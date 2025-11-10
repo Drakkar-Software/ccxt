@@ -91,9 +91,6 @@ setup(
             'aiohttp>=3.10.11',
             'yarl>=1.7.2',
         ],
-        ':python_version>="3.9"': [
-            'coincurve==20.0.0',
-        ],
         'qa': [
             'ruff==0.0.292',
             'tox>=4.8.0',
