@@ -143,6 +143,7 @@ import paradex from  './src/paradex.js'
 import paymium from  './src/paymium.js'
 import phemex from  './src/phemex.js'
 import poloniex from  './src/poloniex.js'
+import polymarket from  './src/polymarket.js'
 import timex from  './src/timex.js'
 import tokocrypto from  './src/tokocrypto.js'
 import toobit from  './src/toobit.js'
@@ -335,6 +336,7 @@ const exchanges = {
     'paymium':                paymium,
     'phemex':                 phemex,
     'poloniex':               poloniex,
+    'polymarket':             polymarket,
     'timex':                  timex,
     'tokocrypto':             tokocrypto,
     'toobit':                 toobit,
@@ -670,6 +672,7 @@ export {
     paymium,
     phemex,
     poloniex,
+    polymarket,
     timex,
     tokocrypto,
     toobit,
