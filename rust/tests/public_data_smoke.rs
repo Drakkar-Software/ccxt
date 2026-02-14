@@ -186,6 +186,22 @@ async fn public_data_smoke_multi_exchange() {
             "BTC/USDT"
         ),
     );
+    assert_suite(
+        "dydx",
+        run_suite!(
+            ccxt::exchanges::dydx::Dydx,
+            ccxt::exchanges::dydx::DydxImpl,
+            "BTC/USDC:USDC"
+        ),
+    );
+    assert_suite(
+        "hyperliquid",
+        run_suite!(
+            ccxt::exchanges::hyperliquid::Hyperliquid,
+            ccxt::exchanges::hyperliquid::HyperliquidImpl,
+            "BTC/USDC:USDC"
+        ),
+    );
 }
 
 #[tokio::test]

@@ -2155,8 +2155,8 @@ async fn dispatch(&mut self, method: Value, params: Value, context: Value) -> Va
 class RustTranspiler {
     sanitizeRustOutput(code: string) {
         return code
-            .replace(/\.function toString\(\) \{ \[native code\] \}\(\)/g, '.to_string()')
-            .replace(/\bfunction toString\(\) \{ \[native code\] \}\(\)/g, 'to_string()')
+            .replace(/\.function\s+toString\(\)\s*\{\s*\[native code\]\s*\}\(\)/g, '.to_string()')
+            .replace(/\bfunction\s+toString\(\)\s*\{\s*\[native code\]\s*\}\(\)/g, 'to_string()')
             .replace(/JSON\.into\(\)::parse/g, 'JSON::parse')
             // Built-in call normalization pass (safe textual rewrites only).
             .replace(/\.toString\(\)/g, '.to_string()')
@@ -2433,6 +2433,7 @@ class RustTranspiler {
         const { allModules } = await this.transpileDerivedExchangeFiles('./js/src', rustExchanges, force);
 
         this.exportRustModules('./rust/src/exchanges/mod.rs', allModules, ['binance']);
+        await this.transpileWs(force);
 
         const libFile = './rust/src/lib.rs';
         const libBody = [
@@ -2447,6 +2448,8 @@ class RustTranspiler {
         ].join('\n');
         overwriteFile(libFile, libBody);
 
+        this.transpileExamples(force);
+
         log.bright.green('Rust transpilation complete.');
     }
 
@@ -2456,6 +2459,221 @@ class RustTranspiler {
 
         const { allModules } = await this.transpileDerivedExchangeFiles('./js/src/pro', rustPro, force);
         this.exportRustModules('./rust/src/pro/mod.rs', allModules);
+    }
+
+    getRustTraitNameFromExchangeId(exchangeId: string) {
+        return exchangeId.charAt(0).toUpperCase() + exchangeId.slice(1);
+    }
+
+    transpileExamples(force = false) {
+        const tsExamplesFolder = './examples/ts';
+        const rustExamplesFolder = './examples/rust';
+        createFolderRecursively(rustExamplesFolder);
+
+        if (!fs.existsSync(tsExamplesFolder)) {
+            return;
+        }
+
+        const generated: string[] = [];
+
+        const files = fs
+            .readdirSync(tsExamplesFolder)
+            .filter((f) => f.endsWith('.ts'))
+            .sort();
+        for (const file of files) {
+            const inputPath = path.join(tsExamplesFolder, file);
+            const outputName = path
+                .basename(file, '.ts')
+                .replace(/[^a-zA-Z0-9_]+/g, '_')
+                .replace(/^(\d)/, '_$1')
+                .toLowerCase();
+            const outputPath = path.join(rustExamplesFolder, `${outputName}.rs`);
+
+            const inMtime = fs.statSync(inputPath).mtime.getTime();
+            const outMtime = fs.existsSync(outputPath) ? fs.statSync(outputPath).mtime.getTime() : 0;
+            if (!force && inMtime <= outMtime) {
+                continue;
+            }
+
+            const tsCode = fs.readFileSync(inputPath, 'utf8');
+
+            const isPro = /new\s+ccxt\.pro\.[a-zA-Z0-9_]+\s*\(/.test(tsCode);
+            const exchangeMatch = /new\s+ccxt(?:\.pro)?\.([a-zA-Z0-9_]+)\s*\(/.exec(tsCode);
+            if (!exchangeMatch) {
+                const placeholder = [
+                    '// AUTO-GENERATED: transpiled from TypeScript examples/',
+                    `// Source: examples/ts/${file}`,
+                    '',
+                    '#[tokio::main]',
+                    'async fn main() {',
+                    `    println!("No exchange constructor detected in ${file}; generated placeholder.");`,
+                    '}',
+                    '',
+                ].join('\n');
+                overwriteFile(outputPath, placeholder);
+                fs.utimesSync(outputPath, new Date(), new Date(inMtime));
+                generated.push(outputName);
+                continue;
+            }
+            const exchangeId = exchangeMatch[1];
+            const exchangeModulePath = isPro ? `./rust/src/pro/${exchangeId}.rs` : `./rust/src/exchanges/${exchangeId}.rs`;
+            if (!fs.existsSync(exchangeModulePath)) {
+                const placeholder = [
+                    '// AUTO-GENERATED: transpiled from TypeScript examples/',
+                    `// Source: examples/ts/${file}`,
+                    '',
+                    '#[tokio::main]',
+                    'async fn main() {',
+                    `    println!("No transpiled Rust module for exchange '${exchangeId}' (${isPro ? 'pro' : 'rest'}); generated placeholder.");`,
+                    '}',
+                    '',
+                ].join('\n');
+                overwriteFile(outputPath, placeholder);
+                fs.utimesSync(outputPath, new Date(), new Date(inMtime));
+                generated.push(outputName);
+                continue;
+            }
+            let classNameKey = exchangeId;
+            try {
+                const sourcePath = isPro ? `./js/src/pro/${exchangeId}.js` : `./js/src/${exchangeId}.js`;
+                if (fs.existsSync(sourcePath)) {
+                    const src = fs.readFileSync(sourcePath, 'utf8');
+                    const classNode = getClassNode(src);
+                    const className = classNode.id?.name;
+                    if (className) {
+                        classNameKey = className;
+                        analyzeClassFromAst(className, classNode);
+                    }
+                }
+            } catch (_) {
+                // Best-effort extraction only; keep fallback.
+            }
+
+            const methodNames = new Set<string>();
+            const exchangeVars = new Set<string>();
+            let m: RegExpExecArray | null = null;
+            const ctorVarRegex = /\b(?:const|let|var)\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*=\s*new\s+ccxt(?:\.pro)?\.[a-zA-Z0-9_]+\s*\(/g;
+            while ((m = ctorVarRegex.exec(tsCode)) !== null) {
+                exchangeVars.add(m[1]);
+            }
+            if (exchangeVars.size === 0) {
+                exchangeVars.add('exchange');
+            }
+            const varsAlternation = Array.from(exchangeVars).join('|');
+            const methodRegex = new RegExp(`\\b(?:${varsAlternation})\\.([a-zA-Z][A-Za-z0-9_]*)\\s*\\(`, 'g');
+            while ((m = methodRegex.exec(tsCode)) !== null) {
+                methodNames.add(m[1]);
+            }
+
+            if (methodNames.size === 0) {
+                const placeholder = [
+                    '// AUTO-GENERATED: transpiled from TypeScript examples/',
+                    `// Source: examples/ts/${file}`,
+                    '',
+                    `use ${isPro ? `ccxt::pro::${exchangeId}` : `ccxt::exchanges::${exchangeId}`}::{${this.getRustTraitNameFromExchangeId(exchangeId)}Impl};`,
+                    'use ccxt::exchange::Value;',
+                    'use serde_json::json;',
+                    '',
+                    '#[tokio::main]',
+                    'async fn main() {',
+                    `    let _exchange = ${this.getRustTraitNameFromExchangeId(exchangeId)}Impl::new(Value::Json(json!({})));`,
+                    `    println!("No exchange method calls detected in ${file}; generated placeholder.");`,
+                    '}',
+                    '',
+                ].join('\n');
+                overwriteFile(outputPath, placeholder);
+                fs.utimesSync(outputPath, new Date(), new Date(inMtime));
+                generated.push(outputName);
+                continue;
+            }
+
+            const symbolMatch = /const\s+symbol\s*=\s*['"]([^'"]+)['"]/.exec(tsCode);
+            const symbol = symbolMatch?.[1] || 'BTC/USDT';
+
+            const traitName = this.getRustTraitNameFromExchangeId(exchangeId);
+            const importPath = isPro ? `ccxt::pro::${exchangeId}` : `ccxt::exchanges::${exchangeId}`;
+            const classFns = {
+                ...(FUNCTION_INFO['Exchange'] || {}),
+                ...(FUNCTION_INFO[classNameKey] || {}),
+                ...(FUNCTION_INFO[traitName] || {}),
+                ...(FUNCTION_INFO[exchangeId] || {}),
+            };
+            const exampleBody: string[] = [];
+            exampleBody.push('// AUTO-GENERATED: transpiled from TypeScript examples/');
+            exampleBody.push(`// Source: examples/ts/${file}`);
+            exampleBody.push('');
+            exampleBody.push('use ccxt::exchange::{normalize, Value};');
+            exampleBody.push(`use ${importPath}::{${traitName}, ${traitName}Impl};`);
+            exampleBody.push('use serde_json::json;');
+            exampleBody.push('');
+            exampleBody.push('#[tokio::main]');
+            exampleBody.push('async fn main() {');
+            exampleBody.push(`    let mut exchange = ${traitName}Impl::new(Value::Json(json!({})));`);
+            exampleBody.push(`    let symbol: Value = "${symbol}".into();`);
+            exampleBody.push('');
+
+            const orderedMethods = Array.from(methodNames).sort();
+            for (const method of orderedMethods) {
+                const fnInfo = classFns[method];
+                if (!fnInfo) {
+                    exampleBody.push(`    // skipped: ${method} (not found in transpiled trait)`);
+                    continue;
+                }
+                const rustName = unCamelCase(method);
+                const args: string[] = [];
+                const needsSymbol =
+                    /^(fetch|watch|create|cancel|edit|parse)/.test(method) ||
+                    method.toLowerCase().includes('ticker') ||
+                    method.toLowerCase().includes('orderbook') ||
+                    method.toLowerCase().includes('ohlcv') ||
+                    method.toLowerCase().includes('trade');
+                for (let i = 0; i < fnInfo.paramsCount; i++) {
+                    if (i === 0 && needsSymbol) {
+                        args.push('symbol.clone()');
+                    } else {
+                        args.push('Value::Undefined');
+                    }
+                }
+                const argsExpr = args.length > 0 ? `, ${args.join(', ')}` : '';
+                if (fnInfo.async) {
+                    exampleBody.push(`    let rv = ${traitName}::${rustName}(&mut exchange${argsExpr}).await;`);
+                } else {
+                    exampleBody.push(`    let rv = ${traitName}::${rustName}(&mut exchange${argsExpr});`);
+                }
+                exampleBody.push(
+                    `    println!("${method}: {}", normalize(&rv).map(|v| v.to_string()).unwrap_or_else(|| "undefined".into()));`
+                );
+            }
+
+            exampleBody.push('}');
+            exampleBody.push('');
+            overwriteFile(outputPath, exampleBody.join('\n'));
+            fs.utimesSync(outputPath, new Date(), new Date(inMtime));
+            generated.push(outputName);
+        }
+
+        if (generated.length > 0) {
+            this.updateCargoExamples(generated);
+            log.cyan(`Transpiled Rust examples: ${generated.length}`);
+        }
+    }
+
+    updateCargoExamples(exampleNames: string[]) {
+        const cargoPath = './rust/Cargo.toml';
+        if (!fs.existsSync(cargoPath)) return;
+        const cargo = fs.readFileSync(cargoPath, 'utf8');
+        const startMarker = '# AUTO-GENERATED RUST EXAMPLES START';
+        const endMarker = '# AUTO-GENERATED RUST EXAMPLES END';
+        const block = [
+            startMarker,
+            ...exampleNames
+                .sort()
+                .map((name) => `[[example]]\nname = "${name}"\npath = "../examples/rust/${name}.rs"`),
+            endMarker,
+        ].join('\n\n');
+        const markerRegex = new RegExp(`${startMarker}[\\s\\S]*${endMarker}`, 'm');
+        const next = markerRegex.test(cargo) ? cargo.replace(markerRegex, block) : `${cargo.trimEnd()}\n\n${block}\n`;
+        overwriteFile(cargoPath, next);
     }
 }
 
