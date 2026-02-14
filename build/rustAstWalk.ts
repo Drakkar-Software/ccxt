@@ -29,6 +29,9 @@ function baseWalker<TState>(node: Node, state: TState, c: (child: Node, state: T
 
 export function walkRecursive<TState>(node: Node, state: TState, visitors: Visitors<TState>) {
     const visit = (n: Node, s: TState) => {
+        if (!isNode(n)) {
+            return;
+        }
         const handler = visitors[n.type];
         if (handler) {
             handler(n, s, visit);

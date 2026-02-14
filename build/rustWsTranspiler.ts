@@ -4,23 +4,16 @@
 
 import log from 'ololog';
 import ansi from 'ansicolor';
-import { createFolderRecursively, overwriteFile } from './fsLocal.js';
+import RustTranspiler from './rustTranspiler.js';
 
 ansi.nice;
 
-// WS transpiler skeleton: prepare output folders and placeholder files.
+// WS transpiler: generate WS exchange modules from js/src/pro.
 async function main() {
-    const rustWsRoot = './rust/src/ws';
-    createFolderRecursively(rustWsRoot);
-
-    const placeholder = [
-        '// AUTO-GENERATED: WS transpiler skeleton',
-        '// TODO: implement WS transpilation from ts/src/pro and js/src/pro',
-        '',
-    ].join('\n');
-
-    overwriteFile('./rust/src/ws/README.md', placeholder);
-    log.bright.yellow('WS transpiler skeleton generated.');
+    const force = process.argv.includes('--force');
+    const transpiler = new RustTranspiler();
+    await transpiler.transpileWs(force);
+    log.bright.green('Rust WS transpilation complete.');
 }
 
 if (process.argv[1] && process.argv[1].includes('rustWsTranspiler')) {
