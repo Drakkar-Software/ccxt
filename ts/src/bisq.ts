@@ -36,7 +36,12 @@ export default class bisq extends Exchange {
                 'future': false,
                 'option': false,
                 'cancelOrder': true,
+                'closeTrade': true,
+                'confirmPaymentReceived': true,
+                'confirmPaymentStarted': true,
+                'confirmPaymentStartedXmr': true,
                 'createOrder': true,
+                'fetchAddressBalance': true,
                 'fetchBalance': true,
                 'fetchMarkets': true,
                 'fetchMyTrades': true,
@@ -45,8 +50,12 @@ export default class bisq extends Exchange {
                 'fetchOrderBook': true,
                 'fetchOrders': false,
                 'fetchTicker': true,
-                'fetchTickers': false,
+                'fetchTickers': true,
+                'fetchTrade': true,
                 'fetchTrades': false,
+                'fetchUnusedBsqAddress': true,
+                'withdraw': true,
+                'withdrawFromTrade': true,
             },
             'urls': {
                 'logo': 'https://bisq.network/images/bisq-mark.svg',
@@ -109,6 +118,7 @@ export default class bisq extends Exchange {
                         'trades/closetrade': 1,
                         'trades/confirmpaymentreceived': 1,
                         'trades/confirmpaymentstarted': 1,
+                        'trades/confirmpaymentstartedxmr': 1,
                         'trades/failtrade': 1,
                         'trades/gettrade': 1,
                         'trades/gettrades': 2,        // 1 call/s daemon limit → weight 2 = 2s gap
@@ -120,6 +130,7 @@ export default class bisq extends Exchange {
                         'wallets/getfundingaddresses': 1,
                         'wallets/getnetwork': 1,
                         'wallets/gettransaction': 1,
+                        'wallets/gettransactions': 1,
                         'wallets/gettxfeerate': 1,
                         'wallets/getunusedbsqaddress': 1,
                         'wallets/lockwallet': 1,
@@ -181,6 +192,7 @@ export default class bisq extends Exchange {
                     'trades/closetrade': 'api/v1/trades/{tradeId}/close',
                     'trades/confirmpaymentreceived': 'api/v1/trades/{tradeId}/payment-received',
                     'trades/confirmpaymentstarted': 'api/v1/trades/{tradeId}/payment-started',
+                    'trades/confirmpaymentstartedxmr': 'api/v1/trades/{tradeId}/payment-started-xmr',
                     'trades/failtrade': 'api/v1/trades/{tradeId}/fail',
                     'trades/gettrade': 'api/v1/trades/{tradeId}',
                     'trades/gettrades': 'api/v1/trades',
@@ -192,6 +204,7 @@ export default class bisq extends Exchange {
                     'wallets/getfundingaddresses': 'api/v1/wallet/addresses',
                     'wallets/getnetwork': 'api/v1/wallet/network',
                     'wallets/gettransaction': 'api/v1/wallet/transactions/{txId}',
+                    'wallets/gettransactions': 'api/v1/wallet/transactions',
                     'wallets/gettxfeerate': 'api/v1/wallet/tx-fee-rate',
                     'wallets/getunusedbsqaddress': 'api/v1/wallet/bsq/unused-address',
                     'wallets/lockwallet': 'api/v1/wallet/lock',
@@ -231,6 +244,7 @@ export default class bisq extends Exchange {
                     'wallets/getfundingaddresses': 'GET',
                     'wallets/getnetwork': 'GET',
                     'wallets/gettransaction': 'GET',
+                    'wallets/gettransactions': 'GET',
                     'wallets/gettxfeerate': 'GET',
                     'wallets/getunusedbsqaddress': 'GET',
                     'wallets/removewalletpassword': 'DELETE',
@@ -318,6 +332,19 @@ export default class bisq extends Exchange {
             return undefined;
         }
         return Precise.stringDiv (satoshis, '100000000');
+    }
+
+    parseCurrencyBalance (currency: string, rawAmount: string): string {
+        // Convert a raw integer balance amount from the Bisq API to its decimal representation.
+        // BTC amounts are in satoshis (1 BTC = 1e8 satoshis).
+        // All other Bisq-native coins (e.g. BSQ) are in their smallest sub-unit (1 unit = 100 sub-units).
+        if (rawAmount === undefined) {
+            return undefined;
+        }
+        if (currency === 'BTC') {
+            return Precise.stringDiv (rawAmount, '100000000');
+        }
+        return Precise.stringDiv (rawAmount, '100');
     }
 
     safeList2 (object: Dict, key1: string, key2: string, defaultValue = []) {
@@ -443,8 +470,8 @@ export default class bisq extends Exchange {
             'future': false,
             'option': false,
             'precision': {
-                'amount': 8,
-                'price': 8,
+                'amount': 1e-8,
+                'price': 1e-8,
             },
             'limits': {
                 'amount': {
@@ -568,14 +595,35 @@ export default class bisq extends Exchange {
     /**
      * @method
      * @name bisq#fetchTickers
-     * @description fetches price tickers for multiple markets, not supported by Bisq
+     * @description fetches price tickers for all markets, or for the markets specified by `symbols`
      * @see https://bisq-network.github.io/slate/#rpc-method-getmarketprice
-     * @param {string[]} [symbols] unified market symbols
+     * @note specific behavior: calls `Price.GetMarketPrice` once per market; markets whose price feed is temporarily
+     *   unavailable (e.g. BSQ on a fresh daemon) are silently skipped rather than failing the whole call
+     * @param {string[]} [symbols] unified market symbols to fetch tickers for; defaults to all loaded markets
      * @param {object} [params] extra parameters specific to the exchange API endpoint
-     * @returns {object} a dictionary of ticker structures
+     * @returns {object} a dictionary of [ticker structures]{@link https://docs.ccxt.com/?id=ticker-structure}
      */
     async fetchTickers (symbols: string[] = undefined, params = {}): Promise<Tickers> {
-        throw new NotSupported (this.id + ' fetchTickers() is not supported, use fetchTicker() instead');
+        await this.loadMarkets ();
+        let targetSymbols = this.symbols;
+        if (symbols !== undefined) {
+            targetSymbols = symbols;
+        }
+        const result: Dict = {};
+        for (let i = 0; i < targetSymbols.length; i++) {
+            const symbol = this.safeString (targetSymbols, i);
+            try {
+                result[symbol] = await this.fetchTicker (symbol, params);
+            } catch (e) {
+                // Skip markets whose price feed is unavailable (e.g. BSQ on a fresh daemon
+                // returns "price feed service has no prices"). Other errors are re-thrown.
+                if (e instanceof ExchangeNotAvailable) {
+                    continue;
+                }
+                throw e;
+            }
+        }
+        return result as Tickers;
     }
 
     /**
@@ -695,7 +743,7 @@ export default class bisq extends Exchange {
      * @name bisq#fetchBalance
      * @description query account balances
      * @see https://bisq-network.github.io/slate/#service-wallets
-     * @note specific behavior: maps `Wallets.GetBalances` into CCXT balances for BTC and BSQ
+     * @note specific behavior: maps `Wallets.GetBalances` into CCXT balances; iterates over all currency keys returned by the API
      * @param {object} [params] extra parameters specific to the exchange API endpoint
      * @returns {object} a [balance structure]{@link https://docs.ccxt.com/?id=balance-structure}
      */
@@ -706,19 +754,244 @@ export default class bisq extends Exchange {
         const result: Dict = {
             'info': response,
         };
-        const btc = this.safeDict (balances, 'btc', {});
-        const bsq = this.safeDict (balances, 'bsq', {});
-        const accountBtc = this.account ();
-        accountBtc['free'] = this.safeString2 (btc, 'available_balance', 'availableBalance');
-        accountBtc['used'] = this.safeString2 (btc, 'reserved_balance', 'reservedBalance');
-        accountBtc['total'] = this.safeString2 (btc, 'total_available_balance', 'totalAvailableBalance');
-        result['BTC'] = accountBtc;
-        const accountBsq = this.account ();
-        accountBsq['free'] = this.safeString2 (bsq, 'available_confirmed_balance', 'availableConfirmedBalance');
-        accountBsq['used'] = this.safeString2 (bsq, 'unverified_balance', 'unverifiedBalance');
-        accountBsq['total'] = this.safeString2 (bsq, 'total_available_balance', 'totalAvailableBalance');
-        result['BSQ'] = accountBsq;
+        const currencyKeys = Object.keys (balances);
+        for (let i = 0; i < currencyKeys.length; i++) {
+            const key = currencyKeys[i];
+            const data = this.safeDict (balances, key, {});
+            const code = key.toUpperCase ();
+            const account = this.account ();
+            const freeRaw = this.safeString2 (data, 'available_balance', 'availableBalance') || this.safeString2 (data, 'available_confirmed_balance', 'availableConfirmedBalance');
+            const usedRaw = this.safeString2 (data, 'reserved_balance', 'reservedBalance') || this.safeString2 (data, 'unverified_balance', 'unverifiedBalance');
+            const totalRaw = this.safeString2 (data, 'total_available_balance', 'totalAvailableBalance');
+            account['free'] = this.parseCurrencyBalance (code, freeRaw);
+            account['used'] = this.parseCurrencyBalance (code, usedRaw);
+            account['total'] = this.parseCurrencyBalance (code, totalRaw);
+            result[code] = account;
+        }
         return this.safeBalance (result);
+    }
+
+    parseTransaction (tx: Dict): Transaction {
+        const txId = this.safeString2 (tx, 'tx_id', 'txId');
+        const isPending = this.safeBool2 (tx, 'is_pending', 'isPending', false);
+        const inputSum = this.satoshisToAmount (this.safeString2 (tx, 'input_sum', 'inputSum'));
+        const outputSum = this.satoshisToAmount (this.safeString2 (tx, 'output_sum', 'outputSum'));
+        const fee = this.satoshisToAmount (this.safeString2 (tx, 'fee', 'fee'));
+        let status = 'ok';
+        if (isPending) {
+            status = 'pending';
+        }
+        return ({
+            'id': txId,
+            'txid': txId,
+            'info': tx,
+            'type': undefined,
+            'currency': 'BTC',
+            'amount': outputSum,
+            'fee': { 'currency': 'BTC', 'cost': fee },
+            'status': status,
+            'timestamp': undefined,
+            'datetime': undefined,
+            'address': undefined,
+            'addressFrom': undefined,
+            'addressTo': undefined,
+            'tag': undefined,
+            'tagFrom': undefined,
+            'tagTo': undefined,
+            'updated': undefined,
+            'comment': this.safeString (tx, 'memo'),
+        });
+    }
+
+    /**
+     * @method
+     * @name bisq#fetchTransactions
+     * @description fetch all BTC transactions in the Bisq wallet
+     * @see https://bisq-network.github.io/slate/#service-wallets
+     * @param {string} [code] currency code — only 'BTC' is supported
+     * @param {int} [since] not used by the Bisq API (client-side filter applied when provided)
+     * @param {int} [limit] not used by the Bisq API (client-side filter applied when provided)
+     * @param {object} [params] extra parameters specific to the exchange API endpoint
+     * @returns {object[]} a list of [transaction structures]{@link https://docs.ccxt.com/?id=transaction-structure}
+     */
+    async fetchTransactions (code: Str = undefined, since: Int = undefined, limit: Int = undefined, params = {}): Promise<Transaction[]> {
+        await this.loadMarkets ();
+        const response = await this.privatePostWalletsGettransactions (params);
+        const txInfoList = this.safeList2 (response, 'tx_info', 'txInfo', []);
+        const transactions = [];
+        for (let i = 0; i < txInfoList.length; i++) {
+            transactions.push (this.parseTransaction (txInfoList[i]));
+        }
+        return this.filterBySinceLimit (transactions, since, limit);
+    }
+
+    /**
+     * @method
+     * @name bisq#fetchDepositAddress
+     * @description get the first unused BTC funding address in the Bisq wallet
+     * @see https://bisq-network.github.io/slate/#service-wallets
+     * @note specific behavior: Bisq has no "create address" RPC; this returns the first unused address from GetFundingAddresses
+     * @param {string} code currency code — only 'BTC' is supported
+     * @param {object} [params] extra parameters specific to the exchange API endpoint
+     * @returns {object} an [address structure]{@link https://docs.ccxt.com/?id=address-structure}
+     */
+    async fetchDepositAddress (code: string, params = {}): Promise<DepositAddress> {
+        await this.loadMarkets ();
+        if (code !== 'BTC') {
+            throw new ExchangeError (this.id + ' fetchDepositAddress() only supports BTC');
+        }
+        const response = await this.privatePostWalletsGetfundingaddresses (params);
+        const addressList = this.safeList2 (response, 'address_balance_info', 'addressBalanceInfo', []);
+        let unusedAddress = undefined;
+        for (let i = 0; i < addressList.length; i++) {
+            const entry = addressList[i];
+            const isUnused = this.safeBool2 (entry, 'is_address_unused', 'isAddressUnused', false);
+            if (isUnused) {
+                unusedAddress = entry;
+                break;
+            }
+        }
+        if (unusedAddress === undefined) {
+            throw new ExchangeError (this.id + ' fetchDepositAddress() no unused BTC address available');
+        }
+        const address = this.safeString (unusedAddress, 'address');
+        this.checkAddress (address);
+        return {
+            'currency': code,
+            'address': address,
+            'tag': undefined,
+            'network': undefined,
+            'info': unusedAddress,
+        };
+    }
+
+    /**
+     * @method
+     * @name bisq#fetchPaymentAccounts
+     * @description fetch all saved fiat payment accounts from the Bisq daemon
+     * @see https://bisq-network.github.io/slate/#service-paymentaccounts
+     * @param {object} [params] extra parameters specific to the exchange API endpoint
+     * @returns {object[]} array of normalised payment account structures
+     */
+    async fetchPaymentAccounts (params = {}): Promise<Dict[]> {
+        await this.loadMarkets ();
+        const response = await this.privatePostPaymentaccountsGetpaymentaccounts (params);
+        const accounts = this.safeList2 (response, 'payment_accounts', 'paymentAccounts', []);
+        const result = [];
+        for (let i = 0; i < accounts.length; i++) {
+            result.push (this.parsePaymentAccount (this.safeDict (accounts, i, {})));
+        }
+        return result;
+    }
+
+    /**
+     * Parse a raw Bisq payment account dict into a normalised structure.
+     */
+    parsePaymentAccount (account: Dict): Dict {
+        const id = this.safeString2 (account, 'id', 'account_id');
+        const name = this.safeString (account, 'accountName') || this.safeString (account, 'account_name');
+        const paymentMethod = this.safeDict2 (account, 'paymentMethod', 'payment_method', {});
+        const methodId = this.safeString (paymentMethod, 'id');
+        const tradeCurrencies = this.safeList2 (account, 'tradeCurrencies', 'trade_currencies', []);
+        const currencyCodes = [];
+        for (let i = 0; i < tradeCurrencies.length; i++) {
+            const tc = this.safeDict (tradeCurrencies, i, {});
+            const code = this.safeString (tc, 'code');
+            if (code !== undefined) {
+                currencyCodes.push (code);
+            }
+        }
+        return {
+            'id': id,
+            'name': name,
+            'paymentMethodId': methodId,
+            'currencies': currencyCodes,
+            'info': account,
+        };
+    }
+
+    /**
+     * @method
+     * @name bisq#createCryptoCurrencyPaymentAccount
+     * @description create an altcoin payment account in the Bisq daemon
+     * @see https://bisq-network.github.io/slate/#service-paymentaccounts
+     * @param {string} currency uppercase currency code, e.g. 'XMR'
+     * @param {string} address the altcoin wallet address
+     * @param {object} [params] extra parameters
+     * @param {string} [params.accountName] human-readable name (defaults to '<CURRENCY> account')
+     * @param {boolean} [params.tradeInstant] whether to enable instant trade (default false)
+     * @returns {object} normalised payment account structure
+     */
+    async createCryptoCurrencyPaymentAccount (currency: string, address: string, params = {}): Promise<Dict> {
+        await this.loadMarkets ();
+        const code = currency.toUpperCase ();
+        const accountName = this.safeString (params, 'accountName') || this.safeString (params, 'account_name') || (code + ' account');
+        const tradeInstant = this.safeBool2 (params, 'tradeInstant', 'trade_instant', false);
+        const request = {
+            'account_name': accountName,
+            'currency_code': code,
+            'address': address,
+            'trade_instant': tradeInstant,
+        };
+        const omitKeys = [ 'accountName', 'account_name', 'tradeInstant', 'trade_instant' ];
+        const response = await this.privatePostPaymentaccountsCreatecryptocurrencypaymentaccount (this.extend (request, this.omit (params, omitKeys)));
+        const paymentAccount = this.safeDict2 (response, 'payment_account', 'paymentAccount', {});
+        return this.parsePaymentAccount (paymentAccount);
+    }
+
+    /**
+     * @method
+     * @name bisq#createFiatPaymentAccount
+     * @description create a fiat payment account using a pre-filled Bisq account form JSON
+     * @see https://bisq-network.github.io/slate/#service-paymentaccounts
+     * @note specific behavior: obtain the blank form via GetPaymentAccountForm(paymentMethodId), fill the required fields, then pass the JSON string here
+     * @param {string} paymentMethodId Bisq payment method identifier, e.g. 'SEPA', 'ZELLE'
+     * @param {string} formJson filled payment account form as a JSON string
+     * @param {object} [params] extra parameters specific to the exchange API endpoint
+     * @returns {object} normalised payment account structure
+     */
+    async createFiatPaymentAccount (paymentMethodId: string, formJson: string, params = {}): Promise<Dict> {
+        await this.loadMarkets ();
+        const request = {
+            'payment_account_form': formJson,
+        };
+        const response = await this.privatePostPaymentaccountsCreatepaymentaccount (this.extend (request, params));
+        const paymentAccount = this.safeDict2 (response, 'payment_account', 'paymentAccount', {});
+        return this.parsePaymentAccount (paymentAccount);
+    }
+
+    /**
+     * @method
+     * @name bisq#createPaymentAccount
+     * @description create a new payment account (altcoin or fiat) in the Bisq daemon
+     * @see https://bisq-network.github.io/slate/#service-paymentaccounts
+     * @note specific behavior: pass params.address for altcoin/crypto accounts; pass params.paymentMethodId + params.formJson for fiat accounts
+     * @param {string} currency currency code, e.g. 'XMR' for altcoin or 'EUR' for fiat
+     * @param {object} [params] extra parameters
+     * @param {string} [params.address] altcoin wallet address (required for crypto accounts)
+     * @param {string} [params.accountName] human-readable name (crypto accounts only, defaults to '<CURRENCY> account')
+     * @param {boolean} [params.tradeInstant] enable instant trade (crypto accounts only, default false)
+     * @param {string} [params.paymentMethodId] Bisq payment method id (required for fiat accounts, e.g. 'SEPA')
+     * @param {string} [params.formJson] filled payment account form JSON string (required for fiat accounts)
+     * @returns {object} normalised payment account structure
+     */
+    async createPaymentAccount (currency: string, params = {}): Promise<Dict> {
+        await this.loadMarkets ();
+        const address = this.safeString (params, 'address') || this.safeString (params, 'walletAddress');
+        const paymentMethodId = this.safeString (params, 'paymentMethodId') || this.safeString (params, 'payment_method_id');
+        if (address !== undefined) {
+            const omitKeys = [ 'address', 'walletAddress' ];
+            return await this.createCryptoCurrencyPaymentAccount (currency, address, this.omit (params, omitKeys));
+        }
+        if (paymentMethodId !== undefined) {
+            const formJson = this.safeString (params, 'formJson') || this.safeString (params, 'form_json');
+            if (formJson === undefined) {
+                throw new ExchangeError (this.id + ' createPaymentAccount() requires params.formJson for fiat accounts');
+            }
+            const omitKeys = [ 'paymentMethodId', 'payment_method_id', 'formJson', 'form_json' ];
+            return await this.createFiatPaymentAccount (paymentMethodId, formJson, this.omit (params, omitKeys));
+        }
+        throw new ExchangeError (this.id + ' createPaymentAccount() requires params.address (crypto) or params.paymentMethodId + params.formJson (fiat)');
     }
 
     /**
@@ -899,6 +1172,235 @@ export default class bisq extends Exchange {
             }
         }
         return this.filterBySymbolSinceLimit (result, symbol, since, limit);
+    }
+
+    /**
+     * @method
+     * @name bisq#fetchTrade
+     * @description fetch the current state of a single Bisq trade by id
+     * @see https://bisq-network.github.io/slate/#rpc-method-gettrade
+     * @param {string} tradeId the trade id
+     * @param {object} [params] extra parameters specific to the exchange API endpoint
+     * @returns {object} a trade structure extended with state/phase fields
+     */
+    async fetchTrade (tradeId: string, params = {}): Promise<Trade> {
+        await this.loadMarkets ();
+        const request = {
+            'tradeId': tradeId,
+        };
+        const response = await this.privatePostTradesGettrade (this.extend (request, params));
+        const trade = this.safeDict (response, 'trade', {});
+        const parsed = this.parseBisqTrade (trade);
+        parsed['state'] = this.safeString (trade, 'state');
+        parsed['phase'] = this.safeString (trade, 'phase');
+        parsed['isCompleted'] = this.safeBool2 (trade, 'is_completed', 'isCompleted', false);
+        parsed['payoutTxId'] = this.safeString2 (trade, 'payout_tx_id', 'payoutTxId');
+        return parsed;
+    }
+
+    /**
+     * @method
+     * @name bisq#confirmPaymentStarted
+     * @description confirm that the buyer has sent the off-chain payment, advancing the trade state machine
+     * @see https://bisq-network.github.io/slate/#rpc-method-confirmpaymentstarted
+     * @param {string} tradeId the trade id
+     * @param {object} [params] extra parameters specific to the exchange API endpoint
+     * @returns {object} raw API response
+     */
+    async confirmPaymentStarted (tradeId: string, params = {}): Promise<Dict> {
+        await this.loadMarkets ();
+        const request = {
+            'tradeId': tradeId,
+        };
+        return await this.privatePostTradesConfirmpaymentstarted (this.extend (request, params));
+    }
+
+    /**
+     * @method
+     * @name bisq#confirmPaymentStartedXmr
+     * @description confirm that the buyer has sent Monero payment, providing tx id and tx key for counterparty verification
+     * @see https://bisq-network.github.io/slate/#rpc-method-confirmpaymentstartedxmr
+     * @param {string} tradeId the trade id
+     * @param {string} txId the XMR transaction id
+     * @param {string} txKey the XMR transaction private key
+     * @param {object} [params] extra parameters specific to the exchange API endpoint
+     * @returns {object} raw API response
+     */
+    async confirmPaymentStartedXmr (tradeId: string, txId: string, txKey: string, params = {}): Promise<Dict> {
+        await this.loadMarkets ();
+        const request = {
+            'tradeId': tradeId,
+            'txId': txId,
+            'txKey': txKey,
+        };
+        return await this.privatePostTradesConfirmpaymentstartedxmr (this.extend (request, params));
+    }
+
+    /**
+     * @method
+     * @name bisq#confirmPaymentReceived
+     * @description confirm that the seller has received the off-chain payment, advancing the trade state machine
+     * @see https://bisq-network.github.io/slate/#rpc-method-confirmpaymentreceived
+     * @param {string} tradeId the trade id
+     * @param {object} [params] extra parameters specific to the exchange API endpoint
+     * @returns {object} raw API response
+     */
+    async confirmPaymentReceived (tradeId: string, params = {}): Promise<Dict> {
+        await this.loadMarkets ();
+        const request = {
+            'tradeId': tradeId,
+        };
+        return await this.privatePostTradesConfirmpaymentreceived (this.extend (request, params));
+    }
+
+    /**
+     * @method
+     * @name bisq#closeTrade
+     * @description close a completed Bisq trade so that funds can be claimed
+     * @see https://bisq-network.github.io/slate/#rpc-method-closetrade
+     * @param {string} tradeId the trade id
+     * @param {object} [params] extra parameters specific to the exchange API endpoint
+     * @returns {object} raw API response
+     */
+    async closeTrade (tradeId: string, params = {}): Promise<Dict> {
+        await this.loadMarkets ();
+        const request = {
+            'tradeId': tradeId,
+        };
+        return await this.privatePostTradesClosetrade (this.extend (request, params));
+    }
+
+    /**
+     * @method
+     * @name bisq#withdrawFromTrade
+     * @description withdraw settled BTC funds from a completed trade to an external address
+     * @see https://bisq-network.github.io/slate/#rpc-method-withdrawfunds
+     * @param {string} tradeId the trade id
+     * @param {string} address destination BTC address
+     * @param {object} [params] extra parameters specific to the exchange API endpoint
+     * @param {string} [params.memo] optional memo/label for the transaction
+     * @returns {object} raw API response
+     */
+    async withdrawFromTrade (tradeId: string, address: string, params = {}): Promise<Dict> {
+        await this.loadMarkets ();
+        const request = {
+            'tradeId': tradeId,
+            'address': address,
+        };
+        return await this.privatePostTradesWithdrawfunds (this.extend (request, params));
+    }
+
+    /**
+     * @method
+     * @name bisq#withdraw
+     * @description send BTC or BSQ from the Bisq wallet to an external address
+     * @see https://bisq-network.github.io/slate/#service-wallets
+     * @note specific behavior: BTC uses `Wallets.SendBtc`; BSQ uses `Wallets.SendBsq`
+     * @param {string} code currency code — 'BTC' or 'BSQ'
+     * @param {number} amount amount to send in whole coins
+     * @param {string} address destination address
+     * @param {string} [tag] not used
+     * @param {object} [params] extra parameters specific to the exchange API endpoint
+     * @param {string} [params.txFeeRate] optional on-chain fee rate in sats/byte
+     * @param {string} [params.memo] optional memo/label (BTC only)
+     * @returns {object} a [transaction structure]{@link https://docs.ccxt.com/?id=transaction-structure}
+     */
+    async withdraw (code: string, amount: Num, address: string, tag = undefined, params = {}): Promise<Dict> {
+        await this.loadMarkets ();
+        this.checkAddress (address);
+        const txFeeRate = this.safeString2 (params, 'txFeeRate', 'tx_fee_rate');
+        const memo = this.safeString (params, 'memo');
+        const omitKeys = [ 'txFeeRate', 'tx_fee_rate', 'memo' ];
+        let response = undefined;
+        if (code === 'BTC') {
+            const request: Dict = {
+                'address': address,
+                'amount': this.numberToString (amount),
+            };
+            if (txFeeRate !== undefined) {
+                request['tx_fee_rate'] = txFeeRate;
+            }
+            if (memo !== undefined) {
+                request['memo'] = memo;
+            }
+            response = await this.privatePostWalletsSendbtc (this.extend (request, this.omit (params, omitKeys)));
+        } else if (code === 'BSQ') {
+            const request: Dict = {
+                'address': address,
+                'amount': this.numberToString (amount),
+            };
+            if (txFeeRate !== undefined) {
+                request['tx_fee_rate'] = txFeeRate;
+            }
+            response = await this.privatePostWalletsSendbsq (this.extend (request, this.omit (params, omitKeys)));
+        } else {
+            throw new ExchangeError (this.id + ' withdraw() only supports BTC and BSQ');
+        }
+        // SendBtcReply / SendBsqReply wraps the result: {"txInfo": {"txId": "...", ...}}
+        const txInfo = this.safeDict2 (response, 'tx_info', 'txInfo', {});
+        const txId = this.safeString2 (txInfo, 'tx_id', 'txId');
+        const now = this.milliseconds ();
+        return {
+            'id': txId,
+            'txid': txId,
+            'currency': code,
+            'amount': amount,
+            'address': address,
+            'tag': undefined,
+            'status': 'ok',
+            'timestamp': now,
+            'datetime': this.iso8601 (now),
+            'fee': undefined,
+            'info': response,
+        };
+    }
+
+    /**
+     * @method
+     * @name bisq#fetchUnusedBsqAddress
+     * @description get an unused BSQ receiving address from the Bisq wallet
+     * @see https://bisq-network.github.io/slate/#service-wallets
+     * @param {object} [params] extra parameters specific to the exchange API endpoint
+     * @returns {object} an address structure with currency='BSQ'
+     */
+    async fetchUnusedBsqAddress (params = {}): Promise<Dict> {
+        await this.loadMarkets ();
+        const response = await this.privatePostWalletsGetunusedbsqaddress (params);
+        const address = this.safeString (response, 'address');
+        return {
+            'currency': 'BSQ',
+            'address': address,
+            'tag': undefined,
+            'network': undefined,
+            'info': response,
+        };
+    }
+
+    /**
+     * @method
+     * @name bisq#fetchAddressBalance
+     * @description fetch the on-chain balance for a specific BTC address in the Bisq wallet
+     * @see https://bisq-network.github.io/slate/#service-wallets
+     * @param {string} address the BTC address to query
+     * @param {object} [params] extra parameters specific to the exchange API endpoint
+     * @returns {object} balance info for the address
+     */
+    async fetchAddressBalance (address: string, params = {}): Promise<Dict> {
+        await this.loadMarkets ();
+        const request = {
+            'address': address,
+        };
+        const response = await this.privatePostWalletsGetaddressbalance (this.extend (request, params));
+        const info = this.safeDict2 (response, 'address_balance_info', 'addressBalanceInfo', {});
+        const balanceRaw = this.safeString (info, 'balance');
+        const isUnused = this.safeBool2 (info, 'is_address_unused', 'isAddressUnused', false);
+        return {
+            'address': this.safeString (info, 'address', address),
+            'balance': this.satoshisToAmount (balanceRaw),
+            'numTxs': this.safeInteger2 (info, 'num_txs', 'numTxs'),
+            'isUsed': !isUnused,
+            'info': response,
+        };
     }
 
     handleErrors (statusCode: int, statusText: string, url: string, method: string, responseHeaders: Dict, responseBody: string, response: Dict, requestHeaders: Dict, requestBody: string) {
