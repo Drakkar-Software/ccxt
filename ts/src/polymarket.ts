@@ -543,17 +543,36 @@ export default class polymarket extends Exchange {
         if (this.safeValue (params, 'closed') === undefined) {
             request['closed'] = !active;
         }
-        let offset = this.safeInteger (request, 'offset', 0);
-        let markets: any[] = [];
-        while (true) {
-            const pageRequest = this.extend (request, { 'offset': offset });
-            const response = await this.gammaPublicGetMarkets (pageRequest);
-            const page = this.safeList (response as any, 'data', response as any) || [];
-            markets = this.arrayConcat (markets, page);
-            if (page.length < limit) {
-                break;
+        // Fetch first page to seed the results
+        const firstResponse = await this.gammaPublicGetMarkets (this.extend ({}, request, { 'offset': 0 }));
+        const firstPage = this.safeList (firstResponse as any, 'data', firstResponse as any) || [];
+        let markets: any[] = firstPage;
+        if (firstPage.length >= limit) {
+            // API returns a plain list with no total count — fetch remaining pages in parallel batches.
+            // BATCH_SIZE=10 pages per round, MAX_ROUNDS=100 covers up to 500,000 markets.
+            const BATCH_SIZE = 10;
+            const MAX_ROUNDS = 100;
+            let currentOffset = limit;
+            let done = false;
+            for (let round = 0; round < MAX_ROUNDS; round++) {
+                const batchPromises = [];
+                for (let i = 0; i < BATCH_SIZE; i++) {
+                    batchPromises.push (this.gammaPublicGetMarkets (this.extend ({}, request, { 'offset': currentOffset + i * limit })));
+                }
+                const batchResponses = await Promise.all (batchPromises);
+                for (let i = 0; i < batchResponses.length; i++) {
+                    const page = this.safeList (batchResponses[i] as any, 'data', batchResponses[i] as any) || [];
+                    markets = this.arrayConcat (markets, page);
+                    if (page.length < limit) {
+                        done = true;
+                        break;
+                    }
+                }
+                currentOffset += BATCH_SIZE * limit;
+                if (done) {
+                    break;
+                }
             }
-            offset += limit;
         }
         const filtered = [];
         for (let i = 0; i < markets.length; i++) {
@@ -1065,7 +1084,7 @@ export default class polymarket extends Exchange {
                     }
                     // Also keep market['info']['tick_size'] in sync so buildAndSignOrder uses the
                     // correct rounding config (prevents price like 0.003956 rounding to 0.00)
-                    if (market['info']['tick_size'] === undefined) {
+                    if (this.safeString (market['info'], 'tick_size') === undefined) {
                         market['info']['tick_size'] = tickSize;
                     }
                 }
@@ -1173,7 +1192,7 @@ export default class polymarket extends Exchange {
         if (tokenId === undefined) {
             throw new ArgumentsRequired (this.id + ' fetchTicker() requires a token_id parameter for market ' + symbol);
         }
-        // Fetch prices using POST /prices endpoint with both BUY and SELL sides
+        // Fetch both BUY and SELL prices in a single POST /prices request
         // See https://docs.polymarket.com/api-reference/pricing/get-multiple-market-prices-by-request
         const pricesResponse = await this.clobPublicPostPrices (this.extend ({
             'requests': [
@@ -1181,7 +1200,6 @@ export default class polymarket extends Exchange {
                 { 'token_id': tokenId, 'side': 'SELL' },
             ],
         }, params));
-        // Parse prices response: {[token_id]: {BUY: "price", SELL: "price"}, ...}
         const tokenPrices = this.safeDict (pricesResponse, tokenId, {});
         const buyPrice = this.safeString (tokenPrices, 'BUY');
         const sellPrice = this.safeString (tokenPrices, 'SELL');
@@ -1207,10 +1225,9 @@ export default class polymarket extends Exchange {
      * @method
      * @name polymarket#fetchTickers
      * @description fetches price tickers for multiple markets, statistical information calculated over the past 24 hours for each market
-     * @see https://docs.polymarket.com/api-reference/pricing/get-multiple-market-prices
+     * @see https://docs.polymarket.com/api-reference/pricing/get-multiple-market-prices-by-request
      * @param {string[]|undefined} symbols unified symbols of the markets to fetch the ticker for, all market tickers are returned if not assigned
      * @param {object} [params] extra parameters specific to the exchange API endpoint
-     * @param {boolean} [params.fetchSpreads] if true, also fetch bid-ask spreads for all markets (default: false)
      * @returns {object} a dictionary of [ticker structures]{@link https://docs.ccxt.com/#/?id=ticker-structure}
      */
     async fetchTickers (symbols: Strings = undefined, params = {}): Promise<Tickers> {
@@ -1221,74 +1238,59 @@ export default class polymarket extends Exchange {
         const symbolsToFetch = symbols || this.symbols;
         for (let i = 0; i < symbolsToFetch.length; i++) {
             const symbol = symbolsToFetch[i];
-            const market = this.market (symbol);
-            // Use market['id'] which is the specific token ID for this outcome (YES/NO)
-            // Do NOT use clobTokenIds[0] as that always picks the first outcome regardless of symbol
-            const tokenId = this.safeString (market, 'id');
-            if (tokenId !== undefined) {
-                tokenIds.push (tokenId);
-                tokenIdToSymbol[tokenId] = symbol;
+            try {
+                const market = this.market (symbol);
+                // Use market['id'] which is the specific token ID for this outcome (YES/NO)
+                // Do NOT use clobTokenIds[0] as that always picks the first outcome regardless of symbol
+                const tokenId = this.safeString (market, 'id');
+                if (tokenId !== undefined) {
+                    tokenIds.push (tokenId);
+                    tokenIdToSymbol[tokenId] = symbol;
+                }
+            } catch (e) {
+                continue;
             }
         }
         if (tokenIds.length === 0) {
             return {};
         }
-        // Build requests array for POST /prices endpoint
-        // Each token needs both BUY and SELL sides
+        // Fetch prices in batches using POST /prices with BUY+SELL requests per token.
+        // Response format: {[token_id]: {BUY: price, SELL: price}}
         // See https://docs.polymarket.com/api-reference/pricing/get-multiple-market-prices-by-request
-        const requests = [];
-        for (let i = 0; i < tokenIds.length; i++) {
-            const tokenId = tokenIds[i];
-            requests.push ({ 'token_id': tokenId, 'side': 'BUY' });
-            requests.push ({ 'token_id': tokenId, 'side': 'SELL' });
-        }
-        // Fetch prices for all token IDs at once using POST /prices endpoint
-        // Response format: {[token_id]: {BUY: "price", SELL: "price"}, ...}
-        // See https://docs.polymarket.com/api-reference/pricing/get-multiple-market-prices-by-request
-        const pricesResponse = await this.clobPublicPostPrices (this.extend ({ 'requests': requests }, params));
-        // Optionally fetch spreads for all token IDs
-        // See https://docs.polymarket.com/api-reference/spreads/get-bid-ask-spreads
-        const fetchSpreads = this.safeBool (params, 'fetchSpreads', false);
-        let spreadsResponse = {};
-        if (fetchSpreads) {
-            try {
-                spreadsResponse = await this.clobPublicPostSpreads (this.extend ({ 'token_ids': tokenIds }, params));
-            } catch (e) {
-                spreadsResponse = {};
+        // Note: lastTradePrice, bestBid, bestAsk are already in marketInfo from loadMarkets() (Gamma API)
+        // and serve as fallbacks in parseTicker() when the pricing API has no orderbook data.
+        const BATCH_TOKEN_SIZE = 250;
+        let allPricesResponse: Dict = {};
+        let batchStart = 0;
+        while (batchStart < tokenIds.length) {
+            const batchTokenIds = tokenIds.slice (batchStart, batchStart + BATCH_TOKEN_SIZE);
+            const batchRequests = [];
+            for (let j = 0; j < batchTokenIds.length; j++) {
+                batchRequests.push ({ 'token_id': batchTokenIds[j], 'side': 'BUY' });
+                batchRequests.push ({ 'token_id': batchTokenIds[j], 'side': 'SELL' });
             }
+            const batchResponse = await this.clobPublicPostPrices ({ 'requests': batchRequests });
+            allPricesResponse = this.deepExtend (allPricesResponse, batchResponse);
+            batchStart = batchStart + BATCH_TOKEN_SIZE;
         }
-        // Build market data map for efficient lookup
-        const tokenIdToMarket = {};
-        for (let i = 0; i < tokenIds.length; i++) {
-            const tokenId = tokenIds[i];
-            const symbol = tokenIdToSymbol[tokenId];
-            tokenIdToMarket[tokenId] = this.market (symbol);
-        }
-        // Parse prices and build tickers (no additional fetching during parsing)
+        // Parse prices and build tickers
         const tickers: Dict = {};
         for (let i = 0; i < tokenIds.length; i++) {
             const tokenId = tokenIds[i];
             const symbol = tokenIdToSymbol[tokenId];
-            const market = tokenIdToMarket[tokenId];
             try {
-                // Get prices from the response (both BUY and SELL are in the same response)
-                const tokenPrices = this.safeDict (pricesResponse, tokenId, {});
+                const market = this.market (symbol);
+                const tokenPrices = this.safeDict (allPricesResponse, tokenId, {});
                 const buyPrice = this.safeString (tokenPrices, 'BUY');
                 const sellPrice = this.safeString (tokenPrices, 'SELL');
-                // Get spread if available
-                const spread = this.safeString (spreadsResponse, tokenId);
-                // Use market info as base data (already loaded from fetchMarkets)
                 const marketInfo = this.safeDict (market, 'info', {});
-                // Combine pricing data with market info
                 const combinedData = this.deepExtend (marketInfo, {
                     'buyPrice': buyPrice,
                     'sellPrice': sellPrice,
-                    'spread': spread,
                 });
                 const ticker = this.parseTicker (combinedData, market);
                 tickers[symbol] = ticker;
             } catch (e) {
-                // Skip markets that fail to parse
                 continue;
             }
         }
@@ -1461,15 +1463,42 @@ export default class polymarket extends Exchange {
         if (last === undefined && lastTradePrice !== undefined) {
             last = lastTradePrice;
         }
+        if (last === undefined && bid !== undefined && ask !== undefined) {
+            last = (bid + ask) / 2;
+        }
+        // Fallback to market outcomesInfo from loadMarkets() (Gamma API)
+        // Match by market.id (clobTokenId) to find the correct outcome price
+        if (last === undefined && market !== undefined) {
+            const marketInfoForPrices = this.safeDict (market, 'info', {});
+            const outcomesInfoList = this.safeList (marketInfoForPrices, 'outcomesInfo', []);
+            const marketId = this.safeString (market, 'id');
+            for (let k = 0; k < outcomesInfoList.length; k++) {
+                const outcomeInfo = this.safeDict (outcomesInfoList, k, {});
+                const outcomeId = this.safeString (outcomeInfo, 'id');
+                if (outcomeId === marketId) {
+                    last = this.safeNumber (outcomeInfo, 'price');
+                    break;
+                }
+            }
+        }
         // Timestamp
         const updatedAtString = this.safeString (ticker, 'updatedAt');
         const timestamp = updatedAtString ? this.parse8601 (updatedAtString) : undefined;
         const datetime = timestamp ? this.iso8601 (timestamp) : undefined;
         // Open (previous closing price - approximated)
-        const open = last !== undefined && oneDayPriceChange !== undefined ? last / (1 + oneDayPriceChange) : undefined;
+        let open = undefined;
+        if (last !== undefined && oneDayPriceChange !== undefined) {
+            open = last / (1 + oneDayPriceChange);
+        }
         // Change and percentage
-        const change = last !== undefined && open !== undefined ? last - open : undefined;
-        const percentage = oneDayPriceChange !== undefined ? oneDayPriceChange * 100 : undefined;
+        let change = undefined;
+        if (last !== undefined && open !== undefined) {
+            change = last - open;
+        }
+        let percentage = undefined;
+        if (oneDayPriceChange !== undefined) {
+            percentage = oneDayPriceChange * 100;
+        }
         // Add additional Polymarket-specific fields to info
         const tickerInfo = this.safeDict (ticker, 'info', {});
         const extendedInfo = this.deepExtend (tickerInfo, {
@@ -2068,7 +2097,24 @@ export default class polymarket extends Exchange {
             throw new ArgumentsRequired (this.id + ' buildAndSignOrder() requires a price parameter or params.marketPrice');
         }
         // Round price and size first, then calculate amounts (same logic for limit and market orders)
-        const rawPrice = this.roundNormal (orderPrice, priceDecimals);
+        let rawPrice = this.roundNormal (orderPrice, priceDecimals);
+        // If the rounded price is zero (price is below tick resolution), auto-detect the needed
+        // decimal precision from the actual price value to avoid submitting a zero makerAmount.
+        if (this.parseNumber (rawPrice) === 0) {
+            const orderPriceStr = this.numberToString (orderPrice);
+            const dotIndex = orderPriceStr.indexOf ('.');
+            let neededDecimals = priceDecimals;
+            if (dotIndex >= 0) {
+                let nonZeroPos = dotIndex + 1;
+                while (nonZeroPos < orderPriceStr.length && orderPriceStr[nonZeroPos] === '0') {
+                    nonZeroPos += 1;
+                }
+                neededDecimals = nonZeroPos - dotIndex;
+            }
+            if (neededDecimals > priceDecimals) {
+                rawPrice = this.roundNormal (orderPrice, neededDecimals);
+            }
+        }
         // Check if this is a market order for special decimal handling
         const orderType = this.safeString (params, 'orderType', 'limit');
         const isMarketOrder = (orderType === 'market');
