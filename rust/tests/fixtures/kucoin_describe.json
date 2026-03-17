@@ -1,0 +1,995 @@
+{
+  "id": "kucoin",
+  "name": "KuCoin",
+  "countries": [
+    "SC"
+  ],
+  "enableRateLimit": true,
+  "rateLimit": 10,
+  "timeout": 10000,
+  "certified": true,
+  "pro": true,
+  "alias": false,
+  "dex": false,
+  "has": {
+    "publicAPI": true,
+    "privateAPI": true,
+    "spot": true,
+    "margin": true,
+    "swap": false,
+    "future": false,
+    "option": false,
+    "borrowCrossMargin": true,
+    "borrowIsolatedMargin": true,
+    "cancelAllOrders": true,
+    "cancelOrder": true,
+    "closeAllPositions": false,
+    "closePosition": false,
+    "createDepositAddress": true,
+    "createLimitOrder": true,
+    "createMarketBuyOrderWithCost": true,
+    "createMarketOrder": true,
+    "createMarketOrderWs": true,
+    "createMarketOrderWithCost": true,
+    "createMarketSellOrderWithCost": true,
+    "createOrder": true,
+    "createOrders": true,
+    "createPostOnlyOrder": true,
+    "createStopLimitOrder": true,
+    "createStopMarketOrder": true,
+    "createStopOrder": true,
+    "createTriggerOrder": true,
+    "editOrder": true,
+    "fetchAccounts": true,
+    "fetchBalance": true,
+    "fetchBorrowInterest": true,
+    "fetchBorrowRateHistories": true,
+    "fetchBorrowRateHistory": true,
+    "fetchClosedOrders": true,
+    "fetchCrossBorrowRate": false,
+    "fetchCrossBorrowRates": false,
+    "fetchCurrencies": true,
+    "fetchCurrenciesWs": "emulated",
+    "fetchDepositAddress": true,
+    "fetchDepositAddresses": false,
+    "fetchDepositAddressesByNetwork": true,
+    "fetchDeposits": true,
+    "fetchDepositWithdrawFee": true,
+    "fetchDepositWithdrawFees": true,
+    "fetchFundingHistory": false,
+    "fetchFundingRate": true,
+    "fetchFundingRateHistory": true,
+    "fetchFundingRates": false,
+    "fetchIndexOHLCV": false,
+    "fetchIsolatedBorrowRate": false,
+    "fetchIsolatedBorrowRates": false,
+    "fetchMarginAdjustmentHistory": false,
+    "fetchL2OrderBook": true,
+    "fetchL3OrderBook": true,
+    "fetchLedger": true,
+    "fetchLeverageTiers": false,
+    "fetchMarginMode": false,
+    "fetchMarketLeverageTiers": false,
+    "fetchMarkets": true,
+    "fetchMarkOHLCV": false,
+    "fetchMyTrades": true,
+    "fetchOHLCV": true,
+    "fetchOpenInterest": false,
+    "fetchOpenInterestHistory": false,
+    "fetchOpenOrders": true,
+    "fetchOrder": true,
+    "fetchOrderBook": true,
+    "fetchOrderBooks": false,
+    "fetchOrdersByStatus": true,
+    "fetchOrderTrades": true,
+    "fetchPositionHistory": false,
+    "fetchPositionsHistory": false,
+    "fetchPositionMode": false,
+    "fetchPremiumIndexOHLCV": false,
+    "fetchStatus": true,
+    "fetchTicker": true,
+    "fetchTickers": true,
+    "fetchMarkPrices": true,
+    "fetchTime": true,
+    "fetchTrades": true,
+    "fetchTradingFee": true,
+    "fetchTradingFees": false,
+    "fetchTransactionFee": true,
+    "fetchTransfers": true,
+    "fetchWithdrawals": true,
+    "repayCrossMargin": true,
+    "repayIsolatedMargin": true,
+    "setLeverage": true,
+    "setMarginMode": false,
+    "setPositionMode": false,
+    "signIn": false,
+    "transfer": true,
+    "withdraw": true,
+    "fetchMarkPrice": true
+  },
+  "urls": {
+    "logo": "https://user-images.githubusercontent.com/51840849/87295558-132aaf80-c50e-11ea-9801-a2fb0c57c799.jpg",
+    "api": {
+      "public": "https://api.kucoin.com",
+      "private": "https://api.kucoin.com",
+      "futuresPrivate": "https://api-futures.kucoin.com",
+      "futuresPublic": "https://api-futures.kucoin.com",
+      "webExchange": "https://kucoin.com/_api",
+      "broker": "https://api-broker.kucoin.com",
+      "earn": "https://api.kucoin.com",
+      "uta": "https://api.kucoin.com",
+      "utaPrivate": "https://api.kucoin.com"
+    },
+    "www": "https://www.kucoin.com",
+    "doc": [
+      "https://docs.kucoin.com"
+    ],
+    "referral": "https://www.kucoin.com/ucenter/signup?rcode=E5wkqe"
+  },
+  "api": {
+    "public": {
+      "get": {
+        "currencies": 4.5,
+        "currencies/{currency}": 4.5,
+        "symbols": 6,
+        "market/orderbook/level1": 3,
+        "market/allTickers": 22.5,
+        "market/stats": 22.5,
+        "markets": 4.5,
+        "market/orderbook/level{level}_{limit}": 6,
+        "market/orderbook/level2_20": 3,
+        "market/orderbook/level2_100": 6,
+        "market/histories": 4.5,
+        "market/candles": 4.5,
+        "prices": 4.5,
+        "timestamp": 4.5,
+        "status": 4.5,
+        "mark-price/{symbol}/current": 3,
+        "mark-price/all-symbols": 3,
+        "margin/config": 25,
+        "announcements": 20,
+        "margin/collateralRatio": 10,
+        "convert/symbol": 5,
+        "convert/currencies": 5
+      },
+      "post": {
+        "bullet-public": 15
+      }
+    },
+    "private": {
+      "get": {
+        "user-info": 30,
+        "user/api-key": 30,
+        "accounts": 7.5,
+        "accounts/{accountId}": 7.5,
+        "accounts/ledgers": 3,
+        "hf/accounts/ledgers": 2,
+        "hf/margin/account/ledgers": 2,
+        "transaction-history": 3,
+        "sub/user": 30,
+        "sub-accounts/{subUserId}": 22.5,
+        "sub-accounts": 30,
+        "sub/api-key": 30,
+        "margin/account": 40,
+        "margin/accounts": 15,
+        "isolated/accounts": 15,
+        "deposit-addresses": 7.5,
+        "deposits": 7.5,
+        "hist-deposits": 7.5,
+        "withdrawals": 30,
+        "hist-withdrawals": 30,
+        "withdrawals/quotas": 30,
+        "accounts/transferable": 30,
+        "transfer-list": 30,
+        "base-fee": 3,
+        "trade-fees": 3,
+        "market/orderbook/level{level}": 3,
+        "market/orderbook/level2": 3,
+        "market/orderbook/level3": 3,
+        "hf/accounts/opened": 2,
+        "hf/orders/active": 2,
+        "hf/orders/active/symbols": 2,
+        "hf/margin/order/active/symbols": 2,
+        "hf/orders/done": 2,
+        "hf/orders/{orderId}": 2,
+        "hf/orders/client-order/{clientOid}": 2,
+        "hf/orders/dead-cancel-all/query": 2,
+        "hf/fills": 2,
+        "orders": 2,
+        "limit/orders": 3,
+        "orders/{orderId}": 2,
+        "order/client-order/{clientOid}": 3,
+        "fills": 10,
+        "limit/fills": 20,
+        "stop-order": 8,
+        "stop-order/{orderId}": 3,
+        "stop-order/queryOrderByClientOid": 3,
+        "oco/order/{orderId}": 2,
+        "oco/order/details/{orderId}": 2,
+        "oco/client-order/{clientOid}": 2,
+        "oco/orders": 2,
+        "hf/margin/orders/active": 4,
+        "hf/margin/orders/done": 10,
+        "hf/margin/orders/{orderId}": 4,
+        "hf/margin/orders/client-order/{clientOid}": 5,
+        "hf/margin/fills": 5,
+        "etf/info": 25,
+        "margin/currencies": 20,
+        "risk/limit/strategy": 20,
+        "isolated/symbols": 20,
+        "margin/symbols": 5,
+        "isolated/account/{symbol}": 50,
+        "margin/borrow": 15,
+        "margin/repay": 15,
+        "margin/interest": 20,
+        "project/list": 10,
+        "project/marketInterestRate": 7.5,
+        "redeem/orders": 10,
+        "purchase/orders": 10,
+        "broker/api/rebase/download": 3,
+        "broker/queryMyCommission": 3,
+        "broker/queryUser": 3,
+        "broker/queryDetailByUid": 3,
+        "migrate/user/account/status": 3,
+        "convert/quote": 20,
+        "convert/order/detail": 5,
+        "convert/order/history": 5,
+        "convert/limit/quote": 20,
+        "convert/limit/order/detail": 5,
+        "convert/limit/orders": 5,
+        "affiliate/inviter/statistics": 30,
+        "earn/redeem-preview": 5
+      },
+      "post": {
+        "sub/user/created": 22.5,
+        "sub/api-key": 30,
+        "sub/api-key/update": 45,
+        "deposit-addresses": 30,
+        "withdrawals": 7.5,
+        "accounts/universal-transfer": 6,
+        "accounts/sub-transfer": 45,
+        "accounts/inner-transfer": 15,
+        "transfer-out": 30,
+        "transfer-in": 30,
+        "hf/orders": 1,
+        "hf/orders/test": 1,
+        "hf/orders/sync": 1,
+        "hf/orders/multi": 1,
+        "hf/orders/multi/sync": 1,
+        "hf/orders/alter": 3,
+        "hf/orders/dead-cancel-all": 2,
+        "orders": 2,
+        "orders/test": 2,
+        "orders/multi": 3,
+        "stop-order": 2,
+        "oco/order": 2,
+        "hf/margin/order": 5,
+        "hf/margin/order/test": 5,
+        "margin/order": 5,
+        "margin/order/test": 5,
+        "margin/borrow": 15,
+        "margin/repay": 10,
+        "purchase": 15,
+        "redeem": 15,
+        "lend/purchase/update": 10,
+        "convert/order": 20,
+        "convert/limit/order": 20,
+        "bullet-private": 10,
+        "position/update-user-leverage": 5,
+        "deposit-address/create": 20
+      },
+      "delete": {
+        "sub/api-key": 45,
+        "withdrawals/{withdrawalId}": 30,
+        "hf/orders/{orderId}": 1,
+        "hf/orders/sync/{orderId}": 1,
+        "hf/orders/client-order/{clientOid}": 1,
+        "hf/orders/sync/client-order/{clientOid}": 1,
+        "hf/orders/cancel/{orderId}": 2,
+        "hf/orders": 2,
+        "hf/orders/cancelAll": 30,
+        "orders/{orderId}": 3,
+        "order/client-order/{clientOid}": 5,
+        "orders": 20,
+        "stop-order/{orderId}": 3,
+        "stop-order/cancelOrderByClientOid": 5,
+        "stop-order/cancel": 3,
+        "oco/order/{orderId}": 3,
+        "oco/client-order/{clientOid}": 3,
+        "oco/orders": 3,
+        "hf/margin/orders/{orderId}": 5,
+        "hf/margin/orders/client-order/{clientOid}": 5,
+        "hf/margin/orders": 10,
+        "convert/limit/order/cancel": 5
+      }
+    },
+    "futuresPublic": {
+      "get": {
+        "contracts/active": 4.5,
+        "contracts/{symbol}": 4.5,
+        "ticker": 3,
+        "level2/snapshot": 4.5,
+        "level2/depth20": 7.5,
+        "level2/depth100": 15,
+        "trade/history": 7.5,
+        "kline/query": 4.5,
+        "interest/query": 7.5,
+        "index/query": 3,
+        "mark-price/{symbol}/current": 4.5,
+        "premium/query": 4.5,
+        "trade-statistics": 4.5,
+        "funding-rate/{symbol}/current": 3,
+        "contract/funding-rates": 7.5,
+        "timestamp": 3,
+        "status": 6,
+        "level2/message/query": 1.3953
+      },
+      "post": {
+        "bullet-public": 15
+      }
+    },
+    "futuresPrivate": {
+      "get": {
+        "transaction-history": 3,
+        "account-overview": 7.5,
+        "account-overview-all": 9,
+        "transfer-list": 30,
+        "orders": 3,
+        "stopOrders": 9,
+        "recentDoneOrders": 7.5,
+        "orders/{orderId}": 7.5,
+        "orders/byClientOid": 7.5,
+        "fills": 7.5,
+        "recentFills": 4.5,
+        "openOrderStatistics": 15,
+        "position": 3,
+        "positions": 3,
+        "margin/maxWithdrawMargin": 15,
+        "contracts/risk-limit/{symbol}": 7.5,
+        "funding-history": 7.5,
+        "copy-trade/futures/get-max-open-size": 6,
+        "copy-trade/futures/position/margin/max-withdraw-margin": 15
+      },
+      "post": {
+        "transfer-out": 30,
+        "transfer-in": 30,
+        "orders": 3,
+        "orders/test": 3,
+        "orders/multi": 4.5,
+        "position/margin/auto-deposit-status": 6,
+        "margin/withdrawMargin": 15,
+        "position/margin/deposit-margin": 6,
+        "position/risk-limit-level/change": 6,
+        "copy-trade/futures/orders": 3,
+        "copy-trade/futures/orders/test": 3,
+        "copy-trade/futures/st-orders": 3,
+        "copy-trade/futures/position/margin/deposit-margin": 6,
+        "copy-trade/futures/position/margin/withdraw-margin": 15,
+        "copy-trade/futures/position/risk-limit-level/change": 3,
+        "copy-trade/futures/position/margin/auto-deposit-status": 6,
+        "copy-trade/futures/position/changeMarginMode": 3,
+        "copy-trade/futures/position/changeCrossUserLeverage": 3,
+        "copy-trade/getCrossModeMarginRequirement": 4.5,
+        "copy-trade/position/switchPositionMode": 3,
+        "bullet-private": 15
+      },
+      "delete": {
+        "orders/{orderId}": 1.5,
+        "orders/client-order/{clientOid}": 1.5,
+        "orders": 45,
+        "stopOrders": 22.5,
+        "copy-trade/futures/orders": 1.5,
+        "copy-trade/futures/orders/client-order": 1.5
+      }
+    },
+    "webExchange": {
+      "get": {
+        "currency/currency/chain-info": 1
+      }
+    },
+    "broker": {
+      "get": {
+        "broker/nd/info": 2,
+        "broker/nd/account": 2,
+        "broker/nd/account/apikey": 2,
+        "broker/nd/rebase/download": 3,
+        "asset/ndbroker/deposit/list": 1,
+        "broker/nd/transfer/detail": 1,
+        "broker/nd/deposit/detail": 1,
+        "broker/nd/withdraw/detail": 1
+      },
+      "post": {
+        "broker/nd/transfer": 1,
+        "broker/nd/account": 3,
+        "broker/nd/account/apikey": 3,
+        "broker/nd/account/update-apikey": 3
+      },
+      "delete": {
+        "broker/nd/account/apikey": 3
+      }
+    },
+    "earn": {
+      "get": {
+        "otc-loan/discount-rate-configs": 10,
+        "otc-loan/loan": 1,
+        "otc-loan/accounts": 1,
+        "earn/redeem-preview": 7.5,
+        "earn/saving/products": 7.5,
+        "earn/hold-assets": 7.5,
+        "earn/promotion/products": 7.5,
+        "earn/kcs-staking/products": 7.5,
+        "earn/staking/products": 7.5,
+        "earn/eth-staking/products": 7.5,
+        "struct-earn/dual/products": 4.5,
+        "struct-earn/orders": 7.5
+      },
+      "post": {
+        "earn/orders": 7.5,
+        "struct-earn/orders": 7.5
+      },
+      "delete": {
+        "earn/orders": 7.5
+      }
+    },
+    "uta": {
+      "get": {
+        "market/announcement": 20,
+        "market/currency": 3,
+        "market/currencies": 3,
+        "market/instrument": 4,
+        "market/ticker": 15,
+        "market/trade": 3,
+        "market/kline": 3,
+        "market/funding-rate": 2,
+        "market/funding-rate-history": 5,
+        "market/cross-config": 25,
+        "market/collateral-discount-ratio": 10,
+        "market/index-price": 20,
+        "market/position-tiers": 20,
+        "market/open-interest": 10,
+        "server/status": 3
+      }
+    },
+    "utaPrivate": {
+      "get": {
+        "market/orderbook": 3,
+        "account/balance": 5,
+        "account/transfer-quota": 20,
+        "account/mode": 30,
+        "account/ledger": 2,
+        "account/interest-history": 15,
+        "account/deposit/address": 5,
+        "{accountMode}/account/balance": 5,
+        "{accountMode}/account/overview": 5,
+        "{accountMode}/order/detail": 4,
+        "{accountMode}/order/open-list": 4,
+        "{accountMode}/order/history": 4,
+        "{accountMode}/order/execution": 4,
+        "{accountMode}/position/open-list": 3,
+        "{accountMode}/position/history": 2,
+        "{accountMode}/position/tiers": 20,
+        "sub-account/balance": 5,
+        "user/fee-rate": 3,
+        "dcp/query": 2
+      },
+      "post": {
+        "account/transfer": 4,
+        "account/mode": 30,
+        "{accountMode}/account/modify-leverage": 20,
+        "{accountMode}/order/place": 1,
+        "{accountMode}/order/place-batch": 4,
+        "{accountMode}/order/cancel": 1,
+        "{accountMode}/order/cancel-batch": 4,
+        "sub-account/canTransferOut": 5,
+        "dcp/set": 2
+      }
+    }
+  },
+  "requiredCredentials": {
+    "apiKey": true,
+    "secret": true,
+    "uid": false,
+    "accountId": false,
+    "login": false,
+    "password": true,
+    "twofa": false,
+    "privateKey": false,
+    "walletAddress": false,
+    "token": false
+  },
+  "currencies": {},
+  "timeframes": {
+    "1m": "1min",
+    "3m": "3min",
+    "5m": "5min",
+    "15m": "15min",
+    "30m": "30min",
+    "1h": "1hour",
+    "2h": "2hour",
+    "4h": "4hour",
+    "6h": "6hour",
+    "8h": "8hour",
+    "12h": "12hour",
+    "1d": "1day",
+    "1w": "1week",
+    "1M": "1month"
+  },
+  "fees": {
+    "trading": {
+      "tierBased": true,
+      "percentage": true,
+      "taker": 0.001,
+      "maker": 0.001,
+      "tiers": {
+        "taker": [
+          [
+            0,
+            0.001
+          ],
+          [
+            50,
+            0.001
+          ],
+          [
+            200,
+            0.0009
+          ],
+          [
+            500,
+            0.0008
+          ],
+          [
+            1000,
+            0.0007
+          ],
+          [
+            2000,
+            0.0007
+          ],
+          [
+            4000,
+            0.0006
+          ],
+          [
+            8000,
+            0.0005
+          ],
+          [
+            15000,
+            0.00045
+          ],
+          [
+            25000,
+            0.0004
+          ],
+          [
+            40000,
+            0.00035
+          ],
+          [
+            60000,
+            0.0003
+          ],
+          [
+            80000,
+            0.00025
+          ]
+        ],
+        "maker": [
+          [
+            0,
+            0.001
+          ],
+          [
+            50,
+            0.0009
+          ],
+          [
+            200,
+            0.0007
+          ],
+          [
+            500,
+            0.0005
+          ],
+          [
+            1000,
+            0.0003
+          ],
+          [
+            2000,
+            0
+          ],
+          [
+            4000,
+            0
+          ],
+          [
+            8000,
+            0
+          ],
+          [
+            15000,
+            -0.00005
+          ],
+          [
+            25000,
+            -0.00005
+          ],
+          [
+            40000,
+            -0.00005
+          ],
+          [
+            60000,
+            -0.00005
+          ],
+          [
+            80000,
+            -0.00005
+          ]
+        ]
+      }
+    },
+    "funding": {
+      "tierBased": false,
+      "percentage": false,
+      "withdraw": {},
+      "deposit": {}
+    }
+  },
+  "status": {
+    "status": "ok"
+  },
+  "exceptions": {
+    "exact": {},
+    "broad": {}
+  },
+  "httpExceptions": {},
+  "commonCurrencies": {
+    "XBT": "BTC",
+    "BCHSV": "BSV",
+    "BIFI": "BIFIF",
+    "VAI": "VAIOT",
+    "WAX": "WAXP",
+    "ALT": "APTOSLAUNCHTOKEN",
+    "KALT": "ALT",
+    "FUD": "FTX Users' Debt"
+  },
+  "precisionMode": 4,
+  "paddingMode": 5,
+  "limits": {
+    "leverage": {},
+    "amount": {},
+    "price": {},
+    "cost": {}
+  },
+  "rollingWindowSize": 60000,
+  "version": "v2",
+  "comment": "Platform 2.0",
+  "quoteJsonNumbers": false,
+  "options": {
+    "version": "v1",
+    "symbolSeparator": "-",
+    "fetchMyTradesMethod": "private_get_fills",
+    "timeDifference": 0,
+    "adjustForTimeDifference": false,
+    "fetchCurrencies": {
+      "webApiEnable": true,
+      "webApiRetries": 1,
+      "webApiMuteFailure": true
+    },
+    "fetchMarkets": {
+      "fetchTickersFees": true
+    },
+    "withdraw": {
+      "includeFee": false
+    },
+    "transfer": {
+      "fillResponseFromRequest": true
+    },
+    "versions": {
+      "public": {
+        "GET": {
+          "currencies": "v3",
+          "currencies/{currency}": "v3",
+          "symbols": "v2",
+          "mark-price/all-symbols": "v3",
+          "announcements": "v3"
+        }
+      },
+      "private": {
+        "GET": {
+          "user-info": "v2",
+          "hf/margin/account/ledgers": "v3",
+          "sub/user": "v2",
+          "sub-accounts": "v2",
+          "margin/accounts": "v3",
+          "isolated/accounts": "v3",
+          "deposit-addresses": "v1",
+          "market/orderbook/level2": "v3",
+          "market/orderbook/level3": "v3",
+          "market/orderbook/level{level}": "v3",
+          "oco/order/{orderId}": "v3",
+          "oco/order/details/{orderId}": "v3",
+          "oco/client-order/{clientOid}": "v3",
+          "oco/orders": "v3",
+          "hf/margin/orders/active": "v3",
+          "hf/margin/order/active/symbols": "v3",
+          "hf/margin/orders/done": "v3",
+          "hf/margin/orders/{orderId}": "v3",
+          "hf/margin/orders/client-order/{clientOid}": "v3",
+          "hf/margin/fills": "v3",
+          "etf/info": "v3",
+          "margin/currencies": "v3",
+          "margin/borrow": "v3",
+          "margin/repay": "v3",
+          "margin/interest": "v3",
+          "project/list": "v3",
+          "project/marketInterestRate": "v3",
+          "redeem/orders": "v3",
+          "purchase/orders": "v3",
+          "migrate/user/account/status": "v3",
+          "margin/symbols": "v3",
+          "affiliate/inviter/statistics": "v2",
+          "asset/ndbroker/deposit/list": "v1"
+        },
+        "POST": {
+          "sub/user/created": "v2",
+          "accounts/universal-transfer": "v3",
+          "accounts/sub-transfer": "v2",
+          "accounts/inner-transfer": "v2",
+          "transfer-out": "v3",
+          "deposit-address/create": "v3",
+          "oco/order": "v3",
+          "hf/margin/order": "v3",
+          "hf/margin/order/test": "v3",
+          "margin/borrow": "v3",
+          "margin/repay": "v3",
+          "purchase": "v3",
+          "redeem": "v3",
+          "lend/purchase/update": "v3",
+          "position/update-user-leverage": "v3",
+          "withdrawals": "v3"
+        },
+        "DELETE": {
+          "hf/margin/orders/{orderId}": "v3",
+          "hf/margin/orders/client-order/{clientOid}": "v3",
+          "hf/margin/orders": "v3",
+          "oco/order/{orderId}": "v3",
+          "oco/client-order/{clientOid}": "v3",
+          "oco/orders": "v3"
+        }
+      },
+      "futuresPrivate": {
+        "POST": {
+          "transfer-out": "v3"
+        }
+      }
+    },
+    "partner": {
+      "spot": {
+        "id": "ccxt",
+        "key": "9e58cc35-5b5e-4133-92ec-166e3f077cb8"
+      },
+      "future": {
+        "id": "ccxtfutures",
+        "key": "1b327198-f30c-4f14-a0ac-918871282f15"
+      }
+    },
+    "accountsByType": {
+      "spot": "trade",
+      "margin": "margin",
+      "cross": "margin",
+      "isolated": "isolated",
+      "main": "main",
+      "funding": "main",
+      "future": "contract",
+      "swap": "contract",
+      "mining": "pool",
+      "hf": "trade_hf"
+    },
+    "networks": {
+      "BRC20": "btc",
+      "BTCNATIVESEGWIT": "bech32",
+      "ERC20": "eth",
+      "TRC20": "trx",
+      "HRC20": "heco",
+      "MATIC": "matic",
+      "KCC": "kcc",
+      "SOL": "sol",
+      "ALGO": "algo",
+      "EOS": "eos",
+      "BEP20": "bsc",
+      "BEP2": "bnb",
+      "ARBONE": "arbitrum",
+      "AVAXX": "avax",
+      "AVAXC": "avaxc",
+      "TLOS": "tlos",
+      "CFX": "cfx",
+      "ACA": "aca",
+      "OPTIMISM": "optimism",
+      "ONT": "ont",
+      "GLMR": "glmr",
+      "CSPR": "cspr",
+      "KLAY": "klay",
+      "XRD": "xrd",
+      "RVN": "rvn",
+      "NEAR": "near",
+      "APT": "aptos",
+      "ETHW": "ethw",
+      "TON": "ton",
+      "BCH": "bch",
+      "BSV": "bchsv",
+      "BCHA": "bchabc",
+      "OSMO": "osmo",
+      "NANO": "nano",
+      "XLM": "xlm",
+      "VET": "vet",
+      "IOST": "iost",
+      "ZIL": "zil",
+      "XRP": "xrp",
+      "TOMO": "tomo",
+      "XMR": "xmr",
+      "COTI": "coti",
+      "XTZ": "xtz",
+      "ADA": "ada",
+      "WAX": "waxp",
+      "THETA": "theta",
+      "ONE": "one",
+      "IOTEX": "iotx",
+      "NULS": "nuls",
+      "KSM": "ksm",
+      "LTC": "ltc",
+      "WAVES": "waves",
+      "DOT": "dot",
+      "STEEM": "steem",
+      "QTUM": "qtum",
+      "DOGE": "doge",
+      "FIL": "fil",
+      "XYM": "xym",
+      "FLUX": "flux",
+      "ATOM": "atom",
+      "XDC": "xdc",
+      "KDA": "kda",
+      "ICP": "icp",
+      "CELO": "celo",
+      "LSK": "lsk",
+      "VSYS": "vsys",
+      "KAR": "kar",
+      "XCH": "xch",
+      "FLOW": "flow",
+      "BAND": "band",
+      "EGLD": "egld",
+      "HBAR": "hbar",
+      "XPR": "xpr",
+      "AR": "ar",
+      "FTM": "ftm",
+      "KAVA": "kava",
+      "KMA": "kma",
+      "XEC": "xec",
+      "IOTA": "iota",
+      "HNT": "hnt",
+      "ASTR": "astr",
+      "PDEX": "pdex",
+      "METIS": "metis",
+      "ZEC": "zec",
+      "POKT": "pokt",
+      "OASYS": "oas",
+      "OASIS": "oasis",
+      "ETC": "etc",
+      "AKT": "akt",
+      "FSN": "fsn",
+      "SCRT": "scrt",
+      "CFG": "cfg",
+      "ICX": "icx",
+      "KMD": "kmd",
+      "NEM": "NEM",
+      "STX": "stx",
+      "DGB": "dgb",
+      "DCR": "dcr",
+      "CKB": "ckb",
+      "ELA": "ela",
+      "HYDRA": "hydra",
+      "BTM": "btm",
+      "KARDIA": "kai",
+      "SXP": "sxp",
+      "NEBL": "nebl",
+      "ZEN": "zen",
+      "SDN": "sdn",
+      "LTO": "lto",
+      "WEMIX": "wemix",
+      "EVER": "ever",
+      "BNC": "bnc",
+      "BNCDOT": "bncdot",
+      "AION": "aion",
+      "GRIN": "grin",
+      "LOKI": "loki",
+      "QKC": "qkc",
+      "TT": "TT",
+      "PIVX": "pivx",
+      "SERO": "sero",
+      "METER": "meter",
+      "STATEMINE": "statemine",
+      "DVPN": "dvpn",
+      "XPRT": "xprt",
+      "MOVR": "movr",
+      "ERGO": "ergo",
+      "ABBC": "abbc",
+      "DIVI": "divi",
+      "PURA": "pura",
+      "DFI": "dfi",
+      "NEON3": "neon3",
+      "DOCK": "dock",
+      "TRUE": "true",
+      "CS": "cs",
+      "ORAI": "orai",
+      "BASE": "base",
+      "TARA": "tara"
+    },
+    "marginModes": {
+      "cross": "MARGIN_TRADE",
+      "isolated": "MARGIN_ISOLATED_TRADE",
+      "spot": "TRADE"
+    }
+  },
+  "features": {
+    "spot": {
+      "sandbox": false,
+      "createOrder": {
+        "marginMode": true,
+        "triggerPrice": true,
+        "triggerDirection": false,
+        "stopLossPrice": true,
+        "takeProfitPrice": true,
+        "timeInForce": {
+          "IOC": true,
+          "FOK": true,
+          "PO": true,
+          "GTD": true
+        },
+        "hedged": false,
+        "trailing": false,
+        "leverage": false,
+        "marketBuyByCost": true,
+        "marketBuyRequiresPrice": false,
+        "selfTradePrevention": true,
+        "iceberg": true
+      },
+      "createOrders": {
+        "max": 5
+      },
+      "fetchMyTrades": {
+        "marginMode": true,
+        "untilDays": 7,
+        "symbolRequired": true
+      },
+      "fetchOrder": {
+        "marginMode": false,
+        "trigger": true,
+        "trailing": false,
+        "symbolRequired": true
+      },
+      "fetchOpenOrders": {
+        "marginMode": true,
+        "limit": 500,
+        "trigger": true,
+        "trailing": false,
+        "symbolRequired": true
+      },
+      "fetchClosedOrders": {
+        "marginMode": true,
+        "limit": 500,
+        "untilDays": 7,
+        "trigger": true,
+        "trailing": false,
+        "symbolRequired": true
+      },
+      "fetchOHLCV": {
+        "limit": 1500
+      }
+    },
+    "swap": {},
+    "future": {}
+  }
+}

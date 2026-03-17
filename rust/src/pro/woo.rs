@@ -8,1016 +8,659 @@
 #![allow(unused_variables)]
 
 use async_trait::async_trait;
+use std::str::FromStr;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use std::collections::BTreeMap;
-use std::str::FromStr;
+use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, JSON, Array, Object, Math, parse_int, shift_2, extend_2, normalize};
 
-pub type JSON = serde_json::Value;
-pub type Array = Vec<Value>;
-pub type Object = BTreeMap<String, Value>;
+use crate::exchange::{PRECISE_BASE, TRUNCATE, ROUND, ROUND_UP, ROUND_DOWN};
+use crate::exchange::{DECIMAL_PLACES, SIGNIFICANT_DIGITS, TICK_SIZE, NO_PADDING, PAD_WITH_ZERO};
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub enum Value {
-    Undefined,
-    Json(JSON),
-}
-
-impl Value {
-    pub fn new_object() -> Value {
-        Value::Json(json!({}))
-    }
-
-    pub fn new_array() -> Value {
-        Value::Json(json!([]))
-    }
-
-    pub fn null() -> Value {
-        Value::Json(json!(null))
-    }
-
-    pub fn is_undefined(&self) -> bool {
-        matches!(self, Value::Undefined)
-    }
-
-    pub fn is_nullish(&self) -> bool {
-        matches!(self, Value::Undefined) || matches!(self, Value::Json(JSON::Null))
-    }
-
-    pub fn is_nonnullish(&self) -> bool {
-        !self.is_nullish()
-    }
-
-    pub fn is_truthy(&self) -> bool {
-        match self {
-            Value::Undefined => false,
-            Value::Json(JSON::Null) => false,
-            Value::Json(JSON::Bool(b)) => *b,
-            Value::Json(JSON::Number(n)) => n.as_f64().unwrap_or(0.0) != 0.0,
-            Value::Json(JSON::String(s)) => !s.is_empty(),
-            Value::Json(JSON::Array(a)) => !a.is_empty(),
-            Value::Json(JSON::Object(o)) => !o.is_empty(),
-        }
-    }
-
-    pub fn is_falsy(&self) -> bool {
-        !self.is_truthy()
-    }
-
-    pub fn or_default(&self, default: Value) -> Value {
-        if self.is_nullish() {
-            default
-        } else {
-            self.clone()
-        }
-    }
-
-    pub fn is_number(&self) -> bool {
-        matches!(self, Value::Json(JSON::Number(_)))
-    }
-
-    pub fn is_string(&self) -> bool {
-        matches!(self, Value::Json(JSON::String(_)))
-    }
-
-    pub fn is_object(&self) -> bool {
-        matches!(self, Value::Json(JSON::Object(_)))
-    }
-
-    pub fn to_upper_case(&self) -> Value {
-        match self {
-            Value::Json(JSON::String(s)) => Value::from(s.to_uppercase()),
-            _ => Value::Undefined,
-        }
-    }
-
-    pub fn unwrap_str(&self) -> &str {
-        match self {
-            Value::Json(JSON::String(s)) => s,
-            _ => "",
-        }
-    }
-
-    pub fn unwrap_usize(&self) -> usize {
-        match self {
-            Value::Json(JSON::Number(n)) => n.as_u64().unwrap_or(0) as usize,
-            Value::Json(JSON::String(s)) => usize::from_str(s).unwrap_or(0),
-            _ => 0,
-        }
-    }
-
-    pub fn unwrap_bool(&self) -> bool {
-        match self {
-            Value::Json(JSON::Bool(b)) => *b,
-            _ => false,
-        }
-    }
-
-    pub fn unwrap_precise(&self) -> &Precise {
-        static PRECISE: Precise = Precise;
-        &PRECISE
-    }
-
-    pub fn unwrap_json(&self) -> &serde_json::Value {
-        match self {
-            Value::Json(v) => v,
-            _ => &JSON::Null,
-        }
-    }
-
-    pub fn unwrap_json_mut(&mut self) -> &mut serde_json::Value {
-        match self {
-            Value::Json(v) => v,
-            Value::Undefined => {
-                *self = Value::new_object();
-                match self {
-                    Value::Json(v) => v,
-                    _ => unreachable!(),
-                }
-            }
-        }
-    }
-
-    pub fn unwrap_precise_mut(&mut self) -> &mut Precise {
-        // Runtime placeholder: return a stable mutable instance without `static mut`.
-        Box::leak(Box::new(Precise))
-    }
-
-    pub fn len(&self) -> usize {
-        match self {
-            Value::Json(JSON::Array(a)) => a.len(),
-            Value::Json(JSON::Object(o)) => o.len(),
-            Value::Json(JSON::String(s)) => s.len(),
-            _ => 0,
-        }
-    }
-
-    pub fn get(&self, _key: Value) -> Value {
-        match (self, _key) {
-            (Value::Json(JSON::Object(o)), Value::Json(JSON::String(k))) => {
-                o.get(&k).cloned().map(Value::Json).unwrap_or(Value::Undefined)
-            }
-            (Value::Json(JSON::Array(a)), Value::Json(JSON::Number(n))) => {
-                let idx = n.as_u64().unwrap_or(0) as usize;
-                a.get(idx).cloned().map(Value::Json).unwrap_or(Value::Undefined)
-            }
-            (Value::Json(JSON::Object(o)), Value::Json(JSON::Number(n))) => {
-                let k = n.as_u64().unwrap_or(0).to_string();
-                o.get(&k).cloned().map(Value::Json).unwrap_or(Value::Undefined)
-            }
-            _ => Value::Undefined,
-        }
-    }
-
-    pub fn set(&mut self, _key: Value, _value: Value) {
-        let value_json = match _value {
-            Value::Json(v) => v,
-            Value::Undefined => JSON::Null,
-        };
-        match (self, _key) {
-            (Value::Json(JSON::Object(o)), Value::Json(JSON::String(k))) => {
-                o.insert(k, value_json);
-            }
-            (Value::Json(JSON::Array(a)), Value::Json(JSON::Number(n))) => {
-                let idx = n.as_u64().unwrap_or(0) as usize;
-                if idx < a.len() {
-                    a[idx] = value_json;
-                } else if idx == a.len() {
-                    a.push(value_json);
-                }
-            }
-            (Value::Json(JSON::Object(o)), Value::Json(JSON::Number(n))) => {
-                let k = n.as_u64().unwrap_or(0).to_string();
-                o.insert(k, value_json);
-            }
-            _ => {}
-        }
-    }
-
-    pub fn push(&mut self, _value: Value) {
-        if let Value::Json(JSON::Array(a)) = self {
-            let v = match _value {
-                Value::Json(j) => j,
-                Value::Undefined => JSON::Null,
-            };
-            a.push(v);
-        }
-    }
-
-    pub fn split(&self, _separator: Value) -> Value {
-        let sep = match _separator {
-            Value::Json(JSON::String(s)) => s,
-            _ => String::new(),
-        };
-        match self {
-            Value::Json(JSON::String(s)) => Value::Json(JSON::Array(s.split(&sep).map(|x| json!(x)).collect())),
-            _ => Value::Undefined,
-        }
-    }
-
-    pub fn deep_extend(&self, _args: Value) -> Value {
-        // Placeholder for variadic deepExtend; caller should pass already-merged object.
-        self.clone()
-    }
-
-    pub fn contains_key(&self, _key: Value) -> bool {
-        match (self, _key) {
-            (Value::Json(JSON::Object(o)), Value::Json(JSON::String(k))) => o.contains_key(&k),
-            _ => false,
-        }
-    }
-
-    pub fn keys(&self) -> Vec<Value> {
-        match self {
-            Value::Json(JSON::Object(o)) => o.keys().map(|k| Value::from(k.as_str())).collect(),
-            _ => vec![],
-        }
-    }
-
-    pub fn values(&self) -> Vec<Value> {
-        match self {
-            Value::Json(JSON::Object(o)) => o.values().cloned().map(Value::Json).collect(),
-            _ => vec![],
-        }
-    }
-
-    pub fn to_array(&self, _x: Value) -> Value {
-        match self {
-            Value::Json(JSON::Array(_)) => self.clone(),
-            Value::Json(JSON::Object(o)) => Value::Json(JSON::Array(o.values().cloned().collect())),
-            _ => Value::new_array(),
-        }
-    }
-
-    pub fn index_of(&self, _x: Value) -> Value {
-        match (self, _x) {
-            (Value::Json(JSON::Array(a)), Value::Json(v)) => {
-                for (i, item) in a.iter().enumerate() {
-                    if item == &v {
-                        return Value::from(i as i64);
-                    }
-                }
-                Value::from(-1i64)
-            }
-            _ => Value::from(-1i64),
-        }
-    }
-
-    pub fn join(&self, _glue: Value) -> Value {
-        let glue = match _glue {
-            Value::Json(JSON::String(s)) => s,
-            _ => String::new(),
-        };
-        match self {
-            Value::Json(JSON::Array(a)) => {
-                let parts: Vec<String> = a.iter().map(|v| v.to_string()).collect();
-                Value::from(parts.join(&glue))
-            }
-            _ => Value::Undefined,
-        }
-    }
-
-    pub fn to_string(&self) -> Value {
-        match self {
-            Value::Json(v) => Value::from(v.to_string()),
-            Value::Undefined => Value::from("undefined"),
-        }
-    }
-
-    pub fn typeof_(&self) -> Value {
-        let t = match self {
-            Value::Undefined => "undefined",
-            Value::Json(JSON::Null) => "null",
-            Value::Json(JSON::Bool(_)) => "boolean",
-            Value::Json(JSON::Number(_)) => "number",
-            Value::Json(JSON::String(_)) => "string",
-            Value::Json(JSON::Array(_)) => "array",
-            Value::Json(JSON::Object(_)) => "object",
-        };
-        Value::from(t)
-    }
-
-    pub fn slice(&self, _start: Value) -> Value {
-        let start = _start.unwrap_usize();
-        match self {
-            Value::Json(JSON::Array(a)) => {
-                let slice = if start < a.len() { a[start..].to_vec() } else { vec![] };
-                Value::Json(JSON::Array(slice))
-            }
-            Value::Json(JSON::String(s)) => Value::from(s.get(start..).unwrap_or("").to_string()),
-            _ => Value::Undefined,
-        }
-    }
-}
-
-impl From<i64> for Value {
-    fn from(v: i64) -> Self {
-        Value::Json(json!(v))
-    }
-}
-
-impl From<usize> for Value {
-    fn from(v: usize) -> Self {
-        Value::Json(json!(v))
-    }
-}
-
-impl From<bool> for Value {
-    fn from(v: bool) -> Self {
-        Value::Json(json!(v))
-    }
-}
-
-impl From<&str> for Value {
-    fn from(v: &str) -> Self {
-        Value::Json(json!(v))
-    }
-}
-
-impl From<String> for Value {
-    fn from(v: String) -> Self {
-        Value::Json(json!(v))
-    }
-}
-
-impl From<f64> for Value {
-    fn from(v: f64) -> Self {
-        match serde_json::Number::from_f64(v) {
-            Some(n) => Value::Json(JSON::Number(n)),
-            None => Value::Json(json!(0)),
-        }
-    }
-}
-
-// ---------------------------------------------------------------------------
-// Arithmetic operators for Value — JS-like coercion semantics
-// ---------------------------------------------------------------------------
-
-fn coerce_to_f64(v: &Value) -> Option<f64> {
-    match v {
-        Value::Json(JSON::Number(n)) => n.as_f64(),
-        Value::Json(JSON::String(s)) => s.parse::<f64>().ok(),
-        Value::Json(JSON::Bool(b)) => Some(if *b { 1.0 } else { 0.0 }),
-        _ => None,
-    }
-}
-
-/// Returns Some(i64) if value is an integer JSON number, None otherwise.
-fn coerce_to_i64(v: &Value) -> Option<i64> {
-    match v {
-        Value::Json(JSON::Number(n)) => n.as_i64(),
-        _ => None,
-    }
-}
-
-impl std::ops::Add for Value {
-    type Output = Value;
-    fn add(self, rhs: Value) -> Value {
-        // String concatenation takes precedence if either side is a string
-        match (&self, &rhs) {
-            (Value::Json(JSON::String(a)), _) => {
-                let b = match &rhs {
-                    Value::Json(JSON::String(s)) => s.clone(),
-                    Value::Json(v) => v.to_string().trim_matches('"').to_string(),
-                    Value::Undefined => "undefined".to_string(),
-                };
-                Value::from(a.clone() + &b)
-            }
-            (_, Value::Json(JSON::String(b))) => {
-                let a = match &self {
-                    Value::Json(v) => v.to_string().trim_matches('"').to_string(),
-                    Value::Undefined => "undefined".to_string(),
-                };
-                Value::from(a + b.as_str())
-            }
-            _ => match (coerce_to_i64(&self), coerce_to_i64(&rhs)) {
-                (Some(a), Some(b)) => Value::from(a + b),
-                _ => match (coerce_to_f64(&self), coerce_to_f64(&rhs)) {
-                    (Some(a), Some(b)) => Value::from(a + b),
-                    _ => Value::Undefined,
-                },
-            },
-        }
-    }
-}
-
-impl std::ops::Sub for Value {
-    type Output = Value;
-    fn sub(self, rhs: Value) -> Value {
-        match (coerce_to_i64(&self), coerce_to_i64(&rhs)) {
-            (Some(a), Some(b)) => Value::from(a - b),
-            _ => match (coerce_to_f64(&self), coerce_to_f64(&rhs)) {
-                (Some(a), Some(b)) => Value::from(a - b),
-                _ => Value::Undefined,
-            },
-        }
-    }
-}
-
-impl std::ops::Mul for Value {
-    type Output = Value;
-    fn mul(self, rhs: Value) -> Value {
-        match (coerce_to_i64(&self), coerce_to_i64(&rhs)) {
-            (Some(a), Some(b)) => Value::from(a * b),
-            _ => match (coerce_to_f64(&self), coerce_to_f64(&rhs)) {
-                (Some(a), Some(b)) => Value::from(a * b),
-                _ => Value::Undefined,
-            },
-        }
-    }
-}
-
-impl std::ops::Div for Value {
-    type Output = Value;
-    fn div(self, rhs: Value) -> Value {
-        match (coerce_to_f64(&self), coerce_to_f64(&rhs)) {
-            (Some(a), Some(b)) if b != 0.0 => Value::from(a / b),
-            _ => Value::Undefined,
-        }
-    }
-}
-
-impl std::ops::Rem for Value {
-    type Output = Value;
-    fn rem(self, rhs: Value) -> Value {
-        match (coerce_to_f64(&self), coerce_to_f64(&rhs)) {
-            (Some(a), Some(b)) if b != 0.0 => Value::from(a % b),
-            _ => Value::Undefined,
-        }
-    }
-}
-
-impl std::ops::Neg for Value {
-    type Output = Value;
-    fn neg(self) -> Value {
-        match coerce_to_f64(&self) {
-            Some(f) => Value::from(-f),
-            None => Value::Undefined,
-        }
-    }
-}
-
-/// Partial ordering for Value — numeric or lexicographic
-impl PartialOrd for Value {
-    fn partial_cmp(&self, other: &Value) -> Option<std::cmp::Ordering> {
-        match (coerce_to_f64(self), coerce_to_f64(other)) {
-            (Some(a), Some(b)) => a.partial_cmp(&b),
-            _ => match (self, other) {
-                (Value::Json(JSON::String(a)), Value::Json(JSON::String(b))) => Some(a.cmp(b)),
-                _ => None,
-            },
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Precise;
-
-pub struct Math;
-
-pub fn parse_int(_value: Value, _radix: Value) -> Value {
-    match _value {
-        Value::Json(JSON::Number(n)) => Value::from(n.as_i64().unwrap_or(0)),
-        Value::Json(JSON::String(s)) => {
-            let radix = _radix.unwrap_usize();
-            let base = if radix == 0 { 10 } else { radix } as u32;
-            let v = i64::from_str_radix(s.trim(), base).unwrap_or(0);
-            Value::from(v)
-        }
-        _ => Value::from(0i64),
-    }
-}
-
-pub fn shift_2(_value: Value) -> (Value, Value) {
-    match _value {
-        Value::Json(JSON::Array(mut a)) => {
-            let first = if !a.is_empty() { Value::Json(a.remove(0)) } else { Value::Undefined };
-            let second = if !a.is_empty() { Value::Json(a.remove(0)) } else { Value::Undefined };
-            (first, second)
-        }
-        _ => (Value::Undefined, Value::Undefined),
-    }
-}
-
-pub fn extend_2(_a: Value, _b: Value) -> Value {
-    match (_a, _b) {
-        (Value::Json(JSON::Object(mut a)), Value::Json(JSON::Object(b))) => {
-            for (k, v) in b {
-                a.insert(k, v);
-            }
-            Value::Json(JSON::Object(a))
-        }
-        (a, _) => a,
-    }
-}
-
-pub fn normalize(_value: &Value) -> Option<JSON> {
-    match _value {
-        Value::Undefined => None,
-        Value::Json(v) => Some(v.clone()),
-    }
-}
-
-pub const PRECISE_BASE: i32 = 10;
-pub const TRUNCATE: i32 = 0;
-pub const ROUND: i32 = 1;
-pub const ROUND_UP: i32 = 2;
-pub const ROUND_DOWN: i32 = 3;
-pub const DECIMAL_PLACES: i32 = 4;
-pub const SIGNIFICANT_DIGITS: i32 = 5;
-pub const TICK_SIZE: i32 = 6;
-pub const NO_PADDING: i32 = 7;
-pub const PAD_WITH_ZERO: i32 = 8;
-
-pub trait ValueTrait {
-    fn is_undefined(&self) -> bool;
-    fn is_nullish(&self) -> bool;
-    fn is_nonnullish(&self) -> bool;
-    fn is_truthy(&self) -> bool;
-    fn or_default(&self, default: Value) -> Value;
-    fn is_number(&self) -> bool;
-    fn is_string(&self) -> bool;
-    fn is_object(&self) -> bool;
-    fn is_falsy(&self) -> bool;
-    fn to_upper_case(&self) -> Value;
-    fn unwrap_str(&self) -> &str;
-    fn unwrap_usize(&self) -> usize;
-    fn unwrap_bool(&self) -> bool;
-    fn unwrap_precise(&self) -> &Precise;
-    fn unwrap_json(&self) -> &serde_json::Value;
-    fn unwrap_json_mut(&mut self) -> &mut serde_json::Value;
-    fn unwrap_precise_mut(&mut self) -> &mut Precise;
-    fn len(&self) -> usize;
-    fn get(&self, key: Value) -> Value;
-    fn set(&mut self, key: Value, value: Value);
-    fn push(&mut self, value: Value);
-    fn split(&self, separator: Value) -> Value;
-    fn contains_key(&self, key: Value) -> bool;
-    fn keys(&self) -> Vec<Value>;
-    fn values(&self) -> Vec<Value>;
-    fn to_array(&self, x: Value) -> Value;
-    fn index_of(&self, x: Value) -> Value;
-    fn join(&self, glue: Value) -> Value;
-    fn to_string(&self) -> Value;
-    fn typeof_(&self) -> Value;
-    fn slice(&self, start: Value) -> Value;
-}
-
-pub struct ExchangeImpl;
-
-impl ExchangeImpl {
-    pub fn init(_value: &mut Value) {
-        // TODO: initialize exchange defaults
-    }
-}
-
-// ---------------------------------------------------------------------------
-// Free helpers used by safe accessor implementations
-// ---------------------------------------------------------------------------
-
-pub fn safe_get(dictionary: &Value, key: &Value) -> Value {
-    match dictionary {
-        Value::Json(serde_json::Value::Object(map)) => {
-            if let Value::Json(serde_json::Value::String(k)) = key {
-                map.get(k).map(|v| Value::Json(v.clone())).unwrap_or(Value::Undefined)
-            } else if let Value::Json(k) = key {
-                let k_str = k.to_string();
-                let k_str = k_str.trim_matches('"');
-                map.get(k_str).map(|v| Value::Json(v.clone())).unwrap_or(Value::Undefined)
-            } else {
-                Value::Undefined
-            }
-        }
-        Value::Json(serde_json::Value::Array(arr)) => {
-            if let Value::Json(serde_json::Value::Number(n)) = key {
-                if let Some(i) = n.as_u64() {
-                    arr.get(i as usize).map(|v| Value::Json(v.clone())).unwrap_or(Value::Undefined)
-                } else {
-                    Value::Undefined
-                }
-            } else {
-                Value::Undefined
-            }
-        }
-        _ => Value::Undefined,
-    }
-}
-
-fn safe_get_from_keys(dictionary: &Value, keys: &[Value]) -> Value {
-    for key in keys {
-        let v = safe_get(dictionary, key);
-        if v.is_nonnullish() {
-            return v;
-        }
-    }
-    Value::Undefined
-}
-
-pub fn value_to_string_opt(v: &Value) -> Option<String> {
-    match v {
-        Value::Json(serde_json::Value::String(s)) => Some(s.clone()),
-        Value::Json(serde_json::Value::Number(n)) => Some(n.to_string()),
-        Value::Json(serde_json::Value::Bool(b)) => Some(b.to_string()),
-        _ => None,
-    }
-}
-
-pub fn value_to_i64_opt(v: &Value) -> Option<i64> {
-    match v {
-        Value::Json(serde_json::Value::Number(n)) => {
-            if let Some(i) = n.as_i64() { return Some(i); }
-            if let Some(f) = n.as_f64() { return Some(f as i64); }
-            None
-        }
-        Value::Json(serde_json::Value::String(s)) => s.parse::<f64>().ok().map(|f| f as i64),
-        Value::Json(serde_json::Value::Bool(b)) => Some(if *b { 1 } else { 0 }),
-        _ => None,
-    }
-}
-
-pub fn value_to_f64_opt(v: &Value) -> Option<f64> {
-    match v {
-        Value::Json(serde_json::Value::Number(n)) => n.as_f64(),
-        Value::Json(serde_json::Value::String(s)) => s.parse::<f64>().ok(),
-        Value::Json(serde_json::Value::Bool(b)) => Some(if *b { 1.0 } else { 0.0 }),
-        _ => None,
-    }
-}
-
-// ---------------------------------------------------------------------------
+// PLEASE DO NOT EDIT THIS FILE, IT IS GENERATED AND WILL BE OVERWRITTEN:
+// https://github.com/ccxt/ccxt/blob/master/CONTRIBUTING.md#how-to-contribute-code
 
 #[async_trait]
-pub trait Exchange {
-
-    // ---------------------------------------------------------------------------
-    // Manually-maintained safe accessor methods — preserved across transpiler runs
-    // ---------------------------------------------------------------------------
-
-    fn safe_string(&self, dictionary: Value, key: Value, default_value: Value) -> Value {
-        let v = safe_get(&dictionary, &key);
-        match &v {
-            Value::Undefined | Value::Json(serde_json::Value::Null) => {
-                if default_value.is_nullish() { Value::Undefined } else { default_value }
+pub trait Woo : Exchange {
+fn describe(&self) -> Value {
+        Value::Json(serde_json::Value::from_str(r###"{
+    "id": "woo",
+    "name": "WOO X",
+    "countries": [
+        "KY"
+    ],
+    "enableRateLimit": true,
+    "rateLimit": 100,
+    "timeout": 10000,
+    "certified": true,
+    "pro": true,
+    "alias": false,
+    "dex": false,
+    "has": {
+        "publicAPI": true,
+        "privateAPI": true,
+        "sandbox": true,
+        "spot": true,
+        "margin": true,
+        "swap": true,
+        "future": false,
+        "option": false,
+        "addMargin": true,
+        "cancelAllOrders": true,
+        "cancelOrder": true,
+        "closeAllPositions": false,
+        "closePosition": false,
+        "createDepositAddress": false,
+        "createLimitOrder": true,
+        "createMarketBuyOrderWithCost": true,
+        "createMarketOrder": false,
+        "createMarketOrderWs": true,
+        "createMarketOrderWithCost": false,
+        "createMarketSellOrderWithCost": true,
+        "createOrder": true,
+        "createOrderWithTakeProfitAndStopLoss": true,
+        "createReduceOnlyOrder": true,
+        "createStopLimitOrder": false,
+        "createStopLossOrder": true,
+        "createStopMarketOrder": false,
+        "createStopOrder": false,
+        "createTakeProfitOrder": true,
+        "createTrailingAmountOrder": true,
+        "createTrailingPercentOrder": true,
+        "createTriggerOrder": true,
+        "editOrder": "emulated",
+        "fetchAccounts": true,
+        "fetchBalance": true,
+        "fetchCanceledOrders": false,
+        "fetchClosedOrder": false,
+        "fetchClosedOrders": true,
+        "fetchConvertCurrencies": true,
+        "fetchConvertQuote": true,
+        "fetchConvertTrade": true,
+        "fetchConvertTradeHistory": true,
+        "fetchCurrencies": true,
+        "fetchCurrenciesWs": "emulated",
+        "fetchDepositAddress": true,
+        "fetchDepositAddresses": false,
+        "fetchDepositAddressesByNetwork": false,
+        "fetchDeposits": true,
+        "fetchDepositsWithdrawals": true,
+        "fetchFundingHistory": true,
+        "fetchFundingRate": true,
+        "fetchFundingRateHistory": true,
+        "fetchFundingInterval": true,
+        "fetchFundingIntervals": false,
+        "fetchFundingRates": true,
+        "fetchIndexOHLCV": false,
+        "fetchMarginAdjustmentHistory": false,
+        "fetchL2OrderBook": true,
+        "fetchLedger": true,
+        "fetchLeverage": true,
+        "fetchMarginMode": false,
+        "fetchMarkets": true,
+        "fetchMarkOHLCV": false,
+        "fetchMyTrades": true,
+        "fetchOHLCV": true,
+        "fetchOpenInterestHistory": false,
+        "fetchOpenOrder": false,
+        "fetchOpenOrders": true,
+        "fetchOrder": true,
+        "fetchOrderBook": true,
+        "fetchOrders": true,
+        "fetchOrderTrades": true,
+        "fetchPosition": true,
+        "fetchPositionHistory": false,
+        "fetchPositionsHistory": false,
+        "fetchPositionMode": false,
+        "fetchPositions": true,
+        "fetchPremiumIndexOHLCV": false,
+        "fetchStatus": true,
+        "fetchTicker": false,
+        "fetchTickers": false,
+        "fetchTime": true,
+        "fetchTrades": true,
+        "fetchTradingFee": true,
+        "fetchTradingFees": true,
+        "fetchTransactions": "emulated",
+        "fetchTransfers": true,
+        "fetchWithdrawals": true,
+        "reduceMargin": false,
+        "setLeverage": true,
+        "setMargin": false,
+        "setPositionMode": true,
+        "transfer": true,
+        "watchBalance": true,
+        "watchMyTrades": true,
+        "watchOHLCV": true,
+        "watchOrderBook": true,
+        "watchBidsAsks": true,
+        "watchOrders": true,
+        "watchPositions": true,
+        "watchTicker": true,
+        "watchTickers": true,
+        "watchTrades": true,
+        "watchTradesForSymbols": false,
+        "unWatchTrades": true,
+        "unWatchOrderBook": true,
+        "unWatchTickers": true,
+        "unWatchTicker": true,
+        "unWatchOHLCV": true,
+        "withdraw": true,
+        "ws": true,
+        "cancelAllOrdersAfter": true,
+        "cancelWithdraw": false,
+        "createConvertTrade": true
+    },
+    "urls": {
+        "logo": "https://user-images.githubusercontent.com/1294454/150730761-1a00e5e0-d28c-480f-9e65-089ce3e6ef3b.jpg",
+        "api": {
+            "pub": "https://api-pub.woox.io",
+            "public": "https://api.{hostname}",
+            "private": "https://api.{hostname}",
+            "ws": {
+                "public": "wss://wss.woox.io/ws/stream",
+                "private": "wss://wss.woox.io/v2/ws/private/stream"
             }
-            _ => {
-                if let Some(s) = value_to_string_opt(&v) { Value::Json(serde_json::Value::String(s)) }
-                else if default_value.is_nullish() { Value::Undefined }
-                else { default_value }
+        },
+        "www": "https://woox.io/",
+        "doc": [
+            "https://docs.woox.io/"
+        ],
+        "fees": [
+            "https://support.woox.io/hc/en-001/articles/4404611795353--Trading-Fees"
+        ],
+        "test": {
+            "pub": "https://api-pub.staging.woox.io",
+            "public": "https://api.staging.woox.io",
+            "private": "https://api.staging.woox.io",
+            "ws": {
+                "public": "wss://wss.staging.woox.io/ws/stream",
+                "private": "wss://wss.staging.woox.io/v2/ws/private/stream"
             }
+        },
+        "referral": {
+            "url": "https://woox.io/register?ref=DIJT0CNL",
+            "discount": 0.35
         }
-    }
-
-    fn safe_string_2(&self, dictionary: Value, key1: Value, key2: Value, default_value: Value) -> Value {
-        let v = safe_get_from_keys(&dictionary, &[key1, key2]);
-        if v.is_nonnullish() { self.safe_string(dictionary.clone(), {
-            // We already have the value; just wrap it
-            let _ = &dictionary;
-            return match value_to_string_opt(&v) {
-                Some(s) => Value::Json(serde_json::Value::String(s)),
-                None => default_value,
-            };
-        }, default_value.clone()) } else { default_value }
-    }
-
-    fn safe_string_n(&self, dictionary: Value, keys: Value, default_value: Value) -> Value {
-        if let Value::Json(serde_json::Value::Array(arr)) = &keys {
-            let key_vals: Vec<Value> = arr.iter().map(|k| Value::Json(k.clone())).collect();
-            let v = safe_get_from_keys(&dictionary, &key_vals);
-            if v.is_nonnullish() {
-                return match value_to_string_opt(&v) {
-                    Some(s) => Value::Json(serde_json::Value::String(s)),
-                    None => if default_value.is_nullish() { Value::Undefined } else { default_value },
-                };
-            }
-        }
-        if default_value.is_nullish() { Value::Undefined } else { default_value }
-    }
-
-    fn safe_string_lower(&self, dictionary: Value, key: Value, default_value: Value) -> Value {
-        match self.safe_string(dictionary, key, default_value) {
-            Value::Json(serde_json::Value::String(s)) => Value::Json(serde_json::Value::String(s.to_lowercase())),
-            other => other,
-        }
-    }
-
-    fn safe_string_lower_2(&self, dictionary: Value, key1: Value, key2: Value, default_value: Value) -> Value {
-        match self.safe_string_2(dictionary, key1, key2, default_value) {
-            Value::Json(serde_json::Value::String(s)) => Value::Json(serde_json::Value::String(s.to_lowercase())),
-            other => other,
-        }
-    }
-
-    fn safe_string_lower_n(&self, dictionary: Value, keys: Value, default_value: Value) -> Value {
-        match self.safe_string_n(dictionary, keys, default_value) {
-            Value::Json(serde_json::Value::String(s)) => Value::Json(serde_json::Value::String(s.to_lowercase())),
-            other => other,
-        }
-    }
-
-    fn safe_string_upper(&self, dictionary: Value, key: Value, default_value: Value) -> Value {
-        match self.safe_string(dictionary, key, default_value) {
-            Value::Json(serde_json::Value::String(s)) => Value::Json(serde_json::Value::String(s.to_uppercase())),
-            other => other,
-        }
-    }
-
-    fn safe_string_upper_2(&self, dictionary: Value, key1: Value, key2: Value, default_value: Value) -> Value {
-        match self.safe_string_2(dictionary, key1, key2, default_value) {
-            Value::Json(serde_json::Value::String(s)) => Value::Json(serde_json::Value::String(s.to_uppercase())),
-            other => other,
-        }
-    }
-
-    fn safe_string_upper_n(&self, dictionary: Value, keys: Value, default_value: Value) -> Value {
-        match self.safe_string_n(dictionary, keys, default_value) {
-            Value::Json(serde_json::Value::String(s)) => Value::Json(serde_json::Value::String(s.to_uppercase())),
-            other => other,
-        }
-    }
-
-    fn safe_integer(&self, dictionary: Value, key: Value, default_value: Value) -> Value {
-        let v = safe_get(&dictionary, &key);
-        match value_to_i64_opt(&v) {
-            Some(i) => Value::Json(serde_json::Value::Number(i.into())),
-            None => if default_value.is_nullish() { Value::Undefined } else { default_value },
-        }
-    }
-
-    fn safe_integer_2(&self, dictionary: Value, key1: Value, key2: Value, default_value: Value) -> Value {
-        let v1 = self.safe_integer(dictionary.clone(), key1, Value::Undefined);
-        if v1.is_nonnullish() { return v1; }
-        self.safe_integer(dictionary, key2, default_value)
-    }
-
-    fn safe_integer_n(&self, dictionary: Value, keys: Value, default_value: Value) -> Value {
-        if let Value::Json(serde_json::Value::Array(arr)) = &keys {
-            for k in arr {
-                let v = self.safe_integer(dictionary.clone(), Value::Json(k.clone()), Value::Undefined);
-                if v.is_nonnullish() { return v; }
-            }
-        }
-        if default_value.is_nullish() { Value::Undefined } else { default_value }
-    }
-
-    fn safe_integer_product(&self, dictionary: Value, key: Value, factor: Value, default_value: Value) -> Value {
-        match (self.safe_integer(dictionary, key, Value::Undefined), value_to_f64_opt(&factor)) {
-            (Value::Json(serde_json::Value::Number(n)), Some(f)) => {
-                if let Some(i) = n.as_i64() {
-                    let result = (i as f64 * f) as i64;
-                    Value::Json(serde_json::Value::Number(result.into()))
-                } else { if default_value.is_nullish() { Value::Undefined } else { default_value } }
-            }
-            _ => if default_value.is_nullish() { Value::Undefined } else { default_value },
-        }
-    }
-
-    fn safe_integer_product_2(&self, dictionary: Value, key1: Value, key2: Value, factor: Value, default_value: Value) -> Value {
-        let v = self.safe_integer_product(dictionary.clone(), key1, factor.clone(), Value::Undefined);
-        if v.is_nonnullish() { return v; }
-        self.safe_integer_product(dictionary, key2, factor, default_value)
-    }
-
-    fn safe_integer_product_n(&self, dictionary: Value, keys: Value, factor: Value, default_value: Value) -> Value {
-        if let Value::Json(serde_json::Value::Array(arr)) = &keys {
-            for k in arr {
-                let v = self.safe_integer_product(dictionary.clone(), Value::Json(k.clone()), factor.clone(), Value::Undefined);
-                if v.is_nonnullish() { return v; }
-            }
-        }
-        if default_value.is_nullish() { Value::Undefined } else { default_value }
-    }
-
-    fn safe_timestamp(&self, dictionary: Value, key: Value, default_value: Value) -> Value {
-        self.safe_integer(dictionary, key, default_value)
-    }
-
-    fn safe_timestamp_2(&self, dictionary: Value, key1: Value, key2: Value, default_value: Value) -> Value {
-        self.safe_integer_2(dictionary, key1, key2, default_value)
-    }
-
-    fn safe_timestamp_n(&self, dictionary: Value, keys: Value, default_value: Value) -> Value {
-        self.safe_integer_n(dictionary, keys, default_value)
-    }
-
-    fn safe_float(&self, dictionary: Value, key: Value, default_value: Value) -> Value {
-        let v = safe_get(&dictionary, &key);
-        match value_to_f64_opt(&v) {
-            Some(f) => {
-                if let Some(n) = serde_json::Number::from_f64(f) {
-                    Value::Json(serde_json::Value::Number(n))
-                } else { if default_value.is_nullish() { Value::Undefined } else { default_value } }
-            }
-            None => if default_value.is_nullish() { Value::Undefined } else { default_value },
-        }
-    }
-
-    fn safe_float_2(&self, dictionary: Value, key1: Value, key2: Value, default_value: Value) -> Value {
-        let v1 = self.safe_float(dictionary.clone(), key1, Value::Undefined);
-        if v1.is_nonnullish() { return v1; }
-        self.safe_float(dictionary, key2, default_value)
-    }
-
-    fn safe_float_n(&self, dictionary: Value, keys: Value, default_value: Value) -> Value {
-        if let Value::Json(serde_json::Value::Array(arr)) = &keys {
-            for k in arr {
-                let v = self.safe_float(dictionary.clone(), Value::Json(k.clone()), Value::Undefined);
-                if v.is_nonnullish() { return v; }
-            }
-        }
-        if default_value.is_nullish() { Value::Undefined } else { default_value }
-    }
-
-    fn safe_value(&self, dictionary: Value, key: Value, default_value: Value) -> Value {
-        let v = safe_get(&dictionary, &key);
-        if v.is_nonnullish() { v } else { if default_value.is_nullish() { Value::Undefined } else { default_value } }
-    }
-
-    fn safe_value_2(&self, dictionary: Value, key1: Value, key2: Value, default_value: Value) -> Value {
-        let v1 = self.safe_value(dictionary.clone(), key1, Value::Undefined);
-        if v1.is_nonnullish() { return v1; }
-        self.safe_value(dictionary, key2, default_value)
-    }
-
-    fn safe_value_n(&self, dictionary: Value, keys: Value, default_value: Value) -> Value {
-        if let Value::Json(serde_json::Value::Array(arr)) = &keys {
-            for k in arr {
-                let v = self.safe_value(dictionary.clone(), Value::Json(k.clone()), Value::Undefined);
-                if v.is_nonnullish() { return v; }
-            }
-        }
-        if default_value.is_nullish() { Value::Undefined } else { default_value }
-    }
-
-    fn parse_number(&self, value: Value, default_value: Value) -> Value {
-        match &value {
-            Value::Json(serde_json::Value::Number(_)) => value,
-            Value::Json(serde_json::Value::String(s)) => {
-                match s.parse::<f64>() {
-                    Ok(f) => {
-                        if let Some(n) = serde_json::Number::from_f64(f) {
-                            Value::Json(serde_json::Value::Number(n))
-                        } else { if default_value.is_nullish() { Value::Undefined } else { default_value } }
-                    }
-                    Err(_) => if default_value.is_nullish() { Value::Undefined } else { default_value },
+    },
+    "api": {
+        "v1": {
+            "pub": {
+                "get": {
+                    "hist/kline": 10,
+                    "hist/trades": 10
+                }
+            },
+            "public": {
+                "get": {
+                    "info": 1,
+                    "info/{symbol}": 1,
+                    "system_info": 1,
+                    "market_trades": 1,
+                    "token": 1,
+                    "token_network": 1,
+                    "funding_rates": 1,
+                    "funding_rate/{symbol}": 1,
+                    "funding_rate_history": 1,
+                    "futures": 1,
+                    "futures/{symbol}": 1,
+                    "orderbook/{symbol}": 1,
+                    "kline": 1
+                }
+            },
+            "private": {
+                "get": {
+                    "client/token": 1,
+                    "order/{oid}": 1,
+                    "client/order/{client_order_id}": 1,
+                    "orders": 1,
+                    "client/trade/{tid}": 1,
+                    "order/{oid}/trades": 1,
+                    "client/trades": 1,
+                    "client/hist_trades": 1,
+                    "staking/yield_history": 1,
+                    "client/holding": 1,
+                    "asset/deposit": 10,
+                    "asset/history": 60,
+                    "sub_account/all": 60,
+                    "sub_account/assets": 60,
+                    "sub_account/asset_detail": 60,
+                    "sub_account/ip_restriction": 10,
+                    "asset/main_sub_transfer_history": 30,
+                    "token_interest": 60,
+                    "token_interest/{token}": 60,
+                    "interest/history": 60,
+                    "interest/repay": 60,
+                    "funding_fee/history": 30,
+                    "positions": 3.33,
+                    "position/{symbol}": 3.33,
+                    "client/transaction_history": 60,
+                    "client/futures_leverage": 60
+                },
+                "post": {
+                    "order": 1,
+                    "order/cancel_all_after": 1,
+                    "asset/ltv": 30,
+                    "asset/internal_withdraw": 30,
+                    "interest/repay": 60,
+                    "client/account_mode": 120,
+                    "client/position_mode": 5,
+                    "client/leverage": 120,
+                    "client/futures_leverage": 30,
+                    "client/isolated_margin": 30
+                },
+                "delete": {
+                    "order": 1,
+                    "client/order": 1,
+                    "orders": 1,
+                    "asset/withdraw": 120
                 }
             }
-            _ => if default_value.is_nullish() { Value::Undefined } else { default_value },
-        }
-    }
-
-    fn parse_to_numeric(&self, value: Value, default_value: Value) -> Value {
-        self.parse_number(value, default_value)
-    }
-
-    fn parse_to_int(&self, value: Value) -> Value {
-        match value_to_i64_opt(&value) {
-            Some(i) => Value::Json(serde_json::Value::Number(i.into())),
-            None => Value::Undefined,
-        }
-    }
-
-    fn safe_number(&self, obj: Value, key: Value, default_number: Value) -> Value {
-        let v = safe_get(&obj, &key);
-        self.parse_number(v, default_number)
-    }
-
-    fn safe_number_2(&self, dictionary: Value, key1: Value, key2: Value, d: Value) -> Value {
-        let v1 = self.safe_number(dictionary.clone(), key1, Value::Undefined);
-        if v1.is_nonnullish() { return v1; }
-        self.safe_number(dictionary, key2, d)
-    }
-
-    fn safe_number_n(&self, obj: Value, arr: Value, default_number: Value) -> Value {
-        if let Value::Json(serde_json::Value::Array(keys)) = &arr {
-            for k in keys {
-                let v = self.safe_number(obj.clone(), Value::Json(k.clone()), Value::Undefined);
-                if v.is_nonnullish() { return v; }
+        },
+        "v2": {
+            "private": {
+                "get": {
+                    "client/holding": 1
+                }
+            }
+        },
+        "v3": {
+            "public": {
+                "get": {
+                    "systemInfo": 1,
+                    "instruments": 1,
+                    "token": 1,
+                    "tokenNetwork": 1,
+                    "tokenInfo": 1,
+                    "marketTrades": 1,
+                    "marketTradesHistory": 1,
+                    "orderbook": 1,
+                    "kline": 1,
+                    "klineHistory": 1,
+                    "futures": 1,
+                    "fundingRate": 1,
+                    "fundingRateHistory": 1,
+                    "insuranceFund": 1
+                }
+            },
+            "private": {
+                "get": {
+                    "trade/order": 2,
+                    "trade/orders": 1,
+                    "trade/algoOrder": 1,
+                    "trade/algoOrders": 1,
+                    "trade/transaction": 1,
+                    "trade/transactionHistory": 5,
+                    "trade/tradingFee": 5,
+                    "account/info": 60,
+                    "account/tokenConfig": 1,
+                    "account/symbolConfig": 1,
+                    "account/subAccounts/all": 60,
+                    "account/referral/summary": 60,
+                    "account/referral/rewardHistory": 60,
+                    "account/credentials": 60,
+                    "asset/balances": 1,
+                    "asset/token/history": 60,
+                    "asset/transfer/history": 30,
+                    "asset/wallet/history": 60,
+                    "asset/wallet/deposit": 60,
+                    "asset/staking/yieldHistory": 60,
+                    "futures/positions": 3.33,
+                    "futures/leverage": 60,
+                    "futures/defaultMarginMode": 60,
+                    "futures/fundingFee/history": 30,
+                    "spotMargin/interestRate": 60,
+                    "spotMargin/interestHistory": 60,
+                    "spotMargin/maxMargin": 60,
+                    "algo/order/{oid}": 1,
+                    "algo/orders": 1,
+                    "positions": 3.33,
+                    "buypower": 1,
+                    "convert/exchangeInfo": 1,
+                    "convert/assetInfo": 1,
+                    "convert/rfq": 60,
+                    "convert/trade": 1,
+                    "convert/trades": 1
+                },
+                "post": {
+                    "trade/order": 2,
+                    "trade/algoOrder": 5,
+                    "trade/cancelAllAfter": 1,
+                    "account/tradingMode": 120,
+                    "account/listenKey": 20,
+                    "asset/transfer": 30,
+                    "asset/wallet/withdraw": 60,
+                    "spotMargin/leverage": 120,
+                    "spotMargin/interestRepay": 60,
+                    "algo/order": 5,
+                    "convert/rft": 60
+                },
+                "put": {
+                    "trade/order": 2,
+                    "trade/algoOrder": 2,
+                    "futures/leverage": 60,
+                    "futures/positionMode": 120,
+                    "order/{oid}": 2,
+                    "order/client/{client_order_id}": 2,
+                    "algo/order/{oid}": 2,
+                    "algo/order/client/{client_order_id}": 2
+                },
+                "delete": {
+                    "trade/order": 1,
+                    "trade/orders": 1,
+                    "trade/algoOrder": 1,
+                    "trade/algoOrders": 1,
+                    "trade/allOrders": 1,
+                    "algo/order/{order_id}": 1,
+                    "algo/orders/pending": 1,
+                    "algo/orders/pending/{symbol}": 1,
+                    "orders/pending": 1
+                }
             }
         }
-        if default_number.is_nullish() { Value::Undefined } else { default_number }
-    }
-
-    fn safe_number_omit_zero(&self, obj: Value, key: Value, default_value: Value) -> Value {
-        let v = self.safe_number(obj, key, Value::Undefined);
-        match &v {
-            Value::Json(serde_json::Value::Number(n)) => {
-                if n.as_f64().map(|f| f == 0.0).unwrap_or(false) {
-                    if default_value.is_nullish() { Value::Undefined } else { default_value }
-                } else { v }
+    },
+    "requiredCredentials": {
+        "apiKey": true,
+        "secret": true,
+        "uid": true,
+        "accountId": false,
+        "login": false,
+        "password": false,
+        "twofa": false,
+        "privateKey": false,
+        "walletAddress": false,
+        "token": false
+    },
+    "currencies": {},
+    "timeframes": {
+        "1m": "1m",
+        "5m": "5m",
+        "15m": "15m",
+        "30m": "30m",
+        "1h": "1h",
+        "4h": "4h",
+        "12h": "12h",
+        "1d": "1d",
+        "1w": "1w",
+        "1M": "1mon",
+        "1y": "1y"
+    },
+    "fees": {
+        "trading": {
+            "tierBased": true,
+            "percentage": true,
+            "taker": 0.0005,
+            "maker": 0.0002
+        },
+        "funding": {
+            "withdraw": {},
+            "deposit": {}
+        }
+    },
+    "status": {
+        "status": "ok"
+    },
+    "exceptions": {
+        "exact": {},
+        "broad": {},
+        "ws": {
+            "exact": {}
+        }
+    },
+    "httpExceptions": {},
+    "commonCurrencies": {
+        "XBT": "BTC",
+        "BCHSV": "BSV"
+    },
+    "precisionMode": 4,
+    "paddingMode": 5,
+    "limits": {
+        "leverage": {},
+        "amount": {},
+        "price": {},
+        "cost": {}
+    },
+    "rollingWindowSize": 60000,
+    "version": "v1",
+    "hostname": "woox.io",
+    "options": {
+        "timeDifference": 0,
+        "adjustForTimeDifference": false,
+        "sandboxMode": false,
+        "createMarketBuyOrderRequiresPrice": true,
+        "network-aliases-for-tokens": {
+            "HT": "ERC20",
+            "OMG": "ERC20",
+            "UATOM": "ATOM",
+            "ZRX": "ZRX"
+        },
+        "networks": {
+            "TRX": "TRON",
+            "TRC20": "TRON",
+            "ERC20": "ETH",
+            "BEP20": "BSC",
+            "ARB": "Arbitrum"
+        },
+        "networksById": {
+            "TRX": "TRC20",
+            "TRON": "TRC20"
+        },
+        "defaultNetworkCodeForCurrencies": {},
+        "transfer": {
+            "fillResponseFromRequest": true
+        },
+        "brokerId": "bc830de7-50f3-460b-9ee0-f430f83f9dad",
+        "tradesLimit": 1000,
+        "ordersLimit": 1000,
+        "requestId": {},
+        "watchPositions": {
+            "fetchPositionsSnapshot": true,
+            "awaitPositionsSnapshot": true
+        }
+    },
+    "features": {
+        "default": {
+            "sandbox": true,
+            "createOrder": {
+                "marginMode": true,
+                "triggerPrice": true,
+                "triggerPriceType": {
+                    "last": true,
+                    "mark": true,
+                    "index": false
+                },
+                "triggerDirection": false,
+                "stopLossPrice": false,
+                "takeProfitPrice": false,
+                "timeInForce": {
+                    "IOC": true,
+                    "FOK": true,
+                    "PO": true,
+                    "GTD": true
+                },
+                "hedged": false,
+                "trailing": true,
+                "leverage": false,
+                "marketBuyByCost": true,
+                "marketBuyRequiresPrice": false,
+                "selfTradePrevention": false,
+                "iceberg": true
+            },
+            "fetchMyTrades": {
+                "marginMode": false,
+                "limit": 500,
+                "daysBack": 90,
+                "untilDays": 10000,
+                "symbolRequired": false
+            },
+            "fetchOrder": {
+                "marginMode": false,
+                "trigger": true,
+                "trailing": false,
+                "symbolRequired": false
+            },
+            "fetchOpenOrders": {
+                "marginMode": false,
+                "limit": 500,
+                "trigger": true,
+                "trailing": true,
+                "symbolRequired": false
+            },
+            "fetchOrders": {
+                "marginMode": false,
+                "limit": 500,
+                "untilDays": 100000,
+                "trigger": true,
+                "trailing": true,
+                "symbolRequired": false
+            },
+            "fetchClosedOrders": {
+                "marginMode": false,
+                "limit": 500,
+                "untilDays": 100000,
+                "trigger": true,
+                "trailing": true,
+                "symbolRequired": false
+            },
+            "fetchOHLCV": {
+                "limit": 1000
             }
-            _ => if default_value.is_nullish() { Value::Undefined } else { default_value },
-        }
-    }
-
-    fn safe_integer_omit_zero(&self, obj: Value, key: Value, default_value: Value) -> Value {
-        let v = self.safe_integer(obj, key, Value::Undefined);
-        match &v {
-            Value::Json(serde_json::Value::Number(n)) => {
-                if n.as_i64().map(|i| i == 0).unwrap_or(false) {
-                    if default_value.is_nullish() { Value::Undefined } else { default_value }
-                } else { v }
+        },
+        "spot": {
+            "extends": "default"
+        },
+        "forSwap": {
+            "extends": "default",
+            "createOrder": {
+                "hedged": true
             }
-            _ => if default_value.is_nullish() { Value::Undefined } else { default_value },
-        }
-    }
-
-    fn safe_bool(&self, dictionary: Value, key: Value, default_value: Value) -> Value {
-        let v = safe_get(&dictionary, &key);
-        match &v {
-            Value::Json(serde_json::Value::Bool(_)) => v,
-            Value::Json(serde_json::Value::Number(n)) => {
-                Value::Json(serde_json::Value::Bool(n.as_i64().map(|i| i != 0).unwrap_or(false)))
+        },
+        "swap": {
+            "linear": {
+                "extends": "forSwap"
             }
-            Value::Json(serde_json::Value::String(s)) => {
-                let sl = s.to_lowercase();
-                if sl == "true" || sl == "1" { Value::Json(serde_json::Value::Bool(true)) }
-                else if sl == "false" || sl == "0" { Value::Json(serde_json::Value::Bool(false)) }
-                else if default_value.is_nullish() { Value::Undefined } else { default_value }
-            }
-            _ => if default_value.is_nullish() { Value::Undefined } else { default_value },
-        }
+        },
+        "future": {}
+    },
+    "streaming": {
+        "keepAlive": 9000
+    }
+}"###).unwrap())
     }
 
-    fn safe_bool_2(&self, dictionary: Value, key1: Value, key2: Value, default_value: Value) -> Value {
-        let v1 = self.safe_bool(dictionary.clone(), key1, Value::Undefined);
-        if v1.is_nonnullish() { return v1; }
-        self.safe_bool(dictionary, key2, default_value)
-    }
+fn request_id(&mut self, mut url: Value) -> Value { Value::Undefined }
 
-    fn safe_bool_n(&self, dictionary_or_list: Value, keys: Value, default_value: Value) -> Value {
-        if let Value::Json(serde_json::Value::Array(arr)) = &keys {
-            for k in arr {
-                let v = self.safe_bool(dictionary_or_list.clone(), Value::Json(k.clone()), Value::Undefined);
-                if v.is_nonnullish() { return v; }
-            }
-        }
-        if default_value.is_nullish() { Value::Undefined } else { default_value }
-    }
+async fn watch_public(&mut self, mut message_hash: Value, mut message: Value) -> Value { Value::Undefined }
 
-    fn safe_dict(&self, dictionary: Value, key: Value, default_value: Value) -> Value {
-        let v = safe_get(&dictionary, &key);
-        match &v {
-            Value::Json(serde_json::Value::Object(_)) => v,
-            _ => if default_value.is_nullish() { Value::Undefined } else { default_value },
-        }
-    }
+async fn unwatch_public(&mut self, mut sub_hash: Value, mut symbol: Value, mut topic: Value, mut params: Value) -> Value { Value::Undefined }
 
-    fn safe_dict_2(&self, dictionary: Value, key1: Value, key2: Value, default_value: Value) -> Value {
-        let v1 = self.safe_dict(dictionary.clone(), key1, Value::Undefined);
-        if v1.is_nonnullish() { return v1; }
-        self.safe_dict(dictionary, key2, default_value)
-    }
+async fn watch_order_book(&mut self, mut symbol: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
 
-    fn safe_dict_n(&self, dictionary_or_list: Value, keys: Value, default_value: Value) -> Value {
-        if let Value::Json(serde_json::Value::Array(arr)) = &keys {
-            for k in arr {
-                let v = self.safe_dict(dictionary_or_list.clone(), Value::Json(k.clone()), Value::Undefined);
-                if v.is_nonnullish() { return v; }
-            }
-        }
-        if default_value.is_nullish() { Value::Undefined } else { default_value }
-    }
+async fn un_watch_order_book(&mut self, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
 
-    fn safe_list(&self, dictionary_or_list: Value, key: Value, default_value: Value) -> Value {
-        let v = safe_get(&dictionary_or_list, &key);
-        match &v {
-            Value::Json(serde_json::Value::Array(_)) => v,
-            _ => if default_value.is_nullish() { Value::Undefined } else { default_value },
-        }
-    }
+fn handle_order_book(&mut self, mut client: Value, mut message: Value) -> Value { Value::Undefined }
 
-    fn safe_list_2(&self, dictionary_or_list: Value, key1: Value, key2: Value, default_value: Value) -> Value {
-        let v1 = self.safe_list(dictionary_or_list.clone(), key1, Value::Undefined);
-        if v1.is_nonnullish() { return v1; }
-        self.safe_list(dictionary_or_list, key2, default_value)
-    }
+fn handle_order_book_subscription(&mut self, mut client: Value, mut message: Value, mut subscription: Value) -> Value { Value::Undefined }
 
-    fn safe_list_n(&self, dictionary_or_list: Value, keys: Value, default_value: Value) -> Value {
-        if let Value::Json(serde_json::Value::Array(arr)) = &keys {
-            for k in arr {
-                let v = self.safe_list(dictionary_or_list.clone(), Value::Json(k.clone()), Value::Undefined);
-                if v.is_nonnullish() { return v; }
-            }
-        }
-        if default_value.is_nullish() { Value::Undefined } else { default_value }
-    }
+async fn fetch_order_book_snapshot(&mut self, mut client: Value, mut message: Value, mut subscription: Value) -> Value { Value::Undefined }
 
-    // ---------------------------------------------------------------------------
-    // METHODS BELOW THIS LINE ARE TRANSPILED FROM JAVASCRIPT
-fn describe(&self) -> Value { Value::Undefined }
-
-
-
-
-
-
-
-
-
-
-fn handle_deltas(&mut self, mut orderbook: Value, mut deltas: Value) -> Value { Value::Undefined }
+fn handle_order_book_message(&mut self, mut client: Value, mut message: Value, mut orderbook: Value) -> Value { Value::Undefined }
 
 fn handle_delta(&mut self, mut bookside: Value, mut delta: Value) -> Value { Value::Undefined }
+
+fn handle_deltas(&mut self, mut bookside: Value, mut deltas: Value) -> Value { Value::Undefined }
+
+async fn watch_ticker(&mut self, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
+
+async fn un_watch_ticker(&mut self, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
+
+fn parse_ws_ticker(&self, mut ticker: Value, mut market: Value) -> Value { Value::Undefined }
+
+fn handle_ticker(&mut self, mut client: Value, mut message: Value) -> Value { Value::Undefined }
+
+async fn watch_tickers(&mut self, mut symbols: Value, mut params: Value) -> Value { Value::Undefined }
+
+async fn un_watch_tickers(&mut self, mut symbols: Value, mut params: Value) -> Value { Value::Undefined }
+
+fn handle_tickers(&mut self, mut client: Value, mut message: Value) -> Value { Value::Undefined }
+
+async fn watch_bids_asks(&mut self, mut symbols: Value, mut params: Value) -> Value { Value::Undefined }
+
+async fn un_watch_bids_asks(&mut self, mut symbols: Value, mut params: Value) -> Value { Value::Undefined }
+
+fn handle_bid_ask(&mut self, mut client: Value, mut message: Value) -> Value { Value::Undefined }
+
+fn parse_ws_bid_ask(&self, mut ticker: Value, mut market: Value) -> Value { Value::Undefined }
+
+async fn watch_ohlcv(&mut self, mut symbol: Value, mut timeframe: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
+
+async fn un_watch_ohlcv(&mut self, mut symbol: Value, mut timeframe: Value, mut params: Value) -> Value { Value::Undefined }
+
+fn handle_ohlcv(&mut self, mut client: Value, mut message: Value) -> Value { Value::Undefined }
+
+async fn watch_trades(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
+
+async fn un_watch_trades(&mut self, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
+
+fn handle_trade(&mut self, mut client: Value, mut message: Value) -> Value { Value::Undefined }
+
+fn parse_ws_trade(&self, mut trade: Value, mut market: Value) -> Value { Value::Undefined }
+
+fn check_required_uid(&mut self, mut error: Value) -> Value { Value::Undefined }
+
+async fn authenticate(&mut self, mut params: Value) -> Value { Value::Undefined }
+
+async fn watch_private(&mut self, mut message_hash: Value, mut message: Value, mut params: Value) -> Value { Value::Undefined }
+
+async fn watch_private_multiple(&mut self, mut message_hashes: Value, mut message: Value, mut params: Value) -> Value { Value::Undefined }
+
+async fn watch_orders(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
+
+async fn watch_my_trades(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
+
+fn parse_ws_order(&self, mut order: Value, mut market: Value) -> Value { Value::Undefined }
+
+fn handle_order_update(&mut self, mut client: Value, mut message: Value) -> Value { Value::Undefined }
+
+fn handle_order(&mut self, mut client: Value, mut message: Value, mut topic: Value) -> Value { Value::Undefined }
+
+fn handle_my_trade(&mut self, mut client: Value, mut message: Value) -> Value { Value::Undefined }
+
+async fn watch_positions(&mut self, mut symbols: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
+
+fn set_positions_cache(&mut self, mut client: Value, mut r#type: Value, mut symbols: Value) -> Value { Value::Undefined }
+
+async fn load_positions_snapshot(&mut self, mut client: Value, mut message_hash: Value) -> Value { Value::Undefined }
+
+fn handle_positions(&mut self, mut client: Value, mut message: Value) -> Value { Value::Undefined }
+
+async fn watch_balance(&mut self, mut params: Value) -> Value { Value::Undefined }
+
+fn handle_balance(&mut self, mut client: Value, mut message: Value) -> Value { Value::Undefined }
+
+fn handle_error_message(&mut self, mut client: Value, mut message: Value) -> Value { Value::Undefined }
+
+fn handle_un_subscription(&mut self, mut client: Value, mut message: Value) -> Value { Value::Undefined }
+
+fn handle_message(&mut self, mut client: Value, mut message: Value) -> Value { Value::Undefined }
+
+fn ping(&mut self, mut client: Value) -> Value { Value::Undefined }
+
+fn handle_ping(&mut self, mut client: Value, mut message: Value) -> Value { Value::Undefined }
+
+fn handle_pong(&mut self, mut client: Value, mut message: Value) -> Value { Value::Undefined }
+
+fn handle_subscribe(&mut self, mut client: Value, mut message: Value) -> Value { Value::Undefined }
+
+fn handle_auth(&mut self, mut client: Value, mut message: Value) -> Value { Value::Undefined }
+
+
+
+
+
+
+
+
+
 
 fn handle_deltas_with_keys(&mut self, mut book_side: Value, mut deltas: Value, mut price_key: Value, mut amount_key: Value, mut count_or_id_key: Value) -> Value { Value::Undefined }
 
@@ -1041,57 +684,9 @@ fn check_address(&mut self, mut address: Value) -> Value { Value::Undefined }
 
 fn find_message_hashes(&mut self, mut client: Value, mut element: Value) -> Value { Value::Undefined }
 
-fn filter_by_limit(&self, mut array: Value, mut limit: Value, mut key: Value, mut from_start: Value) -> Value {
-        if let Value::Json(serde_json::Value::Array(ref arr)) = array {
-            if let Some(n) = value_to_i64_opt(&limit) {
-                let n = n as usize;
-                if arr.len() <= n {
-                    return array;
-                }
-                let from_start_bool = from_start.is_truthy();
-                let slice = if from_start_bool {
-                    arr[..n].to_vec()
-                } else {
-                    let start = arr.len() - n;
-                    arr[start..].to_vec()
-                };
-                return Value::Json(serde_json::Value::Array(slice));
-            }
-        }
-        array
-    }
+fn filter_by_limit(&self, mut array: Value, mut limit: Value, mut key: Value, mut from_start: Value) -> Value { Value::Undefined }
 
-    fn filter_by_since_limit(&self, mut array: Value, mut since: Value, mut limit: Value, mut key: Value, mut tail: Value) -> Value {
-        let key_str = match &key {
-            Value::Json(serde_json::Value::String(s)) => s.clone(),
-            _ => "timestamp".to_string(),
-        };
-        let since_i64 = value_to_i64_opt(&since);
-        let filtered = match &array {
-            Value::Json(serde_json::Value::Array(arr)) => {
-                let filtered: Vec<serde_json::Value> = arr
-                    .iter()
-                    .filter(|item| {
-                        if let Some(since_val) = since_i64 {
-                            if let serde_json::Value::Object(map) = item {
-                                if let Some(ts) = map.get(&key_str) {
-                                    let ts_i64 = Value::Json(ts.clone());
-                                    if let Some(t) = value_to_i64_opt(&ts_i64) {
-                                        return t >= since_val;
-                                    }
-                                }
-                            }
-                        }
-                        true
-                    })
-                    .cloned()
-                    .collect();
-                Value::Json(serde_json::Value::Array(filtered))
-            }
-            _ => array.clone(),
-        };
-        self.filter_by_limit(filtered, limit, key, tail)
-    }
+fn filter_by_since_limit(&self, mut array: Value, mut since: Value, mut limit: Value, mut key: Value, mut tail: Value) -> Value { Value::Undefined }
 
 fn filter_by_value_since_limit(&self, mut array: Value, mut field: Value, mut value: Value, mut since: Value, mut limit: Value, mut key: Value, mut tail: Value) -> Value { Value::Undefined }
 
@@ -1119,7 +714,7 @@ async fn fetch_trades(&mut self, mut symbol: Value, mut since: Value, mut limit:
             ("public", "GET", "aggTrades"),
         ];
         for (api_name, method_name, path_name) in candidates {
-            let rv = Exchange::request(self, path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = Woo::request(self, path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() {
                 return rv;
             }
@@ -1137,11 +732,7 @@ async fn watch_my_liquidations(&mut self, mut symbol: Value, mut since: Value, m
 
 async fn watch_my_liquidations_for_symbols(&mut self, mut symbols: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
 
-async fn watch_trades(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
 async fn un_watch_orders(&mut self, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn un_watch_trades(&mut self, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
 
 async fn watch_trades_for_symbols(&mut self, mut symbols: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
 
@@ -1160,8 +751,6 @@ async fn watch_order_book_for_symbols(&mut self, mut symbols: Value, mut limit: 
 async fn un_watch_order_book_for_symbols(&mut self, mut symbols: Value, mut params: Value) -> Value { Value::Undefined }
 
 async fn un_watch_positions(&mut self, mut symbols: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn un_watch_ticker(&mut self, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
 
 async fn un_watch_mark_price(&mut self, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
 
@@ -1192,7 +781,7 @@ async fn fetch_order_book(&mut self, mut symbol: Value, mut limit: Value, mut pa
             request.set("limit".into(), limit.clone());
         }
         let mut dynamic_calls: Vec<(String, String, String)> = vec![];
-        if let Value::Json(serde_json::Value::Object(api_map)) = Exchange::describe(self).get("api".into()) {
+        if let Value::Json(serde_json::Value::Object(api_map)) = Woo::describe(self).get("api".into()) {
             for (api_name, node) in api_map {
                 collect_routes(&node, &api_name, &mut dynamic_calls);
             }
@@ -1204,7 +793,7 @@ async fn fetch_order_book(&mut self, mut symbol: Value, mut limit: Value, mut pa
                 }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = Exchange::request(self, path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = Woo::request(self, path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() {
                         return rv;
                     }
@@ -1217,7 +806,7 @@ async fn fetch_order_book(&mut self, mut symbol: Value, mut limit: Value, mut pa
             ("public", "GET", "order_book"),
         ];
         for (api_name, method_name, path_name) in candidates {
-            let rv = Exchange::request(self, path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = Woo::request(self, path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() {
                 return rv;
             }
@@ -1233,10 +822,6 @@ async fn fetch_margin_modes(&mut self, mut symbols: Value, mut params: Value) ->
 
 async fn fetch_rest_order_book_safe(&mut self, mut symbol: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
 
-async fn watch_order_book(&mut self, mut symbol: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn un_watch_order_book(&mut self, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
-
 async fn fetch_time(&mut self, mut params: Value) -> Value {
         let candidates = vec![
             ("public", "GET", "time"),
@@ -1244,7 +829,7 @@ async fn fetch_time(&mut self, mut params: Value) -> Value {
             ("public", "GET", "timestamp"),
         ];
         for (api_name, method_name, path_name) in candidates {
-            let rv = Exchange::request(self, path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = Woo::request(self, path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() {
                 return rv;
             }
@@ -1293,10 +878,6 @@ fn parse_funding_rate_history(&self, mut info: Value, mut market: Value) -> Valu
 fn parse_borrow_interest(&self, mut info: Value, mut market: Value) -> Value { Value::Undefined }
 
 fn parse_isolated_borrow_rate(&self, mut info: Value, mut market: Value) -> Value { Value::Undefined }
-
-fn parse_ws_trade(&self, mut trade: Value, mut market: Value) -> Value { Value::Undefined }
-
-fn parse_ws_order(&self, mut order: Value, mut market: Value) -> Value { Value::Undefined }
 
 fn parse_ws_order_trade(&self, mut trade: Value, mut market: Value) -> Value { Value::Undefined }
 
@@ -1459,7 +1040,7 @@ async fn fetch_ohlcv(&mut self, mut symbol: Value, mut timeframe: Value, mut sin
             request.set("limit".into(), limit.clone());
         }
         let mut dynamic_calls: Vec<(String, String, String)> = vec![];
-        if let Value::Json(serde_json::Value::Object(api_map)) = Exchange::describe(self).get("api".into()) {
+        if let Value::Json(serde_json::Value::Object(api_map)) = Woo::describe(self).get("api".into()) {
             for (api_name, node) in api_map {
                 collect_routes(&node, &api_name, &mut dynamic_calls);
             }
@@ -1471,7 +1052,7 @@ async fn fetch_ohlcv(&mut self, mut symbol: Value, mut timeframe: Value, mut sin
                 }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = Exchange::request(self, path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = Woo::request(self, path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() {
                         return rv;
                     }
@@ -1484,7 +1065,7 @@ async fn fetch_ohlcv(&mut self, mut symbol: Value, mut timeframe: Value, mut sin
             ("public", "GET", "ohlcv"),
         ];
         for (api_name, method_name, path_name) in candidates {
-            let rv = Exchange::request(self, path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = Woo::request(self, path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() {
                 return rv;
             }
@@ -1493,8 +1074,6 @@ async fn fetch_ohlcv(&mut self, mut symbol: Value, mut timeframe: Value, mut sin
     }
 
 async fn fetch_ohlcv_ws(&mut self, mut symbol: Value, mut timeframe: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn watch_ohlcv(&mut self, mut symbol: Value, mut timeframe: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
 
 fn convert_trading_view_to_ohlcv(&self, mut ohlcvs: Value, mut timestamp: Value, mut open: Value, mut high: Value, mut low: Value, mut close: Value, mut volume: Value, mut ms: Value) -> Value { Value::Undefined }
 
@@ -1512,6 +1091,8 @@ fn market_symbols(&self, mut symbols: Value, mut r#type: Value, mut allow_empty:
 
 fn market_codes(&mut self, mut codes: Value) -> Value { Value::Undefined }
 
+fn parse_bids_asks(&self, mut bidasks: Value, mut price_key: Value, mut amount_key: Value, mut count_or_id_key: Value) -> Value { Value::Undefined }
+
 async fn fetch_l2_order_book(&mut self, mut symbol: Value, mut limit: Value, mut params: Value) -> Value {
         let mut request = if params.is_object() { params.clone() } else { Value::new_object() };
         request.set("symbol".into(), symbol.clone());
@@ -1524,7 +1105,7 @@ async fn fetch_l2_order_book(&mut self, mut symbol: Value, mut limit: Value, mut
             ("public", "GET", "order_book"),
         ];
         for (api_name, method_name, path_name) in candidates {
-            let rv = Exchange::request(self, path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = Woo::request(self, path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() {
                 return rv;
             }
@@ -1551,6 +1132,7 @@ fn select_network_id_from_raw_networks(&mut self, mut currency_code: Value, mut 
 fn select_network_key_from_networks(&mut self, mut currency_code: Value, mut network_code: Value, mut indexed_network_entries: Value, mut is_indexed_by_unified_network_code: Value) -> Value { Value::Undefined }
 
 
+fn parse_order_book(&self, mut orderbook: Value, mut symbol: Value, mut timestamp: Value, mut bids_key: Value, mut asks_key: Value, mut price_key: Value, mut amount_key: Value, mut count_or_id_key: Value) -> Value { Value::Undefined }
 
 fn parse_ohlcvs(&self, mut ohlcvs: Value, mut market: Value, mut timeframe: Value, mut since: Value, mut limit: Value, mut tail: Value) -> Value { Value::Undefined }
 
@@ -1634,7 +1216,7 @@ async fn request(&mut self, mut path: Value, mut api: Value, mut method: Value, 
             }
         }
 
-        let urls_api = Exchange::describe(self).get("urls".into()).get("api".into());
+        let urls_api = Woo::describe(self).get("urls".into()).get("api".into());
         let mut base = urls_api.get(api.clone());
         if !base.is_string() {
             base = urls_api.get("public".into());
@@ -1658,7 +1240,7 @@ async fn request(&mut self, mut path: Value, mut api: Value, mut method: Value, 
             return Value::Undefined;
         }
         let mut base_url = base.unwrap_str().to_string();
-        let hostname = Exchange::describe(self).get("hostname".into());
+        let hostname = Woo::describe(self).get("hostname".into());
         if hostname.is_string() {
             base_url = base_url.replace("{hostname}", hostname.unwrap_str());
         }
@@ -1766,8 +1348,6 @@ async fn fetch_position_ws(&mut self, mut symbol: Value, mut params: Value) -> V
 
 async fn watch_position(&mut self, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
 
-async fn watch_positions(&mut self, mut symbols: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
 async fn watch_position_for_symbols(&mut self, mut symbols: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
 
 async fn fetch_positions_for_symbol(&mut self, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
@@ -1792,7 +1372,7 @@ async fn fetch_bids_asks(&mut self, mut symbols: Value, mut params: Value) -> Va
             ("public", "GET", "tickers"),
         ];
         for (api_name, method_name, path_name) in candidates {
-            let rv = Exchange::request(self, path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = Woo::request(self, path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() {
                 return rv;
             }
@@ -1806,58 +1386,7 @@ async fn fetch_ledger(&mut self, mut code: Value, mut since: Value, mut limit: V
 
 async fn fetch_ledger_entry(&mut self, mut id: Value, mut code: Value, mut params: Value) -> Value { Value::Undefined }
 
-fn parse_bid_ask(&self, mut bidask: Value, mut price_key: Value, mut amount_key: Value, mut count_or_id_key: Value) -> Value {
-        // price_key defaults to 0, amount_key defaults to 1
-        let pk = if price_key.is_nullish() { Value::from(0usize) } else { price_key };
-        let ak = if amount_key.is_nullish() { Value::from(1usize) } else { amount_key };
-        let price = self.safe_number(bidask.clone(), pk, Value::Undefined);
-        let amount = self.safe_number(bidask.clone(), ak, Value::Undefined);
-        let mut result = Value::Json(serde_json::json!([null, null]));
-        result.set(Value::from(0usize), price);
-        result.set(Value::from(1usize), amount);
-        result
-    }
-
-    fn parse_bids_asks(&self, mut bidasks: Value, mut price_key: Value, mut amount_key: Value, mut count_or_id_key: Value) -> Value {
-        let pk = if price_key.is_nullish() { Value::from(0usize) } else { price_key };
-        let ak = if amount_key.is_nullish() { Value::from(1usize) } else { amount_key };
-        match &bidasks {
-            Value::Json(serde_json::Value::Array(arr)) => {
-                let parsed: Vec<serde_json::Value> = arr
-                    .iter()
-                    .map(|item| {
-                        let iv = Value::Json(item.clone());
-                        let ba = self.parse_bid_ask(iv, pk.clone(), ak.clone(), count_or_id_key.clone());
-                        match ba {
-                            Value::Json(v) => v,
-                            _ => serde_json::Value::Null,
-                        }
-                    })
-                    .collect();
-                Value::Json(serde_json::Value::Array(parsed))
-            }
-            _ => Value::new_array(),
-        }
-    }
-
-    fn parse_order_book(&self, mut orderbook: Value, mut symbol: Value, mut timestamp: Value, mut bids_key: Value, mut asks_key: Value, mut price_key: Value, mut amount_key: Value, mut count_or_id_key: Value) -> Value {
-        let bids_k = if bids_key.is_nullish() { Value::from("bids") } else { bids_key };
-        let asks_k = if asks_key.is_nullish() { Value::from("asks") } else { asks_key };
-        let pk = if price_key.is_nullish() { Value::from(0usize) } else { price_key };
-        let ak = if amount_key.is_nullish() { Value::from(1usize) } else { amount_key };
-        let bids_raw = self.safe_list(orderbook.clone(), bids_k, Value::new_array());
-        let asks_raw = self.safe_list(orderbook.clone(), asks_k, Value::new_array());
-        let bids = self.parse_bids_asks(bids_raw, pk.clone(), ak.clone(), count_or_id_key.clone());
-        let asks = self.parse_bids_asks(asks_raw, pk, ak, count_or_id_key);
-        let mut result = Value::new_object();
-        result.set("symbol".into(), symbol);
-        result.set("bids".into(), bids);
-        result.set("asks".into(), asks);
-        result.set("timestamp".into(), timestamp);
-        result.set("datetime".into(), Value::Undefined);
-        result.set("nonce".into(), Value::Undefined);
-        result
-    }
+fn parse_bid_ask(&self, mut bidask: Value, mut price_key: Value, mut amount_key: Value, mut count_or_id_key: Value) -> Value { Value::Undefined }
 
 fn safe_currency(&self, mut currency_id: Value, mut currency: Value) -> Value { Value::Undefined }
 
@@ -1874,8 +1403,6 @@ async fn fetch_balance(&mut self, mut params: Value) -> Value { Value::Undefined
 async fn fetch_balance_ws(&mut self, mut params: Value) -> Value { Value::Undefined }
 
 fn parse_balance(&self, mut response: Value) -> Value { Value::Undefined }
-
-async fn watch_balance(&mut self, mut params: Value) -> Value { Value::Undefined }
 
 async fn fetch_partial_balance(&mut self, mut part: Value, mut params: Value) -> Value { Value::Undefined }
 
@@ -1903,7 +1430,7 @@ async fn fetch_status(&mut self, mut params: Value) -> Value {
             }
         }
         let mut dynamic_calls: Vec<(String, String, String)> = vec![];
-        if let Value::Json(serde_json::Value::Object(api_map)) = Exchange::describe(self).get("api".into()) {
+        if let Value::Json(serde_json::Value::Object(api_map)) = Woo::describe(self).get("api".into()) {
             for (api_name, node) in api_map {
                 collect_routes(&node, &api_name, &mut dynamic_calls);
             }
@@ -1915,7 +1442,7 @@ async fn fetch_status(&mut self, mut params: Value) -> Value {
                 }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = Exchange::request(self, path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = Woo::request(self, path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() {
                         return rv;
                     }
@@ -1929,7 +1456,7 @@ async fn fetch_status(&mut self, mut params: Value) -> Value {
             ("sapi", "GET", "system/status"),
         ];
         for (api_name, method_name, path_name) in candidates {
-            let rv = Exchange::request(self, path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = Woo::request(self, path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() {
                 return rv;
             }
@@ -1993,7 +1520,7 @@ async fn fetch_ticker(&mut self, mut symbol: Value, mut params: Value) -> Value 
         let mut request = if params.is_object() { params.clone() } else { Value::new_object() };
         request.set("symbol".into(), symbol.clone());
         let mut dynamic_calls: Vec<(String, String, String)> = vec![];
-        if let Value::Json(serde_json::Value::Object(api_map)) = Exchange::describe(self).get("api".into()) {
+        if let Value::Json(serde_json::Value::Object(api_map)) = Woo::describe(self).get("api".into()) {
             for (api_name, node) in api_map {
                 collect_routes(&node, &api_name, &mut dynamic_calls);
             }
@@ -2005,7 +1532,7 @@ async fn fetch_ticker(&mut self, mut symbol: Value, mut params: Value) -> Value 
                 }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = Exchange::request(self, path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = Woo::request(self, path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() {
                         return rv;
                     }
@@ -2018,7 +1545,7 @@ async fn fetch_ticker(&mut self, mut symbol: Value, mut params: Value) -> Value 
             ("public", "GET", "ticker/price"),
         ];
         for (api_name, method_name, path_name) in candidates {
-            let rv = Exchange::request(self, path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = Woo::request(self, path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() {
                 return rv;
             }
@@ -2029,8 +1556,6 @@ async fn fetch_ticker(&mut self, mut symbol: Value, mut params: Value) -> Value 
 async fn fetch_mark_price(&mut self, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
 
 async fn fetch_ticker_ws(&mut self, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn watch_ticker(&mut self, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
 
 async fn fetch_tickers(&mut self, mut symbols: Value, mut params: Value) -> Value {
         fn collect_routes(node: &serde_json::Value, api_name: &str, out: &mut Vec<(String, String, String)>) {
@@ -2050,7 +1575,7 @@ async fn fetch_tickers(&mut self, mut symbols: Value, mut params: Value) -> Valu
             }
         }
         let mut dynamic_calls: Vec<(String, String, String)> = vec![];
-        if let Value::Json(serde_json::Value::Object(api_map)) = Exchange::describe(self).get("api".into()) {
+        if let Value::Json(serde_json::Value::Object(api_map)) = Woo::describe(self).get("api".into()) {
             for (api_name, node) in api_map {
                 collect_routes(&node, &api_name, &mut dynamic_calls);
             }
@@ -2062,7 +1587,7 @@ async fn fetch_tickers(&mut self, mut symbols: Value, mut params: Value) -> Valu
                 }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = Exchange::request(self, path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = Woo::request(self, path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() {
                         return rv;
                     }
@@ -2075,7 +1600,7 @@ async fn fetch_tickers(&mut self, mut symbols: Value, mut params: Value) -> Valu
             ("public", "GET", "ticker"),
         ];
         for (api_name, method_name, path_name) in candidates {
-            let rv = Exchange::request(self, path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = Woo::request(self, path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() {
                 return rv;
             }
@@ -2088,12 +1613,6 @@ async fn fetch_mark_prices(&mut self, mut symbols: Value, mut params: Value) -> 
 async fn fetch_tickers_ws(&mut self, mut symbols: Value, mut params: Value) -> Value { Value::Undefined }
 
 async fn fetch_order_books(&mut self, mut symbols: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn watch_bids_asks(&mut self, mut symbols: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn watch_tickers(&mut self, mut symbols: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn un_watch_tickers(&mut self, mut symbols: Value, mut params: Value) -> Value { Value::Undefined }
 
 async fn fetch_order(&mut self, mut id: Value, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
 
@@ -2185,8 +1704,6 @@ async fn fetch_orders_ws(&mut self, mut symbol: Value, mut since: Value, mut lim
 
 async fn fetch_order_trades(&mut self, mut id: Value, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
 
-async fn watch_orders(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
 async fn fetch_open_orders(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
 
 async fn fetch_open_orders_ws(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
@@ -2206,8 +1723,6 @@ async fn fetch_my_liquidations(&mut self, mut symbol: Value, mut since: Value, m
 async fn fetch_liquidations(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
 
 async fn fetch_my_trades_ws(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn watch_my_trades(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
 
 async fn fetch_greeks(&mut self, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
 
@@ -2505,8 +2020,6 @@ async fn fetch_transfer(&mut self, mut id: Value, mut code: Value, mut params: V
 
 async fn fetch_transfers(&mut self, mut code: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
 
-async fn un_watch_ohlcv(&mut self, mut symbol: Value, mut timeframe: Value, mut params: Value) -> Value { Value::Undefined }
-
 async fn watch_mark_price(&mut self, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
 
 async fn watch_mark_prices(&mut self, mut symbols: Value, mut params: Value) -> Value { Value::Undefined }
@@ -2519,13 +2032,210 @@ async fn create_orders_ws(&mut self, mut orders: Value, mut params: Value) -> Va
 
 async fn fetch_orders_by_status_ws(&mut self, mut status: Value, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
 
-async fn un_watch_bids_asks(&mut self, mut symbols: Value, mut params: Value) -> Value { Value::Undefined }
-
 fn clean_unsubscription(&mut self, mut client: Value, mut sub_hash: Value, mut unsub_hash: Value, mut sub_hash_is_prefix: Value) -> Value { Value::Undefined }
 
 fn clean_cache(&mut self, mut subscription: Value) -> Value { Value::Undefined }
 
 fn timeframe_from_milliseconds(&mut self, mut ms: Value) -> Value { Value::Undefined }
 
-// END TRANSPILED METHODS
+    
+    async fn dispatch(&mut self, method: Value, params: Value, context: Value) -> Value {
+        match method {
+            Value::Json(serde_json::Value::String(ref m)) => {
+                match m.as_ref() {
+                    "v1PubGetHistkline" => Woo::request(self, "hist/kline".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PubGetHisttrades" => Woo::request(self, "hist/trades".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetInfo" => Woo::request(self, "info".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetInfosymbol" => Woo::request(self, "info/{symbol}".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetSysteminfo" => Woo::request(self, "system_info".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetMarkettrades" => Woo::request(self, "market_trades".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetToken" => Woo::request(self, "token".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetTokennetwork" => Woo::request(self, "token_network".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetFundingrates" => Woo::request(self, "funding_rates".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetFundingratesymbol" => Woo::request(self, "funding_rate/{symbol}".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetFundingratehistory" => Woo::request(self, "funding_rate_history".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetFutures" => Woo::request(self, "futures".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetFuturessymbol" => Woo::request(self, "futures/{symbol}".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetOrderbooksymbol" => Woo::request(self, "orderbook/{symbol}".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetKline" => Woo::request(self, "kline".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetClienttoken" => Woo::request(self, "client/token".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetOrderoid" => Woo::request(self, "order/{oid}".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetClientorderclientorderid" => Woo::request(self, "client/order/{client_order_id}".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetOrders" => Woo::request(self, "orders".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetClienttradetid" => Woo::request(self, "client/trade/{tid}".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetOrderoidtrades" => Woo::request(self, "order/{oid}/trades".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetClienttrades" => Woo::request(self, "client/trades".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetClienthisttrades" => Woo::request(self, "client/hist_trades".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetStakingyieldhistory" => Woo::request(self, "staking/yield_history".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetClientholding" => Woo::request(self, "client/holding".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetAssetdeposit" => Woo::request(self, "asset/deposit".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetAssethistory" => Woo::request(self, "asset/history".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetSubaccountall" => Woo::request(self, "sub_account/all".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetSubaccountassets" => Woo::request(self, "sub_account/assets".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetSubaccountassetdetail" => Woo::request(self, "sub_account/asset_detail".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetSubaccountiprestriction" => Woo::request(self, "sub_account/ip_restriction".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetAssetmainsubtransferhistory" => Woo::request(self, "asset/main_sub_transfer_history".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetTokeninterest" => Woo::request(self, "token_interest".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetTokeninteresttoken" => Woo::request(self, "token_interest/{token}".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetInteresthistory" => Woo::request(self, "interest/history".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetInterestrepay" => Woo::request(self, "interest/repay".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetFundingfeehistory" => Woo::request(self, "funding_fee/history".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetPositions" => Woo::request(self, "positions".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetPositionsymbol" => Woo::request(self, "position/{symbol}".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetClienttransactionhistory" => Woo::request(self, "client/transaction_history".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetClientfuturesleverage" => Woo::request(self, "client/futures_leverage".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostOrder" => Woo::request(self, "order".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostOrdercancelallafter" => Woo::request(self, "order/cancel_all_after".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostAssetltv" => Woo::request(self, "asset/ltv".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostAssetinternalwithdraw" => Woo::request(self, "asset/internal_withdraw".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostInterestrepay" => Woo::request(self, "interest/repay".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostClientaccountmode" => Woo::request(self, "client/account_mode".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostClientpositionmode" => Woo::request(self, "client/position_mode".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostClientleverage" => Woo::request(self, "client/leverage".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostClientfuturesleverage" => Woo::request(self, "client/futures_leverage".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostClientisolatedmargin" => Woo::request(self, "client/isolated_margin".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateDeleteOrder" => Woo::request(self, "order".into(), "v1".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateDeleteClientorder" => Woo::request(self, "client/order".into(), "v1".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateDeleteOrders" => Woo::request(self, "orders".into(), "v1".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateDeleteAssetwithdraw" => Woo::request(self, "asset/withdraw".into(), "v1".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivateGetClientholding" => Woo::request(self, "client/holding".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PublicGetSysteminfo" => Woo::request(self, "systemInfo".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PublicGetInstruments" => Woo::request(self, "instruments".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PublicGetToken" => Woo::request(self, "token".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PublicGetTokennetwork" => Woo::request(self, "tokenNetwork".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PublicGetTokeninfo" => Woo::request(self, "tokenInfo".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PublicGetMarkettrades" => Woo::request(self, "marketTrades".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PublicGetMarkettradeshistory" => Woo::request(self, "marketTradesHistory".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PublicGetOrderbook" => Woo::request(self, "orderbook".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PublicGetKline" => Woo::request(self, "kline".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PublicGetKlinehistory" => Woo::request(self, "klineHistory".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PublicGetFutures" => Woo::request(self, "futures".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PublicGetFundingrate" => Woo::request(self, "fundingRate".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PublicGetFundingratehistory" => Woo::request(self, "fundingRateHistory".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PublicGetInsurancefund" => Woo::request(self, "insuranceFund".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivateGetTradeorder" => Woo::request(self, "trade/order".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivateGetTradeorders" => Woo::request(self, "trade/orders".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivateGetTradealgoorder" => Woo::request(self, "trade/algoOrder".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivateGetTradealgoorders" => Woo::request(self, "trade/algoOrders".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivateGetTradetransaction" => Woo::request(self, "trade/transaction".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivateGetTradetransactionhistory" => Woo::request(self, "trade/transactionHistory".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivateGetTradetradingfee" => Woo::request(self, "trade/tradingFee".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivateGetAccountinfo" => Woo::request(self, "account/info".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivateGetAccounttokenconfig" => Woo::request(self, "account/tokenConfig".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivateGetAccountsymbolconfig" => Woo::request(self, "account/symbolConfig".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivateGetAccountsubaccountsall" => Woo::request(self, "account/subAccounts/all".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivateGetAccountreferralsummary" => Woo::request(self, "account/referral/summary".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivateGetAccountreferralrewardhistory" => Woo::request(self, "account/referral/rewardHistory".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivateGetAccountcredentials" => Woo::request(self, "account/credentials".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivateGetAssetbalances" => Woo::request(self, "asset/balances".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivateGetAssettokenhistory" => Woo::request(self, "asset/token/history".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivateGetAssettransferhistory" => Woo::request(self, "asset/transfer/history".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivateGetAssetwallethistory" => Woo::request(self, "asset/wallet/history".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivateGetAssetwalletdeposit" => Woo::request(self, "asset/wallet/deposit".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivateGetAssetstakingyieldhistory" => Woo::request(self, "asset/staking/yieldHistory".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivateGetFuturespositions" => Woo::request(self, "futures/positions".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivateGetFuturesleverage" => Woo::request(self, "futures/leverage".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivateGetFuturesdefaultmarginmode" => Woo::request(self, "futures/defaultMarginMode".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivateGetFuturesfundingfeehistory" => Woo::request(self, "futures/fundingFee/history".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivateGetSpotmargininterestrate" => Woo::request(self, "spotMargin/interestRate".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivateGetSpotmargininteresthistory" => Woo::request(self, "spotMargin/interestHistory".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivateGetSpotmarginmaxmargin" => Woo::request(self, "spotMargin/maxMargin".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivateGetAlgoorderoid" => Woo::request(self, "algo/order/{oid}".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivateGetAlgoorders" => Woo::request(self, "algo/orders".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivateGetPositions" => Woo::request(self, "positions".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivateGetBuypower" => Woo::request(self, "buypower".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivateGetConvertexchangeinfo" => Woo::request(self, "convert/exchangeInfo".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivateGetConvertassetinfo" => Woo::request(self, "convert/assetInfo".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivateGetConvertrfq" => Woo::request(self, "convert/rfq".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivateGetConverttrade" => Woo::request(self, "convert/trade".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivateGetConverttrades" => Woo::request(self, "convert/trades".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivatePostTradeorder" => Woo::request(self, "trade/order".into(), "v3".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivatePostTradealgoorder" => Woo::request(self, "trade/algoOrder".into(), "v3".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivatePostTradecancelallafter" => Woo::request(self, "trade/cancelAllAfter".into(), "v3".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivatePostAccounttradingmode" => Woo::request(self, "account/tradingMode".into(), "v3".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivatePostAccountlistenkey" => Woo::request(self, "account/listenKey".into(), "v3".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivatePostAssettransfer" => Woo::request(self, "asset/transfer".into(), "v3".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivatePostAssetwalletwithdraw" => Woo::request(self, "asset/wallet/withdraw".into(), "v3".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivatePostSpotmarginleverage" => Woo::request(self, "spotMargin/leverage".into(), "v3".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivatePostSpotmargininterestrepay" => Woo::request(self, "spotMargin/interestRepay".into(), "v3".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivatePostAlgoorder" => Woo::request(self, "algo/order".into(), "v3".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivatePostConvertrft" => Woo::request(self, "convert/rft".into(), "v3".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivatePutTradeorder" => Woo::request(self, "trade/order".into(), "v3".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivatePutTradealgoorder" => Woo::request(self, "trade/algoOrder".into(), "v3".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivatePutFuturesleverage" => Woo::request(self, "futures/leverage".into(), "v3".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivatePutFuturespositionmode" => Woo::request(self, "futures/positionMode".into(), "v3".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivatePutOrderoid" => Woo::request(self, "order/{oid}".into(), "v3".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivatePutOrderclientclientorderid" => Woo::request(self, "order/client/{client_order_id}".into(), "v3".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivatePutAlgoorderoid" => Woo::request(self, "algo/order/{oid}".into(), "v3".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivatePutAlgoorderclientclientorderid" => Woo::request(self, "algo/order/client/{client_order_id}".into(), "v3".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivateDeleteTradeorder" => Woo::request(self, "trade/order".into(), "v3".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivateDeleteTradeorders" => Woo::request(self, "trade/orders".into(), "v3".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivateDeleteTradealgoorder" => Woo::request(self, "trade/algoOrder".into(), "v3".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivateDeleteTradealgoorders" => Woo::request(self, "trade/algoOrders".into(), "v3".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivateDeleteTradeallorders" => Woo::request(self, "trade/allOrders".into(), "v3".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivateDeleteAlgoorderorderid" => Woo::request(self, "algo/order/{order_id}".into(), "v3".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivateDeleteAlgoorderspending" => Woo::request(self, "algo/orders/pending".into(), "v3".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivateDeleteAlgoorderspendingsymbol" => Woo::request(self, "algo/orders/pending/{symbol}".into(), "v3".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivateDeleteOrderspending" => Woo::request(self, "orders/pending".into(), "v3".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    _ => unimplemented!(),
+                }
+            },
+            _ => unimplemented!()
+        }
+    }
 }
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WooImpl(Value);
+impl Exchange for WooImpl {}
+impl Woo for WooImpl {}
+impl ValueTrait for WooImpl {
+    fn is_undefined(&self) -> bool { self.0.is_undefined() }
+    fn is_nullish(&self) -> bool { self.0.is_nullish() }
+    fn is_nonnullish(&self) -> bool { self.0.is_nonnullish() }
+    fn is_truthy(&self) -> bool { self.0.is_truthy() }
+    fn or_default(&self, default: Value) -> Value { self.0.or_default(default) }
+    fn is_number(&self) -> bool { self.0.is_number() }
+    fn is_string(&self) -> bool { self.0.is_string() }
+    fn is_object(&self) -> bool { self.0.is_object() }
+    fn is_falsy(&self) -> bool { self.0.is_falsy() }
+    fn to_upper_case(&self) -> Value { self.0.to_upper_case() }
+    fn unwrap_str(&self) -> &str { self.0.unwrap_str() }
+    fn unwrap_usize(&self) -> usize { self.0.unwrap_usize() }
+    fn unwrap_bool(&self) -> bool { self.0.unwrap_bool() }
+    fn unwrap_precise(&self) -> &Precise { self.0.unwrap_precise() }
+    fn unwrap_json(&self) -> &serde_json::Value { self.0.unwrap_json() }
+    fn unwrap_json_mut(&mut self) -> &mut serde_json::Value { self.0.unwrap_json_mut() }
+    fn unwrap_precise_mut(&mut self) -> &mut Precise { self.0.unwrap_precise_mut() }
+    fn len(&self) -> usize { self.0.len() }
+    fn get(&self, key: Value) -> Value { self.0.get(key) }
+    fn set(&mut self, key: Value, value: Value) { self.0.set(key, value) }
+    fn push(&mut self, value: Value) { self.0.push(value) }
+    fn split(&self, separator: Value) -> Value { self.0.split(separator) }
+    fn contains_key(&self, key: Value) -> bool { self.0.contains_key(key) }
+    fn keys(&self) -> Vec<Value> { self.0.keys() }
+    fn values(&self) -> Vec<Value> { self.0.values() }
+    fn to_array(&self, x: Value) -> Value { self.0.to_array(x) }
+    fn index_of(&self, x: Value) -> Value { self.0.index_of(x) }
+    fn join(&self, glue: Value) -> Value { self.0.join(glue) }
+    fn to_string(&self) -> Value { self.0.to_string() }
+    fn typeof_(&self) -> Value { self.0.typeof_() }
+    fn slice(&self, start: Value) -> Value { self.0.slice(start) }
+}
+
+impl WooImpl {
+    pub fn new(params: Value) -> Self {
+        let mut rv = WooImpl(match params {
+            Value::Json(_) => params,
+            _ => Value::new_object()
+        });
+        ExchangeImpl::init(&mut rv.0);
+
+        let config_entries = Woo::describe(&rv);
+        for k in config_entries.keys() {
+            rv.set(k.clone(), config_entries.get(k).clone());
+        }
+        rv
+    }
+}
+

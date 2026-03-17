@@ -1,0 +1,19 @@
+{
+  "safe_string_string": "123.45",
+  "safe_string_num": "42",
+  "safe_string_missing": "default",
+  "safe_string_null": "fallback",
+  "safe_integer_num": 42,
+  "safe_integer_string": 123,
+  "safe_float_float": 3.14,
+  "safe_float_string": 123.45,
+  "safe_bool_true": true,
+  "safe_bool_false": false,
+  "safe_number_string": 123.45,
+  "safe_number_float": 3.14,
+  "safe_dict_nested": {
+    "inner": "value"
+  },
+  "safe_value_string": "123.45",
+  "safe_value_missing": "fallback"
+}

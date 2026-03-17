@@ -1,0 +1,42 @@
+[
+  {
+    "method": "safeString2",
+    "args": [
+      {
+        "a": "1",
+        "b": "2"
+      },
+      "a",
+      "b",
+      "default"
+    ],
+    "expected": "1",
+    "result": "1"
+  },
+  {
+    "method": "safeString2",
+    "args": [
+      {
+        "b": "2"
+      },
+      "a",
+      "b",
+      "default"
+    ],
+    "expected": "2",
+    "result": "2"
+  },
+  {
+    "method": "safeIntegerProduct",
+    "args": [
+      {
+        "ts": 1234
+      },
+      "ts",
+      1000,
+      null
+    ],
+    "expected": 1234000,
+    "result": 1234000
+  }
+]

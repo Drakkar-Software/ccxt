@@ -8,1003 +8,699 @@
 #![allow(unused_variables)]
 
 use async_trait::async_trait;
+use std::str::FromStr;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use std::collections::BTreeMap;
-use std::str::FromStr;
+use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, JSON, Array, Object, Math, parse_int, shift_2, extend_2, normalize};
 
-pub type JSON = serde_json::Value;
-pub type Array = Vec<Value>;
-pub type Object = BTreeMap<String, Value>;
+use crate::exchange::{PRECISE_BASE, TRUNCATE, ROUND, ROUND_UP, ROUND_DOWN};
+use crate::exchange::{DECIMAL_PLACES, SIGNIFICANT_DIGITS, TICK_SIZE, NO_PADDING, PAD_WITH_ZERO};
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub enum Value {
-    Undefined,
-    Json(JSON),
-}
-
-impl Value {
-    pub fn new_object() -> Value {
-        Value::Json(json!({}))
-    }
-
-    pub fn new_array() -> Value {
-        Value::Json(json!([]))
-    }
-
-    pub fn null() -> Value {
-        Value::Json(json!(null))
-    }
-
-    pub fn is_undefined(&self) -> bool {
-        matches!(self, Value::Undefined)
-    }
-
-    pub fn is_nullish(&self) -> bool {
-        matches!(self, Value::Undefined) || matches!(self, Value::Json(JSON::Null))
-    }
-
-    pub fn is_nonnullish(&self) -> bool {
-        !self.is_nullish()
-    }
-
-    pub fn is_truthy(&self) -> bool {
-        match self {
-            Value::Undefined => false,
-            Value::Json(JSON::Null) => false,
-            Value::Json(JSON::Bool(b)) => *b,
-            Value::Json(JSON::Number(n)) => n.as_f64().unwrap_or(0.0) != 0.0,
-            Value::Json(JSON::String(s)) => !s.is_empty(),
-            Value::Json(JSON::Array(a)) => !a.is_empty(),
-            Value::Json(JSON::Object(o)) => !o.is_empty(),
-        }
-    }
-
-    pub fn is_falsy(&self) -> bool {
-        !self.is_truthy()
-    }
-
-    pub fn or_default(&self, default: Value) -> Value {
-        if self.is_nullish() {
-            default
-        } else {
-            self.clone()
-        }
-    }
-
-    pub fn is_number(&self) -> bool {
-        matches!(self, Value::Json(JSON::Number(_)))
-    }
-
-    pub fn is_string(&self) -> bool {
-        matches!(self, Value::Json(JSON::String(_)))
-    }
-
-    pub fn is_object(&self) -> bool {
-        matches!(self, Value::Json(JSON::Object(_)))
-    }
-
-    pub fn to_upper_case(&self) -> Value {
-        match self {
-            Value::Json(JSON::String(s)) => Value::from(s.to_uppercase()),
-            _ => Value::Undefined,
-        }
-    }
-
-    pub fn unwrap_str(&self) -> &str {
-        match self {
-            Value::Json(JSON::String(s)) => s,
-            _ => "",
-        }
-    }
-
-    pub fn unwrap_usize(&self) -> usize {
-        match self {
-            Value::Json(JSON::Number(n)) => n.as_u64().unwrap_or(0) as usize,
-            Value::Json(JSON::String(s)) => usize::from_str(s).unwrap_or(0),
-            _ => 0,
-        }
-    }
-
-    pub fn unwrap_bool(&self) -> bool {
-        match self {
-            Value::Json(JSON::Bool(b)) => *b,
-            _ => false,
-        }
-    }
-
-    pub fn unwrap_precise(&self) -> &Precise {
-        static PRECISE: Precise = Precise;
-        &PRECISE
-    }
-
-    pub fn unwrap_json(&self) -> &serde_json::Value {
-        match self {
-            Value::Json(v) => v,
-            _ => &JSON::Null,
-        }
-    }
-
-    pub fn unwrap_json_mut(&mut self) -> &mut serde_json::Value {
-        match self {
-            Value::Json(v) => v,
-            Value::Undefined => {
-                *self = Value::new_object();
-                match self {
-                    Value::Json(v) => v,
-                    _ => unreachable!(),
-                }
-            }
-        }
-    }
-
-    pub fn unwrap_precise_mut(&mut self) -> &mut Precise {
-        // Runtime placeholder: return a stable mutable instance without `static mut`.
-        Box::leak(Box::new(Precise))
-    }
-
-    pub fn len(&self) -> usize {
-        match self {
-            Value::Json(JSON::Array(a)) => a.len(),
-            Value::Json(JSON::Object(o)) => o.len(),
-            Value::Json(JSON::String(s)) => s.len(),
-            _ => 0,
-        }
-    }
-
-    pub fn get(&self, _key: Value) -> Value {
-        match (self, _key) {
-            (Value::Json(JSON::Object(o)), Value::Json(JSON::String(k))) => {
-                o.get(&k).cloned().map(Value::Json).unwrap_or(Value::Undefined)
-            }
-            (Value::Json(JSON::Array(a)), Value::Json(JSON::Number(n))) => {
-                let idx = n.as_u64().unwrap_or(0) as usize;
-                a.get(idx).cloned().map(Value::Json).unwrap_or(Value::Undefined)
-            }
-            (Value::Json(JSON::Object(o)), Value::Json(JSON::Number(n))) => {
-                let k = n.as_u64().unwrap_or(0).to_string();
-                o.get(&k).cloned().map(Value::Json).unwrap_or(Value::Undefined)
-            }
-            _ => Value::Undefined,
-        }
-    }
-
-    pub fn set(&mut self, _key: Value, _value: Value) {
-        let value_json = match _value {
-            Value::Json(v) => v,
-            Value::Undefined => JSON::Null,
-        };
-        match (self, _key) {
-            (Value::Json(JSON::Object(o)), Value::Json(JSON::String(k))) => {
-                o.insert(k, value_json);
-            }
-            (Value::Json(JSON::Array(a)), Value::Json(JSON::Number(n))) => {
-                let idx = n.as_u64().unwrap_or(0) as usize;
-                if idx < a.len() {
-                    a[idx] = value_json;
-                } else if idx == a.len() {
-                    a.push(value_json);
-                }
-            }
-            (Value::Json(JSON::Object(o)), Value::Json(JSON::Number(n))) => {
-                let k = n.as_u64().unwrap_or(0).to_string();
-                o.insert(k, value_json);
-            }
-            _ => {}
-        }
-    }
-
-    pub fn push(&mut self, _value: Value) {
-        if let Value::Json(JSON::Array(a)) = self {
-            let v = match _value {
-                Value::Json(j) => j,
-                Value::Undefined => JSON::Null,
-            };
-            a.push(v);
-        }
-    }
-
-    pub fn split(&self, _separator: Value) -> Value {
-        let sep = match _separator {
-            Value::Json(JSON::String(s)) => s,
-            _ => String::new(),
-        };
-        match self {
-            Value::Json(JSON::String(s)) => Value::Json(JSON::Array(s.split(&sep).map(|x| json!(x)).collect())),
-            _ => Value::Undefined,
-        }
-    }
-
-    pub fn deep_extend(&self, _args: Value) -> Value {
-        // Placeholder for variadic deepExtend; caller should pass already-merged object.
-        self.clone()
-    }
-
-    pub fn contains_key(&self, _key: Value) -> bool {
-        match (self, _key) {
-            (Value::Json(JSON::Object(o)), Value::Json(JSON::String(k))) => o.contains_key(&k),
-            _ => false,
-        }
-    }
-
-    pub fn keys(&self) -> Vec<Value> {
-        match self {
-            Value::Json(JSON::Object(o)) => o.keys().map(|k| Value::from(k.as_str())).collect(),
-            _ => vec![],
-        }
-    }
-
-    pub fn values(&self) -> Vec<Value> {
-        match self {
-            Value::Json(JSON::Object(o)) => o.values().cloned().map(Value::Json).collect(),
-            _ => vec![],
-        }
-    }
-
-    pub fn to_array(&self, _x: Value) -> Value {
-        match self {
-            Value::Json(JSON::Array(_)) => self.clone(),
-            Value::Json(JSON::Object(o)) => Value::Json(JSON::Array(o.values().cloned().collect())),
-            _ => Value::new_array(),
-        }
-    }
-
-    pub fn index_of(&self, _x: Value) -> Value {
-        match (self, _x) {
-            (Value::Json(JSON::Array(a)), Value::Json(v)) => {
-                for (i, item) in a.iter().enumerate() {
-                    if item == &v {
-                        return Value::from(i as i64);
-                    }
-                }
-                Value::from(-1i64)
-            }
-            _ => Value::from(-1i64),
-        }
-    }
-
-    pub fn join(&self, _glue: Value) -> Value {
-        let glue = match _glue {
-            Value::Json(JSON::String(s)) => s,
-            _ => String::new(),
-        };
-        match self {
-            Value::Json(JSON::Array(a)) => {
-                let parts: Vec<String> = a.iter().map(|v| v.to_string()).collect();
-                Value::from(parts.join(&glue))
-            }
-            _ => Value::Undefined,
-        }
-    }
-
-    pub fn to_string(&self) -> Value {
-        match self {
-            Value::Json(v) => Value::from(v.to_string()),
-            Value::Undefined => Value::from("undefined"),
-        }
-    }
-
-    pub fn typeof_(&self) -> Value {
-        let t = match self {
-            Value::Undefined => "undefined",
-            Value::Json(JSON::Null) => "null",
-            Value::Json(JSON::Bool(_)) => "boolean",
-            Value::Json(JSON::Number(_)) => "number",
-            Value::Json(JSON::String(_)) => "string",
-            Value::Json(JSON::Array(_)) => "array",
-            Value::Json(JSON::Object(_)) => "object",
-        };
-        Value::from(t)
-    }
-
-    pub fn slice(&self, _start: Value) -> Value {
-        let start = _start.unwrap_usize();
-        match self {
-            Value::Json(JSON::Array(a)) => {
-                let slice = if start < a.len() { a[start..].to_vec() } else { vec![] };
-                Value::Json(JSON::Array(slice))
-            }
-            Value::Json(JSON::String(s)) => Value::from(s.get(start..).unwrap_or("").to_string()),
-            _ => Value::Undefined,
-        }
-    }
-}
-
-impl From<i64> for Value {
-    fn from(v: i64) -> Self {
-        Value::Json(json!(v))
-    }
-}
-
-impl From<usize> for Value {
-    fn from(v: usize) -> Self {
-        Value::Json(json!(v))
-    }
-}
-
-impl From<bool> for Value {
-    fn from(v: bool) -> Self {
-        Value::Json(json!(v))
-    }
-}
-
-impl From<&str> for Value {
-    fn from(v: &str) -> Self {
-        Value::Json(json!(v))
-    }
-}
-
-impl From<String> for Value {
-    fn from(v: String) -> Self {
-        Value::Json(json!(v))
-    }
-}
-
-impl From<f64> for Value {
-    fn from(v: f64) -> Self {
-        match serde_json::Number::from_f64(v) {
-            Some(n) => Value::Json(JSON::Number(n)),
-            None => Value::Json(json!(0)),
-        }
-    }
-}
-
-// ---------------------------------------------------------------------------
-// Arithmetic operators for Value — JS-like coercion semantics
-// ---------------------------------------------------------------------------
-
-fn coerce_to_f64(v: &Value) -> Option<f64> {
-    match v {
-        Value::Json(JSON::Number(n)) => n.as_f64(),
-        Value::Json(JSON::String(s)) => s.parse::<f64>().ok(),
-        Value::Json(JSON::Bool(b)) => Some(if *b { 1.0 } else { 0.0 }),
-        _ => None,
-    }
-}
-
-/// Returns Some(i64) if value is an integer JSON number, None otherwise.
-fn coerce_to_i64(v: &Value) -> Option<i64> {
-    match v {
-        Value::Json(JSON::Number(n)) => n.as_i64(),
-        _ => None,
-    }
-}
-
-impl std::ops::Add for Value {
-    type Output = Value;
-    fn add(self, rhs: Value) -> Value {
-        // String concatenation takes precedence if either side is a string
-        match (&self, &rhs) {
-            (Value::Json(JSON::String(a)), _) => {
-                let b = match &rhs {
-                    Value::Json(JSON::String(s)) => s.clone(),
-                    Value::Json(v) => v.to_string().trim_matches('"').to_string(),
-                    Value::Undefined => "undefined".to_string(),
-                };
-                Value::from(a.clone() + &b)
-            }
-            (_, Value::Json(JSON::String(b))) => {
-                let a = match &self {
-                    Value::Json(v) => v.to_string().trim_matches('"').to_string(),
-                    Value::Undefined => "undefined".to_string(),
-                };
-                Value::from(a + b.as_str())
-            }
-            _ => match (coerce_to_i64(&self), coerce_to_i64(&rhs)) {
-                (Some(a), Some(b)) => Value::from(a + b),
-                _ => match (coerce_to_f64(&self), coerce_to_f64(&rhs)) {
-                    (Some(a), Some(b)) => Value::from(a + b),
-                    _ => Value::Undefined,
-                },
-            },
-        }
-    }
-}
-
-impl std::ops::Sub for Value {
-    type Output = Value;
-    fn sub(self, rhs: Value) -> Value {
-        match (coerce_to_i64(&self), coerce_to_i64(&rhs)) {
-            (Some(a), Some(b)) => Value::from(a - b),
-            _ => match (coerce_to_f64(&self), coerce_to_f64(&rhs)) {
-                (Some(a), Some(b)) => Value::from(a - b),
-                _ => Value::Undefined,
-            },
-        }
-    }
-}
-
-impl std::ops::Mul for Value {
-    type Output = Value;
-    fn mul(self, rhs: Value) -> Value {
-        match (coerce_to_i64(&self), coerce_to_i64(&rhs)) {
-            (Some(a), Some(b)) => Value::from(a * b),
-            _ => match (coerce_to_f64(&self), coerce_to_f64(&rhs)) {
-                (Some(a), Some(b)) => Value::from(a * b),
-                _ => Value::Undefined,
-            },
-        }
-    }
-}
-
-impl std::ops::Div for Value {
-    type Output = Value;
-    fn div(self, rhs: Value) -> Value {
-        match (coerce_to_f64(&self), coerce_to_f64(&rhs)) {
-            (Some(a), Some(b)) if b != 0.0 => Value::from(a / b),
-            _ => Value::Undefined,
-        }
-    }
-}
-
-impl std::ops::Rem for Value {
-    type Output = Value;
-    fn rem(self, rhs: Value) -> Value {
-        match (coerce_to_f64(&self), coerce_to_f64(&rhs)) {
-            (Some(a), Some(b)) if b != 0.0 => Value::from(a % b),
-            _ => Value::Undefined,
-        }
-    }
-}
-
-impl std::ops::Neg for Value {
-    type Output = Value;
-    fn neg(self) -> Value {
-        match coerce_to_f64(&self) {
-            Some(f) => Value::from(-f),
-            None => Value::Undefined,
-        }
-    }
-}
-
-/// Partial ordering for Value — numeric or lexicographic
-impl PartialOrd for Value {
-    fn partial_cmp(&self, other: &Value) -> Option<std::cmp::Ordering> {
-        match (coerce_to_f64(self), coerce_to_f64(other)) {
-            (Some(a), Some(b)) => a.partial_cmp(&b),
-            _ => match (self, other) {
-                (Value::Json(JSON::String(a)), Value::Json(JSON::String(b))) => Some(a.cmp(b)),
-                _ => None,
-            },
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Precise;
-
-pub struct Math;
-
-pub fn parse_int(_value: Value, _radix: Value) -> Value {
-    match _value {
-        Value::Json(JSON::Number(n)) => Value::from(n.as_i64().unwrap_or(0)),
-        Value::Json(JSON::String(s)) => {
-            let radix = _radix.unwrap_usize();
-            let base = if radix == 0 { 10 } else { radix } as u32;
-            let v = i64::from_str_radix(s.trim(), base).unwrap_or(0);
-            Value::from(v)
-        }
-        _ => Value::from(0i64),
-    }
-}
-
-pub fn shift_2(_value: Value) -> (Value, Value) {
-    match _value {
-        Value::Json(JSON::Array(mut a)) => {
-            let first = if !a.is_empty() { Value::Json(a.remove(0)) } else { Value::Undefined };
-            let second = if !a.is_empty() { Value::Json(a.remove(0)) } else { Value::Undefined };
-            (first, second)
-        }
-        _ => (Value::Undefined, Value::Undefined),
-    }
-}
-
-pub fn extend_2(_a: Value, _b: Value) -> Value {
-    match (_a, _b) {
-        (Value::Json(JSON::Object(mut a)), Value::Json(JSON::Object(b))) => {
-            for (k, v) in b {
-                a.insert(k, v);
-            }
-            Value::Json(JSON::Object(a))
-        }
-        (a, _) => a,
-    }
-}
-
-pub fn normalize(_value: &Value) -> Option<JSON> {
-    match _value {
-        Value::Undefined => None,
-        Value::Json(v) => Some(v.clone()),
-    }
-}
-
-pub const PRECISE_BASE: i32 = 10;
-pub const TRUNCATE: i32 = 0;
-pub const ROUND: i32 = 1;
-pub const ROUND_UP: i32 = 2;
-pub const ROUND_DOWN: i32 = 3;
-pub const DECIMAL_PLACES: i32 = 4;
-pub const SIGNIFICANT_DIGITS: i32 = 5;
-pub const TICK_SIZE: i32 = 6;
-pub const NO_PADDING: i32 = 7;
-pub const PAD_WITH_ZERO: i32 = 8;
-
-pub trait ValueTrait {
-    fn is_undefined(&self) -> bool;
-    fn is_nullish(&self) -> bool;
-    fn is_nonnullish(&self) -> bool;
-    fn is_truthy(&self) -> bool;
-    fn or_default(&self, default: Value) -> Value;
-    fn is_number(&self) -> bool;
-    fn is_string(&self) -> bool;
-    fn is_object(&self) -> bool;
-    fn is_falsy(&self) -> bool;
-    fn to_upper_case(&self) -> Value;
-    fn unwrap_str(&self) -> &str;
-    fn unwrap_usize(&self) -> usize;
-    fn unwrap_bool(&self) -> bool;
-    fn unwrap_precise(&self) -> &Precise;
-    fn unwrap_json(&self) -> &serde_json::Value;
-    fn unwrap_json_mut(&mut self) -> &mut serde_json::Value;
-    fn unwrap_precise_mut(&mut self) -> &mut Precise;
-    fn len(&self) -> usize;
-    fn get(&self, key: Value) -> Value;
-    fn set(&mut self, key: Value, value: Value);
-    fn push(&mut self, value: Value);
-    fn split(&self, separator: Value) -> Value;
-    fn contains_key(&self, key: Value) -> bool;
-    fn keys(&self) -> Vec<Value>;
-    fn values(&self) -> Vec<Value>;
-    fn to_array(&self, x: Value) -> Value;
-    fn index_of(&self, x: Value) -> Value;
-    fn join(&self, glue: Value) -> Value;
-    fn to_string(&self) -> Value;
-    fn typeof_(&self) -> Value;
-    fn slice(&self, start: Value) -> Value;
-}
-
-pub struct ExchangeImpl;
-
-impl ExchangeImpl {
-    pub fn init(_value: &mut Value) {
-        // TODO: initialize exchange defaults
-    }
-}
-
-// ---------------------------------------------------------------------------
-// Free helpers used by safe accessor implementations
-// ---------------------------------------------------------------------------
-
-pub fn safe_get(dictionary: &Value, key: &Value) -> Value {
-    match dictionary {
-        Value::Json(serde_json::Value::Object(map)) => {
-            if let Value::Json(serde_json::Value::String(k)) = key {
-                map.get(k).map(|v| Value::Json(v.clone())).unwrap_or(Value::Undefined)
-            } else if let Value::Json(k) = key {
-                let k_str = k.to_string();
-                let k_str = k_str.trim_matches('"');
-                map.get(k_str).map(|v| Value::Json(v.clone())).unwrap_or(Value::Undefined)
-            } else {
-                Value::Undefined
-            }
-        }
-        Value::Json(serde_json::Value::Array(arr)) => {
-            if let Value::Json(serde_json::Value::Number(n)) = key {
-                if let Some(i) = n.as_u64() {
-                    arr.get(i as usize).map(|v| Value::Json(v.clone())).unwrap_or(Value::Undefined)
-                } else {
-                    Value::Undefined
-                }
-            } else {
-                Value::Undefined
-            }
-        }
-        _ => Value::Undefined,
-    }
-}
-
-fn safe_get_from_keys(dictionary: &Value, keys: &[Value]) -> Value {
-    for key in keys {
-        let v = safe_get(dictionary, key);
-        if v.is_nonnullish() {
-            return v;
-        }
-    }
-    Value::Undefined
-}
-
-pub fn value_to_string_opt(v: &Value) -> Option<String> {
-    match v {
-        Value::Json(serde_json::Value::String(s)) => Some(s.clone()),
-        Value::Json(serde_json::Value::Number(n)) => Some(n.to_string()),
-        Value::Json(serde_json::Value::Bool(b)) => Some(b.to_string()),
-        _ => None,
-    }
-}
-
-pub fn value_to_i64_opt(v: &Value) -> Option<i64> {
-    match v {
-        Value::Json(serde_json::Value::Number(n)) => {
-            if let Some(i) = n.as_i64() { return Some(i); }
-            if let Some(f) = n.as_f64() { return Some(f as i64); }
-            None
-        }
-        Value::Json(serde_json::Value::String(s)) => s.parse::<f64>().ok().map(|f| f as i64),
-        Value::Json(serde_json::Value::Bool(b)) => Some(if *b { 1 } else { 0 }),
-        _ => None,
-    }
-}
-
-pub fn value_to_f64_opt(v: &Value) -> Option<f64> {
-    match v {
-        Value::Json(serde_json::Value::Number(n)) => n.as_f64(),
-        Value::Json(serde_json::Value::String(s)) => s.parse::<f64>().ok(),
-        Value::Json(serde_json::Value::Bool(b)) => Some(if *b { 1.0 } else { 0.0 }),
-        _ => None,
-    }
-}
-
-// ---------------------------------------------------------------------------
+// PLEASE DO NOT EDIT THIS FILE, IT IS GENERATED AND WILL BE OVERWRITTEN:
+// https://github.com/ccxt/ccxt/blob/master/CONTRIBUTING.md#how-to-contribute-code
 
 #[async_trait]
-pub trait Exchange {
-
-    // ---------------------------------------------------------------------------
-    // Manually-maintained safe accessor methods — preserved across transpiler runs
-    // ---------------------------------------------------------------------------
-
-    fn safe_string(&self, dictionary: Value, key: Value, default_value: Value) -> Value {
-        let v = safe_get(&dictionary, &key);
-        match &v {
-            Value::Undefined | Value::Json(serde_json::Value::Null) => {
-                if default_value.is_nullish() { Value::Undefined } else { default_value }
+pub trait Bitfinex : Exchange {
+fn describe(&self) -> Value {
+        Value::Json(serde_json::Value::from_str(r###"{
+    "id": "bitfinex",
+    "name": "Bitfinex",
+    "countries": [
+        "VG"
+    ],
+    "enableRateLimit": true,
+    "rateLimit": 250,
+    "timeout": 10000,
+    "certified": false,
+    "pro": true,
+    "alias": false,
+    "dex": false,
+    "has": {
+        "publicAPI": true,
+        "privateAPI": true,
+        "spot": true,
+        "margin": true,
+        "swap": true,
+        "future": false,
+        "option": false,
+        "addMargin": false,
+        "borrowCrossMargin": false,
+        "borrowIsolatedMargin": false,
+        "cancelAllOrders": true,
+        "cancelOrder": true,
+        "cancelOrders": true,
+        "createDepositAddress": true,
+        "createLimitOrder": true,
+        "createMarketOrder": true,
+        "createMarketOrderWs": true,
+        "createOrder": true,
+        "createPostOnlyOrder": true,
+        "createReduceOnlyOrder": true,
+        "createStopLimitOrder": true,
+        "createStopMarketOrder": true,
+        "createStopOrder": true,
+        "createTrailingAmountOrder": true,
+        "createTrailingPercentOrder": false,
+        "createTriggerOrder": true,
+        "editOrder": true,
+        "fetchBalance": true,
+        "fetchBorrowInterest": false,
+        "fetchBorrowRate": false,
+        "fetchBorrowRateHistories": false,
+        "fetchBorrowRateHistory": false,
+        "fetchBorrowRates": false,
+        "fetchBorrowRatesPerSymbol": false,
+        "fetchClosedOrder": true,
+        "fetchClosedOrders": true,
+        "fetchCrossBorrowRate": false,
+        "fetchCrossBorrowRates": false,
+        "fetchCurrencies": true,
+        "fetchCurrenciesWs": "emulated",
+        "fetchDepositAddress": true,
+        "fetchDepositAddresses": false,
+        "fetchDepositAddressesByNetwork": false,
+        "fetchDepositsWithdrawals": true,
+        "fetchFundingHistory": false,
+        "fetchFundingRate": "emulated",
+        "fetchFundingRateHistory": true,
+        "fetchFundingRates": true,
+        "fetchGreeks": false,
+        "fetchIndexOHLCV": false,
+        "fetchIsolatedBorrowRate": false,
+        "fetchIsolatedBorrowRates": false,
+        "fetchL2OrderBook": true,
+        "fetchLedger": true,
+        "fetchLeverage": false,
+        "fetchLeverageTiers": false,
+        "fetchLiquidations": true,
+        "fetchMarginMode": false,
+        "fetchMarketLeverageTiers": false,
+        "fetchMarkets": true,
+        "fetchMarkOHLCV": false,
+        "fetchMyTrades": true,
+        "fetchOHLCV": true,
+        "fetchOpenInterest": true,
+        "fetchOpenInterests": true,
+        "fetchOpenInterestHistory": true,
+        "fetchOpenOrder": true,
+        "fetchOpenOrders": true,
+        "fetchOption": false,
+        "fetchOptionChain": false,
+        "fetchOrder": true,
+        "fetchOrderBook": true,
+        "fetchOrderBooks": false,
+        "fetchOrderTrades": true,
+        "fetchPosition": false,
+        "fetchPositionMode": false,
+        "fetchPositions": true,
+        "fetchPremiumIndexOHLCV": false,
+        "fetchStatus": true,
+        "fetchTicker": true,
+        "fetchTickers": true,
+        "fetchTime": false,
+        "fetchTrades": true,
+        "fetchTradingFee": false,
+        "fetchTradingFees": true,
+        "fetchTransactions": "emulated",
+        "fetchVolatilityHistory": false,
+        "reduceMargin": false,
+        "repayCrossMargin": false,
+        "repayIsolatedMargin": false,
+        "setLeverage": false,
+        "setMargin": true,
+        "setMarginMode": false,
+        "setPositionMode": false,
+        "signIn": false,
+        "transfer": true,
+        "watchBalance": true,
+        "watchMyTrades": true,
+        "watchOHLCV": true,
+        "watchOrderBook": true,
+        "watchOrders": true,
+        "watchTicker": true,
+        "watchTickers": false,
+        "watchTrades": true,
+        "watchTradesForSymbols": false,
+        "unWatchTrades": true,
+        "unWatchOrderBook": true,
+        "unWatchTicker": true,
+        "unWatchOHLCV": true,
+        "withdraw": true,
+        "ws": true,
+        "fetchAllGreeks": false
+    },
+    "urls": {
+        "logo": "https://github.com/user-attachments/assets/4a8e947f-ab46-481a-a8ae-8b20e9b03178",
+        "api": {
+            "v1": "https://api.bitfinex.com",
+            "public": "https://api-pub.bitfinex.com",
+            "private": "https://api.bitfinex.com",
+            "ws": {
+                "public": "wss://api-pub.bitfinex.com/ws/2",
+                "private": "wss://api.bitfinex.com/ws/2"
             }
-            _ => {
-                if let Some(s) = value_to_string_opt(&v) { Value::Json(serde_json::Value::String(s)) }
-                else if default_value.is_nullish() { Value::Undefined }
-                else { default_value }
+        },
+        "www": "https://www.bitfinex.com",
+        "doc": [
+            "https://docs.bitfinex.com/v2/docs/",
+            "https://github.com/bitfinexcom/bitfinex-api-node"
+        ],
+        "fees": "https://www.bitfinex.com/fees"
+    },
+    "api": {
+        "public": {
+            "get": {
+                "conf/{config}": 2.7,
+                "conf/pub:{action}:{object}": 2.7,
+                "conf/pub:{action}:{object}:{detail}": 2.7,
+                "conf/pub:map:{object}": 2.7,
+                "conf/pub:map:{object}:{detail}": 2.7,
+                "conf/pub:map:currency:{detail}": 2.7,
+                "conf/pub:map:currency:sym": 2.7,
+                "conf/pub:map:currency:label": 2.7,
+                "conf/pub:map:currency:unit": 2.7,
+                "conf/pub:map:currency:undl": 2.7,
+                "conf/pub:map:currency:pool": 2.7,
+                "conf/pub:map:currency:explorer": 2.7,
+                "conf/pub:map:currency:tx:fee": 2.7,
+                "conf/pub:map:tx:method": 2.7,
+                "conf/pub:list:{object}": 2.7,
+                "conf/pub:list:{object}:{detail}": 2.7,
+                "conf/pub:list:currency": 2.7,
+                "conf/pub:list:pair:exchange": 2.7,
+                "conf/pub:list:pair:margin": 2.7,
+                "conf/pub:list:pair:futures": 2.7,
+                "conf/pub:list:competitions": 2.7,
+                "conf/pub:info:{object}": 2.7,
+                "conf/pub:info:{object}:{detail}": 2.7,
+                "conf/pub:info:pair": 2.7,
+                "conf/pub:info:pair:futures": 2.7,
+                "conf/pub:info:tx:status": 2.7,
+                "conf/pub:fees": 2.7,
+                "platform/status": 8,
+                "tickers": 2.7,
+                "ticker/{symbol}": 2.7,
+                "tickers/hist": 2.7,
+                "trades/{symbol}/hist": 2.7,
+                "book/{symbol}/{precision}": 1,
+                "book/{symbol}/P0": 1,
+                "book/{symbol}/P1": 1,
+                "book/{symbol}/P2": 1,
+                "book/{symbol}/P3": 1,
+                "book/{symbol}/R0": 1,
+                "stats1/{key}:{size}:{symbol}:{side}/{section}": 2.7,
+                "stats1/{key}:{size}:{symbol}:{side}/last": 2.7,
+                "stats1/{key}:{size}:{symbol}:{side}/hist": 2.7,
+                "stats1/{key}:{size}:{symbol}/{section}": 2.7,
+                "stats1/{key}:{size}:{symbol}/last": 2.7,
+                "stats1/{key}:{size}:{symbol}/hist": 2.7,
+                "stats1/{key}:{size}:{symbol}:long/last": 2.7,
+                "stats1/{key}:{size}:{symbol}:long/hist": 2.7,
+                "stats1/{key}:{size}:{symbol}:short/last": 2.7,
+                "stats1/{key}:{size}:{symbol}:short/hist": 2.7,
+                "candles/trade:{timeframe}:{symbol}:{period}/{section}": 2.7,
+                "candles/trade:{timeframe}:{symbol}/{section}": 2.7,
+                "candles/trade:{timeframe}:{symbol}/last": 2.7,
+                "candles/trade:{timeframe}:{symbol}/hist": 2.7,
+                "status/{type}": 2.7,
+                "status/deriv": 2.7,
+                "status/deriv/{symbol}/hist": 2.7,
+                "liquidations/hist": 80,
+                "rankings/{key}:{timeframe}:{symbol}/{section}": 2.7,
+                "rankings/{key}:{timeframe}:{symbol}/hist": 2.7,
+                "pulse/hist": 2.7,
+                "pulse/profile/{nickname}": 2.7,
+                "funding/stats/{symbol}/hist": 10,
+                "ext/vasps": 1
+            },
+            "post": {
+                "calc/trade/avg": 2.7,
+                "calc/fx": 2.7
             }
-        }
-    }
-
-    fn safe_string_2(&self, dictionary: Value, key1: Value, key2: Value, default_value: Value) -> Value {
-        let v = safe_get_from_keys(&dictionary, &[key1, key2]);
-        if v.is_nonnullish() { self.safe_string(dictionary.clone(), {
-            // We already have the value; just wrap it
-            let _ = &dictionary;
-            return match value_to_string_opt(&v) {
-                Some(s) => Value::Json(serde_json::Value::String(s)),
-                None => default_value,
-            };
-        }, default_value.clone()) } else { default_value }
-    }
-
-    fn safe_string_n(&self, dictionary: Value, keys: Value, default_value: Value) -> Value {
-        if let Value::Json(serde_json::Value::Array(arr)) = &keys {
-            let key_vals: Vec<Value> = arr.iter().map(|k| Value::Json(k.clone())).collect();
-            let v = safe_get_from_keys(&dictionary, &key_vals);
-            if v.is_nonnullish() {
-                return match value_to_string_opt(&v) {
-                    Some(s) => Value::Json(serde_json::Value::String(s)),
-                    None => if default_value.is_nullish() { Value::Undefined } else { default_value },
-                };
-            }
-        }
-        if default_value.is_nullish() { Value::Undefined } else { default_value }
-    }
-
-    fn safe_string_lower(&self, dictionary: Value, key: Value, default_value: Value) -> Value {
-        match self.safe_string(dictionary, key, default_value) {
-            Value::Json(serde_json::Value::String(s)) => Value::Json(serde_json::Value::String(s.to_lowercase())),
-            other => other,
-        }
-    }
-
-    fn safe_string_lower_2(&self, dictionary: Value, key1: Value, key2: Value, default_value: Value) -> Value {
-        match self.safe_string_2(dictionary, key1, key2, default_value) {
-            Value::Json(serde_json::Value::String(s)) => Value::Json(serde_json::Value::String(s.to_lowercase())),
-            other => other,
-        }
-    }
-
-    fn safe_string_lower_n(&self, dictionary: Value, keys: Value, default_value: Value) -> Value {
-        match self.safe_string_n(dictionary, keys, default_value) {
-            Value::Json(serde_json::Value::String(s)) => Value::Json(serde_json::Value::String(s.to_lowercase())),
-            other => other,
-        }
-    }
-
-    fn safe_string_upper(&self, dictionary: Value, key: Value, default_value: Value) -> Value {
-        match self.safe_string(dictionary, key, default_value) {
-            Value::Json(serde_json::Value::String(s)) => Value::Json(serde_json::Value::String(s.to_uppercase())),
-            other => other,
-        }
-    }
-
-    fn safe_string_upper_2(&self, dictionary: Value, key1: Value, key2: Value, default_value: Value) -> Value {
-        match self.safe_string_2(dictionary, key1, key2, default_value) {
-            Value::Json(serde_json::Value::String(s)) => Value::Json(serde_json::Value::String(s.to_uppercase())),
-            other => other,
-        }
-    }
-
-    fn safe_string_upper_n(&self, dictionary: Value, keys: Value, default_value: Value) -> Value {
-        match self.safe_string_n(dictionary, keys, default_value) {
-            Value::Json(serde_json::Value::String(s)) => Value::Json(serde_json::Value::String(s.to_uppercase())),
-            other => other,
-        }
-    }
-
-    fn safe_integer(&self, dictionary: Value, key: Value, default_value: Value) -> Value {
-        let v = safe_get(&dictionary, &key);
-        match value_to_i64_opt(&v) {
-            Some(i) => Value::Json(serde_json::Value::Number(i.into())),
-            None => if default_value.is_nullish() { Value::Undefined } else { default_value },
-        }
-    }
-
-    fn safe_integer_2(&self, dictionary: Value, key1: Value, key2: Value, default_value: Value) -> Value {
-        let v1 = self.safe_integer(dictionary.clone(), key1, Value::Undefined);
-        if v1.is_nonnullish() { return v1; }
-        self.safe_integer(dictionary, key2, default_value)
-    }
-
-    fn safe_integer_n(&self, dictionary: Value, keys: Value, default_value: Value) -> Value {
-        if let Value::Json(serde_json::Value::Array(arr)) = &keys {
-            for k in arr {
-                let v = self.safe_integer(dictionary.clone(), Value::Json(k.clone()), Value::Undefined);
-                if v.is_nonnullish() { return v; }
-            }
-        }
-        if default_value.is_nullish() { Value::Undefined } else { default_value }
-    }
-
-    fn safe_integer_product(&self, dictionary: Value, key: Value, factor: Value, default_value: Value) -> Value {
-        match (self.safe_integer(dictionary, key, Value::Undefined), value_to_f64_opt(&factor)) {
-            (Value::Json(serde_json::Value::Number(n)), Some(f)) => {
-                if let Some(i) = n.as_i64() {
-                    let result = (i as f64 * f) as i64;
-                    Value::Json(serde_json::Value::Number(result.into()))
-                } else { if default_value.is_nullish() { Value::Undefined } else { default_value } }
-            }
-            _ => if default_value.is_nullish() { Value::Undefined } else { default_value },
-        }
-    }
-
-    fn safe_integer_product_2(&self, dictionary: Value, key1: Value, key2: Value, factor: Value, default_value: Value) -> Value {
-        let v = self.safe_integer_product(dictionary.clone(), key1, factor.clone(), Value::Undefined);
-        if v.is_nonnullish() { return v; }
-        self.safe_integer_product(dictionary, key2, factor, default_value)
-    }
-
-    fn safe_integer_product_n(&self, dictionary: Value, keys: Value, factor: Value, default_value: Value) -> Value {
-        if let Value::Json(serde_json::Value::Array(arr)) = &keys {
-            for k in arr {
-                let v = self.safe_integer_product(dictionary.clone(), Value::Json(k.clone()), factor.clone(), Value::Undefined);
-                if v.is_nonnullish() { return v; }
-            }
-        }
-        if default_value.is_nullish() { Value::Undefined } else { default_value }
-    }
-
-    fn safe_timestamp(&self, dictionary: Value, key: Value, default_value: Value) -> Value {
-        self.safe_integer(dictionary, key, default_value)
-    }
-
-    fn safe_timestamp_2(&self, dictionary: Value, key1: Value, key2: Value, default_value: Value) -> Value {
-        self.safe_integer_2(dictionary, key1, key2, default_value)
-    }
-
-    fn safe_timestamp_n(&self, dictionary: Value, keys: Value, default_value: Value) -> Value {
-        self.safe_integer_n(dictionary, keys, default_value)
-    }
-
-    fn safe_float(&self, dictionary: Value, key: Value, default_value: Value) -> Value {
-        let v = safe_get(&dictionary, &key);
-        match value_to_f64_opt(&v) {
-            Some(f) => {
-                if let Some(n) = serde_json::Number::from_f64(f) {
-                    Value::Json(serde_json::Value::Number(n))
-                } else { if default_value.is_nullish() { Value::Undefined } else { default_value } }
-            }
-            None => if default_value.is_nullish() { Value::Undefined } else { default_value },
-        }
-    }
-
-    fn safe_float_2(&self, dictionary: Value, key1: Value, key2: Value, default_value: Value) -> Value {
-        let v1 = self.safe_float(dictionary.clone(), key1, Value::Undefined);
-        if v1.is_nonnullish() { return v1; }
-        self.safe_float(dictionary, key2, default_value)
-    }
-
-    fn safe_float_n(&self, dictionary: Value, keys: Value, default_value: Value) -> Value {
-        if let Value::Json(serde_json::Value::Array(arr)) = &keys {
-            for k in arr {
-                let v = self.safe_float(dictionary.clone(), Value::Json(k.clone()), Value::Undefined);
-                if v.is_nonnullish() { return v; }
-            }
-        }
-        if default_value.is_nullish() { Value::Undefined } else { default_value }
-    }
-
-    fn safe_value(&self, dictionary: Value, key: Value, default_value: Value) -> Value {
-        let v = safe_get(&dictionary, &key);
-        if v.is_nonnullish() { v } else { if default_value.is_nullish() { Value::Undefined } else { default_value } }
-    }
-
-    fn safe_value_2(&self, dictionary: Value, key1: Value, key2: Value, default_value: Value) -> Value {
-        let v1 = self.safe_value(dictionary.clone(), key1, Value::Undefined);
-        if v1.is_nonnullish() { return v1; }
-        self.safe_value(dictionary, key2, default_value)
-    }
-
-    fn safe_value_n(&self, dictionary: Value, keys: Value, default_value: Value) -> Value {
-        if let Value::Json(serde_json::Value::Array(arr)) = &keys {
-            for k in arr {
-                let v = self.safe_value(dictionary.clone(), Value::Json(k.clone()), Value::Undefined);
-                if v.is_nonnullish() { return v; }
-            }
-        }
-        if default_value.is_nullish() { Value::Undefined } else { default_value }
-    }
-
-    fn parse_number(&self, value: Value, default_value: Value) -> Value {
-        match &value {
-            Value::Json(serde_json::Value::Number(_)) => value,
-            Value::Json(serde_json::Value::String(s)) => {
-                match s.parse::<f64>() {
-                    Ok(f) => {
-                        if let Some(n) = serde_json::Number::from_f64(f) {
-                            Value::Json(serde_json::Value::Number(n))
-                        } else { if default_value.is_nullish() { Value::Undefined } else { default_value } }
-                    }
-                    Err(_) => if default_value.is_nullish() { Value::Undefined } else { default_value },
-                }
-            }
-            _ => if default_value.is_nullish() { Value::Undefined } else { default_value },
-        }
-    }
-
-    fn parse_to_numeric(&self, value: Value, default_value: Value) -> Value {
-        self.parse_number(value, default_value)
-    }
-
-    fn parse_to_int(&self, value: Value) -> Value {
-        match value_to_i64_opt(&value) {
-            Some(i) => Value::Json(serde_json::Value::Number(i.into())),
-            None => Value::Undefined,
-        }
-    }
-
-    fn safe_number(&self, obj: Value, key: Value, default_number: Value) -> Value {
-        let v = safe_get(&obj, &key);
-        self.parse_number(v, default_number)
-    }
-
-    fn safe_number_2(&self, dictionary: Value, key1: Value, key2: Value, d: Value) -> Value {
-        let v1 = self.safe_number(dictionary.clone(), key1, Value::Undefined);
-        if v1.is_nonnullish() { return v1; }
-        self.safe_number(dictionary, key2, d)
-    }
-
-    fn safe_number_n(&self, obj: Value, arr: Value, default_number: Value) -> Value {
-        if let Value::Json(serde_json::Value::Array(keys)) = &arr {
-            for k in keys {
-                let v = self.safe_number(obj.clone(), Value::Json(k.clone()), Value::Undefined);
-                if v.is_nonnullish() { return v; }
-            }
-        }
-        if default_number.is_nullish() { Value::Undefined } else { default_number }
-    }
-
-    fn safe_number_omit_zero(&self, obj: Value, key: Value, default_value: Value) -> Value {
-        let v = self.safe_number(obj, key, Value::Undefined);
-        match &v {
-            Value::Json(serde_json::Value::Number(n)) => {
-                if n.as_f64().map(|f| f == 0.0).unwrap_or(false) {
-                    if default_value.is_nullish() { Value::Undefined } else { default_value }
-                } else { v }
-            }
-            _ => if default_value.is_nullish() { Value::Undefined } else { default_value },
-        }
-    }
-
-    fn safe_integer_omit_zero(&self, obj: Value, key: Value, default_value: Value) -> Value {
-        let v = self.safe_integer(obj, key, Value::Undefined);
-        match &v {
-            Value::Json(serde_json::Value::Number(n)) => {
-                if n.as_i64().map(|i| i == 0).unwrap_or(false) {
-                    if default_value.is_nullish() { Value::Undefined } else { default_value }
-                } else { v }
-            }
-            _ => if default_value.is_nullish() { Value::Undefined } else { default_value },
-        }
-    }
-
-    fn safe_bool(&self, dictionary: Value, key: Value, default_value: Value) -> Value {
-        let v = safe_get(&dictionary, &key);
-        match &v {
-            Value::Json(serde_json::Value::Bool(_)) => v,
-            Value::Json(serde_json::Value::Number(n)) => {
-                Value::Json(serde_json::Value::Bool(n.as_i64().map(|i| i != 0).unwrap_or(false)))
-            }
-            Value::Json(serde_json::Value::String(s)) => {
-                let sl = s.to_lowercase();
-                if sl == "true" || sl == "1" { Value::Json(serde_json::Value::Bool(true)) }
-                else if sl == "false" || sl == "0" { Value::Json(serde_json::Value::Bool(false)) }
-                else if default_value.is_nullish() { Value::Undefined } else { default_value }
-            }
-            _ => if default_value.is_nullish() { Value::Undefined } else { default_value },
-        }
-    }
-
-    fn safe_bool_2(&self, dictionary: Value, key1: Value, key2: Value, default_value: Value) -> Value {
-        let v1 = self.safe_bool(dictionary.clone(), key1, Value::Undefined);
-        if v1.is_nonnullish() { return v1; }
-        self.safe_bool(dictionary, key2, default_value)
-    }
-
-    fn safe_bool_n(&self, dictionary_or_list: Value, keys: Value, default_value: Value) -> Value {
-        if let Value::Json(serde_json::Value::Array(arr)) = &keys {
-            for k in arr {
-                let v = self.safe_bool(dictionary_or_list.clone(), Value::Json(k.clone()), Value::Undefined);
-                if v.is_nonnullish() { return v; }
+        },
+        "private": {
+            "post": {
+                "auth/r/wallets": 2.7,
+                "auth/r/wallets/hist": 2.7,
+                "auth/r/orders": 2.7,
+                "auth/r/orders/{symbol}": 2.7,
+                "auth/w/order/submit": 2.7,
+                "auth/w/order/update": 2.7,
+                "auth/w/order/cancel": 2.7,
+                "auth/w/order/multi": 2.7,
+                "auth/w/order/cancel/multi": 2.7,
+                "auth/r/orders/{symbol}/hist": 2.7,
+                "auth/r/orders/hist": 2.7,
+                "auth/r/order/{symbol}:{id}/trades": 2.7,
+                "auth/r/trades/{symbol}/hist": 2.7,
+                "auth/r/trades/hist": 2.7,
+                "auth/r/ledgers/{currency}/hist": 2.7,
+                "auth/r/ledgers/hist": 2.7,
+                "auth/r/info/margin/{key}": 2.7,
+                "auth/r/info/margin/base": 2.7,
+                "auth/r/info/margin/sym_all": 2.7,
+                "auth/r/positions": 2.7,
+                "auth/w/position/claim": 2.7,
+                "auth/w/position/increase:": 2.7,
+                "auth/r/position/increase/info": 2.7,
+                "auth/r/positions/hist": 2.7,
+                "auth/r/positions/audit": 2.7,
+                "auth/r/positions/snap": 2.7,
+                "auth/w/deriv/collateral/set": 2.7,
+                "auth/w/deriv/collateral/limits": 2.7,
+                "auth/r/funding/offers": 2.7,
+                "auth/r/funding/offers/{symbol}": 2.7,
+                "auth/w/funding/offer/submit": 2.7,
+                "auth/w/funding/offer/cancel": 2.7,
+                "auth/w/funding/offer/cancel/all": 2.7,
+                "auth/w/funding/close": 2.7,
+                "auth/w/funding/auto": 2.7,
+                "auth/w/funding/keep": 2.7,
+                "auth/r/funding/offers/{symbol}/hist": 2.7,
+                "auth/r/funding/offers/hist": 2.7,
+                "auth/r/funding/loans": 2.7,
+                "auth/r/funding/loans/hist": 2.7,
+                "auth/r/funding/loans/{symbol}": 2.7,
+                "auth/r/funding/loans/{symbol}/hist": 2.7,
+                "auth/r/funding/credits": 2.7,
+                "auth/r/funding/credits/hist": 2.7,
+                "auth/r/funding/credits/{symbol}": 2.7,
+                "auth/r/funding/credits/{symbol}/hist": 2.7,
+                "auth/r/funding/trades/{symbol}/hist": 2.7,
+                "auth/r/funding/trades/hist": 2.7,
+                "auth/r/info/funding/{key}": 2.7,
+                "auth/r/info/user": 2.7,
+                "auth/r/summary": 2.7,
+                "auth/r/logins/hist": 2.7,
+                "auth/r/permissions": 2.7,
+                "auth/w/token": 2.7,
+                "auth/r/audit/hist": 2.7,
+                "auth/w/transfer": 2.7,
+                "auth/w/deposit/address": 24,
+                "auth/w/deposit/invoice": 24,
+                "auth/w/withdraw": 24,
+                "auth/r/movements/{currency}/hist": 2.7,
+                "auth/r/movements/hist": 2.7,
+                "auth/r/alerts": 5.34,
+                "auth/w/alert/set": 2.7,
+                "auth/w/alert/price:{symbol}:{price}/del": 2.7,
+                "auth/w/alert/{type}:{symbol}:{price}/del": 2.7,
+                "auth/calc/order/avail": 2.7,
+                "auth/w/settings/set": 2.7,
+                "auth/r/settings": 2.7,
+                "auth/w/settings/del": 2.7,
+                "auth/r/pulse/hist": 2.7,
+                "auth/w/pulse/add": 16,
+                "auth/w/pulse/del": 2.7
             }
         }
-        if default_value.is_nullish() { Value::Undefined } else { default_value }
-    }
-
-    fn safe_dict(&self, dictionary: Value, key: Value, default_value: Value) -> Value {
-        let v = safe_get(&dictionary, &key);
-        match &v {
-            Value::Json(serde_json::Value::Object(_)) => v,
-            _ => if default_value.is_nullish() { Value::Undefined } else { default_value },
-        }
-    }
-
-    fn safe_dict_2(&self, dictionary: Value, key1: Value, key2: Value, default_value: Value) -> Value {
-        let v1 = self.safe_dict(dictionary.clone(), key1, Value::Undefined);
-        if v1.is_nonnullish() { return v1; }
-        self.safe_dict(dictionary, key2, default_value)
-    }
-
-    fn safe_dict_n(&self, dictionary_or_list: Value, keys: Value, default_value: Value) -> Value {
-        if let Value::Json(serde_json::Value::Array(arr)) = &keys {
-            for k in arr {
-                let v = self.safe_dict(dictionary_or_list.clone(), Value::Json(k.clone()), Value::Undefined);
-                if v.is_nonnullish() { return v; }
+    },
+    "requiredCredentials": {
+        "apiKey": true,
+        "secret": true,
+        "uid": false,
+        "accountId": false,
+        "login": false,
+        "password": false,
+        "twofa": false,
+        "privateKey": false,
+        "walletAddress": false,
+        "token": false
+    },
+    "currencies": {},
+    "timeframes": {
+        "1m": "1m",
+        "5m": "5m",
+        "15m": "15m",
+        "30m": "30m",
+        "1h": "1h",
+        "3h": "3h",
+        "4h": "4h",
+        "6h": "6h",
+        "12h": "12h",
+        "1d": "1D",
+        "1w": "7D",
+        "2w": "14D",
+        "1M": "1M"
+    },
+    "fees": {
+        "trading": {
+            "tierBased": true,
+            "percentage": true,
+            "taker": 0.002,
+            "maker": 0.001,
+            "feeSide": "get",
+            "tiers": {
+                "taker": [
+                    [
+                        0,
+                        0.002
+                    ],
+                    [
+                        500000,
+                        0.002
+                    ],
+                    [
+                        1000000,
+                        0.002
+                    ],
+                    [
+                        2500000,
+                        0.002
+                    ],
+                    [
+                        5000000,
+                        0.002
+                    ],
+                    [
+                        7500000,
+                        0.002
+                    ],
+                    [
+                        10000000,
+                        0.0018
+                    ],
+                    [
+                        15000000,
+                        0.0016
+                    ],
+                    [
+                        20000000,
+                        0.0014
+                    ],
+                    [
+                        25000000,
+                        0.0012
+                    ],
+                    [
+                        30000000,
+                        0.001
+                    ]
+                ],
+                "maker": [
+                    [
+                        0,
+                        0.001
+                    ],
+                    [
+                        500000,
+                        0.0008
+                    ],
+                    [
+                        1000000,
+                        0.0006
+                    ],
+                    [
+                        2500000,
+                        0.0004
+                    ],
+                    [
+                        5000000,
+                        0.0002
+                    ],
+                    [
+                        7500000,
+                        0
+                    ],
+                    [
+                        10000000,
+                        0
+                    ],
+                    [
+                        15000000,
+                        0
+                    ],
+                    [
+                        20000000,
+                        0
+                    ],
+                    [
+                        25000000,
+                        0
+                    ],
+                    [
+                        30000000,
+                        0
+                    ]
+                ]
             }
+        },
+        "funding": {
+            "withdraw": {},
+            "deposit": {}
         }
-        if default_value.is_nullish() { Value::Undefined } else { default_value }
-    }
-
-    fn safe_list(&self, dictionary_or_list: Value, key: Value, default_value: Value) -> Value {
-        let v = safe_get(&dictionary_or_list, &key);
-        match &v {
-            Value::Json(serde_json::Value::Array(_)) => v,
-            _ => if default_value.is_nullish() { Value::Undefined } else { default_value },
-        }
-    }
-
-    fn safe_list_2(&self, dictionary_or_list: Value, key1: Value, key2: Value, default_value: Value) -> Value {
-        let v1 = self.safe_list(dictionary_or_list.clone(), key1, Value::Undefined);
-        if v1.is_nonnullish() { return v1; }
-        self.safe_list(dictionary_or_list, key2, default_value)
-    }
-
-    fn safe_list_n(&self, dictionary_or_list: Value, keys: Value, default_value: Value) -> Value {
-        if let Value::Json(serde_json::Value::Array(arr)) = &keys {
-            for k in arr {
-                let v = self.safe_list(dictionary_or_list.clone(), Value::Json(k.clone()), Value::Undefined);
-                if v.is_nonnullish() { return v; }
+    },
+    "status": {
+        "status": "ok"
+    },
+    "exceptions": {
+        "exact": {},
+        "broad": {}
+    },
+    "httpExceptions": {},
+    "commonCurrencies": {
+        "XBT": "BTC",
+        "BCHSV": "BSV",
+        "UST": "USDT",
+        "EUTF0": "EURT",
+        "USTF0": "USDT",
+        "ALG": "ALGO",
+        "AMP": "AMPL",
+        "ATO": "ATOM",
+        "BCHABC": "XEC",
+        "BCHN": "BCH",
+        "DAT": "DATA",
+        "DOG": "MDOGE",
+        "DSH": "DASH",
+        "EDO": "PNT",
+        "EUS": "EURS",
+        "EUT": "EURT",
+        "HTX": "HT",
+        "IDX": "ID",
+        "IOT": "IOTA",
+        "IQX": "IQ",
+        "LUNA": "LUNC",
+        "LUNA2": "LUNA",
+        "MNA": "MANA",
+        "ORS": "ORS Group",
+        "PAS": "PASS",
+        "QSH": "QASH",
+        "QTM": "QTUM",
+        "RBT": "RBTC",
+        "SNG": "SNGLS",
+        "STJ": "STORJ",
+        "TERRAUST": "USTC",
+        "TSD": "TUSD",
+        "YGG": "YEED",
+        "YYW": "YOYOW",
+        "UDC": "USDC",
+        "VSY": "VSYS",
+        "WAX": "WAXP",
+        "XCH": "XCHF",
+        "ZBT": "ZB"
+    },
+    "precisionMode": 3,
+    "paddingMode": 5,
+    "limits": {
+        "leverage": {},
+        "amount": {},
+        "price": {},
+        "cost": {}
+    },
+    "rollingWindowSize": 60000,
+    "version": "v2",
+    "options": {
+        "precision": "R0",
+        "exchangeTypes": {
+            "MARKET": "market",
+            "EXCHANGE MARKET": "market",
+            "LIMIT": "limit",
+            "EXCHANGE LIMIT": "limit",
+            "EXCHANGE STOP": "market",
+            "EXCHANGE FOK": "limit",
+            "EXCHANGE STOP LIMIT": "limit",
+            "EXCHANGE IOC": "limit"
+        },
+        "orderTypes": {
+            "market": "EXCHANGE MARKET",
+            "limit": "EXCHANGE LIMIT"
+        },
+        "fiat": {
+            "USD": "USD",
+            "EUR": "EUR",
+            "JPY": "JPY",
+            "GBP": "GBP",
+            "CHN": "CHN"
+        },
+        "v2AccountsByType": {
+            "spot": "exchange",
+            "exchange": "exchange",
+            "funding": "funding",
+            "margin": "margin",
+            "derivatives": "margin",
+            "future": "margin",
+            "swap": "margin"
+        },
+        "withdraw": {
+            "includeFee": false
+        },
+        "networks": {
+            "BTC": "BITCOIN",
+            "LTC": "LITECOIN",
+            "ERC20": "ETHEREUM",
+            "OMNI": "TETHERUSO",
+            "LIQUID": "TETHERUSL",
+            "TRC20": "TETHERUSX",
+            "EOS": "TETHERUSS",
+            "AVAX": "TETHERUSDTAVAX",
+            "SOL": "TETHERUSDTSOL",
+            "ALGO": "TETHERUSDTALG",
+            "BCH": "TETHERUSDTBCH",
+            "KSM": "TETHERUSDTKSM",
+            "DVF": "TETHERUSDTDVF",
+            "OMG": "TETHERUSDTOMG"
+        },
+        "networksById": {
+            "TETHERUSE": "ERC20"
+        },
+        "watchOrderBook": {
+            "prec": "P0",
+            "freq": "F0",
+            "checksum": true
+        },
+        "ordersLimit": 1000
+    },
+    "features": {
+        "default": {
+            "sandbox": false,
+            "createOrder": {
+                "marginMode": true,
+                "triggerPrice": true,
+                "triggerDirection": false,
+                "stopLossPrice": true,
+                "takeProfitPrice": true,
+                "timeInForce": {
+                    "IOC": true,
+                    "FOK": true,
+                    "PO": true,
+                    "GTD": false
+                },
+                "hedged": false,
+                "trailing": true,
+                "leverage": true,
+                "marketBuyRequiresPrice": false,
+                "marketBuyByCost": true,
+                "selfTradePrevention": false,
+                "iceberg": false
+            },
+            "createOrders": {
+                "max": 75
+            },
+            "fetchMyTrades": {
+                "marginMode": false,
+                "limit": 2500,
+                "untilDays": 100000,
+                "symbolRequired": false
+            },
+            "fetchOrder": {
+                "marginMode": false,
+                "trigger": false,
+                "trailing": false,
+                "symbolRequired": false
+            },
+            "fetchOpenOrders": {
+                "marginMode": false,
+                "trigger": false,
+                "trailing": false,
+                "symbolRequired": false
+            },
+            "fetchClosedOrders": {
+                "marginMode": false,
+                "untilDays": 100000,
+                "trigger": false,
+                "trailing": false,
+                "symbolRequired": false
+            },
+            "fetchOHLCV": {
+                "limit": 10000
             }
-        }
-        if default_value.is_nullish() { Value::Undefined } else { default_value }
+        },
+        "spot": {
+            "extends": "default"
+        },
+        "swap": {
+            "linear": {
+                "extends": "default"
+            }
+        },
+        "future": {}
+    }
+}"###).unwrap())
     }
 
-    // ---------------------------------------------------------------------------
-    // METHODS BELOW THIS LINE ARE TRANSPILED FROM JAVASCRIPT
-fn describe(&self) -> Value { Value::Undefined }
+async fn subscribe(&mut self, mut channel: Value, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
+
+async fn un_subscribe(&mut self, mut channel: Value, mut topic: Value, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
+
+async fn subscribe_private(&mut self, mut message_hash: Value) -> Value { Value::Undefined }
+
+async fn watch_ohlcv(&mut self, mut symbol: Value, mut timeframe: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
+
+async fn un_watch_ohlcv(&mut self, mut symbol: Value, mut timeframe: Value, mut params: Value) -> Value { Value::Undefined }
+
+fn handle_ohlcv(&mut self, mut client: Value, mut message: Value, mut subscription: Value) -> Value { Value::Undefined }
+
+async fn watch_trades(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
+
+async fn un_watch_trades(&mut self, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
+
+async fn watch_my_trades(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
+
+async fn watch_ticker(&mut self, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
+
+async fn un_watch_ticker(&mut self, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
+
+fn handle_my_trade(&mut self, mut client: Value, mut message: Value, mut subscription: Value) -> Value { Value::Undefined }
+
+fn handle_trades(&mut self, mut client: Value, mut message: Value, mut subscription: Value) -> Value { Value::Undefined }
+
+fn parse_ws_trade(&self, mut trade: Value, mut market: Value) -> Value { Value::Undefined }
+
+fn handle_ticker(&mut self, mut client: Value, mut message: Value, mut subscription: Value) -> Value { Value::Undefined }
+
+fn parse_ws_ticker(&self, mut ticker: Value, mut market: Value) -> Value { Value::Undefined }
+
+async fn watch_order_book(&mut self, mut symbol: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
+
+fn handle_order_book(&mut self, mut client: Value, mut message: Value, mut subscription: Value) -> Value { Value::Undefined }
+
+fn handle_checksum(&mut self, mut client: Value, mut message: Value, mut subscription: Value) -> Value { Value::Undefined }
+
+async fn watch_balance(&mut self, mut params: Value) -> Value { Value::Undefined }
+
+fn handle_balance(&mut self, mut client: Value, mut message: Value, mut subscription: Value) -> Value { Value::Undefined }
+
+fn parse_ws_balance(&self, mut balance: Value) -> Value { Value::Undefined }
+
+fn handle_system_status(&mut self, mut client: Value, mut message: Value) -> Value { Value::Undefined }
+
+fn handle_unsubscription_status(&mut self, mut client: Value, mut message: Value) -> Value { Value::Undefined }
+
+fn handle_subscription_status(&mut self, mut client: Value, mut message: Value) -> Value { Value::Undefined }
+
+async fn authenticate(&mut self, mut params: Value) -> Value { Value::Undefined }
+
+fn handle_authentication_message(&mut self, mut client: Value, mut message: Value) -> Value { Value::Undefined }
+
+async fn watch_orders(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
+
+fn handle_orders(&mut self, mut client: Value, mut message: Value, mut subscription: Value) -> Value { Value::Undefined }
+
+fn parse_ws_order_status(&self, mut status: Value) -> Value { Value::Undefined }
+
+fn parse_ws_order(&self, mut order: Value, mut market: Value) -> Value { Value::Undefined }
+
+fn handle_message(&mut self, mut client: Value, mut message: Value) -> Value { Value::Undefined }
 
 
 
@@ -1041,57 +737,9 @@ fn check_address(&mut self, mut address: Value) -> Value { Value::Undefined }
 
 fn find_message_hashes(&mut self, mut client: Value, mut element: Value) -> Value { Value::Undefined }
 
-fn filter_by_limit(&self, mut array: Value, mut limit: Value, mut key: Value, mut from_start: Value) -> Value {
-        if let Value::Json(serde_json::Value::Array(ref arr)) = array {
-            if let Some(n) = value_to_i64_opt(&limit) {
-                let n = n as usize;
-                if arr.len() <= n {
-                    return array;
-                }
-                let from_start_bool = from_start.is_truthy();
-                let slice = if from_start_bool {
-                    arr[..n].to_vec()
-                } else {
-                    let start = arr.len() - n;
-                    arr[start..].to_vec()
-                };
-                return Value::Json(serde_json::Value::Array(slice));
-            }
-        }
-        array
-    }
+fn filter_by_limit(&self, mut array: Value, mut limit: Value, mut key: Value, mut from_start: Value) -> Value { Value::Undefined }
 
-    fn filter_by_since_limit(&self, mut array: Value, mut since: Value, mut limit: Value, mut key: Value, mut tail: Value) -> Value {
-        let key_str = match &key {
-            Value::Json(serde_json::Value::String(s)) => s.clone(),
-            _ => "timestamp".to_string(),
-        };
-        let since_i64 = value_to_i64_opt(&since);
-        let filtered = match &array {
-            Value::Json(serde_json::Value::Array(arr)) => {
-                let filtered: Vec<serde_json::Value> = arr
-                    .iter()
-                    .filter(|item| {
-                        if let Some(since_val) = since_i64 {
-                            if let serde_json::Value::Object(map) = item {
-                                if let Some(ts) = map.get(&key_str) {
-                                    let ts_i64 = Value::Json(ts.clone());
-                                    if let Some(t) = value_to_i64_opt(&ts_i64) {
-                                        return t >= since_val;
-                                    }
-                                }
-                            }
-                        }
-                        true
-                    })
-                    .cloned()
-                    .collect();
-                Value::Json(serde_json::Value::Array(filtered))
-            }
-            _ => array.clone(),
-        };
-        self.filter_by_limit(filtered, limit, key, tail)
-    }
+fn filter_by_since_limit(&self, mut array: Value, mut since: Value, mut limit: Value, mut key: Value, mut tail: Value) -> Value { Value::Undefined }
 
 fn filter_by_value_since_limit(&self, mut array: Value, mut field: Value, mut value: Value, mut since: Value, mut limit: Value, mut key: Value, mut tail: Value) -> Value { Value::Undefined }
 
@@ -1119,7 +767,7 @@ async fn fetch_trades(&mut self, mut symbol: Value, mut since: Value, mut limit:
             ("public", "GET", "aggTrades"),
         ];
         for (api_name, method_name, path_name) in candidates {
-            let rv = Exchange::request(self, path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = Bitfinex::request(self, path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() {
                 return rv;
             }
@@ -1137,11 +785,7 @@ async fn watch_my_liquidations(&mut self, mut symbol: Value, mut since: Value, m
 
 async fn watch_my_liquidations_for_symbols(&mut self, mut symbols: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
 
-async fn watch_trades(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
 async fn un_watch_orders(&mut self, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn un_watch_trades(&mut self, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
 
 async fn watch_trades_for_symbols(&mut self, mut symbols: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
 
@@ -1160,8 +804,6 @@ async fn watch_order_book_for_symbols(&mut self, mut symbols: Value, mut limit: 
 async fn un_watch_order_book_for_symbols(&mut self, mut symbols: Value, mut params: Value) -> Value { Value::Undefined }
 
 async fn un_watch_positions(&mut self, mut symbols: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn un_watch_ticker(&mut self, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
 
 async fn un_watch_mark_price(&mut self, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
 
@@ -1192,7 +834,7 @@ async fn fetch_order_book(&mut self, mut symbol: Value, mut limit: Value, mut pa
             request.set("limit".into(), limit.clone());
         }
         let mut dynamic_calls: Vec<(String, String, String)> = vec![];
-        if let Value::Json(serde_json::Value::Object(api_map)) = Exchange::describe(self).get("api".into()) {
+        if let Value::Json(serde_json::Value::Object(api_map)) = Bitfinex::describe(self).get("api".into()) {
             for (api_name, node) in api_map {
                 collect_routes(&node, &api_name, &mut dynamic_calls);
             }
@@ -1204,7 +846,7 @@ async fn fetch_order_book(&mut self, mut symbol: Value, mut limit: Value, mut pa
                 }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = Exchange::request(self, path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = Bitfinex::request(self, path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() {
                         return rv;
                     }
@@ -1217,7 +859,7 @@ async fn fetch_order_book(&mut self, mut symbol: Value, mut limit: Value, mut pa
             ("public", "GET", "order_book"),
         ];
         for (api_name, method_name, path_name) in candidates {
-            let rv = Exchange::request(self, path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = Bitfinex::request(self, path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() {
                 return rv;
             }
@@ -1233,8 +875,6 @@ async fn fetch_margin_modes(&mut self, mut symbols: Value, mut params: Value) ->
 
 async fn fetch_rest_order_book_safe(&mut self, mut symbol: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
 
-async fn watch_order_book(&mut self, mut symbol: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
 async fn un_watch_order_book(&mut self, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
 
 async fn fetch_time(&mut self, mut params: Value) -> Value {
@@ -1244,7 +884,7 @@ async fn fetch_time(&mut self, mut params: Value) -> Value {
             ("public", "GET", "timestamp"),
         ];
         for (api_name, method_name, path_name) in candidates {
-            let rv = Exchange::request(self, path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = Bitfinex::request(self, path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() {
                 return rv;
             }
@@ -1293,10 +933,6 @@ fn parse_funding_rate_history(&self, mut info: Value, mut market: Value) -> Valu
 fn parse_borrow_interest(&self, mut info: Value, mut market: Value) -> Value { Value::Undefined }
 
 fn parse_isolated_borrow_rate(&self, mut info: Value, mut market: Value) -> Value { Value::Undefined }
-
-fn parse_ws_trade(&self, mut trade: Value, mut market: Value) -> Value { Value::Undefined }
-
-fn parse_ws_order(&self, mut order: Value, mut market: Value) -> Value { Value::Undefined }
 
 fn parse_ws_order_trade(&self, mut trade: Value, mut market: Value) -> Value { Value::Undefined }
 
@@ -1459,7 +1095,7 @@ async fn fetch_ohlcv(&mut self, mut symbol: Value, mut timeframe: Value, mut sin
             request.set("limit".into(), limit.clone());
         }
         let mut dynamic_calls: Vec<(String, String, String)> = vec![];
-        if let Value::Json(serde_json::Value::Object(api_map)) = Exchange::describe(self).get("api".into()) {
+        if let Value::Json(serde_json::Value::Object(api_map)) = Bitfinex::describe(self).get("api".into()) {
             for (api_name, node) in api_map {
                 collect_routes(&node, &api_name, &mut dynamic_calls);
             }
@@ -1471,7 +1107,7 @@ async fn fetch_ohlcv(&mut self, mut symbol: Value, mut timeframe: Value, mut sin
                 }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = Exchange::request(self, path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = Bitfinex::request(self, path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() {
                         return rv;
                     }
@@ -1484,7 +1120,7 @@ async fn fetch_ohlcv(&mut self, mut symbol: Value, mut timeframe: Value, mut sin
             ("public", "GET", "ohlcv"),
         ];
         for (api_name, method_name, path_name) in candidates {
-            let rv = Exchange::request(self, path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = Bitfinex::request(self, path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() {
                 return rv;
             }
@@ -1493,8 +1129,6 @@ async fn fetch_ohlcv(&mut self, mut symbol: Value, mut timeframe: Value, mut sin
     }
 
 async fn fetch_ohlcv_ws(&mut self, mut symbol: Value, mut timeframe: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn watch_ohlcv(&mut self, mut symbol: Value, mut timeframe: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
 
 fn convert_trading_view_to_ohlcv(&self, mut ohlcvs: Value, mut timestamp: Value, mut open: Value, mut high: Value, mut low: Value, mut close: Value, mut volume: Value, mut ms: Value) -> Value { Value::Undefined }
 
@@ -1512,6 +1146,8 @@ fn market_symbols(&self, mut symbols: Value, mut r#type: Value, mut allow_empty:
 
 fn market_codes(&mut self, mut codes: Value) -> Value { Value::Undefined }
 
+fn parse_bids_asks(&self, mut bidasks: Value, mut price_key: Value, mut amount_key: Value, mut count_or_id_key: Value) -> Value { Value::Undefined }
+
 async fn fetch_l2_order_book(&mut self, mut symbol: Value, mut limit: Value, mut params: Value) -> Value {
         let mut request = if params.is_object() { params.clone() } else { Value::new_object() };
         request.set("symbol".into(), symbol.clone());
@@ -1524,7 +1160,7 @@ async fn fetch_l2_order_book(&mut self, mut symbol: Value, mut limit: Value, mut
             ("public", "GET", "order_book"),
         ];
         for (api_name, method_name, path_name) in candidates {
-            let rv = Exchange::request(self, path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = Bitfinex::request(self, path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() {
                 return rv;
             }
@@ -1551,6 +1187,7 @@ fn select_network_id_from_raw_networks(&mut self, mut currency_code: Value, mut 
 fn select_network_key_from_networks(&mut self, mut currency_code: Value, mut network_code: Value, mut indexed_network_entries: Value, mut is_indexed_by_unified_network_code: Value) -> Value { Value::Undefined }
 
 
+fn parse_order_book(&self, mut orderbook: Value, mut symbol: Value, mut timestamp: Value, mut bids_key: Value, mut asks_key: Value, mut price_key: Value, mut amount_key: Value, mut count_or_id_key: Value) -> Value { Value::Undefined }
 
 fn parse_ohlcvs(&self, mut ohlcvs: Value, mut market: Value, mut timeframe: Value, mut since: Value, mut limit: Value, mut tail: Value) -> Value { Value::Undefined }
 
@@ -1634,7 +1271,7 @@ async fn request(&mut self, mut path: Value, mut api: Value, mut method: Value, 
             }
         }
 
-        let urls_api = Exchange::describe(self).get("urls".into()).get("api".into());
+        let urls_api = Bitfinex::describe(self).get("urls".into()).get("api".into());
         let mut base = urls_api.get(api.clone());
         if !base.is_string() {
             base = urls_api.get("public".into());
@@ -1658,7 +1295,7 @@ async fn request(&mut self, mut path: Value, mut api: Value, mut method: Value, 
             return Value::Undefined;
         }
         let mut base_url = base.unwrap_str().to_string();
-        let hostname = Exchange::describe(self).get("hostname".into());
+        let hostname = Bitfinex::describe(self).get("hostname".into());
         if hostname.is_string() {
             base_url = base_url.replace("{hostname}", hostname.unwrap_str());
         }
@@ -1792,7 +1429,7 @@ async fn fetch_bids_asks(&mut self, mut symbols: Value, mut params: Value) -> Va
             ("public", "GET", "tickers"),
         ];
         for (api_name, method_name, path_name) in candidates {
-            let rv = Exchange::request(self, path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = Bitfinex::request(self, path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() {
                 return rv;
             }
@@ -1806,58 +1443,7 @@ async fn fetch_ledger(&mut self, mut code: Value, mut since: Value, mut limit: V
 
 async fn fetch_ledger_entry(&mut self, mut id: Value, mut code: Value, mut params: Value) -> Value { Value::Undefined }
 
-fn parse_bid_ask(&self, mut bidask: Value, mut price_key: Value, mut amount_key: Value, mut count_or_id_key: Value) -> Value {
-        // price_key defaults to 0, amount_key defaults to 1
-        let pk = if price_key.is_nullish() { Value::from(0usize) } else { price_key };
-        let ak = if amount_key.is_nullish() { Value::from(1usize) } else { amount_key };
-        let price = self.safe_number(bidask.clone(), pk, Value::Undefined);
-        let amount = self.safe_number(bidask.clone(), ak, Value::Undefined);
-        let mut result = Value::Json(serde_json::json!([null, null]));
-        result.set(Value::from(0usize), price);
-        result.set(Value::from(1usize), amount);
-        result
-    }
-
-    fn parse_bids_asks(&self, mut bidasks: Value, mut price_key: Value, mut amount_key: Value, mut count_or_id_key: Value) -> Value {
-        let pk = if price_key.is_nullish() { Value::from(0usize) } else { price_key };
-        let ak = if amount_key.is_nullish() { Value::from(1usize) } else { amount_key };
-        match &bidasks {
-            Value::Json(serde_json::Value::Array(arr)) => {
-                let parsed: Vec<serde_json::Value> = arr
-                    .iter()
-                    .map(|item| {
-                        let iv = Value::Json(item.clone());
-                        let ba = self.parse_bid_ask(iv, pk.clone(), ak.clone(), count_or_id_key.clone());
-                        match ba {
-                            Value::Json(v) => v,
-                            _ => serde_json::Value::Null,
-                        }
-                    })
-                    .collect();
-                Value::Json(serde_json::Value::Array(parsed))
-            }
-            _ => Value::new_array(),
-        }
-    }
-
-    fn parse_order_book(&self, mut orderbook: Value, mut symbol: Value, mut timestamp: Value, mut bids_key: Value, mut asks_key: Value, mut price_key: Value, mut amount_key: Value, mut count_or_id_key: Value) -> Value {
-        let bids_k = if bids_key.is_nullish() { Value::from("bids") } else { bids_key };
-        let asks_k = if asks_key.is_nullish() { Value::from("asks") } else { asks_key };
-        let pk = if price_key.is_nullish() { Value::from(0usize) } else { price_key };
-        let ak = if amount_key.is_nullish() { Value::from(1usize) } else { amount_key };
-        let bids_raw = self.safe_list(orderbook.clone(), bids_k, Value::new_array());
-        let asks_raw = self.safe_list(orderbook.clone(), asks_k, Value::new_array());
-        let bids = self.parse_bids_asks(bids_raw, pk.clone(), ak.clone(), count_or_id_key.clone());
-        let asks = self.parse_bids_asks(asks_raw, pk, ak, count_or_id_key);
-        let mut result = Value::new_object();
-        result.set("symbol".into(), symbol);
-        result.set("bids".into(), bids);
-        result.set("asks".into(), asks);
-        result.set("timestamp".into(), timestamp);
-        result.set("datetime".into(), Value::Undefined);
-        result.set("nonce".into(), Value::Undefined);
-        result
-    }
+fn parse_bid_ask(&self, mut bidask: Value, mut price_key: Value, mut amount_key: Value, mut count_or_id_key: Value) -> Value { Value::Undefined }
 
 fn safe_currency(&self, mut currency_id: Value, mut currency: Value) -> Value { Value::Undefined }
 
@@ -1874,8 +1460,6 @@ async fn fetch_balance(&mut self, mut params: Value) -> Value { Value::Undefined
 async fn fetch_balance_ws(&mut self, mut params: Value) -> Value { Value::Undefined }
 
 fn parse_balance(&self, mut response: Value) -> Value { Value::Undefined }
-
-async fn watch_balance(&mut self, mut params: Value) -> Value { Value::Undefined }
 
 async fn fetch_partial_balance(&mut self, mut part: Value, mut params: Value) -> Value { Value::Undefined }
 
@@ -1903,7 +1487,7 @@ async fn fetch_status(&mut self, mut params: Value) -> Value {
             }
         }
         let mut dynamic_calls: Vec<(String, String, String)> = vec![];
-        if let Value::Json(serde_json::Value::Object(api_map)) = Exchange::describe(self).get("api".into()) {
+        if let Value::Json(serde_json::Value::Object(api_map)) = Bitfinex::describe(self).get("api".into()) {
             for (api_name, node) in api_map {
                 collect_routes(&node, &api_name, &mut dynamic_calls);
             }
@@ -1915,7 +1499,7 @@ async fn fetch_status(&mut self, mut params: Value) -> Value {
                 }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = Exchange::request(self, path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = Bitfinex::request(self, path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() {
                         return rv;
                     }
@@ -1929,7 +1513,7 @@ async fn fetch_status(&mut self, mut params: Value) -> Value {
             ("sapi", "GET", "system/status"),
         ];
         for (api_name, method_name, path_name) in candidates {
-            let rv = Exchange::request(self, path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = Bitfinex::request(self, path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() {
                 return rv;
             }
@@ -1993,7 +1577,7 @@ async fn fetch_ticker(&mut self, mut symbol: Value, mut params: Value) -> Value 
         let mut request = if params.is_object() { params.clone() } else { Value::new_object() };
         request.set("symbol".into(), symbol.clone());
         let mut dynamic_calls: Vec<(String, String, String)> = vec![];
-        if let Value::Json(serde_json::Value::Object(api_map)) = Exchange::describe(self).get("api".into()) {
+        if let Value::Json(serde_json::Value::Object(api_map)) = Bitfinex::describe(self).get("api".into()) {
             for (api_name, node) in api_map {
                 collect_routes(&node, &api_name, &mut dynamic_calls);
             }
@@ -2005,7 +1589,7 @@ async fn fetch_ticker(&mut self, mut symbol: Value, mut params: Value) -> Value 
                 }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = Exchange::request(self, path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = Bitfinex::request(self, path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() {
                         return rv;
                     }
@@ -2018,7 +1602,7 @@ async fn fetch_ticker(&mut self, mut symbol: Value, mut params: Value) -> Value 
             ("public", "GET", "ticker/price"),
         ];
         for (api_name, method_name, path_name) in candidates {
-            let rv = Exchange::request(self, path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = Bitfinex::request(self, path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() {
                 return rv;
             }
@@ -2029,8 +1613,6 @@ async fn fetch_ticker(&mut self, mut symbol: Value, mut params: Value) -> Value 
 async fn fetch_mark_price(&mut self, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
 
 async fn fetch_ticker_ws(&mut self, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn watch_ticker(&mut self, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
 
 async fn fetch_tickers(&mut self, mut symbols: Value, mut params: Value) -> Value {
         fn collect_routes(node: &serde_json::Value, api_name: &str, out: &mut Vec<(String, String, String)>) {
@@ -2050,7 +1632,7 @@ async fn fetch_tickers(&mut self, mut symbols: Value, mut params: Value) -> Valu
             }
         }
         let mut dynamic_calls: Vec<(String, String, String)> = vec![];
-        if let Value::Json(serde_json::Value::Object(api_map)) = Exchange::describe(self).get("api".into()) {
+        if let Value::Json(serde_json::Value::Object(api_map)) = Bitfinex::describe(self).get("api".into()) {
             for (api_name, node) in api_map {
                 collect_routes(&node, &api_name, &mut dynamic_calls);
             }
@@ -2062,7 +1644,7 @@ async fn fetch_tickers(&mut self, mut symbols: Value, mut params: Value) -> Valu
                 }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = Exchange::request(self, path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = Bitfinex::request(self, path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() {
                         return rv;
                     }
@@ -2075,7 +1657,7 @@ async fn fetch_tickers(&mut self, mut symbols: Value, mut params: Value) -> Valu
             ("public", "GET", "ticker"),
         ];
         for (api_name, method_name, path_name) in candidates {
-            let rv = Exchange::request(self, path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = Bitfinex::request(self, path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() {
                 return rv;
             }
@@ -2185,8 +1767,6 @@ async fn fetch_orders_ws(&mut self, mut symbol: Value, mut since: Value, mut lim
 
 async fn fetch_order_trades(&mut self, mut id: Value, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
 
-async fn watch_orders(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
 async fn fetch_open_orders(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
 
 async fn fetch_open_orders_ws(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
@@ -2206,8 +1786,6 @@ async fn fetch_my_liquidations(&mut self, mut symbol: Value, mut since: Value, m
 async fn fetch_liquidations(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
 
 async fn fetch_my_trades_ws(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn watch_my_trades(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
 
 async fn fetch_greeks(&mut self, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
 
@@ -2505,8 +2083,6 @@ async fn fetch_transfer(&mut self, mut id: Value, mut code: Value, mut params: V
 
 async fn fetch_transfers(&mut self, mut code: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
 
-async fn un_watch_ohlcv(&mut self, mut symbol: Value, mut timeframe: Value, mut params: Value) -> Value { Value::Undefined }
-
 async fn watch_mark_price(&mut self, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
 
 async fn watch_mark_prices(&mut self, mut symbols: Value, mut params: Value) -> Value { Value::Undefined }
@@ -2527,5 +2103,206 @@ fn clean_cache(&mut self, mut subscription: Value) -> Value { Value::Undefined }
 
 fn timeframe_from_milliseconds(&mut self, mut ms: Value) -> Value { Value::Undefined }
 
-// END TRANSPILED METHODS
+    
+    async fn dispatch(&mut self, method: Value, params: Value, context: Value) -> Value {
+        match method {
+            Value::Json(serde_json::Value::String(ref m)) => {
+                match m.as_ref() {
+                    "publicGetConfconfig" => Bitfinex::request(self, "conf/{config}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetConfpubactionobject" => Bitfinex::request(self, "conf/pub:{action}:{object}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetConfpubactionobjectdetail" => Bitfinex::request(self, "conf/pub:{action}:{object}:{detail}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetConfpubmapobject" => Bitfinex::request(self, "conf/pub:map:{object}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetConfpubmapobjectdetail" => Bitfinex::request(self, "conf/pub:map:{object}:{detail}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetConfpubmapcurrencydetail" => Bitfinex::request(self, "conf/pub:map:currency:{detail}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetConfpubmapcurrencysym" => Bitfinex::request(self, "conf/pub:map:currency:sym".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetConfpubmapcurrencylabel" => Bitfinex::request(self, "conf/pub:map:currency:label".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetConfpubmapcurrencyunit" => Bitfinex::request(self, "conf/pub:map:currency:unit".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetConfpubmapcurrencyundl" => Bitfinex::request(self, "conf/pub:map:currency:undl".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetConfpubmapcurrencypool" => Bitfinex::request(self, "conf/pub:map:currency:pool".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetConfpubmapcurrencyexplorer" => Bitfinex::request(self, "conf/pub:map:currency:explorer".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetConfpubmapcurrencytxfee" => Bitfinex::request(self, "conf/pub:map:currency:tx:fee".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetConfpubmaptxmethod" => Bitfinex::request(self, "conf/pub:map:tx:method".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetConfpublistobject" => Bitfinex::request(self, "conf/pub:list:{object}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetConfpublistobjectdetail" => Bitfinex::request(self, "conf/pub:list:{object}:{detail}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetConfpublistcurrency" => Bitfinex::request(self, "conf/pub:list:currency".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetConfpublistpairexchange" => Bitfinex::request(self, "conf/pub:list:pair:exchange".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetConfpublistpairmargin" => Bitfinex::request(self, "conf/pub:list:pair:margin".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetConfpublistpairfutures" => Bitfinex::request(self, "conf/pub:list:pair:futures".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetConfpublistcompetitions" => Bitfinex::request(self, "conf/pub:list:competitions".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetConfpubinfoobject" => Bitfinex::request(self, "conf/pub:info:{object}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetConfpubinfoobjectdetail" => Bitfinex::request(self, "conf/pub:info:{object}:{detail}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetConfpubinfopair" => Bitfinex::request(self, "conf/pub:info:pair".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetConfpubinfopairfutures" => Bitfinex::request(self, "conf/pub:info:pair:futures".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetConfpubinfotxstatus" => Bitfinex::request(self, "conf/pub:info:tx:status".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetConfpubfees" => Bitfinex::request(self, "conf/pub:fees".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetPlatformstatus" => Bitfinex::request(self, "platform/status".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetTickers" => Bitfinex::request(self, "tickers".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetTickersymbol" => Bitfinex::request(self, "ticker/{symbol}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetTickershist" => Bitfinex::request(self, "tickers/hist".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetTradessymbolhist" => Bitfinex::request(self, "trades/{symbol}/hist".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetBooksymbolprecision" => Bitfinex::request(self, "book/{symbol}/{precision}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetBooksymbolp0" => Bitfinex::request(self, "book/{symbol}/P0".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetBooksymbolp1" => Bitfinex::request(self, "book/{symbol}/P1".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetBooksymbolp2" => Bitfinex::request(self, "book/{symbol}/P2".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetBooksymbolp3" => Bitfinex::request(self, "book/{symbol}/P3".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetBooksymbolr0" => Bitfinex::request(self, "book/{symbol}/R0".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetStats1keysizesymbolsidesection" => Bitfinex::request(self, "stats1/{key}:{size}:{symbol}:{side}/{section}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetStats1keysizesymbolsidelast" => Bitfinex::request(self, "stats1/{key}:{size}:{symbol}:{side}/last".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetStats1keysizesymbolsidehist" => Bitfinex::request(self, "stats1/{key}:{size}:{symbol}:{side}/hist".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetStats1keysizesymbolsection" => Bitfinex::request(self, "stats1/{key}:{size}:{symbol}/{section}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetStats1keysizesymbollast" => Bitfinex::request(self, "stats1/{key}:{size}:{symbol}/last".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetStats1keysizesymbolhist" => Bitfinex::request(self, "stats1/{key}:{size}:{symbol}/hist".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetStats1keysizesymbollonglast" => Bitfinex::request(self, "stats1/{key}:{size}:{symbol}:long/last".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetStats1keysizesymbollonghist" => Bitfinex::request(self, "stats1/{key}:{size}:{symbol}:long/hist".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetStats1keysizesymbolshortlast" => Bitfinex::request(self, "stats1/{key}:{size}:{symbol}:short/last".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetStats1keysizesymbolshorthist" => Bitfinex::request(self, "stats1/{key}:{size}:{symbol}:short/hist".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetCandlestradetimeframesymbolperiodsection" => Bitfinex::request(self, "candles/trade:{timeframe}:{symbol}:{period}/{section}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetCandlestradetimeframesymbolsection" => Bitfinex::request(self, "candles/trade:{timeframe}:{symbol}/{section}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetCandlestradetimeframesymbollast" => Bitfinex::request(self, "candles/trade:{timeframe}:{symbol}/last".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetCandlestradetimeframesymbolhist" => Bitfinex::request(self, "candles/trade:{timeframe}:{symbol}/hist".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetStatustype" => Bitfinex::request(self, "status/{type}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetStatusderiv" => Bitfinex::request(self, "status/deriv".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetStatusderivsymbolhist" => Bitfinex::request(self, "status/deriv/{symbol}/hist".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetLiquidationshist" => Bitfinex::request(self, "liquidations/hist".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetRankingskeytimeframesymbolsection" => Bitfinex::request(self, "rankings/{key}:{timeframe}:{symbol}/{section}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetRankingskeytimeframesymbolhist" => Bitfinex::request(self, "rankings/{key}:{timeframe}:{symbol}/hist".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetPulsehist" => Bitfinex::request(self, "pulse/hist".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetPulseprofilenickname" => Bitfinex::request(self, "pulse/profile/{nickname}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetFundingstatssymbolhist" => Bitfinex::request(self, "funding/stats/{symbol}/hist".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetExtvasps" => Bitfinex::request(self, "ext/vasps".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicPostCalctradeavg" => Bitfinex::request(self, "calc/trade/avg".into(), "public".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicPostCalcfx" => Bitfinex::request(self, "calc/fx".into(), "public".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthrwallets" => Bitfinex::request(self, "auth/r/wallets".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthrwalletshist" => Bitfinex::request(self, "auth/r/wallets/hist".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthrorders" => Bitfinex::request(self, "auth/r/orders".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthrorderssymbol" => Bitfinex::request(self, "auth/r/orders/{symbol}".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthwordersubmit" => Bitfinex::request(self, "auth/w/order/submit".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthworderupdate" => Bitfinex::request(self, "auth/w/order/update".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthwordercancel" => Bitfinex::request(self, "auth/w/order/cancel".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthwordermulti" => Bitfinex::request(self, "auth/w/order/multi".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthwordercancelmulti" => Bitfinex::request(self, "auth/w/order/cancel/multi".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthrorderssymbolhist" => Bitfinex::request(self, "auth/r/orders/{symbol}/hist".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthrordershist" => Bitfinex::request(self, "auth/r/orders/hist".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthrordersymbolidtrades" => Bitfinex::request(self, "auth/r/order/{symbol}:{id}/trades".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthrtradessymbolhist" => Bitfinex::request(self, "auth/r/trades/{symbol}/hist".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthrtradeshist" => Bitfinex::request(self, "auth/r/trades/hist".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthrledgerscurrencyhist" => Bitfinex::request(self, "auth/r/ledgers/{currency}/hist".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthrledgershist" => Bitfinex::request(self, "auth/r/ledgers/hist".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthrinfomarginkey" => Bitfinex::request(self, "auth/r/info/margin/{key}".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthrinfomarginbase" => Bitfinex::request(self, "auth/r/info/margin/base".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthrinfomarginsymall" => Bitfinex::request(self, "auth/r/info/margin/sym_all".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthrpositions" => Bitfinex::request(self, "auth/r/positions".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthwpositionclaim" => Bitfinex::request(self, "auth/w/position/claim".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthwpositionincrease" => Bitfinex::request(self, "auth/w/position/increase:".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthrpositionincreaseinfo" => Bitfinex::request(self, "auth/r/position/increase/info".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthrpositionshist" => Bitfinex::request(self, "auth/r/positions/hist".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthrpositionsaudit" => Bitfinex::request(self, "auth/r/positions/audit".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthrpositionssnap" => Bitfinex::request(self, "auth/r/positions/snap".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthwderivcollateralset" => Bitfinex::request(self, "auth/w/deriv/collateral/set".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthwderivcollaterallimits" => Bitfinex::request(self, "auth/w/deriv/collateral/limits".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthrfundingoffers" => Bitfinex::request(self, "auth/r/funding/offers".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthrfundingofferssymbol" => Bitfinex::request(self, "auth/r/funding/offers/{symbol}".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthwfundingoffersubmit" => Bitfinex::request(self, "auth/w/funding/offer/submit".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthwfundingoffercancel" => Bitfinex::request(self, "auth/w/funding/offer/cancel".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthwfundingoffercancelall" => Bitfinex::request(self, "auth/w/funding/offer/cancel/all".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthwfundingclose" => Bitfinex::request(self, "auth/w/funding/close".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthwfundingauto" => Bitfinex::request(self, "auth/w/funding/auto".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthwfundingkeep" => Bitfinex::request(self, "auth/w/funding/keep".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthrfundingofferssymbolhist" => Bitfinex::request(self, "auth/r/funding/offers/{symbol}/hist".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthrfundingoffershist" => Bitfinex::request(self, "auth/r/funding/offers/hist".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthrfundingloans" => Bitfinex::request(self, "auth/r/funding/loans".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthrfundingloanshist" => Bitfinex::request(self, "auth/r/funding/loans/hist".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthrfundingloanssymbol" => Bitfinex::request(self, "auth/r/funding/loans/{symbol}".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthrfundingloanssymbolhist" => Bitfinex::request(self, "auth/r/funding/loans/{symbol}/hist".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthrfundingcredits" => Bitfinex::request(self, "auth/r/funding/credits".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthrfundingcreditshist" => Bitfinex::request(self, "auth/r/funding/credits/hist".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthrfundingcreditssymbol" => Bitfinex::request(self, "auth/r/funding/credits/{symbol}".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthrfundingcreditssymbolhist" => Bitfinex::request(self, "auth/r/funding/credits/{symbol}/hist".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthrfundingtradessymbolhist" => Bitfinex::request(self, "auth/r/funding/trades/{symbol}/hist".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthrfundingtradeshist" => Bitfinex::request(self, "auth/r/funding/trades/hist".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthrinfofundingkey" => Bitfinex::request(self, "auth/r/info/funding/{key}".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthrinfouser" => Bitfinex::request(self, "auth/r/info/user".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthrsummary" => Bitfinex::request(self, "auth/r/summary".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthrloginshist" => Bitfinex::request(self, "auth/r/logins/hist".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthrpermissions" => Bitfinex::request(self, "auth/r/permissions".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthwtoken" => Bitfinex::request(self, "auth/w/token".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthraudithist" => Bitfinex::request(self, "auth/r/audit/hist".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthwtransfer" => Bitfinex::request(self, "auth/w/transfer".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthwdepositaddress" => Bitfinex::request(self, "auth/w/deposit/address".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthwdepositinvoice" => Bitfinex::request(self, "auth/w/deposit/invoice".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthwwithdraw" => Bitfinex::request(self, "auth/w/withdraw".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthrmovementscurrencyhist" => Bitfinex::request(self, "auth/r/movements/{currency}/hist".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthrmovementshist" => Bitfinex::request(self, "auth/r/movements/hist".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthralerts" => Bitfinex::request(self, "auth/r/alerts".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthwalertset" => Bitfinex::request(self, "auth/w/alert/set".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthwalertpricesymbolpricedel" => Bitfinex::request(self, "auth/w/alert/price:{symbol}:{price}/del".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthwalerttypesymbolpricedel" => Bitfinex::request(self, "auth/w/alert/{type}:{symbol}:{price}/del".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthcalcorderavail" => Bitfinex::request(self, "auth/calc/order/avail".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthwsettingsset" => Bitfinex::request(self, "auth/w/settings/set".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthrsettings" => Bitfinex::request(self, "auth/r/settings".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthwsettingsdel" => Bitfinex::request(self, "auth/w/settings/del".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthrpulsehist" => Bitfinex::request(self, "auth/r/pulse/hist".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthwpulseadd" => Bitfinex::request(self, "auth/w/pulse/add".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthwpulsedel" => Bitfinex::request(self, "auth/w/pulse/del".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    _ => unimplemented!(),
+                }
+            },
+            _ => unimplemented!()
+        }
+    }
 }
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BitfinexImpl(Value);
+impl Exchange for BitfinexImpl {}
+impl Bitfinex for BitfinexImpl {}
+impl ValueTrait for BitfinexImpl {
+    fn is_undefined(&self) -> bool { self.0.is_undefined() }
+    fn is_nullish(&self) -> bool { self.0.is_nullish() }
+    fn is_nonnullish(&self) -> bool { self.0.is_nonnullish() }
+    fn is_truthy(&self) -> bool { self.0.is_truthy() }
+    fn or_default(&self, default: Value) -> Value { self.0.or_default(default) }
+    fn is_number(&self) -> bool { self.0.is_number() }
+    fn is_string(&self) -> bool { self.0.is_string() }
+    fn is_object(&self) -> bool { self.0.is_object() }
+    fn is_falsy(&self) -> bool { self.0.is_falsy() }
+    fn to_upper_case(&self) -> Value { self.0.to_upper_case() }
+    fn unwrap_str(&self) -> &str { self.0.unwrap_str() }
+    fn unwrap_usize(&self) -> usize { self.0.unwrap_usize() }
+    fn unwrap_bool(&self) -> bool { self.0.unwrap_bool() }
+    fn unwrap_precise(&self) -> &Precise { self.0.unwrap_precise() }
+    fn unwrap_json(&self) -> &serde_json::Value { self.0.unwrap_json() }
+    fn unwrap_json_mut(&mut self) -> &mut serde_json::Value { self.0.unwrap_json_mut() }
+    fn unwrap_precise_mut(&mut self) -> &mut Precise { self.0.unwrap_precise_mut() }
+    fn len(&self) -> usize { self.0.len() }
+    fn get(&self, key: Value) -> Value { self.0.get(key) }
+    fn set(&mut self, key: Value, value: Value) { self.0.set(key, value) }
+    fn push(&mut self, value: Value) { self.0.push(value) }
+    fn split(&self, separator: Value) -> Value { self.0.split(separator) }
+    fn contains_key(&self, key: Value) -> bool { self.0.contains_key(key) }
+    fn keys(&self) -> Vec<Value> { self.0.keys() }
+    fn values(&self) -> Vec<Value> { self.0.values() }
+    fn to_array(&self, x: Value) -> Value { self.0.to_array(x) }
+    fn index_of(&self, x: Value) -> Value { self.0.index_of(x) }
+    fn join(&self, glue: Value) -> Value { self.0.join(glue) }
+    fn to_string(&self) -> Value { self.0.to_string() }
+    fn typeof_(&self) -> Value { self.0.typeof_() }
+    fn slice(&self, start: Value) -> Value { self.0.slice(start) }
+}
+
+impl BitfinexImpl {
+    pub fn new(params: Value) -> Self {
+        let mut rv = BitfinexImpl(match params {
+            Value::Json(_) => params,
+            _ => Value::new_object()
+        });
+        ExchangeImpl::init(&mut rv.0);
+
+        let config_entries = Bitfinex::describe(&rv);
+        for k in config_entries.keys() {
+            rv.set(k.clone(), config_entries.get(k).clone());
+        }
+        rv
+    }
+}
+
