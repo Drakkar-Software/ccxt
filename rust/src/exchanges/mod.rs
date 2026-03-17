@@ -1,5 +1,7 @@
 // AUTO-GENERATED: rust exchange modules
 #[cfg(feature = "full-exchanges")]
+pub mod alp;
+#[cfg(feature = "full-exchanges")]
 pub mod alpaca;
 #[cfg(feature = "full-exchanges")]
 pub mod apex;
@@ -7,6 +9,8 @@ pub mod apex;
 pub mod arkham;
 #[cfg(feature = "full-exchanges")]
 pub mod ascendex;
+#[cfg(feature = "full-exchanges")]
+pub mod aster;
 #[cfg(feature = "full-exchanges")]
 pub mod backpack;
 #[cfg(feature = "full-exchanges")]
@@ -68,6 +72,8 @@ pub mod btcturk;
 pub mod bullish;
 #[cfg(feature = "full-exchanges")]
 pub mod bybit;
+#[cfg(feature = "full-exchanges")]
+pub mod bydfi;
 #[cfg(feature = "full-exchanges")]
 pub mod cex;
 #[cfg(feature = "full-exchanges")]
@@ -210,5 +216,7 @@ pub mod xt;
 pub mod yobit;
 #[cfg(feature = "full-exchanges")]
 pub mod zaif;
+#[cfg(feature = "full-exchanges")]
+pub mod zebpay;
 #[cfg(feature = "full-exchanges")]
 pub mod zonda;

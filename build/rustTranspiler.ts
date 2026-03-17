@@ -25,6 +25,25 @@ const __dirname = path.dirname(fileURLToPath(metaFileUrl));
 const FUNCTION_INFO: Record<string, Record<string, { paramsCount: number; async: boolean }>> = {};
 const RUST_STUB_MODE = true;
 
+// Methods that are manually implemented in the Exchange trait (in exchange.rs)
+// and should NOT be auto-generated as stubs by the transpiler.
+const MANUALLY_IMPLEMENTED_METHODS = new Set([
+    'safeString', 'safeString2', 'safeStringN',
+    'safeStringLower', 'safeStringLower2', 'safeStringLowerN',
+    'safeStringUpper', 'safeStringUpper2', 'safeStringUpperN',
+    'safeInteger', 'safeInteger2', 'safeIntegerN',
+    'safeIntegerProduct', 'safeIntegerProduct2', 'safeIntegerProductN',
+    'safeTimestamp', 'safeTimestamp2', 'safeTimestampN',
+    'safeFloat', 'safeFloat2', 'safeFloatN',
+    'safeValue', 'safeValue2', 'safeValueN',
+    'parseNumber', 'parseToInt', 'parseToNumeric',
+    'safeNumber', 'safeNumber2', 'safeNumberN', 'safeNumberOmitZero',
+    'safeIntegerOmitZero',
+    'safeBool', 'safeBool2', 'safeBoolN',
+    'safeDict', 'safeDict2', 'safeDictN',
+    'safeList', 'safeList2', 'safeListN',
+]);
+
 function isUpperCase(x: string) {
     return x && x.length > 0 && x[0] === x.toUpperCase()[0];
 }
@@ -342,6 +361,10 @@ function transpileMethodToRust(opts: {
             return '';
         }
         const fname = fnNode.id?.name || 'unknown';
+        // Skip methods that are manually implemented above the auto-generated delimiter.
+        if (MANUALLY_IMPLEMENTED_METHODS.has(fname)) {
+            return '';
+        }
         let isSelfImmutable = false;
         if (
             fname.startsWith('safe') ||
