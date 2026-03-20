@@ -1688,16 +1688,16 @@ fn test_filter_by_since_limit_applies_limit_after_filter() {
     let result = Exchange::filter_by_since_limit(&ex,
         arr,
         Value::from(200i64),
-        Value::from(2i64),  // limit to 2 from the end of filtered
+        Value::from(2i64),  // limit to 2 from start of filtered (since is defined → fromStart=true)
         Value::from("timestamp"),
         Value::Undefined,
     );
     let json = normalize(&result).expect("should be array");
     let items = json.as_array().unwrap();
-    // filtered: [200, 300, 400] → last 2 → [300, 400]
+    // filtered: [200, 300, 400] → first 2 (fromStart=true when since defined) → [200, 300]
     assert_eq!(items.len(), 2);
-    assert_eq!(items[0]["timestamp"], json!(300));
-    assert_eq!(items[1]["timestamp"], json!(400));
+    assert_eq!(items[0]["timestamp"], json!(200));
+    assert_eq!(items[1]["timestamp"], json!(300));
 }
 
 #[test]

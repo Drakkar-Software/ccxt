@@ -10,6 +10,5 @@ async fn main() {
     let mut exchange = HyperliquidImpl::new(Value::Json(json!({})));
     let symbol: Value = "BTC/USDT".into();
 
-    let rv = Hyperliquid::load_markets(&mut exchange, Value::Undefined, Value::Undefined).await;
-    println!("loadMarkets: {}", normalize(&rv).map(|v| v.to_string()).unwrap_or_else(|| "undefined".into()));
+    // skipped: loadMarkets (not found in transpiled trait)
 }

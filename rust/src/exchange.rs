@@ -1003,6 +1003,148 @@ pub trait Exchange {
     }
 
     // ---------------------------------------------------------------------------
+    // Manually-implemented base exchange methods
+    // ---------------------------------------------------------------------------
+
+    fn filter_by_limit(&self, mut array: Value, mut limit: Value, mut key: Value, mut from_start: Value) -> Value {
+        if key.is_nullish() { key = Value::from("timestamp"); }
+        if limit.is_nonnullish() {
+            if let Value::Json(JSON::Array(ref arr)) = array {
+                let array_length = arr.len();
+                if array_length > 0 {
+                    let lim = limit.unwrap_usize();
+                    let mut ascending = true;
+                    let first_val = array.get(Value::from(0i64)).get(key.clone());
+                    let last_val = array.get(Value::from((array_length - 1) as i64)).get(key.clone());
+                    if first_val.is_nonnullish() && last_val.is_nonnullish() {
+                        ascending = first_val <= last_val;
+                    }
+                    if from_start.is_truthy() {
+                        let take = if lim > array_length { array_length } else { lim };
+                        if ascending {
+                            array = Value::Json(JSON::Array(arr[..take].to_vec()));
+                        } else {
+                            let start = if array_length > lim { array_length - lim } else { 0 };
+                            array = Value::Json(JSON::Array(arr[start..].to_vec()));
+                        }
+                    } else {
+                        if ascending {
+                            let start = if array_length > lim { array_length - lim } else { 0 };
+                            array = Value::Json(JSON::Array(arr[start..].to_vec()));
+                        } else {
+                            let take = if lim > array_length { array_length } else { lim };
+                            array = Value::Json(JSON::Array(arr[..take].to_vec()));
+                        }
+                    }
+                }
+            }
+        }
+        array
+    }
+
+    fn filter_by_since_limit(&self, mut array: Value, mut since: Value, mut limit: Value, mut key: Value, mut tail: Value) -> Value {
+        if key.is_nullish() { key = Value::from("timestamp"); }
+        let since_is_defined = since.is_nonnullish();
+        // toArray
+        if let Value::Json(JSON::Array(_)) = &array {} else {
+            array = Value::new_array();
+        }
+        let mut result = array.clone();
+        if since_is_defined {
+            let mut filtered = vec![];
+            if let Value::Json(JSON::Array(ref arr)) = array {
+                for entry_json in arr {
+                    let entry = Value::Json(entry_json.clone());
+                    let value = self.safe_value(entry.clone(), key.clone(), Value::Undefined);
+                    if value.is_nonnullish() && value >= since {
+                        filtered.push(entry_json.clone());
+                    }
+                }
+            }
+            result = Value::Json(JSON::Array(filtered));
+        }
+        if tail.is_truthy() && limit.is_nonnullish() {
+            if let Value::Json(JSON::Array(ref arr)) = result {
+                let lim = limit.unwrap_usize();
+                let start = if arr.len() > lim { arr.len() - lim } else { 0 };
+                return Value::Json(JSON::Array(arr[start..].to_vec()));
+            }
+            return result;
+        }
+        let should_filter_from_start = !tail.is_truthy() && since_is_defined;
+        self.filter_by_limit(result, limit, key, Value::from(should_filter_from_start))
+    }
+
+    fn parse_bid_ask(&self, mut bidask: Value, mut price_key: Value, mut amount_key: Value, mut count_or_id_key: Value) -> Value {
+        if price_key.is_nullish() { price_key = Value::from(0i64); }
+        if amount_key.is_nullish() { amount_key = Value::from(1i64); }
+        if count_or_id_key.is_nullish() { count_or_id_key = Value::from(2i64); }
+        let price = self.safe_float(bidask.clone(), price_key, Value::Undefined);
+        let amount = self.safe_float(bidask.clone(), amount_key, Value::Undefined);
+        let count_or_id = self.safe_integer(bidask, count_or_id_key, Value::Undefined);
+        let mut result = Value::Json(json!([
+            price.unwrap_json().clone(),
+            amount.unwrap_json().clone()
+        ]));
+        if count_or_id.is_nonnullish() {
+            result.push(count_or_id);
+        }
+        result
+    }
+
+    fn parse_bids_asks(&self, mut bidasks: Value, mut price_key: Value, mut amount_key: Value, mut count_or_id_key: Value) -> Value {
+        // toArray
+        if let Value::Json(JSON::Array(_)) = &bidasks {} else {
+            bidasks = Value::new_array();
+        }
+        let mut result = Value::new_array();
+        if let Value::Json(JSON::Array(ref arr)) = bidasks {
+            for item in arr {
+                let parsed = self.parse_bid_ask(Value::Json(item.clone()), price_key.clone(), amount_key.clone(), count_or_id_key.clone());
+                result.push(parsed);
+            }
+        }
+        result
+    }
+
+    fn parse_order_book(&self, mut orderbook: Value, mut symbol: Value, mut timestamp: Value, mut bids_key: Value, mut asks_key: Value, mut price_key: Value, mut amount_key: Value, mut count_or_id_key: Value) -> Value {
+        if bids_key.is_nullish() { bids_key = Value::from("bids"); }
+        if asks_key.is_nullish() { asks_key = Value::from("asks"); }
+        if price_key.is_nullish() { price_key = Value::from(0i64); }
+        if amount_key.is_nullish() { amount_key = Value::from(1i64); }
+        if count_or_id_key.is_nullish() { count_or_id_key = Value::from(2i64); }
+        let raw_bids = self.safe_value(orderbook.clone(), bids_key, Value::Json(json!([])));
+        let raw_asks = self.safe_value(orderbook, asks_key, Value::Json(json!([])));
+        let bids = self.parse_bids_asks(raw_bids, price_key.clone(), amount_key.clone(), count_or_id_key.clone());
+        let asks = self.parse_bids_asks(raw_asks, price_key, amount_key, count_or_id_key);
+        // Sort bids descending by price (index 0), asks ascending by price
+        let mut sorted_bids = if let Value::Json(JSON::Array(mut arr)) = bids {
+            arr.sort_by(|a, b| {
+                let pa = a.as_array().and_then(|v| v.first()).and_then(|x| x.as_f64()).unwrap_or(0.0);
+                let pb = b.as_array().and_then(|v| v.first()).and_then(|x| x.as_f64()).unwrap_or(0.0);
+                pb.partial_cmp(&pa).unwrap_or(std::cmp::Ordering::Equal)
+            });
+            Value::Json(JSON::Array(arr))
+        } else { Value::new_array() };
+        let mut sorted_asks = if let Value::Json(JSON::Array(mut arr)) = asks {
+            arr.sort_by(|a, b| {
+                let pa = a.as_array().and_then(|v| v.first()).and_then(|x| x.as_f64()).unwrap_or(0.0);
+                let pb = b.as_array().and_then(|v| v.first()).and_then(|x| x.as_f64()).unwrap_or(0.0);
+                pa.partial_cmp(&pb).unwrap_or(std::cmp::Ordering::Equal)
+            });
+            Value::Json(JSON::Array(arr))
+        } else { Value::new_array() };
+        let mut result = Value::new_object();
+        result.set(Value::from("symbol"), symbol);
+        result.set(Value::from("bids"), sorted_bids);
+        result.set(Value::from("asks"), sorted_asks);
+        result.set(Value::from("timestamp"), timestamp.clone());
+        result.set(Value::from("datetime"), Value::Undefined);
+        result.set(Value::from("nonce"), Value::Undefined);
+        result
+    }
+
+    // ---------------------------------------------------------------------------
     // METHODS BELOW THIS LINE ARE TRANSPILED FROM JAVASCRIPT
 fn describe(&self) -> Value { Value::Undefined }
 
@@ -1041,57 +1183,7 @@ fn check_address(&mut self, mut address: Value) -> Value { Value::Undefined }
 
 fn find_message_hashes(&mut self, mut client: Value, mut element: Value) -> Value { Value::Undefined }
 
-fn filter_by_limit(&self, mut array: Value, mut limit: Value, mut key: Value, mut from_start: Value) -> Value {
-        if let Value::Json(serde_json::Value::Array(ref arr)) = array {
-            if let Some(n) = value_to_i64_opt(&limit) {
-                let n = n as usize;
-                if arr.len() <= n {
-                    return array;
-                }
-                let from_start_bool = from_start.is_truthy();
-                let slice = if from_start_bool {
-                    arr[..n].to_vec()
-                } else {
-                    let start = arr.len() - n;
-                    arr[start..].to_vec()
-                };
-                return Value::Json(serde_json::Value::Array(slice));
-            }
-        }
-        array
-    }
 
-    fn filter_by_since_limit(&self, mut array: Value, mut since: Value, mut limit: Value, mut key: Value, mut tail: Value) -> Value {
-        let key_str = match &key {
-            Value::Json(serde_json::Value::String(s)) => s.clone(),
-            _ => "timestamp".to_string(),
-        };
-        let since_i64 = value_to_i64_opt(&since);
-        let filtered = match &array {
-            Value::Json(serde_json::Value::Array(arr)) => {
-                let filtered: Vec<serde_json::Value> = arr
-                    .iter()
-                    .filter(|item| {
-                        if let Some(since_val) = since_i64 {
-                            if let serde_json::Value::Object(map) = item {
-                                if let Some(ts) = map.get(&key_str) {
-                                    let ts_i64 = Value::Json(ts.clone());
-                                    if let Some(t) = value_to_i64_opt(&ts_i64) {
-                                        return t >= since_val;
-                                    }
-                                }
-                            }
-                        }
-                        true
-                    })
-                    .cloned()
-                    .collect();
-                Value::Json(serde_json::Value::Array(filtered))
-            }
-            _ => array.clone(),
-        };
-        self.filter_by_limit(filtered, limit, key, tail)
-    }
 
 fn filter_by_value_since_limit(&self, mut array: Value, mut field: Value, mut value: Value, mut since: Value, mut limit: Value, mut key: Value, mut tail: Value) -> Value { Value::Undefined }
 
@@ -1512,6 +1604,7 @@ fn market_symbols(&self, mut symbols: Value, mut r#type: Value, mut allow_empty:
 
 fn market_codes(&mut self, mut codes: Value) -> Value { Value::Undefined }
 
+
 async fn fetch_l2_order_book(&mut self, mut symbol: Value, mut limit: Value, mut params: Value) -> Value {
         let mut request = if params.is_object() { params.clone() } else { Value::new_object() };
         request.set("symbol".into(), symbol.clone());
@@ -1806,58 +1899,6 @@ async fn fetch_ledger(&mut self, mut code: Value, mut since: Value, mut limit: V
 
 async fn fetch_ledger_entry(&mut self, mut id: Value, mut code: Value, mut params: Value) -> Value { Value::Undefined }
 
-fn parse_bid_ask(&self, mut bidask: Value, mut price_key: Value, mut amount_key: Value, mut count_or_id_key: Value) -> Value {
-        // price_key defaults to 0, amount_key defaults to 1
-        let pk = if price_key.is_nullish() { Value::from(0usize) } else { price_key };
-        let ak = if amount_key.is_nullish() { Value::from(1usize) } else { amount_key };
-        let price = self.safe_number(bidask.clone(), pk, Value::Undefined);
-        let amount = self.safe_number(bidask.clone(), ak, Value::Undefined);
-        let mut result = Value::Json(serde_json::json!([null, null]));
-        result.set(Value::from(0usize), price);
-        result.set(Value::from(1usize), amount);
-        result
-    }
-
-    fn parse_bids_asks(&self, mut bidasks: Value, mut price_key: Value, mut amount_key: Value, mut count_or_id_key: Value) -> Value {
-        let pk = if price_key.is_nullish() { Value::from(0usize) } else { price_key };
-        let ak = if amount_key.is_nullish() { Value::from(1usize) } else { amount_key };
-        match &bidasks {
-            Value::Json(serde_json::Value::Array(arr)) => {
-                let parsed: Vec<serde_json::Value> = arr
-                    .iter()
-                    .map(|item| {
-                        let iv = Value::Json(item.clone());
-                        let ba = self.parse_bid_ask(iv, pk.clone(), ak.clone(), count_or_id_key.clone());
-                        match ba {
-                            Value::Json(v) => v,
-                            _ => serde_json::Value::Null,
-                        }
-                    })
-                    .collect();
-                Value::Json(serde_json::Value::Array(parsed))
-            }
-            _ => Value::new_array(),
-        }
-    }
-
-    fn parse_order_book(&self, mut orderbook: Value, mut symbol: Value, mut timestamp: Value, mut bids_key: Value, mut asks_key: Value, mut price_key: Value, mut amount_key: Value, mut count_or_id_key: Value) -> Value {
-        let bids_k = if bids_key.is_nullish() { Value::from("bids") } else { bids_key };
-        let asks_k = if asks_key.is_nullish() { Value::from("asks") } else { asks_key };
-        let pk = if price_key.is_nullish() { Value::from(0usize) } else { price_key };
-        let ak = if amount_key.is_nullish() { Value::from(1usize) } else { amount_key };
-        let bids_raw = self.safe_list(orderbook.clone(), bids_k, Value::new_array());
-        let asks_raw = self.safe_list(orderbook.clone(), asks_k, Value::new_array());
-        let bids = self.parse_bids_asks(bids_raw, pk.clone(), ak.clone(), count_or_id_key.clone());
-        let asks = self.parse_bids_asks(asks_raw, pk, ak, count_or_id_key);
-        let mut result = Value::new_object();
-        result.set("symbol".into(), symbol);
-        result.set("bids".into(), bids);
-        result.set("asks".into(), asks);
-        result.set("timestamp".into(), timestamp);
-        result.set("datetime".into(), Value::Undefined);
-        result.set("nonce".into(), Value::Undefined);
-        result
-    }
 
 fn safe_currency(&self, mut currency_id: Value, mut currency: Value) -> Value { Value::Undefined }
 

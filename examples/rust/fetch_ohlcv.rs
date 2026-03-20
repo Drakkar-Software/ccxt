@@ -10,7 +10,7 @@ async fn main() {
     let mut exchange = OkxImpl::new(Value::Json(json!({})));
     let symbol: Value = "BTC/USDT".into();
 
-    let rv = Okx::fetch_ohlcv(&mut exchange, symbol.clone(), Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined).await;
+    let rv = exchange.fetch_ohlcv(symbol.clone(), Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined).await;
     println!("fetchOHLCV: {}", normalize(&rv).map(|v| v.to_string()).unwrap_or_else(|| "undefined".into()));
     // skipped: milliseconds (not found in transpiled trait)
 }

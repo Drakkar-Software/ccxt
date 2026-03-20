@@ -49,18 +49,22 @@ path = "../examples/rust/benchmark.rs"
 [[example]]
 name = "build_ohlcv_bars"
 path = "../examples/rust/build_ohlcv_bars.rs"
+required-features = ["full-pro"]
 
 [[example]]
 name = "compare_two_exchanges_capabilities"
 path = "../examples/rust/compare_two_exchanges_capabilities.rs"
+required-features = ["full-exchanges"]
 
 [[example]]
 name = "create_order_position_with_takeprofit_stoploss"
 path = "../examples/rust/create_order_position_with_takeprofit_stoploss.rs"
+required-features = ["full-exchanges"]
 
 [[example]]
 name = "create_order_ws_example"
 path = "../examples/rust/create_order_ws_example.rs"
+required-features = ["full-pro"]
 
 [[example]]
 name = "create_orders_example"
@@ -69,18 +73,22 @@ path = "../examples/rust/create_orders_example.rs"
 [[example]]
 name = "create_trailing_amount_order"
 path = "../examples/rust/create_trailing_amount_order.rs"
+required-features = ["full-exchanges"]
 
 [[example]]
 name = "create_trailing_percent_order"
 path = "../examples/rust/create_trailing_percent_order.rs"
+required-features = ["full-exchanges"]
 
 [[example]]
 name = "custom_proxy_agent_for_js"
 path = "../examples/rust/custom_proxy_agent_for_js.rs"
+required-features = ["full-exchanges"]
 
 [[example]]
 name = "exchange_rate_limiter_rollingwindow"
 path = "../examples/rust/exchange_rate_limiter_rollingwindow.rs"
+required-features = ["full-exchanges"]
 
 [[example]]
 name = "fetch_balance_all_exchanges"
@@ -93,6 +101,7 @@ path = "../examples/rust/fetch_first_ohlcv_timestamp.rs"
 [[example]]
 name = "fetch_ohlcv"
 path = "../examples/rust/fetch_ohlcv.rs"
+required-features = ["full-exchanges"]
 
 [[example]]
 name = "fetch_ohlcv_many_exchanges_continuosly"
@@ -109,10 +118,12 @@ path = "../examples/rust/how_to_import_one_exchange_esm.rs"
 [[example]]
 name = "hyperliquid_load_hip3_dexes"
 path = "../examples/rust/hyperliquid_load_hip3_dexes.rs"
+required-features = ["full-exchanges"]
 
 [[example]]
 name = "kraken_create_and_close_position"
 path = "../examples/rust/kraken_create_and_close_position.rs"
+required-features = ["full-exchanges"]
 
 [[example]]
 name = "margin_loan_borrow_buy_sell_repay"
@@ -121,10 +132,12 @@ path = "../examples/rust/margin_loan_borrow_buy_sell_repay.rs"
 [[example]]
 name = "phemex_create_order_position_with_takeprofit_stoploss"
 path = "../examples/rust/phemex_create_order_position_with_takeprofit_stoploss.rs"
+required-features = ["full-exchanges"]
 
 [[example]]
 name = "proxy_usage"
 path = "../examples/rust/proxy_usage.rs"
+required-features = ["full-pro"]
 
 [[example]]
 name = "sample_local_proxy_server_with_cors"
@@ -133,26 +146,32 @@ path = "../examples/rust/sample_local_proxy_server_with_cors.rs"
 [[example]]
 name = "watch_ohlcv"
 path = "../examples/rust/watch_ohlcv.rs"
+required-features = ["full-pro"]
 
 [[example]]
 name = "watch_ohlcv_for_symbols"
 path = "../examples/rust/watch_ohlcv_for_symbols.rs"
+required-features = ["full-pro"]
 
 [[example]]
 name = "watch_orderbook_for_symbols"
 path = "../examples/rust/watch_orderbook_for_symbols.rs"
+required-features = ["full-pro"]
 
 [[example]]
 name = "watch_tickers"
 path = "../examples/rust/watch_tickers.rs"
+required-features = ["full-pro"]
 
 [[example]]
 name = "watch_trades_for_symbols"
 path = "../examples/rust/watch_trades_for_symbols.rs"
+required-features = ["full-pro"]
 
 [[example]]
 name = "watchpositions"
 path = "../examples/rust/watchpositions.rs"
+required-features = ["full-pro"]
 
 [[example]]
 name = "watchpositions_many_exchanges_continuosly"
@@ -161,5 +180,6 @@ path = "../examples/rust/watchpositions_many_exchanges_continuosly.rs"
 [[example]]
 name = "watchpositionsforsymbols"
 path = "../examples/rust/watchpositionsforsymbols.rs"
+required-features = ["full-pro"]
 
 # AUTO-GENERATED RUST EXAMPLES END

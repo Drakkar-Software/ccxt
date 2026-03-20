@@ -42,6 +42,8 @@ const MANUALLY_IMPLEMENTED_METHODS = new Set([
     'safeBool', 'safeBool2', 'safeBoolN',
     'safeDict', 'safeDict2', 'safeDictN',
     'safeList', 'safeList2', 'safeListN',
+    'filterByLimit', 'filterBySinceLimit',
+    'parseBidAsk', 'parseBidsAsks', 'parseOrderBook',
 ]);
 
 function isUpperCase(x: string) {
@@ -2497,7 +2499,8 @@ class RustTranspiler {
             return;
         }
 
-        const generated: string[] = [];
+        const alwaysOnExchanges = new Set(['binance']);
+        const generated: Array<{ name: string; requiredFeature?: string }> = [];
 
         const files = fs
             .readdirSync(tsExamplesFolder)
@@ -2535,7 +2538,7 @@ class RustTranspiler {
                 ].join('\n');
                 overwriteFile(outputPath, placeholder);
                 fs.utimesSync(outputPath, new Date(), new Date(inMtime));
-                generated.push(outputName);
+                generated.push({ name: outputName });
                 continue;
             }
             const exchangeId = exchangeMatch[1];
@@ -2553,7 +2556,7 @@ class RustTranspiler {
                 ].join('\n');
                 overwriteFile(outputPath, placeholder);
                 fs.utimesSync(outputPath, new Date(), new Date(inMtime));
-                generated.push(outputName);
+                generated.push({ name: outputName });
                 continue;
             }
             let classNameKey = exchangeId;
@@ -2606,7 +2609,8 @@ class RustTranspiler {
                 ].join('\n');
                 overwriteFile(outputPath, placeholder);
                 fs.utimesSync(outputPath, new Date(), new Date(inMtime));
-                generated.push(outputName);
+                const reqFeat0 = isPro ? 'full-pro' : (!alwaysOnExchanges.has(exchangeId) ? 'full-exchanges' : undefined);
+                generated.push({ name: outputName, requiredFeature: reqFeat0 });
                 continue;
             }
 
@@ -2621,6 +2625,12 @@ class RustTranspiler {
                 ...(FUNCTION_INFO[traitName] || {}),
                 ...(FUNCTION_INFO[exchangeId] || {}),
             };
+            // Filter to only methods that actually exist in the generated Rust trait file
+            const rustSource = fs.readFileSync(exchangeModulePath, 'utf8');
+            const rustMethodNames = new Set<string>();
+            for (const m of rustSource.matchAll(/fn\s+([a-z_][a-z0-9_]*)\s*\(/g)) {
+                rustMethodNames.add(m[1]);
+            }
             const exampleBody: string[] = [];
             exampleBody.push('// AUTO-GENERATED: transpiled from TypeScript examples/');
             exampleBody.push(`// Source: examples/ts/${file}`);
@@ -2638,11 +2648,11 @@ class RustTranspiler {
             const orderedMethods = Array.from(methodNames).sort();
             for (const method of orderedMethods) {
                 const fnInfo = classFns[method];
-                if (!fnInfo) {
+                const rustName = unCamelCase(method);
+                if (!fnInfo || !rustMethodNames.has(rustName)) {
                     exampleBody.push(`    // skipped: ${method} (not found in transpiled trait)`);
                     continue;
                 }
-                const rustName = unCamelCase(method);
                 const args: string[] = [];
                 const needsSymbol =
                     /^(fetch|watch|create|cancel|edit|parse)/.test(method) ||
@@ -2657,11 +2667,11 @@ class RustTranspiler {
                         args.push('Value::Undefined');
                     }
                 }
-                const argsExpr = args.length > 0 ? `, ${args.join(', ')}` : '';
+                const argsExpr = args.length > 0 ? args.join(', ') : '';
                 if (fnInfo.async) {
-                    exampleBody.push(`    let rv = ${traitName}::${rustName}(&mut exchange${argsExpr}).await;`);
+                    exampleBody.push(`    let rv = exchange.${rustName}(${argsExpr}).await;`);
                 } else {
-                    exampleBody.push(`    let rv = ${traitName}::${rustName}(&mut exchange${argsExpr});`);
+                    exampleBody.push(`    let rv = exchange.${rustName}(${argsExpr});`);
                 }
                 exampleBody.push(
                     `    println!("${method}: {}", normalize(&rv).map(|v| v.to_string()).unwrap_or_else(|| "undefined".into()));`
@@ -2672,7 +2682,8 @@ class RustTranspiler {
             exampleBody.push('');
             overwriteFile(outputPath, exampleBody.join('\n'));
             fs.utimesSync(outputPath, new Date(), new Date(inMtime));
-            generated.push(outputName);
+            const reqFeat = isPro ? 'full-pro' : (!alwaysOnExchanges.has(exchangeId) ? 'full-exchanges' : undefined);
+            generated.push({ name: outputName, requiredFeature: reqFeat });
         }
 
         if (generated.length > 0) {
@@ -2681,7 +2692,7 @@ class RustTranspiler {
         }
     }
 
-    updateCargoExamples(exampleNames: string[]) {
+    updateCargoExamples(examples: Array<{ name: string; requiredFeature?: string }>) {
         const cargoPath = './rust/Cargo.toml';
         if (!fs.existsSync(cargoPath)) return;
         const cargo = fs.readFileSync(cargoPath, 'utf8');
@@ -2689,9 +2700,15 @@ class RustTranspiler {
         const endMarker = '# AUTO-GENERATED RUST EXAMPLES END';
         const block = [
             startMarker,
-            ...exampleNames
-                .sort()
-                .map((name) => `[[example]]\nname = "${name}"\npath = "../examples/rust/${name}.rs"`),
+            ...examples
+                .sort((a, b) => a.name.localeCompare(b.name))
+                .map((ex) => {
+                    let entry = `[[example]]\nname = "${ex.name}"\npath = "../examples/rust/${ex.name}.rs"`;
+                    if (ex.requiredFeature) {
+                        entry += `\nrequired-features = ["${ex.requiredFeature}"]`;
+                    }
+                    return entry;
+                }),
             endMarker,
         ].join('\n\n');
         const markerRegex = new RegExp(`${startMarker}[\\s\\S]*${endMarker}`, 'm');

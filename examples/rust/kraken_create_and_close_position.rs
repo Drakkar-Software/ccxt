@@ -10,18 +10,17 @@ async fn main() {
     let mut exchange = KrakenImpl::new(Value::Json(json!({})));
     let symbol: Value = "UNI/USD".into();
 
-    let rv = Kraken::create_order(&mut exchange, symbol.clone(), Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined).await;
+    let rv = exchange.create_order(symbol.clone(), Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined).await;
     println!("createOrder: {}", normalize(&rv).map(|v| v.to_string()).unwrap_or_else(|| "undefined".into()));
-    let rv = Kraken::fetch_closed_orders(&mut exchange, symbol.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+    let rv = exchange.fetch_closed_orders(symbol.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
     println!("fetchClosedOrders: {}", normalize(&rv).map(|v| v.to_string()).unwrap_or_else(|| "undefined".into()));
-    let rv = Kraken::fetch_positions(&mut exchange, symbol.clone(), Value::Undefined).await;
+    let rv = exchange.fetch_positions(symbol.clone(), Value::Undefined).await;
     println!("fetchPositions: {}", normalize(&rv).map(|v| v.to_string()).unwrap_or_else(|| "undefined".into()));
-    let rv = Kraken::fetch_ticker(&mut exchange, symbol.clone(), Value::Undefined).await;
+    let rv = exchange.fetch_ticker(symbol.clone(), Value::Undefined).await;
     println!("fetchTicker: {}", normalize(&rv).map(|v| v.to_string()).unwrap_or_else(|| "undefined".into()));
-    let rv = Kraken::load_markets(&mut exchange, Value::Undefined, Value::Undefined).await;
-    println!("loadMarkets: {}", normalize(&rv).map(|v| v.to_string()).unwrap_or_else(|| "undefined".into()));
-    let rv = Kraken::market(&mut exchange, Value::Undefined);
+    // skipped: loadMarkets (not found in transpiled trait)
+    let rv = exchange.market(Value::Undefined);
     println!("market: {}", normalize(&rv).map(|v| v.to_string()).unwrap_or_else(|| "undefined".into()));
-    let rv = Kraken::price_to_precision(&mut exchange, Value::Undefined, Value::Undefined);
+    let rv = exchange.price_to_precision(Value::Undefined, Value::Undefined);
     println!("priceToPrecision: {}", normalize(&rv).map(|v| v.to_string()).unwrap_or_else(|| "undefined".into()));
 }

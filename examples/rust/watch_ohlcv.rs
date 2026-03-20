@@ -10,6 +10,6 @@ async fn main() {
     let mut exchange = BinanceImpl::new(Value::Json(json!({})));
     let symbol: Value = "BTC/USDT".into();
 
-    let rv = Binance::watch_ohlcv(&mut exchange, symbol.clone(), Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined).await;
+    let rv = exchange.watch_ohlcv(symbol.clone(), Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined).await;
     println!("watchOHLCV: {}", normalize(&rv).map(|v| v.to_string()).unwrap_or_else(|| "undefined".into()));
 }

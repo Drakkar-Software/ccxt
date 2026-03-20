@@ -481,7 +481,6 @@ async fn fetch_order_book(&mut self, mut symbol: Value, mut limit: Value, mut pa
         Value::Undefined
     }
 
-fn parse_bids_asks(&self, mut bidasks: Value, mut price_key: Value, mut amount_key: Value, mut count_or_id_key: Value) -> Value { Value::Undefined }
 
 async fn fetch_tickers(&mut self, mut symbols: Value, mut params: Value) -> Value {
         fn collect_routes(node: &serde_json::Value, api_name: &str, out: &mut Vec<(String, String, String)>) {
@@ -631,9 +630,7 @@ fn check_address(&mut self, mut address: Value) -> Value { Value::Undefined }
 
 fn find_message_hashes(&mut self, mut client: Value, mut element: Value) -> Value { Value::Undefined }
 
-fn filter_by_limit(&self, mut array: Value, mut limit: Value, mut key: Value, mut from_start: Value) -> Value { Value::Undefined }
 
-fn filter_by_since_limit(&self, mut array: Value, mut since: Value, mut limit: Value, mut key: Value, mut tail: Value) -> Value { Value::Undefined }
 
 fn filter_by_value_since_limit(&self, mut array: Value, mut field: Value, mut value: Value, mut since: Value, mut limit: Value, mut key: Value, mut tail: Value) -> Value { Value::Undefined }
 
@@ -935,7 +932,6 @@ fn select_network_id_from_raw_networks(&mut self, mut currency_code: Value, mut 
 fn select_network_key_from_networks(&mut self, mut currency_code: Value, mut network_code: Value, mut indexed_network_entries: Value, mut is_indexed_by_unified_network_code: Value) -> Value { Value::Undefined }
 
 
-fn parse_order_book(&self, mut orderbook: Value, mut symbol: Value, mut timestamp: Value, mut bids_key: Value, mut asks_key: Value, mut price_key: Value, mut amount_key: Value, mut count_or_id_key: Value) -> Value { Value::Undefined }
 
 fn parse_ohlcvs(&self, mut ohlcvs: Value, mut market: Value, mut timeframe: Value, mut since: Value, mut limit: Value, mut tail: Value) -> Value { Value::Undefined }
 
@@ -1169,7 +1165,6 @@ async fn fetch_borrow_interest(&mut self, mut code: Value, mut symbol: Value, mu
 
 async fn fetch_ledger_entry(&mut self, mut id: Value, mut code: Value, mut params: Value) -> Value { Value::Undefined }
 
-fn parse_bid_ask(&self, mut bidask: Value, mut price_key: Value, mut amount_key: Value, mut count_or_id_key: Value) -> Value { Value::Undefined }
 
 fn safe_currency(&self, mut currency_id: Value, mut currency: Value) -> Value { Value::Undefined }
 
