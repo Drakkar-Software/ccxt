@@ -1,6 +1,7 @@
+mod common;
+
 use ccxt::exchange::{normalize, Value};
 use serde_json::{json, Value as JsonValue};
-use std::net::ToSocketAddrs;
 
 #[derive(Debug)]
 struct PublicSuite {
@@ -10,14 +11,6 @@ struct PublicSuite {
     tickers: Value,
     order_book: Value,
     ohlcv: Value,
-}
-
-fn assert_describe_shape(exchange: &str, describe: &JsonValue) {
-    assert!(describe.get("id").is_some(), "{exchange}: describe.id missing");
-    assert!(describe.get("name").is_some(), "{exchange}: describe.name missing");
-    assert!(describe.get("has").is_some(), "{exchange}: describe.has missing");
-    assert!(describe.get("api").is_some(), "{exchange}: describe.api missing");
-    assert!(describe.get("urls").is_some(), "{exchange}: describe.urls missing");
 }
 
 fn assert_optional_status_shape(exchange: &str, status: Option<JsonValue>) {
@@ -30,47 +23,12 @@ fn assert_optional_status_shape(exchange: &str, status: Option<JsonValue>) {
     }
 }
 
-fn assert_optional_ticker_shape(exchange: &str, ticker: Option<JsonValue>) {
-    if let Some(v) = ticker {
-        if let Some(obj) = v.as_object() {
-            if let Some(symbol) = obj.get("symbol") {
-                assert!(symbol.is_string(), "{exchange}: ticker.symbol should be string");
-            }
-        }
-    }
-}
-
 fn assert_optional_tickers_shape(exchange: &str, tickers: Option<JsonValue>) {
     if let Some(v) = tickers {
         assert!(
             v.is_object() || v.is_array() || v.is_string() || v.is_number() || v.is_boolean() || v.is_null(),
             "{exchange}: tickers returned unexpected JSON type"
         );
-    }
-}
-
-fn assert_optional_order_book_shape(exchange: &str, order_book: Option<JsonValue>) {
-    if let Some(v) = order_book {
-        if let Some(obj) = v.as_object() {
-            if let Some(bids) = obj.get("bids") {
-                assert!(bids.is_array(), "{exchange}: order_book.bids should be array");
-            }
-            if let Some(asks) = obj.get("asks") {
-                assert!(asks.is_array(), "{exchange}: order_book.asks should be array");
-            }
-        }
-    }
-}
-
-fn assert_optional_ohlcv_shape(exchange: &str, ohlcv: Option<JsonValue>) {
-    if let Some(v) = ohlcv {
-        if let Some(rows) = v.as_array() {
-            for row in rows.iter().take(3) {
-                if let Some(entry) = row.as_array() {
-                    assert!(entry.len() >= 6, "{exchange}: ohlcv row should have at least 6 fields");
-                }
-            }
-        }
     }
 }
 
@@ -115,18 +73,14 @@ macro_rules! run_suite {
     }};
 }
 
-fn assert_suite(exchange: &str, suite: PublicSuite) {
+fn assert_suite(exchange: &str, suite: PublicSuite, symbol: &str) {
     let describe = normalize(&suite.describe).expect("describe should always be JSON");
-    assert_describe_shape(exchange, &describe);
+    common::assert_describe_shape(exchange, &describe, false);
     assert_optional_status_shape(exchange, normalize(&suite.status));
-    assert_optional_ticker_shape(exchange, normalize(&suite.ticker));
+    common::assert_ticker_shape(exchange, normalize(&suite.ticker), symbol);
     assert_optional_tickers_shape(exchange, normalize(&suite.tickers));
-    assert_optional_order_book_shape(exchange, normalize(&suite.order_book));
-    assert_optional_ohlcv_shape(exchange, normalize(&suite.ohlcv));
-}
-
-fn network_available() -> bool {
-    ("api.binance.com", 443).to_socket_addrs().is_ok()
+    common::assert_order_book_shape(exchange, normalize(&suite.order_book), symbol);
+    common::assert_ohlcv_shape(exchange, normalize(&suite.ohlcv));
 }
 
 #[tokio::test]
@@ -136,7 +90,7 @@ async fn public_data_smoke_binance() {
         ccxt::exchanges::binance::BinanceImpl,
         "BTC/USDT"
     );
-    assert_suite("binance", suite);
+    assert_suite("binance", suite, "BTC/USDT");
 }
 
 #[cfg(feature = "full-exchanges")]
@@ -149,10 +103,12 @@ async fn public_data_smoke_multi_exchange() {
             ccxt::exchanges::bybit::BybitImpl,
             "BTC/USDT:USDT"
         ),
+        "BTC/USDT:USDT",
     );
     assert_suite(
         "okx",
         run_suite!(ccxt::exchanges::okx::Okx, ccxt::exchanges::okx::OkxImpl, "BTC/USDT"),
+        "BTC/USDT",
     );
     assert_suite(
         "kraken",
@@ -161,6 +117,7 @@ async fn public_data_smoke_multi_exchange() {
             ccxt::exchanges::kraken::KrakenImpl,
             "BTC/USD"
         ),
+        "BTC/USD",
     );
     assert_suite(
         "coinbase",
@@ -169,6 +126,7 @@ async fn public_data_smoke_multi_exchange() {
             ccxt::exchanges::coinbase::CoinbaseImpl,
             "BTC/USD"
         ),
+        "BTC/USD",
     );
     assert_suite(
         "kucoin",
@@ -177,6 +135,7 @@ async fn public_data_smoke_multi_exchange() {
             ccxt::exchanges::kucoin::KucoinImpl,
             "BTC/USDT"
         ),
+        "BTC/USDT",
     );
     assert_suite(
         "gateio",
@@ -185,6 +144,7 @@ async fn public_data_smoke_multi_exchange() {
             ccxt::exchanges::gateio::GateioImpl,
             "BTC/USDT"
         ),
+        "BTC/USDT",
     );
     assert_suite(
         "dydx",
@@ -193,6 +153,7 @@ async fn public_data_smoke_multi_exchange() {
             ccxt::exchanges::dydx::DydxImpl,
             "BTC/USDC:USDC"
         ),
+        "BTC/USDC:USDC",
     );
     assert_suite(
         "hyperliquid",
@@ -201,12 +162,13 @@ async fn public_data_smoke_multi_exchange() {
             ccxt::exchanges::hyperliquid::HyperliquidImpl,
             "BTC/USDC:USDC"
         ),
+        "BTC/USDC:USDC",
     );
 }
 
 #[tokio::test]
 async fn strict_public_data_binance_should_return_json() {
-    if !network_available() {
+    if !common::network_available() {
         eprintln!("skipping strict_public_data_binance_should_return_json: no DNS/network");
         return;
     }
