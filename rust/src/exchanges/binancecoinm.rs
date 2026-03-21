@@ -21,3487 +21,2075 @@ use crate::exchange::{DECIMAL_PLACES, SIGNIFICANT_DIGITS, TICK_SIZE, NO_PADDING,
 
 #[async_trait]
 pub trait Binancecoinm : Exchange {
-fn describe(&self) -> Value {
+    fn describe(&self) -> Value {
         Value::Json(serde_json::Value::from_str(r###"{
-    "id": "binancecoinm",
-    "name": "Binance COIN-M",
-    "countries": [],
-    "enableRateLimit": true,
-    "rateLimit": 50,
-    "timeout": 10000,
-    "certified": true,
-    "pro": true,
-    "alias": false,
-    "dex": false,
-    "has": {
-        "publicAPI": true,
-        "privateAPI": true,
-        "sandbox": true,
-        "spot": false,
-        "margin": false,
-        "swap": true,
-        "future": true,
-        "addMargin": true,
-        "borrowCrossMargin": true,
-        "borrowIsolatedMargin": true,
-        "cancelAllOrders": true,
-        "cancelOrder": true,
-        "cancelOrders": true,
-        "closeAllPositions": false,
-        "closePosition": false,
-        "createDepositAddress": false,
-        "createLimitBuyOrder": true,
-        "createLimitOrder": true,
-        "createLimitSellOrder": true,
-        "createMarketBuyOrder": true,
-        "createMarketBuyOrderWithCost": true,
-        "createMarketOrder": true,
-        "createMarketOrderWs": true,
-        "createMarketOrderWithCost": true,
-        "createMarketSellOrder": true,
-        "createMarketSellOrderWithCost": true,
-        "createOrder": true,
-        "createOrders": true,
-        "createOrderWithTakeProfitAndStopLoss": false,
-        "createPostOnlyOrder": true,
-        "createReduceOnlyOrder": true,
-        "createStopLimitOrder": true,
-        "createStopLossOrder": true,
-        "createStopMarketOrder": true,
-        "createStopOrder": true,
-        "createTakeProfitOrder": true,
-        "createTrailingPercentOrder": true,
-        "createTriggerOrder": true,
-        "editOrder": true,
-        "editOrders": true,
-        "fetchBalance": true,
-        "fetchBidsAsks": true,
-        "fetchBorrowInterest": true,
-        "fetchBorrowRateHistories": false,
-        "fetchBorrowRateHistory": true,
-        "fetchCanceledAndClosedOrders": "emulated",
-        "fetchCanceledOrders": "emulated",
-        "fetchClosedOrder": false,
-        "fetchClosedOrders": "emulated",
-        "fetchConvertCurrencies": true,
-        "fetchConvertQuote": true,
-        "fetchConvertTrade": true,
-        "fetchConvertTradeHistory": true,
-        "fetchCrossBorrowRate": true,
-        "fetchCrossBorrowRates": false,
-        "fetchCurrencies": true,
-        "fetchCurrenciesWs": "emulated",
-        "fetchDeposit": false,
-        "fetchDepositAddress": true,
-        "fetchDepositAddresses": false,
-        "fetchDepositAddressesByNetwork": false,
-        "fetchDeposits": true,
-        "fetchDepositsWithdrawals": false,
-        "fetchDepositWithdrawFee": "emulated",
-        "fetchDepositWithdrawFees": true,
-        "fetchFundingHistory": true,
-        "fetchFundingRate": true,
-        "fetchFundingRateHistory": true,
-        "fetchFundingInterval": "emulated",
-        "fetchFundingIntervals": true,
-        "fetchFundingRates": true,
-        "fetchGreeks": true,
-        "fetchIndexOHLCV": true,
-        "fetchIsolatedBorrowRate": "emulated",
-        "fetchIsolatedBorrowRates": true,
-        "fetchMarginAdjustmentHistory": true,
-        "fetchL2OrderBook": true,
-        "fetchL3OrderBook": false,
-        "fetchLastPrices": true,
-        "fetchLedger": true,
-        "fetchLedgerEntry": true,
-        "fetchLeverage": "emulated",
-        "fetchLeverages": true,
-        "fetchLeverageTiers": true,
-        "fetchLiquidations": false,
-        "fetchLongShortRatio": false,
-        "fetchLongShortRatioHistory": true,
-        "fetchMarginMode": true,
-        "fetchMarginModes": true,
-        "fetchMarketLeverageTiers": "emulated",
-        "fetchMarkets": true,
-        "fetchMarkOHLCV": true,
-        "fetchMyLiquidations": true,
-        "fetchMySettlementHistory": true,
-        "fetchMyTrades": true,
-        "fetchOHLCV": true,
-        "fetchOpenInterest": true,
-        "fetchOpenInterestHistory": true,
-        "fetchOpenOrder": true,
-        "fetchOpenOrders": true,
-        "fetchOption": true,
-        "fetchOptionChain": false,
-        "fetchOrder": true,
-        "fetchOrderBook": true,
-        "fetchOrderBooks": false,
-        "fetchOrders": true,
-        "fetchOrderTrades": true,
-        "fetchPosition": true,
-        "fetchPositionHistory": false,
-        "fetchPositionsHistory": false,
-        "fetchPositionMode": true,
-        "fetchPositions": true,
-        "fetchPositionsRisk": true,
-        "fetchPremiumIndexOHLCV": true,
-        "fetchSettlementHistory": true,
-        "fetchStatus": true,
-        "fetchTicker": true,
-        "fetchTickers": true,
-        "fetchMarkPrices": true,
-        "fetchTime": true,
-        "fetchTrades": true,
-        "fetchTradingFee": true,
-        "fetchTradingFees": true,
-        "fetchTradingLimits": "emulated",
-        "fetchTransactionFee": "emulated",
-        "fetchTransactionFees": true,
-        "fetchTransactions": false,
-        "fetchTransfer": false,
-        "fetchTransfers": true,
-        "fetchUnderlyingAssets": false,
-        "fetchVolatilityHistory": false,
-        "fetchWithdrawAddresses": false,
-        "fetchWithdrawal": false,
-        "fetchWithdrawals": true,
-        "fetchWithdrawalWhitelist": false,
-        "reduceMargin": true,
-        "repayCrossMargin": true,
-        "repayIsolatedMargin": true,
-        "setLeverage": true,
-        "setMargin": false,
-        "setMarginMode": true,
-        "setPositionMode": true,
-        "signIn": false,
-        "transfer": true,
-        "withdraw": true,
-        "createConvertTrade": true,
-        "fetchAllGreeks": true,
-        "fetchMarkPrice": true
-    },
-    "urls": {
-        "logo": "https://github.com/user-attachments/assets/387cfc4e-5f33-48cd-8f5c-cd4854dabf0c",
-        "api": {
-            "sapi": "https://api.binance.com/sapi/v1",
-            "sapiV2": "https://api.binance.com/sapi/v2",
-            "sapiV3": "https://api.binance.com/sapi/v3",
-            "sapiV4": "https://api.binance.com/sapi/v4",
-            "dapiPublic": "https://dapi.binance.com/dapi/v1",
-            "dapiPrivate": "https://dapi.binance.com/dapi/v1",
-            "eapiPublic": "https://eapi.binance.com/eapi/v1",
-            "eapiPrivate": "https://eapi.binance.com/eapi/v1",
-            "dapiPrivateV2": "https://dapi.binance.com/dapi/v2",
-            "dapiData": "https://dapi.binance.com/futures/data",
-            "fapiPublic": "https://fapi.binance.com/fapi/v1",
-            "fapiPublicV2": "https://fapi.binance.com/fapi/v2",
-            "fapiPublicV3": "https://fapi.binance.com/fapi/v3",
-            "fapiPrivate": "https://fapi.binance.com/fapi/v1",
-            "fapiPrivateV2": "https://fapi.binance.com/fapi/v2",
-            "fapiPrivateV3": "https://fapi.binance.com/fapi/v3",
-            "fapiData": "https://fapi.binance.com/futures/data",
-            "public": "https://api.binance.com/api/v3",
-            "private": "https://api.binance.com/api/v3",
-            "v1": "https://api.binance.com/api/v1",
-            "papi": "https://papi.binance.com/papi/v1",
-            "papiV2": "https://papi.binance.com/papi/v2"
-        },
-        "www": "https://www.binance.com",
-        "doc": [
-            "https://binance-docs.github.io/apidocs/delivery/en/",
-            "https://binance-docs.github.io/apidocs/spot/en",
-            "https://developers.binance.com/en"
-        ],
-        "fees": "https://www.binance.com/en/fee/schedule",
-        "test": {
-            "dapiPublic": "https://testnet.binancefuture.com/dapi/v1",
-            "dapiPrivate": "https://testnet.binancefuture.com/dapi/v1",
-            "dapiPrivateV2": "https://testnet.binancefuture.com/dapi/v2",
-            "fapiPublic": "https://testnet.binancefuture.com/fapi/v1",
-            "fapiPublicV2": "https://testnet.binancefuture.com/fapi/v2",
-            "fapiPublicV3": "https://testnet.binancefuture.com/fapi/v3",
-            "fapiPrivate": "https://testnet.binancefuture.com/fapi/v1",
-            "fapiPrivateV2": "https://testnet.binancefuture.com/fapi/v2",
-            "fapiPrivateV3": "https://testnet.binancefuture.com/fapi/v3",
-            "public": "https://testnet.binance.vision/api/v3",
-            "private": "https://testnet.binance.vision/api/v3",
-            "v1": "https://testnet.binance.vision/api/v1"
-        },
-        "demo": {
-            "dapiPublic": "https://demo-dapi.binance.com/dapi/v1",
-            "dapiPrivate": "https://demo-dapi.binance.com/dapi/v1",
-            "dapiPrivateV2": "https://demo-dapi.binance.com/dapi/v2",
-            "fapiPublic": "https://demo-fapi.binance.com/fapi/v1",
-            "fapiPublicV2": "https://demo-fapi.binance.com/fapi/v2",
-            "fapiPublicV3": "https://demo-fapi.binance.com/fapi/v3",
-            "fapiPrivate": "https://demo-fapi.binance.com/fapi/v1",
-            "fapiPrivateV2": "https://demo-fapi.binance.com/fapi/v2",
-            "fapiPrivateV3": "https://demo-fapi.binance.com/fapi/v3",
-            "public": "https://demo-api.binance.com/api/v3",
-            "private": "https://demo-api.binance.com/api/v3",
-            "v1": "https://demo-api.binance.com/api/v1"
-        },
-        "referral": {
-            "url": "https://accounts.binance.com/register?ref=CCXTCOM",
-            "discount": 0.1
-        },
-        "api_management": "https://www.binance.com/en/usercenter/settings/api-management"
-    },
-    "api": {
-        "sapi": {
-            "get": {
-                "copyTrading/futures/userStatus": 2,
-                "copyTrading/futures/leadSymbol": 2,
-                "system/status": 0.1,
-                "accountSnapshot": 240,
-                "account/info": 0.1,
-                "margin/asset": 1,
-                "margin/pair": 1,
-                "margin/allAssets": 0.1,
-                "margin/allPairs": 0.1,
-                "margin/priceIndex": 1,
-                "spot/delist-schedule": 10,
-                "asset/assetDividend": 1,
-                "asset/dribblet": 0.1,
-                "asset/transfer": 0.1,
-                "asset/assetDetail": 0.1,
-                "asset/tradeFee": 0.1,
-                "asset/ledger-transfer/cloud-mining/queryByPage": 4.0002,
-                "asset/convert-transfer/queryByPage": 0.033335,
-                "asset/wallet/balance": 6,
-                "asset/custody/transfer-history": 6,
-                "margin/borrow-repay": 1,
-                "margin/loan": 1,
-                "margin/repay": 1,
-                "margin/account": 1,
-                "margin/transfer": 0.1,
-                "margin/interestHistory": 0.1,
-                "margin/forceLiquidationRec": 0.1,
-                "margin/order": 1,
-                "margin/openOrders": 1,
-                "margin/allOrders": 20,
-                "margin/myTrades": 1,
-                "margin/maxBorrowable": 5,
-                "margin/maxTransferable": 5,
-                "margin/tradeCoeff": 1,
-                "margin/isolated/transfer": 0.1,
-                "margin/isolated/account": 1,
-                "margin/isolated/pair": 1,
-                "margin/isolated/allPairs": 1,
-                "margin/isolated/accountLimit": 0.1,
-                "margin/interestRateHistory": 0.1,
-                "margin/orderList": 1,
-                "margin/allOrderList": 20,
-                "margin/openOrderList": 1,
-                "margin/crossMarginData": {
-                    "cost": 0.1,
-                    "noCoin": 0.5
-                },
-                "margin/isolatedMarginData": {
-                    "cost": 0.1,
-                    "noCoin": 1
-                },
-                "margin/isolatedMarginTier": 0.1,
-                "margin/rateLimit/order": 2,
-                "margin/dribblet": 0.1,
-                "margin/dust": 20.001,
-                "margin/crossMarginCollateralRatio": 10,
-                "margin/exchange-small-liability": 0.6667,
-                "margin/exchange-small-liability-history": 0.6667,
-                "margin/next-hourly-interest-rate": 0.6667,
-                "margin/capital-flow": 10,
-                "margin/delist-schedule": 10,
-                "margin/available-inventory": 0.3334,
-                "margin/leverageBracket": 0.1,
-                "loan/vip/loanable/data": 40,
-                "loan/vip/collateral/data": 40,
-                "loan/vip/request/data": 2.6668,
-                "loan/vip/request/interestRate": 2.6668,
-                "loan/income": 40.002,
-                "loan/ongoing/orders": 40,
-                "loan/ltv/adjustment/history": 40,
-                "loan/borrow/history": 40,
-                "loan/repay/history": 40,
-                "loan/loanable/data": 40,
-                "loan/collateral/data": 40,
-                "loan/repay/collateral/rate": 600,
-                "loan/flexible/ongoing/orders": 30,
-                "loan/flexible/borrow/history": 40,
-                "loan/flexible/repay/history": 40,
-                "loan/flexible/ltv/adjustment/history": 40,
-                "loan/vip/ongoing/orders": 40,
-                "loan/vip/repay/history": 40,
-                "loan/vip/collateral/account": 600,
-                "fiat/orders": 600.03,
-                "fiat/payments": 0.1,
-                "futures/transfer": 1,
-                "futures/histDataLink": 0.1,
-                "rebate/taxQuery": 80.004,
-                "capital/config/getall": 1,
-                "capital/deposit/address": 1,
-                "capital/deposit/address/list": 1,
-                "capital/deposit/hisrec": 0.1,
-                "capital/deposit/subAddress": 0.1,
-                "capital/deposit/subHisrec": 0.1,
-                "capital/withdraw/history": 2,
-                "capital/withdraw/address/list": 10,
-                "capital/contract/convertible-coins": 4.0002,
-                "convert/tradeFlow": 20.001,
-                "convert/exchangeInfo": 50,
-                "convert/assetInfo": 10,
-                "convert/orderStatus": 0.6667,
-                "convert/limit/queryOpenOrders": 20.001,
-                "account/status": 0.1,
-                "account/apiTradingStatus": 0.1,
-                "account/apiRestrictions/ipRestriction": 0.1,
-                "bnbBurn": 0.1,
-                "sub-account/futures/account": 1,
-                "sub-account/futures/accountSummary": 0.1,
-                "sub-account/futures/positionRisk": 1,
-                "sub-account/futures/internalTransfer": 0.1,
-                "sub-account/list": 0.1,
-                "sub-account/margin/account": 1,
-                "sub-account/margin/accountSummary": 1,
-                "sub-account/spotSummary": 0.1,
-                "sub-account/status": 1,
-                "sub-account/sub/transfer/history": 0.1,
-                "sub-account/transfer/subUserHistory": 0.1,
-                "sub-account/universalTransfer": 0.1,
-                "sub-account/apiRestrictions/ipRestriction/thirdPartyList": 1,
-                "sub-account/transaction-statistics": 0.40002,
-                "sub-account/subAccountApi/ipRestriction": 20.001,
-                "managed-subaccount/asset": 0.1,
-                "managed-subaccount/accountSnapshot": 240,
-                "managed-subaccount/queryTransLogForInvestor": 0.1,
-                "managed-subaccount/queryTransLogForTradeParent": 0.40002,
-                "managed-subaccount/fetch-future-asset": 0.40002,
-                "managed-subaccount/marginAsset": 0.1,
-                "managed-subaccount/info": 0.40002,
-                "managed-subaccount/deposit/address": 0.006667,
-                "managed-subaccount/query-trans-log": 0.40002,
-                "lending/daily/product/list": 0.1,
-                "lending/daily/userLeftQuota": 0.1,
-                "lending/daily/userRedemptionQuota": 0.1,
-                "lending/daily/token/position": 0.1,
-                "lending/union/account": 0.1,
-                "lending/union/purchaseRecord": 0.1,
-                "lending/union/redemptionRecord": 0.1,
-                "lending/union/interestHistory": 0.1,
-                "lending/project/list": 0.1,
-                "lending/project/position/list": 0.1,
-                "eth-staking/eth/history/stakingHistory": 15,
-                "eth-staking/eth/history/redemptionHistory": 15,
-                "eth-staking/eth/history/rewardsHistory": 15,
-                "eth-staking/eth/quota": 15,
-                "eth-staking/eth/history/rateHistory": 15,
-                "eth-staking/account": 15,
-                "eth-staking/wbeth/history/wrapHistory": 15,
-                "eth-staking/wbeth/history/unwrapHistory": 15,
-                "eth-staking/eth/history/wbethRewardsHistory": 15,
-                "sol-staking/sol/history/stakingHistory": 15,
-                "sol-staking/sol/history/redemptionHistory": 15,
-                "sol-staking/sol/history/bnsolRewardsHistory": 15,
-                "sol-staking/sol/history/rateHistory": 15,
-                "sol-staking/account": 15,
-                "sol-staking/sol/quota": 15,
-                "mining/pub/algoList": 0.1,
-                "mining/pub/coinList": 0.1,
-                "mining/worker/detail": 0.5,
-                "mining/worker/list": 0.5,
-                "mining/payment/list": 0.5,
-                "mining/statistics/user/status": 0.5,
-                "mining/statistics/user/list": 0.5,
-                "mining/payment/uid": 0.5,
-                "bswap/pools": 0.1,
-                "bswap/liquidity": {
-                    "cost": 0.1,
-                    "noPoolId": 1
-                },
-                "bswap/liquidityOps": 20.001,
-                "bswap/quote": 1.00005,
-                "bswap/swap": 20.001,
-                "bswap/poolConfigure": 1.00005,
-                "bswap/addLiquidityPreview": 1.00005,
-                "bswap/removeLiquidityPreview": 1.00005,
-                "bswap/unclaimedRewards": 6.667,
-                "bswap/claimedHistory": 6.667,
-                "blvt/tokenInfo": 0.1,
-                "blvt/subscribe/record": 0.1,
-                "blvt/redeem/record": 0.1,
-                "blvt/userLimit": 0.1,
-                "apiReferral/ifNewUser": 1,
-                "apiReferral/customization": 1,
-                "apiReferral/userCustomization": 1,
-                "apiReferral/rebate/recentRecord": 1,
-                "apiReferral/rebate/historicalRecord": 1,
-                "apiReferral/kickback/recentRecord": 1,
-                "apiReferral/kickback/historicalRecord": 1,
-                "broker/subAccountApi": 1,
-                "broker/subAccount": 1,
-                "broker/subAccountApi/commission/futures": 1,
-                "broker/subAccountApi/commission/coinFutures": 1,
-                "broker/info": 1,
-                "broker/transfer": 1,
-                "broker/transfer/futures": 1,
-                "broker/rebate/recentRecord": 1,
-                "broker/rebate/historicalRecord": 1,
-                "broker/subAccount/bnbBurn/status": 1,
-                "broker/subAccount/depositHist": 1,
-                "broker/subAccount/spotSummary": 1,
-                "broker/subAccount/marginSummary": 1,
-                "broker/subAccount/futuresSummary": 1,
-                "broker/rebate/futures/recentRecord": 1,
-                "broker/subAccountApi/ipRestriction": 1,
-                "broker/universalTransfer": 1,
-                "account/apiRestrictions": 0.1,
-                "c2c/orderMatch/listUserOrderHistory": 0.1,
-                "nft/history/transactions": 20.001,
-                "nft/history/deposit": 20.001,
-                "nft/history/withdraw": 20.001,
-                "nft/user/getAsset": 20.001,
-                "pay/transactions": 20.001,
-                "giftcard/verify": 0.1,
-                "giftcard/cryptography/rsa-public-key": 0.1,
-                "giftcard/buyCode/token-limit": 0.1,
-                "algo/spot/openOrders": 0.1,
-                "algo/spot/historicalOrders": 0.1,
-                "algo/spot/subOrders": 0.1,
-                "algo/futures/openOrders": 0.1,
-                "algo/futures/historicalOrders": 0.1,
-                "algo/futures/subOrders": 0.1,
-                "portfolio/account": 0.1,
-                "portfolio/collateralRate": 5,
-                "portfolio/pmLoan": 3.3335,
-                "portfolio/interest-history": 0.6667,
-                "portfolio/asset-index-price": 0.1,
-                "portfolio/repay-futures-switch": 3,
-                "portfolio/margin-asset-leverage": 5,
-                "portfolio/balance": 2,
-                "portfolio/negative-balance-exchange-record": 2,
-                "portfolio/pmloan-history": 5,
-                "portfolio/earn-asset-balance": 150,
-                "portfolio/delta-mode": 150,
-                "staking/productList": 0.1,
-                "staking/position": 0.1,
-                "staking/stakingRecord": 0.1,
-                "staking/personalLeftQuota": 0.1,
-                "lending/auto-invest/target-asset/list": 0.1,
-                "lending/auto-invest/target-asset/roi/list": 0.1,
-                "lending/auto-invest/all/asset": 0.1,
-                "lending/auto-invest/source-asset/list": 0.1,
-                "lending/auto-invest/plan/list": 0.1,
-                "lending/auto-invest/plan/id": 0.1,
-                "lending/auto-invest/history/list": 0.1,
-                "lending/auto-invest/index/info": 0.1,
-                "lending/auto-invest/index/user-summary": 0.1,
-                "lending/auto-invest/one-off/status": 0.1,
-                "lending/auto-invest/redeem/history": 0.1,
-                "lending/auto-invest/rebalance/history": 0.1,
-                "simple-earn/flexible/list": 15,
-                "simple-earn/locked/list": 15,
-                "simple-earn/flexible/personalLeftQuota": 15,
-                "simple-earn/locked/personalLeftQuota": 15,
-                "simple-earn/flexible/subscriptionPreview": 15,
-                "simple-earn/locked/subscriptionPreview": 15,
-                "simple-earn/flexible/history/rateHistory": 15,
-                "simple-earn/flexible/position": 15,
-                "simple-earn/locked/position": 15,
-                "simple-earn/account": 15,
-                "simple-earn/flexible/history/subscriptionRecord": 15,
-                "simple-earn/locked/history/subscriptionRecord": 15,
-                "simple-earn/flexible/history/redemptionRecord": 15,
-                "simple-earn/locked/history/redemptionRecord": 15,
-                "simple-earn/flexible/history/rewardsRecord": 15,
-                "simple-earn/locked/history/rewardsRecord": 15,
-                "simple-earn/flexible/history/collateralRecord": 0.1,
-                "dci/product/list": 0.1,
-                "dci/product/positions": 0.1,
-                "dci/product/accounts": 0.1
+            "id": "binancecoinm",
+            "name": "Binance COIN-M",
+            "countries": [],
+            "enableRateLimit": true,
+            "rateLimit": 50,
+            "timeout": 10000,
+            "certified": true,
+            "pro": true,
+            "alias": false,
+            "dex": false,
+            "has": {
+                "publicAPI": true,
+                "privateAPI": true,
+                "sandbox": true,
+                "spot": false,
+                "margin": false,
+                "swap": true,
+                "future": true,
+                "addMargin": true,
+                "borrowCrossMargin": true,
+                "borrowIsolatedMargin": true,
+                "cancelAllOrders": true,
+                "cancelOrder": true,
+                "cancelOrders": true,
+                "closeAllPositions": false,
+                "closePosition": false,
+                "createDepositAddress": false,
+                "createLimitBuyOrder": true,
+                "createLimitOrder": true,
+                "createLimitSellOrder": true,
+                "createMarketBuyOrder": true,
+                "createMarketBuyOrderWithCost": true,
+                "createMarketOrder": true,
+                "createMarketOrderWs": true,
+                "createMarketOrderWithCost": true,
+                "createMarketSellOrder": true,
+                "createMarketSellOrderWithCost": true,
+                "createOrder": true,
+                "createOrders": true,
+                "createOrderWithTakeProfitAndStopLoss": false,
+                "createPostOnlyOrder": true,
+                "createReduceOnlyOrder": true,
+                "createStopLimitOrder": true,
+                "createStopLossOrder": true,
+                "createStopMarketOrder": true,
+                "createStopOrder": true,
+                "createTakeProfitOrder": true,
+                "createTrailingPercentOrder": true,
+                "createTriggerOrder": true,
+                "editOrder": true,
+                "editOrders": true,
+                "fetchBalance": true,
+                "fetchBidsAsks": true,
+                "fetchBorrowInterest": true,
+                "fetchBorrowRateHistories": false,
+                "fetchBorrowRateHistory": true,
+                "fetchCanceledAndClosedOrders": "emulated",
+                "fetchCanceledOrders": "emulated",
+                "fetchClosedOrder": false,
+                "fetchClosedOrders": "emulated",
+                "fetchConvertCurrencies": true,
+                "fetchConvertQuote": true,
+                "fetchConvertTrade": true,
+                "fetchConvertTradeHistory": true,
+                "fetchCrossBorrowRate": true,
+                "fetchCrossBorrowRates": false,
+                "fetchCurrencies": true,
+                "fetchCurrenciesWs": "emulated",
+                "fetchDeposit": false,
+                "fetchDepositAddress": true,
+                "fetchDepositAddresses": false,
+                "fetchDepositAddressesByNetwork": false,
+                "fetchDeposits": true,
+                "fetchDepositsWithdrawals": false,
+                "fetchDepositWithdrawFee": "emulated",
+                "fetchDepositWithdrawFees": true,
+                "fetchFundingHistory": true,
+                "fetchFundingRate": true,
+                "fetchFundingRateHistory": true,
+                "fetchFundingInterval": "emulated",
+                "fetchFundingIntervals": true,
+                "fetchFundingRates": true,
+                "fetchGreeks": true,
+                "fetchIndexOHLCV": true,
+                "fetchIsolatedBorrowRate": "emulated",
+                "fetchIsolatedBorrowRates": true,
+                "fetchMarginAdjustmentHistory": true,
+                "fetchL2OrderBook": true,
+                "fetchL3OrderBook": false,
+                "fetchLastPrices": true,
+                "fetchLedger": true,
+                "fetchLedgerEntry": true,
+                "fetchLeverage": "emulated",
+                "fetchLeverages": true,
+                "fetchLeverageTiers": true,
+                "fetchLiquidations": false,
+                "fetchLongShortRatio": false,
+                "fetchLongShortRatioHistory": true,
+                "fetchMarginMode": true,
+                "fetchMarginModes": true,
+                "fetchMarketLeverageTiers": "emulated",
+                "fetchMarkets": true,
+                "fetchMarkOHLCV": true,
+                "fetchMyLiquidations": true,
+                "fetchMySettlementHistory": true,
+                "fetchMyTrades": true,
+                "fetchOHLCV": true,
+                "fetchOpenInterest": true,
+                "fetchOpenInterestHistory": true,
+                "fetchOpenOrder": true,
+                "fetchOpenOrders": true,
+                "fetchOption": true,
+                "fetchOptionChain": false,
+                "fetchOrder": true,
+                "fetchOrderBook": true,
+                "fetchOrderBooks": false,
+                "fetchOrders": true,
+                "fetchOrderTrades": true,
+                "fetchPosition": true,
+                "fetchPositionHistory": false,
+                "fetchPositionsHistory": false,
+                "fetchPositionMode": true,
+                "fetchPositions": true,
+                "fetchPositionsRisk": true,
+                "fetchPremiumIndexOHLCV": true,
+                "fetchSettlementHistory": true,
+                "fetchStatus": true,
+                "fetchTicker": true,
+                "fetchTickers": true,
+                "fetchMarkPrices": true,
+                "fetchTime": true,
+                "fetchTrades": true,
+                "fetchTradingFee": true,
+                "fetchTradingFees": true,
+                "fetchTradingLimits": "emulated",
+                "fetchTransactionFee": "emulated",
+                "fetchTransactionFees": true,
+                "fetchTransactions": false,
+                "fetchTransfer": false,
+                "fetchTransfers": true,
+                "fetchUnderlyingAssets": false,
+                "fetchVolatilityHistory": false,
+                "fetchWithdrawAddresses": false,
+                "fetchWithdrawal": false,
+                "fetchWithdrawals": true,
+                "fetchWithdrawalWhitelist": false,
+                "reduceMargin": true,
+                "repayCrossMargin": true,
+                "repayIsolatedMargin": true,
+                "setLeverage": true,
+                "setMargin": false,
+                "setMarginMode": true,
+                "setPositionMode": true,
+                "signIn": false,
+                "transfer": true,
+                "withdraw": true,
+                "createConvertTrade": true,
+                "fetchAllGreeks": true,
+                "fetchMarkPrice": true
             },
-            "post": {
-                "asset/dust": 0.06667,
-                "asset/dust-btc": 0.1,
-                "asset/transfer": 6.0003,
-                "asset/get-funding-asset": 0.1,
-                "asset/convert-transfer": 0.033335,
-                "account/disableFastWithdrawSwitch": 0.1,
-                "account/enableFastWithdrawSwitch": 0.1,
-                "capital/withdraw/apply": 4.0002,
-                "capital/contract/convertible-coins": 4.0002,
-                "capital/deposit/credit-apply": 0.1,
-                "margin/borrow-repay": 20.001,
-                "margin/transfer": 4.0002,
-                "margin/loan": 20.001,
-                "margin/repay": 20.001,
-                "margin/order": 0.040002,
-                "margin/order/oco": 0.040002,
-                "margin/dust": 20.001,
-                "margin/exchange-small-liability": 20.001,
-                "margin/isolated/transfer": 4.0002,
-                "margin/isolated/account": 2.0001,
-                "margin/max-leverage": 300,
-                "bnbBurn": 0.1,
-                "sub-account/virtualSubAccount": 0.1,
-                "sub-account/margin/transfer": 4.0002,
-                "sub-account/margin/enable": 0.1,
-                "sub-account/futures/enable": 0.1,
-                "sub-account/futures/transfer": 0.1,
-                "sub-account/futures/internalTransfer": 0.1,
-                "sub-account/transfer/subToSub": 0.1,
-                "sub-account/transfer/subToMaster": 0.1,
-                "sub-account/universalTransfer": 0.1,
-                "sub-account/options/enable": 0.1,
-                "managed-subaccount/deposit": 0.1,
-                "managed-subaccount/withdraw": 0.1,
-                "userDataStream": 0.1,
-                "userDataStream/isolated": 0.1,
-                "futures/transfer": 0.1,
-                "lending/customizedFixed/purchase": 0.1,
-                "lending/daily/purchase": 0.1,
-                "lending/daily/redeem": 0.1,
-                "bswap/liquidityAdd": 60,
-                "bswap/liquidityRemove": 60,
-                "bswap/swap": 60,
-                "bswap/claimRewards": 6.667,
-                "blvt/subscribe": 0.1,
-                "blvt/redeem": 0.1,
-                "apiReferral/customization": 1,
-                "apiReferral/userCustomization": 1,
-                "apiReferral/rebate/historicalRecord": 1,
-                "apiReferral/kickback/historicalRecord": 1,
-                "broker/subAccount": 1,
-                "broker/subAccount/margin": 1,
-                "broker/subAccount/futures": 1,
-                "broker/subAccountApi": 1,
-                "broker/subAccountApi/permission": 1,
-                "broker/subAccountApi/commission": 1,
-                "broker/subAccountApi/commission/futures": 1,
-                "broker/subAccountApi/commission/coinFutures": 1,
-                "broker/transfer": 1,
-                "broker/transfer/futures": 1,
-                "broker/rebate/historicalRecord": 1,
-                "broker/subAccount/bnbBurn/spot": 1,
-                "broker/subAccount/bnbBurn/marginInterest": 1,
-                "broker/subAccount/blvt": 1,
-                "broker/subAccountApi/ipRestriction": 1,
-                "broker/subAccountApi/ipRestriction/ipList": 1,
-                "broker/universalTransfer": 1,
-                "broker/subAccountApi/permission/universalTransfer": 1,
-                "broker/subAccountApi/permission/vanillaOptions": 1,
-                "giftcard/createCode": 0.1,
-                "giftcard/redeemCode": 0.1,
-                "giftcard/buyCode": 0.1,
-                "algo/spot/newOrderTwap": 20.001,
-                "algo/futures/newOrderVp": 20.001,
-                "algo/futures/newOrderTwap": 20.001,
-                "staking/purchase": 0.1,
-                "staking/redeem": 0.1,
-                "staking/setAutoStaking": 0.1,
-                "eth-staking/eth/stake": 15,
-                "eth-staking/eth/redeem": 15,
-                "eth-staking/wbeth/wrap": 15,
-                "sol-staking/sol/stake": 15,
-                "sol-staking/sol/redeem": 15,
-                "mining/hash-transfer/config": 0.5,
-                "mining/hash-transfer/config/cancel": 0.5,
-                "portfolio/repay": 20.001,
-                "loan/vip/renew": 40.002,
-                "loan/vip/borrow": 40.002,
-                "loan/borrow": 40.002,
-                "loan/repay": 40.002,
-                "loan/adjust/ltv": 40.002,
-                "loan/customize/margin_call": 40.002,
-                "loan/flexible/repay": 40.002,
-                "loan/flexible/adjust/ltv": 40.002,
-                "loan/vip/repay": 40.002,
-                "convert/getQuote": 1.3334,
-                "convert/acceptQuote": 3.3335,
-                "convert/limit/placeOrder": 3.3335,
-                "convert/limit/cancelOrder": 1.3334,
-                "portfolio/auto-collection": 150,
-                "portfolio/asset-collection": 6,
-                "portfolio/bnb-transfer": 150,
-                "portfolio/repay-futures-switch": 150,
-                "portfolio/repay-futures-negative-balance": 150,
-                "portfolio/mint": 20,
-                "portfolio/redeem": 20,
-                "portfolio/earn-asset-transfer": 150,
-                "portfolio/delta-mode": 150,
-                "lending/auto-invest/plan/add": 0.1,
-                "lending/auto-invest/plan/edit": 0.1,
-                "lending/auto-invest/plan/edit-status": 0.1,
-                "lending/auto-invest/one-off": 0.1,
-                "lending/auto-invest/redeem": 0.1,
-                "simple-earn/flexible/subscribe": 0.1,
-                "simple-earn/locked/subscribe": 0.1,
-                "simple-earn/flexible/redeem": 0.1,
-                "simple-earn/locked/redeem": 0.1,
-                "simple-earn/flexible/setAutoSubscribe": 15,
-                "simple-earn/locked/setAutoSubscribe": 15,
-                "simple-earn/locked/setRedeemOption": 5,
-                "dci/product/subscribe": 0.1,
-                "dci/product/auto_compound/edit": 0.1
+            "urls": {
+                "logo": "https://github.com/user-attachments/assets/387cfc4e-5f33-48cd-8f5c-cd4854dabf0c",
+                "api": {
+                    "sapi": "https://api.binance.com/sapi/v1",
+                    "sapiV2": "https://api.binance.com/sapi/v2",
+                    "sapiV3": "https://api.binance.com/sapi/v3",
+                    "sapiV4": "https://api.binance.com/sapi/v4",
+                    "dapiPublic": "https://dapi.binance.com/dapi/v1",
+                    "dapiPrivate": "https://dapi.binance.com/dapi/v1",
+                    "eapiPublic": "https://eapi.binance.com/eapi/v1",
+                    "eapiPrivate": "https://eapi.binance.com/eapi/v1",
+                    "dapiPrivateV2": "https://dapi.binance.com/dapi/v2",
+                    "dapiData": "https://dapi.binance.com/futures/data",
+                    "fapiPublic": "https://fapi.binance.com/fapi/v1",
+                    "fapiPublicV2": "https://fapi.binance.com/fapi/v2",
+                    "fapiPublicV3": "https://fapi.binance.com/fapi/v3",
+                    "fapiPrivate": "https://fapi.binance.com/fapi/v1",
+                    "fapiPrivateV2": "https://fapi.binance.com/fapi/v2",
+                    "fapiPrivateV3": "https://fapi.binance.com/fapi/v3",
+                    "fapiData": "https://fapi.binance.com/futures/data",
+                    "public": "https://api.binance.com/api/v3",
+                    "private": "https://api.binance.com/api/v3",
+                    "v1": "https://api.binance.com/api/v1",
+                    "papi": "https://papi.binance.com/papi/v1",
+                    "papiV2": "https://papi.binance.com/papi/v2"
+                },
+                "www": "https://www.binance.com",
+                "doc": [
+                    "https://binance-docs.github.io/apidocs/delivery/en/",
+                    "https://binance-docs.github.io/apidocs/spot/en",
+                    "https://developers.binance.com/en"
+                ],
+                "fees": "https://www.binance.com/en/fee/schedule",
+                "test": {
+                    "dapiPublic": "https://testnet.binancefuture.com/dapi/v1",
+                    "dapiPrivate": "https://testnet.binancefuture.com/dapi/v1",
+                    "dapiPrivateV2": "https://testnet.binancefuture.com/dapi/v2",
+                    "fapiPublic": "https://testnet.binancefuture.com/fapi/v1",
+                    "fapiPublicV2": "https://testnet.binancefuture.com/fapi/v2",
+                    "fapiPublicV3": "https://testnet.binancefuture.com/fapi/v3",
+                    "fapiPrivate": "https://testnet.binancefuture.com/fapi/v1",
+                    "fapiPrivateV2": "https://testnet.binancefuture.com/fapi/v2",
+                    "fapiPrivateV3": "https://testnet.binancefuture.com/fapi/v3",
+                    "public": "https://testnet.binance.vision/api/v3",
+                    "private": "https://testnet.binance.vision/api/v3",
+                    "v1": "https://testnet.binance.vision/api/v1"
+                },
+                "demo": {
+                    "dapiPublic": "https://demo-dapi.binance.com/dapi/v1",
+                    "dapiPrivate": "https://demo-dapi.binance.com/dapi/v1",
+                    "dapiPrivateV2": "https://demo-dapi.binance.com/dapi/v2",
+                    "fapiPublic": "https://demo-fapi.binance.com/fapi/v1",
+                    "fapiPublicV2": "https://demo-fapi.binance.com/fapi/v2",
+                    "fapiPublicV3": "https://demo-fapi.binance.com/fapi/v3",
+                    "fapiPrivate": "https://demo-fapi.binance.com/fapi/v1",
+                    "fapiPrivateV2": "https://demo-fapi.binance.com/fapi/v2",
+                    "fapiPrivateV3": "https://demo-fapi.binance.com/fapi/v3",
+                    "public": "https://demo-api.binance.com/api/v3",
+                    "private": "https://demo-api.binance.com/api/v3",
+                    "v1": "https://demo-api.binance.com/api/v1"
+                },
+                "referral": {
+                    "url": "https://accounts.binance.com/register?ref=CCXTCOM",
+                    "discount": 0.1
+                },
+                "api_management": "https://www.binance.com/en/usercenter/settings/api-management"
             },
-            "put": {
-                "userDataStream": 0.1,
-                "userDataStream/isolated": 0.1
+            "api": {
+                "sapi": {
+                    "get": {
+                        "copyTrading/futures/userStatus": 2,
+                        "copyTrading/futures/leadSymbol": 2,
+                        "system/status": 0.1,
+                        "accountSnapshot": 240,
+                        "account/info": 0.1,
+                        "margin/asset": 1,
+                        "margin/pair": 1,
+                        "margin/allAssets": 0.1,
+                        "margin/allPairs": 0.1,
+                        "margin/priceIndex": 1,
+                        "spot/delist-schedule": 10,
+                        "asset/assetDividend": 1,
+                        "asset/dribblet": 0.1,
+                        "asset/transfer": 0.1,
+                        "asset/assetDetail": 0.1,
+                        "asset/tradeFee": 0.1,
+                        "asset/ledger-transfer/cloud-mining/queryByPage": 4.0002,
+                        "asset/convert-transfer/queryByPage": 0.033335,
+                        "asset/wallet/balance": 6,
+                        "asset/custody/transfer-history": 6,
+                        "margin/borrow-repay": 1,
+                        "margin/loan": 1,
+                        "margin/repay": 1,
+                        "margin/account": 1,
+                        "margin/transfer": 0.1,
+                        "margin/interestHistory": 0.1,
+                        "margin/forceLiquidationRec": 0.1,
+                        "margin/order": 1,
+                        "margin/openOrders": 1,
+                        "margin/allOrders": 20,
+                        "margin/myTrades": 1,
+                        "margin/maxBorrowable": 5,
+                        "margin/maxTransferable": 5,
+                        "margin/tradeCoeff": 1,
+                        "margin/isolated/transfer": 0.1,
+                        "margin/isolated/account": 1,
+                        "margin/isolated/pair": 1,
+                        "margin/isolated/allPairs": 1,
+                        "margin/isolated/accountLimit": 0.1,
+                        "margin/interestRateHistory": 0.1,
+                        "margin/orderList": 1,
+                        "margin/allOrderList": 20,
+                        "margin/openOrderList": 1,
+                        "margin/crossMarginData": {
+                            "cost": 0.1,
+                            "noCoin": 0.5
+                        },
+                        "margin/isolatedMarginData": {
+                            "cost": 0.1,
+                            "noCoin": 1
+                        },
+                        "margin/isolatedMarginTier": 0.1,
+                        "margin/rateLimit/order": 2,
+                        "margin/dribblet": 0.1,
+                        "margin/dust": 20.001,
+                        "margin/crossMarginCollateralRatio": 10,
+                        "margin/exchange-small-liability": 0.6667,
+                        "margin/exchange-small-liability-history": 0.6667,
+                        "margin/next-hourly-interest-rate": 0.6667,
+                        "margin/capital-flow": 10,
+                        "margin/delist-schedule": 10,
+                        "margin/available-inventory": 0.3334,
+                        "margin/leverageBracket": 0.1,
+                        "loan/vip/loanable/data": 40,
+                        "loan/vip/collateral/data": 40,
+                        "loan/vip/request/data": 2.6668,
+                        "loan/vip/request/interestRate": 2.6668,
+                        "loan/income": 40.002,
+                        "loan/ongoing/orders": 40,
+                        "loan/ltv/adjustment/history": 40,
+                        "loan/borrow/history": 40,
+                        "loan/repay/history": 40,
+                        "loan/loanable/data": 40,
+                        "loan/collateral/data": 40,
+                        "loan/repay/collateral/rate": 600,
+                        "loan/flexible/ongoing/orders": 30,
+                        "loan/flexible/borrow/history": 40,
+                        "loan/flexible/repay/history": 40,
+                        "loan/flexible/ltv/adjustment/history": 40,
+                        "loan/vip/ongoing/orders": 40,
+                        "loan/vip/repay/history": 40,
+                        "loan/vip/collateral/account": 600,
+                        "fiat/orders": 600.03,
+                        "fiat/payments": 0.1,
+                        "futures/transfer": 1,
+                        "futures/histDataLink": 0.1,
+                        "rebate/taxQuery": 80.004,
+                        "capital/config/getall": 1,
+                        "capital/deposit/address": 1,
+                        "capital/deposit/address/list": 1,
+                        "capital/deposit/hisrec": 0.1,
+                        "capital/deposit/subAddress": 0.1,
+                        "capital/deposit/subHisrec": 0.1,
+                        "capital/withdraw/history": 2,
+                        "capital/withdraw/address/list": 10,
+                        "capital/contract/convertible-coins": 4.0002,
+                        "convert/tradeFlow": 20.001,
+                        "convert/exchangeInfo": 50,
+                        "convert/assetInfo": 10,
+                        "convert/orderStatus": 0.6667,
+                        "convert/limit/queryOpenOrders": 20.001,
+                        "account/status": 0.1,
+                        "account/apiTradingStatus": 0.1,
+                        "account/apiRestrictions/ipRestriction": 0.1,
+                        "bnbBurn": 0.1,
+                        "sub-account/futures/account": 1,
+                        "sub-account/futures/accountSummary": 0.1,
+                        "sub-account/futures/positionRisk": 1,
+                        "sub-account/futures/internalTransfer": 0.1,
+                        "sub-account/list": 0.1,
+                        "sub-account/margin/account": 1,
+                        "sub-account/margin/accountSummary": 1,
+                        "sub-account/spotSummary": 0.1,
+                        "sub-account/status": 1,
+                        "sub-account/sub/transfer/history": 0.1,
+                        "sub-account/transfer/subUserHistory": 0.1,
+                        "sub-account/universalTransfer": 0.1,
+                        "sub-account/apiRestrictions/ipRestriction/thirdPartyList": 1,
+                        "sub-account/transaction-statistics": 0.40002,
+                        "sub-account/subAccountApi/ipRestriction": 20.001,
+                        "managed-subaccount/asset": 0.1,
+                        "managed-subaccount/accountSnapshot": 240,
+                        "managed-subaccount/queryTransLogForInvestor": 0.1,
+                        "managed-subaccount/queryTransLogForTradeParent": 0.40002,
+                        "managed-subaccount/fetch-future-asset": 0.40002,
+                        "managed-subaccount/marginAsset": 0.1,
+                        "managed-subaccount/info": 0.40002,
+                        "managed-subaccount/deposit/address": 0.006667,
+                        "managed-subaccount/query-trans-log": 0.40002,
+                        "lending/daily/product/list": 0.1,
+                        "lending/daily/userLeftQuota": 0.1,
+                        "lending/daily/userRedemptionQuota": 0.1,
+                        "lending/daily/token/position": 0.1,
+                        "lending/union/account": 0.1,
+                        "lending/union/purchaseRecord": 0.1,
+                        "lending/union/redemptionRecord": 0.1,
+                        "lending/union/interestHistory": 0.1,
+                        "lending/project/list": 0.1,
+                        "lending/project/position/list": 0.1,
+                        "eth-staking/eth/history/stakingHistory": 15,
+                        "eth-staking/eth/history/redemptionHistory": 15,
+                        "eth-staking/eth/history/rewardsHistory": 15,
+                        "eth-staking/eth/quota": 15,
+                        "eth-staking/eth/history/rateHistory": 15,
+                        "eth-staking/account": 15,
+                        "eth-staking/wbeth/history/wrapHistory": 15,
+                        "eth-staking/wbeth/history/unwrapHistory": 15,
+                        "eth-staking/eth/history/wbethRewardsHistory": 15,
+                        "sol-staking/sol/history/stakingHistory": 15,
+                        "sol-staking/sol/history/redemptionHistory": 15,
+                        "sol-staking/sol/history/bnsolRewardsHistory": 15,
+                        "sol-staking/sol/history/rateHistory": 15,
+                        "sol-staking/account": 15,
+                        "sol-staking/sol/quota": 15,
+                        "mining/pub/algoList": 0.1,
+                        "mining/pub/coinList": 0.1,
+                        "mining/worker/detail": 0.5,
+                        "mining/worker/list": 0.5,
+                        "mining/payment/list": 0.5,
+                        "mining/statistics/user/status": 0.5,
+                        "mining/statistics/user/list": 0.5,
+                        "mining/payment/uid": 0.5,
+                        "bswap/pools": 0.1,
+                        "bswap/liquidity": {
+                            "cost": 0.1,
+                            "noPoolId": 1
+                        },
+                        "bswap/liquidityOps": 20.001,
+                        "bswap/quote": 1.00005,
+                        "bswap/swap": 20.001,
+                        "bswap/poolConfigure": 1.00005,
+                        "bswap/addLiquidityPreview": 1.00005,
+                        "bswap/removeLiquidityPreview": 1.00005,
+                        "bswap/unclaimedRewards": 6.667,
+                        "bswap/claimedHistory": 6.667,
+                        "blvt/tokenInfo": 0.1,
+                        "blvt/subscribe/record": 0.1,
+                        "blvt/redeem/record": 0.1,
+                        "blvt/userLimit": 0.1,
+                        "apiReferral/ifNewUser": 1,
+                        "apiReferral/customization": 1,
+                        "apiReferral/userCustomization": 1,
+                        "apiReferral/rebate/recentRecord": 1,
+                        "apiReferral/rebate/historicalRecord": 1,
+                        "apiReferral/kickback/recentRecord": 1,
+                        "apiReferral/kickback/historicalRecord": 1,
+                        "broker/subAccountApi": 1,
+                        "broker/subAccount": 1,
+                        "broker/subAccountApi/commission/futures": 1,
+                        "broker/subAccountApi/commission/coinFutures": 1,
+                        "broker/info": 1,
+                        "broker/transfer": 1,
+                        "broker/transfer/futures": 1,
+                        "broker/rebate/recentRecord": 1,
+                        "broker/rebate/historicalRecord": 1,
+                        "broker/subAccount/bnbBurn/status": 1,
+                        "broker/subAccount/depositHist": 1,
+                        "broker/subAccount/spotSummary": 1,
+                        "broker/subAccount/marginSummary": 1,
+                        "broker/subAccount/futuresSummary": 1,
+                        "broker/rebate/futures/recentRecord": 1,
+                        "broker/subAccountApi/ipRestriction": 1,
+                        "broker/universalTransfer": 1,
+                        "account/apiRestrictions": 0.1,
+                        "c2c/orderMatch/listUserOrderHistory": 0.1,
+                        "nft/history/transactions": 20.001,
+                        "nft/history/deposit": 20.001,
+                        "nft/history/withdraw": 20.001,
+                        "nft/user/getAsset": 20.001,
+                        "pay/transactions": 20.001,
+                        "giftcard/verify": 0.1,
+                        "giftcard/cryptography/rsa-public-key": 0.1,
+                        "giftcard/buyCode/token-limit": 0.1,
+                        "algo/spot/openOrders": 0.1,
+                        "algo/spot/historicalOrders": 0.1,
+                        "algo/spot/subOrders": 0.1,
+                        "algo/futures/openOrders": 0.1,
+                        "algo/futures/historicalOrders": 0.1,
+                        "algo/futures/subOrders": 0.1,
+                        "portfolio/account": 0.1,
+                        "portfolio/collateralRate": 5,
+                        "portfolio/pmLoan": 3.3335,
+                        "portfolio/interest-history": 0.6667,
+                        "portfolio/asset-index-price": 0.1,
+                        "portfolio/repay-futures-switch": 3,
+                        "portfolio/margin-asset-leverage": 5,
+                        "portfolio/balance": 2,
+                        "portfolio/negative-balance-exchange-record": 2,
+                        "portfolio/pmloan-history": 5,
+                        "portfolio/earn-asset-balance": 150,
+                        "portfolio/delta-mode": 150,
+                        "staking/productList": 0.1,
+                        "staking/position": 0.1,
+                        "staking/stakingRecord": 0.1,
+                        "staking/personalLeftQuota": 0.1,
+                        "lending/auto-invest/target-asset/list": 0.1,
+                        "lending/auto-invest/target-asset/roi/list": 0.1,
+                        "lending/auto-invest/all/asset": 0.1,
+                        "lending/auto-invest/source-asset/list": 0.1,
+                        "lending/auto-invest/plan/list": 0.1,
+                        "lending/auto-invest/plan/id": 0.1,
+                        "lending/auto-invest/history/list": 0.1,
+                        "lending/auto-invest/index/info": 0.1,
+                        "lending/auto-invest/index/user-summary": 0.1,
+                        "lending/auto-invest/one-off/status": 0.1,
+                        "lending/auto-invest/redeem/history": 0.1,
+                        "lending/auto-invest/rebalance/history": 0.1,
+                        "simple-earn/flexible/list": 15,
+                        "simple-earn/locked/list": 15,
+                        "simple-earn/flexible/personalLeftQuota": 15,
+                        "simple-earn/locked/personalLeftQuota": 15,
+                        "simple-earn/flexible/subscriptionPreview": 15,
+                        "simple-earn/locked/subscriptionPreview": 15,
+                        "simple-earn/flexible/history/rateHistory": 15,
+                        "simple-earn/flexible/position": 15,
+                        "simple-earn/locked/position": 15,
+                        "simple-earn/account": 15,
+                        "simple-earn/flexible/history/subscriptionRecord": 15,
+                        "simple-earn/locked/history/subscriptionRecord": 15,
+                        "simple-earn/flexible/history/redemptionRecord": 15,
+                        "simple-earn/locked/history/redemptionRecord": 15,
+                        "simple-earn/flexible/history/rewardsRecord": 15,
+                        "simple-earn/locked/history/rewardsRecord": 15,
+                        "simple-earn/flexible/history/collateralRecord": 0.1,
+                        "dci/product/list": 0.1,
+                        "dci/product/positions": 0.1,
+                        "dci/product/accounts": 0.1
+                    },
+                    "post": {
+                        "asset/dust": 0.06667,
+                        "asset/dust-btc": 0.1,
+                        "asset/transfer": 6.0003,
+                        "asset/get-funding-asset": 0.1,
+                        "asset/convert-transfer": 0.033335,
+                        "account/disableFastWithdrawSwitch": 0.1,
+                        "account/enableFastWithdrawSwitch": 0.1,
+                        "capital/withdraw/apply": 4.0002,
+                        "capital/contract/convertible-coins": 4.0002,
+                        "capital/deposit/credit-apply": 0.1,
+                        "margin/borrow-repay": 20.001,
+                        "margin/transfer": 4.0002,
+                        "margin/loan": 20.001,
+                        "margin/repay": 20.001,
+                        "margin/order": 0.040002,
+                        "margin/order/oco": 0.040002,
+                        "margin/dust": 20.001,
+                        "margin/exchange-small-liability": 20.001,
+                        "margin/isolated/transfer": 4.0002,
+                        "margin/isolated/account": 2.0001,
+                        "margin/max-leverage": 300,
+                        "bnbBurn": 0.1,
+                        "sub-account/virtualSubAccount": 0.1,
+                        "sub-account/margin/transfer": 4.0002,
+                        "sub-account/margin/enable": 0.1,
+                        "sub-account/futures/enable": 0.1,
+                        "sub-account/futures/transfer": 0.1,
+                        "sub-account/futures/internalTransfer": 0.1,
+                        "sub-account/transfer/subToSub": 0.1,
+                        "sub-account/transfer/subToMaster": 0.1,
+                        "sub-account/universalTransfer": 0.1,
+                        "sub-account/options/enable": 0.1,
+                        "managed-subaccount/deposit": 0.1,
+                        "managed-subaccount/withdraw": 0.1,
+                        "userDataStream": 0.1,
+                        "userDataStream/isolated": 0.1,
+                        "futures/transfer": 0.1,
+                        "lending/customizedFixed/purchase": 0.1,
+                        "lending/daily/purchase": 0.1,
+                        "lending/daily/redeem": 0.1,
+                        "bswap/liquidityAdd": 60,
+                        "bswap/liquidityRemove": 60,
+                        "bswap/swap": 60,
+                        "bswap/claimRewards": 6.667,
+                        "blvt/subscribe": 0.1,
+                        "blvt/redeem": 0.1,
+                        "apiReferral/customization": 1,
+                        "apiReferral/userCustomization": 1,
+                        "apiReferral/rebate/historicalRecord": 1,
+                        "apiReferral/kickback/historicalRecord": 1,
+                        "broker/subAccount": 1,
+                        "broker/subAccount/margin": 1,
+                        "broker/subAccount/futures": 1,
+                        "broker/subAccountApi": 1,
+                        "broker/subAccountApi/permission": 1,
+                        "broker/subAccountApi/commission": 1,
+                        "broker/subAccountApi/commission/futures": 1,
+                        "broker/subAccountApi/commission/coinFutures": 1,
+                        "broker/transfer": 1,
+                        "broker/transfer/futures": 1,
+                        "broker/rebate/historicalRecord": 1,
+                        "broker/subAccount/bnbBurn/spot": 1,
+                        "broker/subAccount/bnbBurn/marginInterest": 1,
+                        "broker/subAccount/blvt": 1,
+                        "broker/subAccountApi/ipRestriction": 1,
+                        "broker/subAccountApi/ipRestriction/ipList": 1,
+                        "broker/universalTransfer": 1,
+                        "broker/subAccountApi/permission/universalTransfer": 1,
+                        "broker/subAccountApi/permission/vanillaOptions": 1,
+                        "giftcard/createCode": 0.1,
+                        "giftcard/redeemCode": 0.1,
+                        "giftcard/buyCode": 0.1,
+                        "algo/spot/newOrderTwap": 20.001,
+                        "algo/futures/newOrderVp": 20.001,
+                        "algo/futures/newOrderTwap": 20.001,
+                        "staking/purchase": 0.1,
+                        "staking/redeem": 0.1,
+                        "staking/setAutoStaking": 0.1,
+                        "eth-staking/eth/stake": 15,
+                        "eth-staking/eth/redeem": 15,
+                        "eth-staking/wbeth/wrap": 15,
+                        "sol-staking/sol/stake": 15,
+                        "sol-staking/sol/redeem": 15,
+                        "mining/hash-transfer/config": 0.5,
+                        "mining/hash-transfer/config/cancel": 0.5,
+                        "portfolio/repay": 20.001,
+                        "loan/vip/renew": 40.002,
+                        "loan/vip/borrow": 40.002,
+                        "loan/borrow": 40.002,
+                        "loan/repay": 40.002,
+                        "loan/adjust/ltv": 40.002,
+                        "loan/customize/margin_call": 40.002,
+                        "loan/flexible/repay": 40.002,
+                        "loan/flexible/adjust/ltv": 40.002,
+                        "loan/vip/repay": 40.002,
+                        "convert/getQuote": 1.3334,
+                        "convert/acceptQuote": 3.3335,
+                        "convert/limit/placeOrder": 3.3335,
+                        "convert/limit/cancelOrder": 1.3334,
+                        "portfolio/auto-collection": 150,
+                        "portfolio/asset-collection": 6,
+                        "portfolio/bnb-transfer": 150,
+                        "portfolio/repay-futures-switch": 150,
+                        "portfolio/repay-futures-negative-balance": 150,
+                        "portfolio/mint": 20,
+                        "portfolio/redeem": 20,
+                        "portfolio/earn-asset-transfer": 150,
+                        "portfolio/delta-mode": 150,
+                        "lending/auto-invest/plan/add": 0.1,
+                        "lending/auto-invest/plan/edit": 0.1,
+                        "lending/auto-invest/plan/edit-status": 0.1,
+                        "lending/auto-invest/one-off": 0.1,
+                        "lending/auto-invest/redeem": 0.1,
+                        "simple-earn/flexible/subscribe": 0.1,
+                        "simple-earn/locked/subscribe": 0.1,
+                        "simple-earn/flexible/redeem": 0.1,
+                        "simple-earn/locked/redeem": 0.1,
+                        "simple-earn/flexible/setAutoSubscribe": 15,
+                        "simple-earn/locked/setAutoSubscribe": 15,
+                        "simple-earn/locked/setRedeemOption": 5,
+                        "dci/product/subscribe": 0.1,
+                        "dci/product/auto_compound/edit": 0.1
+                    },
+                    "put": {
+                        "userDataStream": 0.1,
+                        "userDataStream/isolated": 0.1
+                    },
+                    "delete": {
+                        "margin/openOrders": 0.1,
+                        "margin/order": 0.006667,
+                        "margin/orderList": 0.006667,
+                        "margin/isolated/account": 2.0001,
+                        "userDataStream": 0.1,
+                        "userDataStream/isolated": 0.1,
+                        "broker/subAccountApi": 1,
+                        "broker/subAccountApi/ipRestriction/ipList": 1,
+                        "algo/spot/order": 0.1,
+                        "algo/futures/order": 0.1,
+                        "sub-account/subAccountApi/ipRestriction/ipList": 20.001
+                    }
+                },
+                "sapiV2": {
+                    "get": {
+                        "eth-staking/account": 15,
+                        "sub-account/futures/account": 0.1,
+                        "sub-account/futures/accountSummary": 1,
+                        "sub-account/futures/positionRisk": 0.1,
+                        "loan/flexible/ongoing/orders": 30,
+                        "loan/flexible/borrow/history": 40,
+                        "loan/flexible/repay/history": 40,
+                        "loan/flexible/ltv/adjustment/history": 40,
+                        "loan/flexible/loanable/data": 40,
+                        "loan/flexible/collateral/data": 40,
+                        "portfolio/account": 2
+                    },
+                    "post": {
+                        "eth-staking/eth/stake": 15,
+                        "sub-account/subAccountApi/ipRestriction": 20.001,
+                        "loan/flexible/borrow": 40.002,
+                        "loan/flexible/repay": 40.002,
+                        "loan/flexible/adjust/ltv": 40.002
+                    }
+                },
+                "sapiV3": {
+                    "get": {
+                        "sub-account/assets": 0.40002
+                    },
+                    "post": {
+                        "asset/getUserAsset": 0.5
+                    }
+                },
+                "sapiV4": {
+                    "get": {
+                        "sub-account/assets": 0.40002
+                    }
+                },
+                "dapiPublic": {
+                    "get": {
+                        "ping": 1,
+                        "time": 1,
+                        "exchangeInfo": 1,
+                        "depth": {
+                            "cost": 2,
+                            "byLimit": [
+                                [
+                                    50,
+                                    2
+                                ],
+                                [
+                                    100,
+                                    5
+                                ],
+                                [
+                                    500,
+                                    10
+                                ],
+                                [
+                                    1000,
+                                    20
+                                ]
+                            ]
+                        },
+                        "trades": 5,
+                        "historicalTrades": 20,
+                        "aggTrades": 20,
+                        "premiumIndex": 10,
+                        "fundingRate": 1,
+                        "klines": {
+                            "cost": 1,
+                            "byLimit": [
+                                [
+                                    99,
+                                    1
+                                ],
+                                [
+                                    499,
+                                    2
+                                ],
+                                [
+                                    1000,
+                                    5
+                                ],
+                                [
+                                    10000,
+                                    10
+                                ]
+                            ]
+                        },
+                        "continuousKlines": {
+                            "cost": 1,
+                            "byLimit": [
+                                [
+                                    99,
+                                    1
+                                ],
+                                [
+                                    499,
+                                    2
+                                ],
+                                [
+                                    1000,
+                                    5
+                                ],
+                                [
+                                    10000,
+                                    10
+                                ]
+                            ]
+                        },
+                        "indexPriceKlines": {
+                            "cost": 1,
+                            "byLimit": [
+                                [
+                                    99,
+                                    1
+                                ],
+                                [
+                                    499,
+                                    2
+                                ],
+                                [
+                                    1000,
+                                    5
+                                ],
+                                [
+                                    10000,
+                                    10
+                                ]
+                            ]
+                        },
+                        "markPriceKlines": {
+                            "cost": 1,
+                            "byLimit": [
+                                [
+                                    99,
+                                    1
+                                ],
+                                [
+                                    499,
+                                    2
+                                ],
+                                [
+                                    1000,
+                                    5
+                                ],
+                                [
+                                    10000,
+                                    10
+                                ]
+                            ]
+                        },
+                        "premiumIndexKlines": {
+                            "cost": 1,
+                            "byLimit": [
+                                [
+                                    99,
+                                    1
+                                ],
+                                [
+                                    499,
+                                    2
+                                ],
+                                [
+                                    1000,
+                                    5
+                                ],
+                                [
+                                    10000,
+                                    10
+                                ]
+                            ]
+                        },
+                        "ticker/24hr": {
+                            "cost": 1,
+                            "noSymbol": 40
+                        },
+                        "ticker/price": {
+                            "cost": 1,
+                            "noSymbol": 2
+                        },
+                        "ticker/bookTicker": {
+                            "cost": 2,
+                            "noSymbol": 5
+                        },
+                        "constituents": 2,
+                        "openInterest": 1,
+                        "fundingInfo": 1
+                    }
+                },
+                "dapiData": {
+                    "get": {
+                        "delivery-price": 1,
+                        "openInterestHist": 1,
+                        "topLongShortAccountRatio": 1,
+                        "topLongShortPositionRatio": 1,
+                        "globalLongShortAccountRatio": 1,
+                        "takerBuySellVol": 1,
+                        "basis": 1
+                    }
+                },
+                "dapiPrivate": {
+                    "get": {
+                        "positionSide/dual": 30,
+                        "orderAmendment": 1,
+                        "order": 1,
+                        "openOrder": 1,
+                        "openOrders": {
+                            "cost": 1,
+                            "noSymbol": 5
+                        },
+                        "allOrders": {
+                            "cost": 20,
+                            "noSymbol": 40
+                        },
+                        "balance": 1,
+                        "account": 5,
+                        "positionMargin/history": 1,
+                        "positionRisk": 1,
+                        "userTrades": {
+                            "cost": 20,
+                            "noSymbol": 40
+                        },
+                        "income": 20,
+                        "leverageBracket": 1,
+                        "forceOrders": {
+                            "cost": 20,
+                            "noSymbol": 50
+                        },
+                        "adlQuantile": 5,
+                        "commissionRate": 20,
+                        "income/asyn": 5,
+                        "income/asyn/id": 5,
+                        "trade/asyn": 0.5,
+                        "trade/asyn/id": 0.5,
+                        "order/asyn": 0.5,
+                        "order/asyn/id": 0.5,
+                        "pmExchangeInfo": 0.5,
+                        "pmAccountInfo": 0.5
+                    },
+                    "post": {
+                        "positionSide/dual": 1,
+                        "order": 4,
+                        "batchOrders": 5,
+                        "countdownCancelAll": 10,
+                        "leverage": 1,
+                        "marginType": 1,
+                        "positionMargin": 1,
+                        "listenKey": 1
+                    },
+                    "put": {
+                        "listenKey": 1,
+                        "order": 1,
+                        "batchOrders": 5
+                    },
+                    "delete": {
+                        "order": 1,
+                        "allOpenOrders": 1,
+                        "batchOrders": 5,
+                        "listenKey": 1
+                    }
+                },
+                "dapiPrivateV2": {
+                    "get": {
+                        "leverageBracket": 1
+                    }
+                },
+                "fapiPublic": {
+                    "get": {
+                        "ping": 1,
+                        "time": 1,
+                        "exchangeInfo": 1,
+                        "depth": {
+                            "cost": 2,
+                            "byLimit": [
+                                [
+                                    50,
+                                    2
+                                ],
+                                [
+                                    100,
+                                    5
+                                ],
+                                [
+                                    500,
+                                    10
+                                ],
+                                [
+                                    1000,
+                                    20
+                                ]
+                            ]
+                        },
+                        "rpiDepth": 20,
+                        "trades": 5,
+                        "historicalTrades": 20,
+                        "aggTrades": 20,
+                        "klines": {
+                            "cost": 1,
+                            "byLimit": [
+                                [
+                                    99,
+                                    1
+                                ],
+                                [
+                                    499,
+                                    2
+                                ],
+                                [
+                                    1000,
+                                    5
+                                ],
+                                [
+                                    10000,
+                                    10
+                                ]
+                            ]
+                        },
+                        "continuousKlines": {
+                            "cost": 1,
+                            "byLimit": [
+                                [
+                                    99,
+                                    1
+                                ],
+                                [
+                                    499,
+                                    2
+                                ],
+                                [
+                                    1000,
+                                    5
+                                ],
+                                [
+                                    10000,
+                                    10
+                                ]
+                            ]
+                        },
+                        "markPriceKlines": {
+                            "cost": 1,
+                            "byLimit": [
+                                [
+                                    99,
+                                    1
+                                ],
+                                [
+                                    499,
+                                    2
+                                ],
+                                [
+                                    1000,
+                                    5
+                                ],
+                                [
+                                    10000,
+                                    10
+                                ]
+                            ]
+                        },
+                        "indexPriceKlines": {
+                            "cost": 1,
+                            "byLimit": [
+                                [
+                                    99,
+                                    1
+                                ],
+                                [
+                                    499,
+                                    2
+                                ],
+                                [
+                                    1000,
+                                    5
+                                ],
+                                [
+                                    10000,
+                                    10
+                                ]
+                            ]
+                        },
+                        "premiumIndexKlines": {
+                            "cost": 1,
+                            "byLimit": [
+                                [
+                                    99,
+                                    1
+                                ],
+                                [
+                                    499,
+                                    2
+                                ],
+                                [
+                                    1000,
+                                    5
+                                ],
+                                [
+                                    10000,
+                                    10
+                                ]
+                            ]
+                        },
+                        "fundingRate": 1,
+                        "fundingInfo": 1,
+                        "premiumIndex": 1,
+                        "ticker/24hr": {
+                            "cost": 1,
+                            "noSymbol": 40
+                        },
+                        "ticker/price": {
+                            "cost": 1,
+                            "noSymbol": 2
+                        },
+                        "ticker/bookTicker": {
+                            "cost": 1,
+                            "noSymbol": 2
+                        },
+                        "openInterest": 1,
+                        "indexInfo": 1,
+                        "assetIndex": {
+                            "cost": 1,
+                            "noSymbol": 10
+                        },
+                        "constituents": 2,
+                        "apiTradingStatus": {
+                            "cost": 1,
+                            "noSymbol": 10
+                        },
+                        "lvtKlines": 1,
+                        "convert/exchangeInfo": 4,
+                        "insuranceBalance": 1,
+                        "symbolAdlRisk": 1,
+                        "tradingSchedule": 5
+                    }
+                },
+                "fapiData": {
+                    "get": {
+                        "delivery-price": 1,
+                        "openInterestHist": 1,
+                        "topLongShortAccountRatio": 1,
+                        "topLongShortPositionRatio": 1,
+                        "globalLongShortAccountRatio": 1,
+                        "takerlongshortRatio": 1,
+                        "basis": 1
+                    }
+                },
+                "fapiPrivate": {
+                    "get": {
+                        "forceOrders": {
+                            "cost": 20,
+                            "noSymbol": 50
+                        },
+                        "allOrders": 5,
+                        "openOrder": 1,
+                        "openOrders": {
+                            "cost": 1,
+                            "noSymbol": 40
+                        },
+                        "order": 1,
+                        "account": 5,
+                        "balance": 5,
+                        "leverageBracket": 1,
+                        "positionMargin/history": 1,
+                        "positionRisk": 5,
+                        "positionSide/dual": 30,
+                        "userTrades": 5,
+                        "income": 30,
+                        "commissionRate": 20,
+                        "rateLimit/order": 1,
+                        "apiTradingStatus": 1,
+                        "multiAssetsMargin": 30,
+                        "apiReferral/ifNewUser": 1,
+                        "apiReferral/customization": 1,
+                        "apiReferral/userCustomization": 1,
+                        "apiReferral/traderNum": 1,
+                        "apiReferral/overview": 1,
+                        "apiReferral/tradeVol": 1,
+                        "apiReferral/rebateVol": 1,
+                        "apiReferral/traderSummary": 1,
+                        "adlQuantile": 5,
+                        "pmAccountInfo": 5,
+                        "orderAmendment": 1,
+                        "income/asyn": 1000,
+                        "income/asyn/id": 10,
+                        "order/asyn": 1000,
+                        "order/asyn/id": 10,
+                        "trade/asyn": 1000,
+                        "trade/asyn/id": 10,
+                        "feeBurn": 1,
+                        "symbolConfig": 5,
+                        "accountConfig": 5,
+                        "convert/orderStatus": 5,
+                        "algoOrder": 1,
+                        "openAlgoOrders": {
+                            "cost": 1,
+                            "noSymbol": 40
+                        },
+                        "allAlgoOrders": 5,
+                        "stock/contract": 50
+                    },
+                    "post": {
+                        "batchOrders": 5,
+                        "positionSide/dual": 1,
+                        "positionMargin": 1,
+                        "marginType": 1,
+                        "order": 4,
+                        "order/test": 1,
+                        "leverage": 1,
+                        "listenKey": 1,
+                        "countdownCancelAll": 10,
+                        "multiAssetsMargin": 1,
+                        "apiReferral/customization": 1,
+                        "apiReferral/userCustomization": 1,
+                        "feeBurn": 1,
+                        "convert/getQuote": 200,
+                        "convert/acceptQuote": 20,
+                        "algoOrder": 1
+                    },
+                    "put": {
+                        "listenKey": 1,
+                        "order": 1,
+                        "batchOrders": 5
+                    },
+                    "delete": {
+                        "batchOrders": 1,
+                        "order": 1,
+                        "allOpenOrders": 1,
+                        "listenKey": 1,
+                        "algoOrder": 1,
+                        "algoOpenOrders": 1
+                    }
+                },
+                "fapiPublicV2": {
+                    "get": {
+                        "ticker/price": 0
+                    }
+                },
+                "fapiPrivateV2": {
+                    "get": {
+                        "account": 1,
+                        "balance": 1,
+                        "positionRisk": 1
+                    }
+                },
+                "fapiPublicV3": {
+                    "get": {}
+                },
+                "fapiPrivateV3": {
+                    "get": {
+                        "account": 1,
+                        "balance": 1,
+                        "positionRisk": 1
+                    }
+                },
+                "eapiPublic": {
+                    "get": {
+                        "ping": 1,
+                        "time": 1,
+                        "exchangeInfo": 1,
+                        "index": 1,
+                        "ticker": 5,
+                        "mark": 5,
+                        "depth": 1,
+                        "klines": 1,
+                        "trades": 5,
+                        "historicalTrades": 20,
+                        "exerciseHistory": 3,
+                        "openInterest": 3
+                    }
+                },
+                "eapiPrivate": {
+                    "get": {
+                        "account": 3,
+                        "position": 5,
+                        "openOrders": {
+                            "cost": 1,
+                            "noSymbol": 40
+                        },
+                        "historyOrders": 3,
+                        "userTrades": 5,
+                        "exerciseRecord": 5,
+                        "bill": 1,
+                        "income/asyn": 5,
+                        "income/asyn/id": 5,
+                        "marginAccount": 3,
+                        "mmp": 1,
+                        "countdownCancelAll": 1,
+                        "order": 1,
+                        "block/order/orders": 5,
+                        "block/order/execute": 5,
+                        "block/user-trades": 5,
+                        "blockTrades": 5,
+                        "comission": 5
+                    },
+                    "post": {
+                        "order": 1,
+                        "batchOrders": 5,
+                        "listenKey": 1,
+                        "mmpSet": 1,
+                        "mmpReset": 1,
+                        "countdownCancelAll": 1,
+                        "countdownCancelAllHeartBeat": 10,
+                        "block/order/create": 5,
+                        "block/order/execute": 5
+                    },
+                    "put": {
+                        "listenKey": 1,
+                        "block/order/create": 5
+                    },
+                    "delete": {
+                        "order": 1,
+                        "batchOrders": 1,
+                        "allOpenOrders": 1,
+                        "allOpenOrdersByUnderlying": 1,
+                        "listenKey": 1,
+                        "block/order/create": 5
+                    }
+                },
+                "public": {
+                    "get": {
+                        "ping": 0.2,
+                        "time": 0.2,
+                        "depth": {
+                            "cost": 1,
+                            "byLimit": [
+                                [
+                                    100,
+                                    1
+                                ],
+                                [
+                                    500,
+                                    5
+                                ],
+                                [
+                                    1000,
+                                    10
+                                ],
+                                [
+                                    5000,
+                                    50
+                                ]
+                            ]
+                        },
+                        "trades": 2,
+                        "aggTrades": 0.4,
+                        "historicalTrades": 2,
+                        "klines": 0.4,
+                        "uiKlines": 0.4,
+                        "ticker/24hr": {
+                            "cost": 0.4,
+                            "noSymbol": 16
+                        },
+                        "ticker": {
+                            "cost": 0.4,
+                            "noSymbol": 16
+                        },
+                        "ticker/tradingDay": 0.8,
+                        "ticker/price": {
+                            "cost": 0.4,
+                            "noSymbol": 0.8
+                        },
+                        "ticker/bookTicker": {
+                            "cost": 0.4,
+                            "noSymbol": 0.8
+                        },
+                        "exchangeInfo": 4,
+                        "avgPrice": 0.4
+                    },
+                    "put": {
+                        "userDataStream": 0.4
+                    },
+                    "post": {
+                        "userDataStream": 0.4
+                    },
+                    "delete": {
+                        "userDataStream": 0.4
+                    }
+                },
+                "private": {
+                    "get": {
+                        "allOrderList": 4,
+                        "openOrderList": 1.2,
+                        "orderList": 0.8,
+                        "order": 0.8,
+                        "openOrders": {
+                            "cost": 1.2,
+                            "noSymbol": 16
+                        },
+                        "allOrders": 4,
+                        "account": 4,
+                        "myTrades": 4,
+                        "rateLimit/order": 8,
+                        "myPreventedMatches": 4,
+                        "myAllocations": 4,
+                        "account/commission": 4
+                    },
+                    "post": {
+                        "order/oco": 0.2,
+                        "orderList/oco": 0.2,
+                        "orderList/oto": 0.2,
+                        "orderList/otoco": 0.2,
+                        "orderList/opo": 0.2,
+                        "orderList/opoco": 0.2,
+                        "sor/order": 0.2,
+                        "sor/order/test": 0.2,
+                        "order": 0.2,
+                        "order/cancelReplace": 0.2,
+                        "order/test": 0.2
+                    },
+                    "delete": {
+                        "openOrders": 0.2,
+                        "orderList": 0.2,
+                        "order": 0.2
+                    }
+                },
+                "papi": {
+                    "get": {
+                        "ping": 0.2,
+                        "um/order": 1,
+                        "um/openOrder": 1,
+                        "um/openOrders": {
+                            "cost": 1,
+                            "noSymbol": 40
+                        },
+                        "um/allOrders": 5,
+                        "cm/order": 1,
+                        "cm/openOrder": 1,
+                        "cm/openOrders": {
+                            "cost": 1,
+                            "noSymbol": 40
+                        },
+                        "cm/allOrders": 20,
+                        "um/conditional/openOrder": 1,
+                        "um/conditional/openOrders": {
+                            "cost": 1,
+                            "noSymbol": 40
+                        },
+                        "um/conditional/orderHistory": 1,
+                        "um/conditional/allOrders": {
+                            "cost": 1,
+                            "noSymbol": 40
+                        },
+                        "cm/conditional/openOrder": 1,
+                        "cm/conditional/openOrders": {
+                            "cost": 1,
+                            "noSymbol": 40
+                        },
+                        "cm/conditional/orderHistory": 1,
+                        "cm/conditional/allOrders": 40,
+                        "margin/order": 10,
+                        "margin/openOrders": 5,
+                        "margin/allOrders": 100,
+                        "margin/orderList": 5,
+                        "margin/allOrderList": 100,
+                        "margin/openOrderList": 5,
+                        "margin/myTrades": 5,
+                        "balance": 4,
+                        "account": 4,
+                        "margin/maxBorrowable": 1,
+                        "margin/maxWithdraw": 1,
+                        "um/positionRisk": 1,
+                        "cm/positionRisk": 0.2,
+                        "um/positionSide/dual": 6,
+                        "cm/positionSide/dual": 6,
+                        "um/userTrades": 5,
+                        "cm/userTrades": 20,
+                        "um/leverageBracket": 0.2,
+                        "cm/leverageBracket": 0.2,
+                        "margin/forceOrders": 1,
+                        "um/forceOrders": {
+                            "cost": 20,
+                            "noSymbol": 50
+                        },
+                        "cm/forceOrders": {
+                            "cost": 20,
+                            "noSymbol": 50
+                        },
+                        "um/apiTradingStatus": {
+                            "cost": 0.2,
+                            "noSymbol": 2
+                        },
+                        "um/commissionRate": 4,
+                        "cm/commissionRate": 4,
+                        "margin/marginLoan": 2,
+                        "margin/repayLoan": 2,
+                        "margin/marginInterestHistory": 0.2,
+                        "portfolio/interest-history": 10,
+                        "um/income": 6,
+                        "cm/income": 6,
+                        "um/account": 1,
+                        "cm/account": 1,
+                        "repay-futures-switch": 6,
+                        "um/adlQuantile": 5,
+                        "cm/adlQuantile": 5,
+                        "um/trade/asyn": 300,
+                        "um/trade/asyn/id": 2,
+                        "um/order/asyn": 300,
+                        "um/order/asyn/id": 2,
+                        "um/income/asyn": 300,
+                        "um/income/asyn/id": 2,
+                        "um/orderAmendment": 1,
+                        "cm/orderAmendment": 1,
+                        "um/feeBurn": 30,
+                        "um/accountConfig": 1,
+                        "um/symbolConfig": 1,
+                        "cm/accountConfig": 1,
+                        "cm/symbolConfig": 1,
+                        "rateLimit/order": 1
+                    },
+                    "post": {
+                        "um/order": 1,
+                        "um/conditional/order": 1,
+                        "cm/order": 1,
+                        "cm/conditional/order": 1,
+                        "margin/order": 1,
+                        "marginLoan": 100,
+                        "repayLoan": 100,
+                        "margin/order/oco": 1,
+                        "um/leverage": 0.2,
+                        "cm/leverage": 0.2,
+                        "um/positionSide/dual": 0.2,
+                        "cm/positionSide/dual": 0.2,
+                        "auto-collection": 150,
+                        "bnb-transfer": 150,
+                        "repay-futures-switch": 150,
+                        "repay-futures-negative-balance": 150,
+                        "listenKey": 0.2,
+                        "asset-collection": 6,
+                        "margin/repay-debt": 3000,
+                        "um/feeBurn": 1
+                    },
+                    "put": {
+                        "listenKey": 0.2,
+                        "um/order": 1,
+                        "cm/order": 1
+                    },
+                    "delete": {
+                        "um/order": 1,
+                        "um/conditional/order": 1,
+                        "um/allOpenOrders": 1,
+                        "um/conditional/allOpenOrders": 1,
+                        "cm/order": 1,
+                        "cm/conditional/order": 1,
+                        "cm/allOpenOrders": 1,
+                        "cm/conditional/allOpenOrders": 1,
+                        "margin/order": 2,
+                        "margin/allOpenOrders": 5,
+                        "margin/orderList": 2,
+                        "listenKey": 0.2
+                    }
+                },
+                "papiV2": {
+                    "get": {
+                        "um/account": 1
+                    }
+                }
             },
-            "delete": {
-                "margin/openOrders": 0.1,
-                "margin/order": 0.006667,
-                "margin/orderList": 0.006667,
-                "margin/isolated/account": 2.0001,
-                "userDataStream": 0.1,
-                "userDataStream/isolated": 0.1,
-                "broker/subAccountApi": 1,
-                "broker/subAccountApi/ipRestriction/ipList": 1,
-                "algo/spot/order": 0.1,
-                "algo/futures/order": 0.1,
-                "sub-account/subAccountApi/ipRestriction/ipList": 20.001
-            }
-        },
-        "sapiV2": {
-            "get": {
-                "eth-staking/account": 15,
-                "sub-account/futures/account": 0.1,
-                "sub-account/futures/accountSummary": 1,
-                "sub-account/futures/positionRisk": 0.1,
-                "loan/flexible/ongoing/orders": 30,
-                "loan/flexible/borrow/history": 40,
-                "loan/flexible/repay/history": 40,
-                "loan/flexible/ltv/adjustment/history": 40,
-                "loan/flexible/loanable/data": 40,
-                "loan/flexible/collateral/data": 40,
-                "portfolio/account": 2
+            "requiredCredentials": {
+                "apiKey": true,
+                "secret": true,
+                "uid": false,
+                "accountId": false,
+                "login": false,
+                "password": false,
+                "twofa": false,
+                "privateKey": false,
+                "walletAddress": false,
+                "token": false
             },
-            "post": {
-                "eth-staking/eth/stake": 15,
-                "sub-account/subAccountApi/ipRestriction": 20.001,
-                "loan/flexible/borrow": 40.002,
-                "loan/flexible/repay": 40.002,
-                "loan/flexible/adjust/ltv": 40.002
-            }
-        },
-        "sapiV3": {
-            "get": {
-                "sub-account/assets": 0.40002
+            "currencies": {
+                "BNFCR": {
+                    "id": "BNFCR",
+                    "code": "BNFCR",
+                    "precision": 0.001,
+                    "fees": {},
+                    "networks": {},
+                    "limits": {
+                        "deposit": {},
+                        "withdraw": {}
+                    }
+                }
             },
-            "post": {
-                "asset/getUserAsset": 0.5
-            }
-        },
-        "sapiV4": {
-            "get": {
-                "sub-account/assets": 0.40002
-            }
-        },
-        "dapiPublic": {
-            "get": {
-                "ping": 1,
-                "time": 1,
-                "exchangeInfo": 1,
-                "depth": {
-                    "cost": 2,
-                    "byLimit": [
-                        [
-                            50,
-                            2
-                        ],
-                        [
-                            100,
-                            5
-                        ],
-                        [
-                            500,
-                            10
-                        ],
-                        [
-                            1000,
-                            20
-                        ]
-                    ]
-                },
-                "trades": 5,
-                "historicalTrades": 20,
-                "aggTrades": 20,
-                "premiumIndex": 10,
-                "fundingRate": 1,
-                "klines": {
-                    "cost": 1,
-                    "byLimit": [
-                        [
-                            99,
-                            1
-                        ],
-                        [
-                            499,
-                            2
-                        ],
-                        [
-                            1000,
-                            5
-                        ],
-                        [
-                            10000,
-                            10
-                        ]
-                    ]
-                },
-                "continuousKlines": {
-                    "cost": 1,
-                    "byLimit": [
-                        [
-                            99,
-                            1
-                        ],
-                        [
-                            499,
-                            2
-                        ],
-                        [
-                            1000,
-                            5
-                        ],
-                        [
-                            10000,
-                            10
-                        ]
-                    ]
-                },
-                "indexPriceKlines": {
-                    "cost": 1,
-                    "byLimit": [
-                        [
-                            99,
-                            1
-                        ],
-                        [
-                            499,
-                            2
-                        ],
-                        [
-                            1000,
-                            5
-                        ],
-                        [
-                            10000,
-                            10
-                        ]
-                    ]
-                },
-                "markPriceKlines": {
-                    "cost": 1,
-                    "byLimit": [
-                        [
-                            99,
-                            1
-                        ],
-                        [
-                            499,
-                            2
-                        ],
-                        [
-                            1000,
-                            5
-                        ],
-                        [
-                            10000,
-                            10
-                        ]
-                    ]
-                },
-                "premiumIndexKlines": {
-                    "cost": 1,
-                    "byLimit": [
-                        [
-                            99,
-                            1
-                        ],
-                        [
-                            499,
-                            2
-                        ],
-                        [
-                            1000,
-                            5
-                        ],
-                        [
-                            10000,
-                            10
-                        ]
-                    ]
-                },
-                "ticker/24hr": {
-                    "cost": 1,
-                    "noSymbol": 40
-                },
-                "ticker/price": {
-                    "cost": 1,
-                    "noSymbol": 2
-                },
-                "ticker/bookTicker": {
-                    "cost": 2,
-                    "noSymbol": 5
-                },
-                "constituents": 2,
-                "openInterest": 1,
-                "fundingInfo": 1
-            }
-        },
-        "dapiData": {
-            "get": {
-                "delivery-price": 1,
-                "openInterestHist": 1,
-                "topLongShortAccountRatio": 1,
-                "topLongShortPositionRatio": 1,
-                "globalLongShortAccountRatio": 1,
-                "takerBuySellVol": 1,
-                "basis": 1
-            }
-        },
-        "dapiPrivate": {
-            "get": {
-                "positionSide/dual": 30,
-                "orderAmendment": 1,
-                "order": 1,
-                "openOrder": 1,
-                "openOrders": {
-                    "cost": 1,
-                    "noSymbol": 5
-                },
-                "allOrders": {
-                    "cost": 20,
-                    "noSymbol": 40
-                },
-                "balance": 1,
-                "account": 5,
-                "positionMargin/history": 1,
-                "positionRisk": 1,
-                "userTrades": {
-                    "cost": 20,
-                    "noSymbol": 40
-                },
-                "income": 20,
-                "leverageBracket": 1,
-                "forceOrders": {
-                    "cost": 20,
-                    "noSymbol": 50
-                },
-                "adlQuantile": 5,
-                "commissionRate": 20,
-                "income/asyn": 5,
-                "income/asyn/id": 5,
-                "trade/asyn": 0.5,
-                "trade/asyn/id": 0.5,
-                "order/asyn": 0.5,
-                "order/asyn/id": 0.5,
-                "pmExchangeInfo": 0.5,
-                "pmAccountInfo": 0.5
+            "timeframes": {
+                "1s": "1s",
+                "1m": "1m",
+                "3m": "3m",
+                "5m": "5m",
+                "15m": "15m",
+                "30m": "30m",
+                "1h": "1h",
+                "2h": "2h",
+                "4h": "4h",
+                "6h": "6h",
+                "8h": "8h",
+                "12h": "12h",
+                "1d": "1d",
+                "3d": "3d",
+                "1w": "1w",
+                "1M": "1M"
             },
-            "post": {
-                "positionSide/dual": 1,
-                "order": 4,
-                "batchOrders": 5,
-                "countdownCancelAll": 10,
-                "leverage": 1,
-                "marginType": 1,
-                "positionMargin": 1,
-                "listenKey": 1
+            "fees": {
+                "trading": {
+                    "tierBased": false,
+                    "percentage": true,
+                    "taker": 0.001,
+                    "maker": 0.001,
+                    "feeSide": "get"
+                },
+                "funding": {
+                    "withdraw": {},
+                    "deposit": {}
+                },
+                "linear": {
+                    "trading": {
+                        "feeSide": "quote",
+                        "tierBased": true,
+                        "percentage": true,
+                        "taker": 0.0005,
+                        "maker": 0.0002,
+                        "tiers": {
+                            "taker": [
+                                [
+                                    0,
+                                    0.0004
+                                ],
+                                [
+                                    250,
+                                    0.0004
+                                ],
+                                [
+                                    2500,
+                                    0.00035
+                                ],
+                                [
+                                    7500,
+                                    0.00032
+                                ],
+                                [
+                                    22500,
+                                    0.0003
+                                ],
+                                [
+                                    50000,
+                                    0.00027
+                                ],
+                                [
+                                    100000,
+                                    0.00025
+                                ],
+                                [
+                                    200000,
+                                    0.00022
+                                ],
+                                [
+                                    400000,
+                                    0.0002
+                                ],
+                                [
+                                    750000,
+                                    0.00017
+                                ]
+                            ],
+                            "maker": [
+                                [
+                                    0,
+                                    0.0002
+                                ],
+                                [
+                                    250,
+                                    0.00016
+                                ],
+                                [
+                                    2500,
+                                    0.00014
+                                ],
+                                [
+                                    7500,
+                                    0.00012
+                                ],
+                                [
+                                    22500,
+                                    0.0001
+                                ],
+                                [
+                                    50000,
+                                    0.00008
+                                ],
+                                [
+                                    100000,
+                                    0.00006
+                                ],
+                                [
+                                    200000,
+                                    0.00004
+                                ],
+                                [
+                                    400000,
+                                    0.00002
+                                ],
+                                [
+                                    750000,
+                                    0
+                                ]
+                            ]
+                        }
+                    }
+                },
+                "inverse": {
+                    "trading": {
+                        "feeSide": "base",
+                        "tierBased": true,
+                        "percentage": true,
+                        "taker": 0.0005,
+                        "maker": 0.0001,
+                        "tiers": {
+                            "taker": [
+                                [
+                                    0,
+                                    0.0005
+                                ],
+                                [
+                                    250,
+                                    0.00045
+                                ],
+                                [
+                                    2500,
+                                    0.0004
+                                ],
+                                [
+                                    7500,
+                                    0.0003
+                                ],
+                                [
+                                    22500,
+                                    0.00025
+                                ],
+                                [
+                                    50000,
+                                    0.00024
+                                ],
+                                [
+                                    100000,
+                                    0.00024
+                                ],
+                                [
+                                    200000,
+                                    0.00024
+                                ],
+                                [
+                                    400000,
+                                    0.00024
+                                ],
+                                [
+                                    750000,
+                                    0.00024
+                                ]
+                            ],
+                            "maker": [
+                                [
+                                    0,
+                                    0.0001
+                                ],
+                                [
+                                    250,
+                                    0.00008
+                                ],
+                                [
+                                    2500,
+                                    0.00005
+                                ],
+                                [
+                                    7500,
+                                    0.000003
+                                ],
+                                [
+                                    22500,
+                                    0
+                                ],
+                                [
+                                    50000,
+                                    -0.00005
+                                ],
+                                [
+                                    100000,
+                                    -0.00006
+                                ],
+                                [
+                                    200000,
+                                    -0.00007
+                                ],
+                                [
+                                    400000,
+                                    -0.00008
+                                ],
+                                [
+                                    750000,
+                                    -0.00009
+                                ]
+                            ]
+                        }
+                    }
+                },
+                "option": {}
             },
-            "put": {
-                "listenKey": 1,
-                "order": 1,
-                "batchOrders": 5
+            "status": {
+                "status": "ok"
             },
-            "delete": {
-                "order": 1,
-                "allOpenOrders": 1,
-                "batchOrders": 5,
-                "listenKey": 1
-            }
-        },
-        "dapiPrivateV2": {
-            "get": {
-                "leverageBracket": 1
-            }
-        },
-        "fapiPublic": {
-            "get": {
-                "ping": 1,
-                "time": 1,
-                "exchangeInfo": 1,
-                "depth": {
-                    "cost": 2,
-                    "byLimit": [
-                        [
-                            50,
-                            2
-                        ],
-                        [
-                            100,
-                            5
-                        ],
-                        [
-                            500,
-                            10
-                        ],
-                        [
-                            1000,
-                            20
-                        ]
-                    ]
+            "exceptions": {
+                "spot": {
+                    "exact": {}
                 },
-                "rpiDepth": 20,
-                "trades": 5,
-                "historicalTrades": 20,
-                "aggTrades": 20,
-                "klines": {
-                    "cost": 1,
-                    "byLimit": [
-                        [
-                            99,
-                            1
-                        ],
-                        [
-                            499,
-                            2
-                        ],
-                        [
-                            1000,
-                            5
-                        ],
-                        [
-                            10000,
-                            10
-                        ]
-                    ]
+                "linear": {
+                    "exact": {}
                 },
-                "continuousKlines": {
-                    "cost": 1,
-                    "byLimit": [
-                        [
-                            99,
-                            1
-                        ],
-                        [
-                            499,
-                            2
-                        ],
-                        [
-                            1000,
-                            5
-                        ],
-                        [
-                            10000,
-                            10
-                        ]
-                    ]
+                "inverse": {
+                    "exact": {}
                 },
-                "markPriceKlines": {
-                    "cost": 1,
-                    "byLimit": [
-                        [
-                            99,
-                            1
-                        ],
-                        [
-                            499,
-                            2
-                        ],
-                        [
-                            1000,
-                            5
-                        ],
-                        [
-                            10000,
-                            10
-                        ]
-                    ]
+                "option": {
+                    "exact": {}
                 },
-                "indexPriceKlines": {
-                    "cost": 1,
-                    "byLimit": [
-                        [
-                            99,
-                            1
-                        ],
-                        [
-                            499,
-                            2
-                        ],
-                        [
-                            1000,
-                            5
-                        ],
-                        [
-                            10000,
-                            10
-                        ]
-                    ]
+                "portfolioMargin": {
+                    "exact": {}
                 },
-                "premiumIndexKlines": {
-                    "cost": 1,
-                    "byLimit": [
-                        [
-                            99,
-                            1
-                        ],
-                        [
-                            499,
-                            2
-                        ],
-                        [
-                            1000,
-                            5
-                        ],
-                        [
-                            10000,
-                            10
-                        ]
-                    ]
-                },
-                "fundingRate": 1,
-                "fundingInfo": 1,
-                "premiumIndex": 1,
-                "ticker/24hr": {
-                    "cost": 1,
-                    "noSymbol": 40
-                },
-                "ticker/price": {
-                    "cost": 1,
-                    "noSymbol": 2
-                },
-                "ticker/bookTicker": {
-                    "cost": 1,
-                    "noSymbol": 2
-                },
-                "openInterest": 1,
-                "indexInfo": 1,
-                "assetIndex": {
-                    "cost": 1,
-                    "noSymbol": 10
-                },
-                "constituents": 2,
-                "apiTradingStatus": {
-                    "cost": 1,
-                    "noSymbol": 10
-                },
-                "lvtKlines": 1,
-                "convert/exchangeInfo": 4,
-                "insuranceBalance": 1,
-                "symbolAdlRisk": 1,
-                "tradingSchedule": 5
-            }
-        },
-        "fapiData": {
-            "get": {
-                "delivery-price": 1,
-                "openInterestHist": 1,
-                "topLongShortAccountRatio": 1,
-                "topLongShortPositionRatio": 1,
-                "globalLongShortAccountRatio": 1,
-                "takerlongshortRatio": 1,
-                "basis": 1
-            }
-        },
-        "fapiPrivate": {
-            "get": {
-                "forceOrders": {
-                    "cost": 20,
-                    "noSymbol": 50
-                },
-                "allOrders": 5,
-                "openOrder": 1,
-                "openOrders": {
-                    "cost": 1,
-                    "noSymbol": 40
-                },
-                "order": 1,
-                "account": 5,
-                "balance": 5,
-                "leverageBracket": 1,
-                "positionMargin/history": 1,
-                "positionRisk": 5,
-                "positionSide/dual": 30,
-                "userTrades": 5,
-                "income": 30,
-                "commissionRate": 20,
-                "rateLimit/order": 1,
-                "apiTradingStatus": 1,
-                "multiAssetsMargin": 30,
-                "apiReferral/ifNewUser": 1,
-                "apiReferral/customization": 1,
-                "apiReferral/userCustomization": 1,
-                "apiReferral/traderNum": 1,
-                "apiReferral/overview": 1,
-                "apiReferral/tradeVol": 1,
-                "apiReferral/rebateVol": 1,
-                "apiReferral/traderSummary": 1,
-                "adlQuantile": 5,
-                "pmAccountInfo": 5,
-                "orderAmendment": 1,
-                "income/asyn": 1000,
-                "income/asyn/id": 10,
-                "order/asyn": 1000,
-                "order/asyn/id": 10,
-                "trade/asyn": 1000,
-                "trade/asyn/id": 10,
-                "feeBurn": 1,
-                "symbolConfig": 5,
-                "accountConfig": 5,
-                "convert/orderStatus": 5,
-                "algoOrder": 1,
-                "openAlgoOrders": {
-                    "cost": 1,
-                    "noSymbol": 40
-                },
-                "allAlgoOrders": 5,
-                "stock/contract": 50
+                "exact": {},
+                "broad": {}
             },
-            "post": {
-                "batchOrders": 5,
-                "positionSide/dual": 1,
-                "positionMargin": 1,
-                "marginType": 1,
-                "order": 4,
-                "order/test": 1,
-                "leverage": 1,
-                "listenKey": 1,
-                "countdownCancelAll": 10,
-                "multiAssetsMargin": 1,
-                "apiReferral/customization": 1,
-                "apiReferral/userCustomization": 1,
-                "feeBurn": 1,
-                "convert/getQuote": 200,
-                "convert/acceptQuote": 20,
-                "algoOrder": 1
+            "httpExceptions": {},
+            "commonCurrencies": {
+                "XBT": "BTC",
+                "BCHSV": "BSV",
+                "BCC": "BCC",
+                "YOYO": "YOYOW"
             },
-            "put": {
-                "listenKey": 1,
-                "order": 1,
-                "batchOrders": 5
-            },
-            "delete": {
-                "batchOrders": 1,
-                "order": 1,
-                "allOpenOrders": 1,
-                "listenKey": 1,
-                "algoOrder": 1,
-                "algoOpenOrders": 1
-            }
-        },
-        "fapiPublicV2": {
-            "get": {
-                "ticker/price": 0
-            }
-        },
-        "fapiPrivateV2": {
-            "get": {
-                "account": 1,
-                "balance": 1,
-                "positionRisk": 1
-            }
-        },
-        "fapiPublicV3": {
-            "get": {}
-        },
-        "fapiPrivateV3": {
-            "get": {
-                "account": 1,
-                "balance": 1,
-                "positionRisk": 1
-            }
-        },
-        "eapiPublic": {
-            "get": {
-                "ping": 1,
-                "time": 1,
-                "exchangeInfo": 1,
-                "index": 1,
-                "ticker": 5,
-                "mark": 5,
-                "depth": 1,
-                "klines": 1,
-                "trades": 5,
-                "historicalTrades": 20,
-                "exerciseHistory": 3,
-                "openInterest": 3
-            }
-        },
-        "eapiPrivate": {
-            "get": {
-                "account": 3,
-                "position": 5,
-                "openOrders": {
-                    "cost": 1,
-                    "noSymbol": 40
-                },
-                "historyOrders": 3,
-                "userTrades": 5,
-                "exerciseRecord": 5,
-                "bill": 1,
-                "income/asyn": 5,
-                "income/asyn/id": 5,
-                "marginAccount": 3,
-                "mmp": 1,
-                "countdownCancelAll": 1,
-                "order": 1,
-                "block/order/orders": 5,
-                "block/order/execute": 5,
-                "block/user-trades": 5,
-                "blockTrades": 5,
-                "comission": 5
-            },
-            "post": {
-                "order": 1,
-                "batchOrders": 5,
-                "listenKey": 1,
-                "mmpSet": 1,
-                "mmpReset": 1,
-                "countdownCancelAll": 1,
-                "countdownCancelAllHeartBeat": 10,
-                "block/order/create": 5,
-                "block/order/execute": 5
-            },
-            "put": {
-                "listenKey": 1,
-                "block/order/create": 5
-            },
-            "delete": {
-                "order": 1,
-                "batchOrders": 1,
-                "allOpenOrders": 1,
-                "allOpenOrdersByUnderlying": 1,
-                "listenKey": 1,
-                "block/order/create": 5
-            }
-        },
-        "public": {
-            "get": {
-                "ping": 0.2,
-                "time": 0.2,
-                "depth": {
-                    "cost": 1,
-                    "byLimit": [
-                        [
-                            100,
-                            1
-                        ],
-                        [
-                            500,
-                            5
-                        ],
-                        [
-                            1000,
-                            10
-                        ],
-                        [
-                            5000,
-                            50
-                        ]
-                    ]
-                },
-                "trades": 2,
-                "aggTrades": 0.4,
-                "historicalTrades": 2,
-                "klines": 0.4,
-                "uiKlines": 0.4,
-                "ticker/24hr": {
-                    "cost": 0.4,
-                    "noSymbol": 16
-                },
-                "ticker": {
-                    "cost": 0.4,
-                    "noSymbol": 16
-                },
-                "ticker/tradingDay": 0.8,
-                "ticker/price": {
-                    "cost": 0.4,
-                    "noSymbol": 0.8
-                },
-                "ticker/bookTicker": {
-                    "cost": 0.4,
-                    "noSymbol": 0.8
-                },
-                "exchangeInfo": 4,
-                "avgPrice": 0.4
-            },
-            "put": {
-                "userDataStream": 0.4
-            },
-            "post": {
-                "userDataStream": 0.4
-            },
-            "delete": {
-                "userDataStream": 0.4
-            }
-        },
-        "private": {
-            "get": {
-                "allOrderList": 4,
-                "openOrderList": 1.2,
-                "orderList": 0.8,
-                "order": 0.8,
-                "openOrders": {
-                    "cost": 1.2,
-                    "noSymbol": 16
-                },
-                "allOrders": 4,
-                "account": 4,
-                "myTrades": 4,
-                "rateLimit/order": 8,
-                "myPreventedMatches": 4,
-                "myAllocations": 4,
-                "account/commission": 4
-            },
-            "post": {
-                "order/oco": 0.2,
-                "orderList/oco": 0.2,
-                "orderList/oto": 0.2,
-                "orderList/otoco": 0.2,
-                "orderList/opo": 0.2,
-                "orderList/opoco": 0.2,
-                "sor/order": 0.2,
-                "sor/order/test": 0.2,
-                "order": 0.2,
-                "order/cancelReplace": 0.2,
-                "order/test": 0.2
-            },
-            "delete": {
-                "openOrders": 0.2,
-                "orderList": 0.2,
-                "order": 0.2
-            }
-        },
-        "papi": {
-            "get": {
-                "ping": 0.2,
-                "um/order": 1,
-                "um/openOrder": 1,
-                "um/openOrders": {
-                    "cost": 1,
-                    "noSymbol": 40
-                },
-                "um/allOrders": 5,
-                "cm/order": 1,
-                "cm/openOrder": 1,
-                "cm/openOrders": {
-                    "cost": 1,
-                    "noSymbol": 40
-                },
-                "cm/allOrders": 20,
-                "um/conditional/openOrder": 1,
-                "um/conditional/openOrders": {
-                    "cost": 1,
-                    "noSymbol": 40
-                },
-                "um/conditional/orderHistory": 1,
-                "um/conditional/allOrders": {
-                    "cost": 1,
-                    "noSymbol": 40
-                },
-                "cm/conditional/openOrder": 1,
-                "cm/conditional/openOrders": {
-                    "cost": 1,
-                    "noSymbol": 40
-                },
-                "cm/conditional/orderHistory": 1,
-                "cm/conditional/allOrders": 40,
-                "margin/order": 10,
-                "margin/openOrders": 5,
-                "margin/allOrders": 100,
-                "margin/orderList": 5,
-                "margin/allOrderList": 100,
-                "margin/openOrderList": 5,
-                "margin/myTrades": 5,
-                "balance": 4,
-                "account": 4,
-                "margin/maxBorrowable": 1,
-                "margin/maxWithdraw": 1,
-                "um/positionRisk": 1,
-                "cm/positionRisk": 0.2,
-                "um/positionSide/dual": 6,
-                "cm/positionSide/dual": 6,
-                "um/userTrades": 5,
-                "cm/userTrades": 20,
-                "um/leverageBracket": 0.2,
-                "cm/leverageBracket": 0.2,
-                "margin/forceOrders": 1,
-                "um/forceOrders": {
-                    "cost": 20,
-                    "noSymbol": 50
-                },
-                "cm/forceOrders": {
-                    "cost": 20,
-                    "noSymbol": 50
-                },
-                "um/apiTradingStatus": {
-                    "cost": 0.2,
-                    "noSymbol": 2
-                },
-                "um/commissionRate": 4,
-                "cm/commissionRate": 4,
-                "margin/marginLoan": 2,
-                "margin/repayLoan": 2,
-                "margin/marginInterestHistory": 0.2,
-                "portfolio/interest-history": 10,
-                "um/income": 6,
-                "cm/income": 6,
-                "um/account": 1,
-                "cm/account": 1,
-                "repay-futures-switch": 6,
-                "um/adlQuantile": 5,
-                "cm/adlQuantile": 5,
-                "um/trade/asyn": 300,
-                "um/trade/asyn/id": 2,
-                "um/order/asyn": 300,
-                "um/order/asyn/id": 2,
-                "um/income/asyn": 300,
-                "um/income/asyn/id": 2,
-                "um/orderAmendment": 1,
-                "cm/orderAmendment": 1,
-                "um/feeBurn": 30,
-                "um/accountConfig": 1,
-                "um/symbolConfig": 1,
-                "cm/accountConfig": 1,
-                "cm/symbolConfig": 1,
-                "rateLimit/order": 1
-            },
-            "post": {
-                "um/order": 1,
-                "um/conditional/order": 1,
-                "cm/order": 1,
-                "cm/conditional/order": 1,
-                "margin/order": 1,
-                "marginLoan": 100,
-                "repayLoan": 100,
-                "margin/order/oco": 1,
-                "um/leverage": 0.2,
-                "cm/leverage": 0.2,
-                "um/positionSide/dual": 0.2,
-                "cm/positionSide/dual": 0.2,
-                "auto-collection": 150,
-                "bnb-transfer": 150,
-                "repay-futures-switch": 150,
-                "repay-futures-negative-balance": 150,
-                "listenKey": 0.2,
-                "asset-collection": 6,
-                "margin/repay-debt": 3000,
-                "um/feeBurn": 1
-            },
-            "put": {
-                "listenKey": 0.2,
-                "um/order": 1,
-                "cm/order": 1
-            },
-            "delete": {
-                "um/order": 1,
-                "um/conditional/order": 1,
-                "um/allOpenOrders": 1,
-                "um/conditional/allOpenOrders": 1,
-                "cm/order": 1,
-                "cm/conditional/order": 1,
-                "cm/allOpenOrders": 1,
-                "cm/conditional/allOpenOrders": 1,
-                "margin/order": 2,
-                "margin/allOpenOrders": 5,
-                "margin/orderList": 2,
-                "listenKey": 0.2
-            }
-        },
-        "papiV2": {
-            "get": {
-                "um/account": 1
-            }
-        }
-    },
-    "requiredCredentials": {
-        "apiKey": true,
-        "secret": true,
-        "uid": false,
-        "accountId": false,
-        "login": false,
-        "password": false,
-        "twofa": false,
-        "privateKey": false,
-        "walletAddress": false,
-        "token": false
-    },
-    "currencies": {
-        "BNFCR": {
-            "id": "BNFCR",
-            "code": "BNFCR",
-            "precision": 0.001,
-            "fees": {},
-            "networks": {},
+            "precisionMode": 4,
+            "paddingMode": 5,
             "limits": {
-                "deposit": {},
-                "withdraw": {}
-            }
-        }
-    },
-    "timeframes": {
-        "1s": "1s",
-        "1m": "1m",
-        "3m": "3m",
-        "5m": "5m",
-        "15m": "15m",
-        "30m": "30m",
-        "1h": "1h",
-        "2h": "2h",
-        "4h": "4h",
-        "6h": "6h",
-        "8h": "8h",
-        "12h": "12h",
-        "1d": "1d",
-        "3d": "3d",
-        "1w": "1w",
-        "1M": "1M"
-    },
-    "fees": {
-        "trading": {
-            "tierBased": false,
-            "percentage": true,
-            "taker": 0.001,
-            "maker": 0.001,
-            "feeSide": "get"
-        },
-        "funding": {
-            "withdraw": {},
-            "deposit": {}
-        },
-        "linear": {
-            "trading": {
-                "feeSide": "quote",
-                "tierBased": true,
-                "percentage": true,
-                "taker": 0.0005,
-                "maker": 0.0002,
-                "tiers": {
-                    "taker": [
-                        [
-                            0,
-                            0.0004
-                        ],
-                        [
-                            250,
-                            0.0004
-                        ],
-                        [
-                            2500,
-                            0.00035
-                        ],
-                        [
-                            7500,
-                            0.00032
-                        ],
-                        [
-                            22500,
-                            0.0003
-                        ],
-                        [
-                            50000,
-                            0.00027
-                        ],
-                        [
-                            100000,
-                            0.00025
-                        ],
-                        [
-                            200000,
-                            0.00022
-                        ],
-                        [
-                            400000,
-                            0.0002
-                        ],
-                        [
-                            750000,
-                            0.00017
-                        ]
-                    ],
-                    "maker": [
-                        [
-                            0,
-                            0.0002
-                        ],
-                        [
-                            250,
-                            0.00016
-                        ],
-                        [
-                            2500,
-                            0.00014
-                        ],
-                        [
-                            7500,
-                            0.00012
-                        ],
-                        [
-                            22500,
-                            0.0001
-                        ],
-                        [
-                            50000,
-                            0.00008
-                        ],
-                        [
-                            100000,
-                            0.00006
-                        ],
-                        [
-                            200000,
-                            0.00004
-                        ],
-                        [
-                            400000,
-                            0.00002
-                        ],
-                        [
-                            750000,
-                            0
-                        ]
+                "leverage": {},
+                "amount": {},
+                "price": {},
+                "cost": {}
+            },
+            "rollingWindowSize": 60000,
+            "options": {
+                "sandboxMode": false,
+                "fetchMargins": true,
+                "fetchMarkets": {
+                    "types": [
+                        "inverse"
                     ]
-                }
-            }
-        },
-        "inverse": {
-            "trading": {
-                "feeSide": "base",
-                "tierBased": true,
-                "percentage": true,
-                "taker": 0.0005,
-                "maker": 0.0001,
-                "tiers": {
-                    "taker": [
-                        [
-                            0,
-                            0.0005
-                        ],
-                        [
-                            250,
-                            0.00045
-                        ],
-                        [
-                            2500,
-                            0.0004
-                        ],
-                        [
-                            7500,
-                            0.0003
-                        ],
-                        [
-                            22500,
-                            0.00025
-                        ],
-                        [
-                            50000,
-                            0.00024
-                        ],
-                        [
-                            100000,
-                            0.00024
-                        ],
-                        [
-                            200000,
-                            0.00024
-                        ],
-                        [
-                            400000,
-                            0.00024
-                        ],
-                        [
-                            750000,
-                            0.00024
-                        ]
-                    ],
-                    "maker": [
-                        [
-                            0,
-                            0.0001
-                        ],
-                        [
-                            250,
-                            0.00008
-                        ],
-                        [
-                            2500,
-                            0.00005
-                        ],
-                        [
-                            7500,
-                            0.000003
-                        ],
-                        [
-                            22500,
-                            0
-                        ],
-                        [
-                            50000,
-                            -0.00005
-                        ],
-                        [
-                            100000,
-                            -0.00006
-                        ],
-                        [
-                            200000,
-                            -0.00007
-                        ],
-                        [
-                            400000,
-                            -0.00008
-                        ],
-                        [
-                            750000,
-                            -0.00009
-                        ]
-                    ]
-                }
-            }
-        },
-        "option": {}
-    },
-    "status": {
-        "status": "ok"
-    },
-    "exceptions": {
-        "spot": {
-            "exact": {}
-        },
-        "linear": {
-            "exact": {}
-        },
-        "inverse": {
-            "exact": {}
-        },
-        "option": {
-            "exact": {}
-        },
-        "portfolioMargin": {
-            "exact": {}
-        },
-        "exact": {},
-        "broad": {}
-    },
-    "httpExceptions": {},
-    "commonCurrencies": {
-        "XBT": "BTC",
-        "BCHSV": "BSV",
-        "BCC": "BCC",
-        "YOYO": "YOYOW"
-    },
-    "precisionMode": 4,
-    "paddingMode": 5,
-    "limits": {
-        "leverage": {},
-        "amount": {},
-        "price": {},
-        "cost": {}
-    },
-    "rollingWindowSize": 60000,
-    "options": {
-        "sandboxMode": false,
-        "fetchMargins": true,
-        "fetchMarkets": {
-            "types": [
-                "inverse"
-            ]
-        },
-        "loadAllOptions": false,
-        "fetchCurrencies": true,
-        "defaultTimeInForce": "GTC",
-        "defaultType": "spot",
-        "defaultSubType": "inverse",
-        "hasAlreadyAuthenticatedSuccessfully": false,
-        "warnOnFetchOpenOrdersWithoutSymbol": true,
-        "currencyToPrecisionRoundingMode": 0,
-        "throwMarginModeAlreadySet": false,
-        "fetchPositions": "positionRisk",
-        "recvWindow": 10000,
-        "timeDifference": 0,
-        "adjustForTimeDifference": false,
-        "newOrderRespType": {
-            "market": "FULL",
-            "limit": "FULL"
-        },
-        "quoteOrderQty": true,
-        "broker": {
-            "spot": "x-TKT5PX2F",
-            "margin": "x-TKT5PX2F",
-            "future": "x-cvBPrNm9",
-            "delivery": "x-xcKtGhcu",
-            "swap": "x-cvBPrNm9",
-            "option": "x-xcKtGhcu",
-            "inverse": "x-xcKtGhcu"
-        },
-        "accountsByType": {
-            "main": "MAIN",
-            "spot": "MAIN",
-            "funding": "FUNDING",
-            "margin": "MARGIN",
-            "cross": "MARGIN",
-            "future": "UMFUTURE",
-            "delivery": "CMFUTURE",
-            "linear": "UMFUTURE",
-            "swap": "UMFUTURE",
-            "inverse": "CMFUTURE",
-            "option": "OPTION"
-        },
-        "accountsById": {
-            "MAIN": "spot",
-            "FUNDING": "funding",
-            "MARGIN": "margin",
-            "UMFUTURE": "linear",
-            "CMFUTURE": "inverse",
-            "OPTION": "option"
-        },
-        "networks": {
-            "ERC20": "ETH",
-            "TRC20": "TRX",
-            "BEP2": "BNB",
-            "BEP20": "BSC",
-            "OMNI": "OMNI",
-            "EOS": "EOS",
-            "SPL": "SOL",
-            "SOL": "SOL"
-        },
-        "networksById": {
-            "SOL": "SOL"
-        },
-        "impliedNetworks": {
-            "ETH": {
-                "ERC20": "ETH"
-            },
-            "TRX": {
-                "TRC20": "TRX"
-            }
-        },
-        "legalMoney": {
-            "MXN": true,
-            "UGX": true,
-            "SEK": true,
-            "CHF": true,
-            "VND": true,
-            "AED": true,
-            "DKK": true,
-            "KZT": true,
-            "HUF": true,
-            "PEN": true,
-            "PHP": true,
-            "USD": true,
-            "TRY": true,
-            "EUR": true,
-            "NGN": true,
-            "PLN": true,
-            "BRL": true,
-            "ZAR": true,
-            "KES": true,
-            "ARS": true,
-            "RUB": true,
-            "AUD": true,
-            "NOK": true,
-            "CZK": true,
-            "GBP": true,
-            "UAH": true,
-            "GHS": true,
-            "HKD": true,
-            "CAD": true,
-            "INR": true,
-            "JPY": true,
-            "NZD": true
-        },
-        "legalMoneyCurrenciesById": {
-            "BUSD": "USD"
-        },
-        "defaultWithdrawPrecision": 1e-8
-    },
-    "features": {
-        "spot": {
-            "sandbox": true,
-            "fetchCurrencies": {
-                "private": true
-            },
-            "createOrder": {
-                "marginMode": true,
-                "triggerPrice": true,
-                "triggerDirection": false,
-                "stopLossPrice": true,
-                "takeProfitPrice": true,
-                "timeInForce": {
-                    "IOC": true,
-                    "FOK": true,
-                    "PO": true,
-                    "GTD": false
                 },
-                "hedged": true,
-                "leverage": false,
-                "marketBuyByCost": true,
-                "marketBuyRequiresPrice": false,
-                "selfTradePrevention": {
-                    "EXPIRE_MAKER": true,
-                    "EXPIRE_TAKER": true,
-                    "EXPIRE_BOTH": true,
-                    "NONE": true
+                "loadAllOptions": false,
+                "fetchCurrencies": true,
+                "defaultTimeInForce": "GTC",
+                "defaultType": "spot",
+                "defaultSubType": "inverse",
+                "hasAlreadyAuthenticatedSuccessfully": false,
+                "warnOnFetchOpenOrdersWithoutSymbol": true,
+                "currencyToPrecisionRoundingMode": 0,
+                "throwMarginModeAlreadySet": false,
+                "fetchPositions": "positionRisk",
+                "recvWindow": 10000,
+                "timeDifference": 0,
+                "adjustForTimeDifference": false,
+                "newOrderRespType": {
+                    "market": "FULL",
+                    "limit": "FULL"
                 },
-                "trailing": false,
-                "icebergAmount": true
-            },
-            "fetchMyTrades": {
-                "marginMode": false,
-                "limit": 1000,
-                "untilDays": 1,
-                "symbolRequired": true
-            },
-            "fetchOrder": {
-                "marginMode": true,
-                "trigger": false,
-                "trailing": false,
-                "symbolRequired": true
-            },
-            "fetchOpenOrders": {
-                "marginMode": true,
-                "trigger": false,
-                "trailing": false,
-                "symbolRequired": false
-            },
-            "fetchOrders": {
-                "marginMode": true,
-                "limit": 1000,
-                "untilDays": 10000,
-                "trigger": false,
-                "trailing": false,
-                "symbolRequired": true
-            },
-            "fetchClosedOrders": {
-                "marginMode": true,
-                "limit": 1000,
-                "untilDays": 10000,
-                "trigger": false,
-                "trailing": false,
-                "symbolRequired": true
-            },
-            "fetchOHLCV": {
-                "limit": 1000
-            }
-        },
-        "forDerivatives": {
-            "sandbox": true,
-            "createOrder": {
-                "marginMode": false,
-                "triggerPrice": true,
-                "triggerPriceType": {
-                    "mark": true,
-                    "last": true,
-                    "index": false
+                "quoteOrderQty": true,
+                "broker": {
+                    "spot": "x-TKT5PX2F",
+                    "margin": "x-TKT5PX2F",
+                    "future": "x-cvBPrNm9",
+                    "delivery": "x-xcKtGhcu",
+                    "swap": "x-cvBPrNm9",
+                    "option": "x-xcKtGhcu",
+                    "inverse": "x-xcKtGhcu"
                 },
-                "stopLossPrice": true,
-                "takeProfitPrice": true,
-                "timeInForce": {
-                    "IOC": true,
-                    "FOK": true,
-                    "PO": true,
-                    "GTD": true
+                "accountsByType": {
+                    "main": "MAIN",
+                    "spot": "MAIN",
+                    "funding": "FUNDING",
+                    "margin": "MARGIN",
+                    "cross": "MARGIN",
+                    "future": "UMFUTURE",
+                    "delivery": "CMFUTURE",
+                    "linear": "UMFUTURE",
+                    "swap": "UMFUTURE",
+                    "inverse": "CMFUTURE",
+                    "option": "OPTION"
                 },
-                "hedged": true,
-                "selfTradePrevention": true,
-                "trailing": true,
-                "iceberg": false,
-                "leverage": false,
-                "marketBuyRequiresPrice": false,
-                "marketBuyByCost": true
+                "accountsById": {
+                    "MAIN": "spot",
+                    "FUNDING": "funding",
+                    "MARGIN": "margin",
+                    "UMFUTURE": "linear",
+                    "CMFUTURE": "inverse",
+                    "OPTION": "option"
+                },
+                "networks": {
+                    "ERC20": "ETH",
+                    "TRC20": "TRX",
+                    "BEP2": "BNB",
+                    "BEP20": "BSC",
+                    "OMNI": "OMNI",
+                    "EOS": "EOS",
+                    "SPL": "SOL",
+                    "SOL": "SOL"
+                },
+                "networksById": {
+                    "SOL": "SOL"
+                },
+                "impliedNetworks": {
+                    "ETH": {
+                        "ERC20": "ETH"
+                    },
+                    "TRX": {
+                        "TRC20": "TRX"
+                    }
+                },
+                "legalMoney": {
+                    "MXN": true,
+                    "UGX": true,
+                    "SEK": true,
+                    "CHF": true,
+                    "VND": true,
+                    "AED": true,
+                    "DKK": true,
+                    "KZT": true,
+                    "HUF": true,
+                    "PEN": true,
+                    "PHP": true,
+                    "USD": true,
+                    "TRY": true,
+                    "EUR": true,
+                    "NGN": true,
+                    "PLN": true,
+                    "BRL": true,
+                    "ZAR": true,
+                    "KES": true,
+                    "ARS": true,
+                    "RUB": true,
+                    "AUD": true,
+                    "NOK": true,
+                    "CZK": true,
+                    "GBP": true,
+                    "UAH": true,
+                    "GHS": true,
+                    "HKD": true,
+                    "CAD": true,
+                    "INR": true,
+                    "JPY": true,
+                    "NZD": true
+                },
+                "legalMoneyCurrenciesById": {
+                    "BUSD": "USD"
+                },
+                "defaultWithdrawPrecision": 1e-8
             },
-            "createOrders": {
-                "max": 5
-            },
-            "fetchMyTrades": {
-                "marginMode": false,
-                "limit": 1000,
-                "untilDays": 7,
-                "symbolRequired": true
-            },
-            "fetchOrder": {
-                "marginMode": false,
-                "trigger": false,
-                "trailing": false,
-                "symbolRequired": true
-            },
-            "fetchOpenOrders": {
-                "marginMode": true,
-                "limit": 500,
-                "trigger": false,
-                "trailing": false,
-                "symbolRequired": false
-            },
-            "fetchOrders": {
-                "marginMode": true,
-                "limit": 1000,
-                "daysBack": 90,
-                "untilDays": 7,
-                "trigger": false,
-                "trailing": false,
-                "symbolRequired": true
-            },
-            "fetchClosedOrders": {
-                "marginMode": true,
-                "limit": 1000,
-                "daysBack": 90,
-                "daysBackCanceled": 3,
-                "untilDays": 7,
-                "trigger": false,
-                "trailing": false,
-                "symbolRequired": true
-            },
-            "fetchOHLCV": {
-                "limit": 1500
-            }
-        },
-        "swap": {
-            "linear": {
-                "extends": "forDerivatives"
-            },
-            "inverse": {
-                "extends": "forDerivatives"
-            }
-        },
-        "future": {
-            "linear": {
-                "extends": "forDerivatives"
-            },
-            "inverse": {
-                "extends": "forDerivatives"
-            }
-        }
-    }
-}"###).unwrap())
-    }
-
-async fn transfer_in(&mut self, mut code: Value, mut amount: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn transfer_out(&mut self, mut code: Value, mut amount: Value, mut params: Value) -> Value { Value::Undefined }
-
-
-
-
-
-
-
-
-
-
-fn handle_deltas(&mut self, mut orderbook: Value, mut deltas: Value) -> Value { Value::Undefined }
-
-fn handle_delta(&mut self, mut bookside: Value, mut delta: Value) -> Value { Value::Undefined }
-
-fn handle_deltas_with_keys(&mut self, mut book_side: Value, mut deltas: Value, mut price_key: Value, mut amount_key: Value, mut count_or_id_key: Value) -> Value { Value::Undefined }
-
-fn get_cache_index(&mut self, mut orderbook: Value, mut deltas: Value) -> Value { Value::Undefined }
-
-fn arrays_concat(&mut self, mut arrays_of_arrays: Value) -> Value { Value::Undefined }
-
-fn find_timeframe(&mut self, mut timeframe: Value, mut timeframes: Value) -> Value { Value::Undefined }
-
-fn check_proxy_url_settings(&mut self, mut url: Value, mut method: Value, mut headers: Value, mut body: Value) -> Value { Value::Undefined }
-
-fn url_encoder_for_proxy_url(&mut self, mut target_url: Value) -> Value { Value::Undefined }
-
-fn check_proxy_settings(&mut self, mut url: Value, mut method: Value, mut headers: Value, mut body: Value) -> Value { Value::Undefined }
-
-fn check_ws_proxy_settings(&mut self) -> Value { Value::Undefined }
-
-fn check_conflicting_proxies(&mut self, mut proxy_agent_set: Value, mut proxy_url_set: Value) -> Value { Value::Undefined }
-
-fn check_address(&mut self, mut address: Value) -> Value { Value::Undefined }
-
-fn find_message_hashes(&mut self, mut client: Value, mut element: Value) -> Value { Value::Undefined }
-
-
-
-fn filter_by_value_since_limit(&self, mut array: Value, mut field: Value, mut value: Value, mut since: Value, mut limit: Value, mut key: Value, mut tail: Value) -> Value { Value::Undefined }
-
-fn set_sandbox_mode(&mut self, mut enabled: Value) -> Value { Value::Undefined }
-
-fn enable_demo_trading(&mut self, mut enable: Value) -> Value { Value::Undefined }
-
-fn sign(&mut self, mut path: Value, mut api: Value, mut method: Value, mut params: Value, mut headers: Value, mut body: Value) -> Value { Value::Undefined }
-
-async fn fetch_accounts(&mut self, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_trades(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
-        let mut request = if params.is_object() { params.clone() } else { Value::new_object() };
-        request.set("symbol".into(), symbol.clone());
-        if since.is_nonnullish() {
-            request.set("since".into(), since.clone());
-            request.set("startTime".into(), since.clone());
-        }
-        if limit.is_nonnullish() {
-            request.set("limit".into(), limit.clone());
-        }
-        let candidates = vec![
-            ("public", "GET", "trades"),
-            ("public", "GET", "recent_trades"),
-            ("public", "GET", "aggTrades"),
-        ];
-        for (api_name, method_name, path_name) in candidates {
-            let rv = Binancecoinm::request(self, path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
-            if !rv.is_undefined() {
-                return rv;
-            }
-        }
-        Value::Undefined
-    }
-
-async fn fetch_trades_ws(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn watch_liquidations(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn watch_liquidations_for_symbols(&mut self, mut symbols: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn watch_my_liquidations(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn watch_my_liquidations_for_symbols(&mut self, mut symbols: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn watch_trades(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn un_watch_orders(&mut self, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn un_watch_trades(&mut self, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn watch_trades_for_symbols(&mut self, mut symbols: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn un_watch_trades_for_symbols(&mut self, mut symbols: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn watch_my_trades_for_symbols(&mut self, mut symbols: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn watch_orders_for_symbols(&mut self, mut symbols: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn watch_ohlcv_for_symbols(&mut self, mut symbols_and_timeframes: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn un_watch_ohlcv_for_symbols(&mut self, mut symbols_and_timeframes: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn watch_order_book_for_symbols(&mut self, mut symbols: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn un_watch_order_book_for_symbols(&mut self, mut symbols: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn un_watch_positions(&mut self, mut symbols: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn un_watch_ticker(&mut self, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn un_watch_mark_price(&mut self, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn un_watch_mark_prices(&mut self, mut symbols: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_deposit_addresses(&mut self, mut codes: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_order_book(&mut self, mut symbol: Value, mut limit: Value, mut params: Value) -> Value {
-        fn collect_routes(node: &serde_json::Value, api_name: &str, out: &mut Vec<(String, String, String)>) {
-            if let serde_json::Value::Object(map) = node {
-                for (k, v) in map {
-                    let kl = k.to_lowercase();
-                    if kl == "get" || kl == "post" || kl == "put" || kl == "delete" {
-                        if let serde_json::Value::Object(paths) = v {
-                            for (p, _cost) in paths {
-                                out.push((api_name.to_string(), kl.to_uppercase(), p.clone()));
-                            }
-                        }
-                    } else {
-                        collect_routes(v, api_name, out);
+            "features": {
+                "spot": {
+                    "sandbox": true,
+                    "fetchCurrencies": {
+                        "private": true
+                    },
+                    "createOrder": {
+                        "marginMode": true,
+                        "triggerPrice": true,
+                        "triggerDirection": false,
+                        "stopLossPrice": true,
+                        "takeProfitPrice": true,
+                        "timeInForce": {
+                            "IOC": true,
+                            "FOK": true,
+                            "PO": true,
+                            "GTD": false
+                        },
+                        "hedged": true,
+                        "leverage": false,
+                        "marketBuyByCost": true,
+                        "marketBuyRequiresPrice": false,
+                        "selfTradePrevention": {
+                            "EXPIRE_MAKER": true,
+                            "EXPIRE_TAKER": true,
+                            "EXPIRE_BOTH": true,
+                            "NONE": true
+                        },
+                        "trailing": false,
+                        "icebergAmount": true
+                    },
+                    "fetchMyTrades": {
+                        "marginMode": false,
+                        "limit": 1000,
+                        "untilDays": 1,
+                        "symbolRequired": true
+                    },
+                    "fetchOrder": {
+                        "marginMode": true,
+                        "trigger": false,
+                        "trailing": false,
+                        "symbolRequired": true
+                    },
+                    "fetchOpenOrders": {
+                        "marginMode": true,
+                        "trigger": false,
+                        "trailing": false,
+                        "symbolRequired": false
+                    },
+                    "fetchOrders": {
+                        "marginMode": true,
+                        "limit": 1000,
+                        "untilDays": 10000,
+                        "trigger": false,
+                        "trailing": false,
+                        "symbolRequired": true
+                    },
+                    "fetchClosedOrders": {
+                        "marginMode": true,
+                        "limit": 1000,
+                        "untilDays": 10000,
+                        "trigger": false,
+                        "trailing": false,
+                        "symbolRequired": true
+                    },
+                    "fetchOHLCV": {
+                        "limit": 1000
+                    }
+                },
+                "forDerivatives": {
+                    "sandbox": true,
+                    "createOrder": {
+                        "marginMode": false,
+                        "triggerPrice": true,
+                        "triggerPriceType": {
+                            "mark": true,
+                            "last": true,
+                            "index": false
+                        },
+                        "stopLossPrice": true,
+                        "takeProfitPrice": true,
+                        "timeInForce": {
+                            "IOC": true,
+                            "FOK": true,
+                            "PO": true,
+                            "GTD": true
+                        },
+                        "hedged": true,
+                        "selfTradePrevention": true,
+                        "trailing": true,
+                        "iceberg": false,
+                        "leverage": false,
+                        "marketBuyRequiresPrice": false,
+                        "marketBuyByCost": true
+                    },
+                    "createOrders": {
+                        "max": 5
+                    },
+                    "fetchMyTrades": {
+                        "marginMode": false,
+                        "limit": 1000,
+                        "untilDays": 7,
+                        "symbolRequired": true
+                    },
+                    "fetchOrder": {
+                        "marginMode": false,
+                        "trigger": false,
+                        "trailing": false,
+                        "symbolRequired": true
+                    },
+                    "fetchOpenOrders": {
+                        "marginMode": true,
+                        "limit": 500,
+                        "trigger": false,
+                        "trailing": false,
+                        "symbolRequired": false
+                    },
+                    "fetchOrders": {
+                        "marginMode": true,
+                        "limit": 1000,
+                        "daysBack": 90,
+                        "untilDays": 7,
+                        "trigger": false,
+                        "trailing": false,
+                        "symbolRequired": true
+                    },
+                    "fetchClosedOrders": {
+                        "marginMode": true,
+                        "limit": 1000,
+                        "daysBack": 90,
+                        "daysBackCanceled": 3,
+                        "untilDays": 7,
+                        "trigger": false,
+                        "trailing": false,
+                        "symbolRequired": true
+                    },
+                    "fetchOHLCV": {
+                        "limit": 1500
+                    }
+                },
+                "swap": {
+                    "linear": {
+                        "extends": "forDerivatives"
+                    },
+                    "inverse": {
+                        "extends": "forDerivatives"
+                    }
+                },
+                "future": {
+                    "linear": {
+                        "extends": "forDerivatives"
+                    },
+                    "inverse": {
+                        "extends": "forDerivatives"
                     }
                 }
             }
-        }
-        let mut request = if params.is_object() { params.clone() } else { Value::new_object() };
-        request.set("symbol".into(), symbol.clone());
-        if limit.is_nonnullish() {
-            request.set("limit".into(), limit.clone());
-        }
-        let mut dynamic_calls: Vec<(String, String, String)> = vec![];
-        if let Value::Json(serde_json::Value::Object(api_map)) = Binancecoinm::describe(self).get("api".into()) {
-            for (api_name, node) in api_map {
-                collect_routes(&node, &api_name, &mut dynamic_calls);
-            }
-        }
-        for token in ["depth", "orderbook", "order_book"] {
-            for (api_name, method_name, path_name) in &dynamic_calls {
-                if method_name.as_str() != "GET" || path_name.contains('{') {
-                    continue;
-                }
-                let p = path_name.to_lowercase();
-                if p == token || p.contains(token) {
-                    let rv = Binancecoinm::request(self, path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
-                    if !rv.is_undefined() {
-                        return rv;
-                    }
-                }
-            }
-        }
-        let candidates = vec![
-            ("public", "GET", "depth"),
-            ("public", "GET", "orderbook"),
-            ("public", "GET", "order_book"),
-        ];
-        for (api_name, method_name, path_name) in candidates {
-            let rv = Binancecoinm::request(self, path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
-            if !rv.is_undefined() {
-                return rv;
-            }
-        }
-        Value::Undefined
+        }"###).unwrap())
     }
 
-async fn fetch_order_book_ws(&mut self, mut symbol: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_margin_mode(&mut self, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_margin_modes(&mut self, mut symbols: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_rest_order_book_safe(&mut self, mut symbol: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn watch_order_book(&mut self, mut symbol: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn un_watch_order_book(&mut self, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_time(&mut self, mut params: Value) -> Value {
-        let candidates = vec![
-            ("public", "GET", "time"),
-            ("public", "GET", "server/time"),
-            ("public", "GET", "timestamp"),
-        ];
-        for (api_name, method_name, path_name) in candidates {
-            let rv = Binancecoinm::request(self, path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
-            if !rv.is_undefined() {
-                return rv;
-            }
-        }
-        Value::Undefined
+    async fn transfer_in(&mut self, mut code: Value, mut amount: Value, mut params: Value) -> Value {
+        params = params.or_default(Value::new_object());
+        // transfer from spot wallet to coinm futures wallet
+        return self.futures_transfer(code.clone(), amount.clone(), Value::from(3), params.clone()).await;
     }
 
-async fn fetch_trading_limits(&mut self, mut symbols: Value, mut params: Value) -> Value { Value::Undefined }
-
-fn parse_currency(&self, mut raw_currency: Value) -> Value { Value::Undefined }
-
-fn parse_currencies(&self, mut raw_currencies: Value) -> Value { Value::Undefined }
-
-fn parse_market(&self, mut market: Value) -> Value { Value::Undefined }
-
-fn parse_markets(&self, mut markets: Value) -> Value { Value::Undefined }
-
-fn parse_ticker(&self, mut ticker: Value, mut market: Value) -> Value { Value::Undefined }
-
-fn parse_deposit_address(&self, mut deposit_address: Value, mut currency: Value) -> Value { Value::Undefined }
-
-fn parse_trade(&self, mut trade: Value, mut market: Value) -> Value { Value::Undefined }
-
-fn parse_transaction(&self, mut transaction: Value, mut currency: Value) -> Value { Value::Undefined }
-
-fn parse_transfer(&self, mut transfer: Value, mut currency: Value) -> Value { Value::Undefined }
-
-fn parse_account(&self, mut account: Value) -> Value { Value::Undefined }
-
-fn parse_ledger_entry(&self, mut item: Value, mut currency: Value) -> Value { Value::Undefined }
-
-fn parse_order(&self, mut order: Value, mut market: Value) -> Value { Value::Undefined }
-
-async fn fetch_cross_borrow_rates(&mut self, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_isolated_borrow_rates(&mut self, mut params: Value) -> Value { Value::Undefined }
-
-fn parse_market_leverage_tiers(&self, mut info: Value, mut market: Value) -> Value { Value::Undefined }
-
-async fn fetch_leverage_tiers(&mut self, mut symbols: Value, mut params: Value) -> Value { Value::Undefined }
-
-fn parse_position(&self, mut position: Value, mut market: Value) -> Value { Value::Undefined }
-
-fn parse_funding_rate_history(&self, mut info: Value, mut market: Value) -> Value { Value::Undefined }
-
-fn parse_borrow_interest(&self, mut info: Value, mut market: Value) -> Value { Value::Undefined }
-
-fn parse_isolated_borrow_rate(&self, mut info: Value, mut market: Value) -> Value { Value::Undefined }
-
-fn parse_ws_trade(&self, mut trade: Value, mut market: Value) -> Value { Value::Undefined }
-
-fn parse_ws_order(&self, mut order: Value, mut market: Value) -> Value { Value::Undefined }
-
-fn parse_ws_order_trade(&self, mut trade: Value, mut market: Value) -> Value { Value::Undefined }
-
-fn parse_ws_ohlcv(&self, mut ohlcv: Value, mut market: Value) -> Value { Value::Undefined }
-
-async fn fetch_funding_rates(&mut self, mut symbols: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_funding_intervals(&mut self, mut symbols: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn watch_funding_rate(&mut self, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn watch_funding_rates(&mut self, mut symbols: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn watch_funding_rates_for_symbols(&mut self, mut symbols: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn transfer(&mut self, mut code: Value, mut amount: Value, mut from_account: Value, mut to_account: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn withdraw(&mut self, mut code: Value, mut amount: Value, mut address: Value, mut tag: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn create_deposit_address(&mut self, mut code: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn set_leverage(&mut self, mut leverage: Value, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_leverage(&mut self, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_leverages(&mut self, mut symbols: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn set_position_mode(&mut self, mut hedged: Value, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn add_margin(&mut self, mut symbol: Value, mut amount: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn reduce_margin(&mut self, mut symbol: Value, mut amount: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn set_margin(&mut self, mut symbol: Value, mut amount: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_long_short_ratio(&mut self, mut symbol: Value, mut timeframe: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_long_short_ratio_history(&mut self, mut symbol: Value, mut timeframe: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_margin_adjustment_history(&mut self, mut symbol: Value, mut r#type: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn set_margin_mode(&mut self, mut margin_mode: Value, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_deposit_addresses_by_network(&mut self, mut code: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_open_interest_history(&mut self, mut symbol: Value, mut timeframe: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_open_interest(&mut self, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_open_interests(&mut self, mut symbols: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn sign_in(&mut self, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_payment_methods(&mut self, mut params: Value) -> Value { Value::Undefined }
-
-
-
-fn is_round_number(&mut self, mut value: Value) -> Value { Value::Undefined }
-
-
-
-fn after_construct(&mut self) -> Value { Value::Undefined }
-
-fn init_rest_rate_limiter(&mut self) -> Value { Value::Undefined }
-
-fn features_generator(&mut self) -> Value { Value::Undefined }
-
-fn features_mapper(&mut self, mut initial_features: Value, mut market_type: Value, mut sub_type: Value) -> Value { Value::Undefined }
-
-fn feature_value(&mut self, mut symbol: Value, mut method_name: Value, mut param_name: Value, mut default_value: Value) -> Value { Value::Undefined }
-
-fn feature_value_by_type(&mut self, mut market_type: Value, mut sub_type: Value, mut method_name: Value, mut param_name: Value, mut default_value: Value) -> Value { Value::Undefined }
-
-fn orderbook_checksum_message(&mut self, mut symbol: Value) -> Value { Value::Undefined }
-
-fn create_networks_by_id_object(&mut self) -> Value { Value::Undefined }
-
-fn get_default_options(&mut self) -> Value { Value::Undefined }
-
-fn safe_ledger_entry(&self, mut entry: Value, mut currency: Value) -> Value { Value::Undefined }
-
-fn safe_currency_structure(&self, mut currency: Value) -> Value { Value::Undefined }
-
-fn safe_market_structure(&self, mut market: Value) -> Value { Value::Undefined }
-
-fn set_markets(&mut self, mut markets: Value, mut currencies: Value) -> Value { Value::Undefined }
-
-fn set_markets_from_exchange(&mut self, mut source_exchange: Value) -> Value { Value::Undefined }
-
-fn get_describe_for_extended_ws_exchange(&mut self, mut current_rest_instance: Value, mut parent_rest_instance: Value, mut ws_base_describe: Value) -> Value { Value::Undefined }
-
-fn safe_balance(&self, mut balance: Value) -> Value { Value::Undefined }
-
-fn safe_order(&self, mut order: Value, mut market: Value) -> Value { Value::Undefined }
-
-fn parse_orders(&self, mut orders: Value, mut market: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-fn calculate_fee_with_rate(&mut self, mut symbol: Value, mut r#type: Value, mut side: Value, mut amount: Value, mut price: Value, mut taker_or_maker: Value, mut fee_rate: Value, mut params: Value) -> Value { Value::Undefined }
-
-fn calculate_fee(&mut self, mut symbol: Value, mut r#type: Value, mut side: Value, mut amount: Value, mut price: Value, mut taker_or_maker: Value, mut params: Value) -> Value { Value::Undefined }
-
-fn safe_liquidation(&self, mut liquidation: Value, mut market: Value) -> Value { Value::Undefined }
-
-fn safe_trade(&self, mut trade: Value, mut market: Value) -> Value { Value::Undefined }
-
-fn create_ccxt_trade_id(&mut self, mut timestamp: Value, mut side: Value, mut amount: Value, mut price: Value, mut taker_or_maker: Value) -> Value { Value::Undefined }
-
-fn parsed_fee_and_fees(&self, mut container: Value) -> Value { Value::Undefined }
-
-fn parse_fee_numeric(&self, mut fee: Value) -> Value { Value::Undefined }
-
-fn find_nearest_ceiling(&mut self, mut arr: Value, mut provided_value: Value) -> Value { Value::Undefined }
-
-fn invert_flat_string_dictionary(&mut self, mut dict: Value) -> Value { Value::Undefined }
-
-fn reduce_fees_by_currency(&mut self, mut fees: Value) -> Value { Value::Undefined }
-
-fn safe_ticker(&self, mut ticker: Value, mut market: Value) -> Value { Value::Undefined }
-
-async fn fetch_borrow_rate(&mut self, mut code: Value, mut amount: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn repay_cross_margin(&mut self, mut code: Value, mut amount: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn repay_isolated_margin(&mut self, mut symbol: Value, mut code: Value, mut amount: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn borrow_cross_margin(&mut self, mut code: Value, mut amount: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn borrow_isolated_margin(&mut self, mut symbol: Value, mut code: Value, mut amount: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn borrow_margin(&mut self, mut code: Value, mut amount: Value, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn repay_margin(&mut self, mut code: Value, mut amount: Value, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_ohlcv(&mut self, mut symbol: Value, mut timeframe: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
-        fn collect_routes(node: &serde_json::Value, api_name: &str, out: &mut Vec<(String, String, String)>) {
-            if let serde_json::Value::Object(map) = node {
-                for (k, v) in map {
-                    let kl = k.to_lowercase();
-                    if kl == "get" || kl == "post" || kl == "put" || kl == "delete" {
-                        if let serde_json::Value::Object(paths) = v {
-                            for (p, _cost) in paths {
-                                out.push((api_name.to_string(), kl.to_uppercase(), p.clone()));
-                            }
-                        }
-                    } else {
-                        collect_routes(v, api_name, out);
-                    }
-                }
-            }
-        }
-        let mut request = if params.is_object() { params.clone() } else { Value::new_object() };
-        request.set("symbol".into(), symbol.clone());
-        request.set("timeframe".into(), timeframe.clone());
-        request.set("interval".into(), timeframe.clone());
-        if since.is_nonnullish() {
-            request.set("since".into(), since.clone());
-            request.set("startTime".into(), since.clone());
-        }
-        if limit.is_nonnullish() {
-            request.set("limit".into(), limit.clone());
-        }
-        let mut dynamic_calls: Vec<(String, String, String)> = vec![];
-        if let Value::Json(serde_json::Value::Object(api_map)) = Binancecoinm::describe(self).get("api".into()) {
-            for (api_name, node) in api_map {
-                collect_routes(&node, &api_name, &mut dynamic_calls);
-            }
-        }
-        for token in ["klines", "candles", "ohlcv"] {
-            for (api_name, method_name, path_name) in &dynamic_calls {
-                if method_name.as_str() != "GET" || path_name.contains('{') {
-                    continue;
-                }
-                let p = path_name.to_lowercase();
-                if p == token || p.contains(token) {
-                    let rv = Binancecoinm::request(self, path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
-                    if !rv.is_undefined() {
-                        return rv;
-                    }
-                }
-            }
-        }
-        let candidates = vec![
-            ("public", "GET", "klines"),
-            ("public", "GET", "candles"),
-            ("public", "GET", "ohlcv"),
-        ];
-        for (api_name, method_name, path_name) in candidates {
-            let rv = Binancecoinm::request(self, path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
-            if !rv.is_undefined() {
-                return rv;
-            }
-        }
-        Value::Undefined
+    async fn transfer_out(&mut self, mut code: Value, mut amount: Value, mut params: Value) -> Value {
+        params = params.or_default(Value::new_object());
+        // transfer from coinm futures wallet to spot wallet
+        return self.futures_transfer(code.clone(), amount.clone(), Value::from(4), params.clone()).await;
     }
-
-async fn fetch_ohlcv_ws(&mut self, mut symbol: Value, mut timeframe: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn watch_ohlcv(&mut self, mut symbol: Value, mut timeframe: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-fn convert_trading_view_to_ohlcv(&self, mut ohlcvs: Value, mut timestamp: Value, mut open: Value, mut high: Value, mut low: Value, mut close: Value, mut volume: Value, mut ms: Value) -> Value { Value::Undefined }
-
-fn convert_ohlcv_to_trading_view(&self, mut ohlcvs: Value, mut timestamp: Value, mut open: Value, mut high: Value, mut low: Value, mut close: Value, mut volume: Value, mut ms: Value) -> Value { Value::Undefined }
-
-async fn fetch_web_endpoint(&mut self, mut method: Value, mut endpoint_method: Value, mut return_as_json: Value, mut start_regex: Value, mut end_regex: Value) -> Value { Value::Undefined }
-
-fn market_ids(&mut self, mut symbols: Value) -> Value { Value::Undefined }
-
-fn currency_ids(&mut self, mut codes: Value) -> Value { Value::Undefined }
-
-fn markets_for_symbols(&mut self, mut symbols: Value) -> Value { Value::Undefined }
-
-fn market_symbols(&self, mut symbols: Value, mut r#type: Value, mut allow_empty: Value, mut same_type_only: Value, mut same_sub_type_only: Value) -> Value { Value::Undefined }
-
-fn market_codes(&mut self, mut codes: Value) -> Value { Value::Undefined }
-
-
-async fn fetch_l2_order_book(&mut self, mut symbol: Value, mut limit: Value, mut params: Value) -> Value {
-        let mut request = if params.is_object() { params.clone() } else { Value::new_object() };
-        request.set("symbol".into(), symbol.clone());
-        if limit.is_nonnullish() {
-            request.set("limit".into(), limit.clone());
-        }
-        let candidates = vec![
-            ("public", "GET", "depth"),
-            ("public", "GET", "orderbook"),
-            ("public", "GET", "order_book"),
-        ];
-        for (api_name, method_name, path_name) in candidates {
-            let rv = Binancecoinm::request(self, path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
-            if !rv.is_undefined() {
-                return rv;
-            }
-        }
-        Value::Undefined
-    }
-
-fn filter_by_symbol(&self, mut objects: Value, mut symbol: Value) -> Value { Value::Undefined }
-
-fn parse_ohlcv(&self, mut ohlcv: Value, mut market: Value) -> Value { Value::Undefined }
-
-fn network_code_to_id(&mut self, mut network_code: Value, mut currency_code: Value) -> Value { Value::Undefined }
-
-fn network_id_to_code(&mut self, mut network_id: Value, mut currency_code: Value) -> Value { Value::Undefined }
-
-fn handle_network_code_and_params(&mut self, mut params: Value) -> Value { Value::Undefined }
-
-fn default_network_code(&mut self, mut currency_code: Value) -> Value { Value::Undefined }
-
-fn select_network_code_from_unified_networks(&mut self, mut currency_code: Value, mut network_code: Value, mut indexed_network_entries: Value) -> Value { Value::Undefined }
-
-fn select_network_id_from_raw_networks(&mut self, mut currency_code: Value, mut network_code: Value, mut indexed_network_entries: Value) -> Value { Value::Undefined }
-
-fn select_network_key_from_networks(&mut self, mut currency_code: Value, mut network_code: Value, mut indexed_network_entries: Value, mut is_indexed_by_unified_network_code: Value) -> Value { Value::Undefined }
-
-
-
-fn parse_ohlcvs(&self, mut ohlcvs: Value, mut market: Value, mut timeframe: Value, mut since: Value, mut limit: Value, mut tail: Value) -> Value { Value::Undefined }
-
-fn parse_leverage_tiers(&self, mut response: Value, mut symbols: Value, mut market_id_key: Value) -> Value { Value::Undefined }
-
-async fn load_trading_limits(&mut self, mut symbols: Value, mut reload: Value, mut params: Value) -> Value { Value::Undefined }
-
-fn safe_position(&self, mut position: Value) -> Value { Value::Undefined }
-
-fn parse_positions(&self, mut positions: Value, mut symbols: Value, mut params: Value) -> Value { Value::Undefined }
-
-fn parse_accounts(&self, mut accounts: Value, mut params: Value) -> Value { Value::Undefined }
-
-fn parse_trades_helper(&self, mut is_ws: Value, mut trades: Value, mut market: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-fn parse_trades(&self, mut trades: Value, mut market: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-fn parse_ws_trades(&self, mut trades: Value, mut market: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-fn parse_transactions(&self, mut transactions: Value, mut currency: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-fn parse_transfers(&self, mut transfers: Value, mut currency: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-fn parse_ledger(&self, mut data: Value, mut currency: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-fn nonce(&self) -> Value { Value::Undefined }
-
-fn set_headers(&mut self, mut headers: Value) -> Value { Value::Undefined }
-
-fn currency_id(&mut self, mut code: Value) -> Value { Value::Undefined }
-
-fn market_id(&mut self, mut symbol: Value) -> Value { Value::Undefined }
-
-fn symbol(&self, mut symbol: Value) -> Value { Value::Undefined }
-
-fn handle_param_string(&mut self, mut params: Value, mut param_name: Value, mut default_value: Value) -> Value { Value::Undefined }
-
-fn handle_param_string_2(&mut self, mut params: Value, mut param_name_1: Value, mut param_name_2: Value, mut default_value: Value) -> Value { Value::Undefined }
-
-fn handle_param_integer(&mut self, mut params: Value, mut param_name: Value, mut default_value: Value) -> Value { Value::Undefined }
-
-fn handle_param_integer_2(&mut self, mut params: Value, mut param_name_1: Value, mut param_name_2: Value, mut default_value: Value) -> Value { Value::Undefined }
-
-fn handle_param_bool(&mut self, mut params: Value, mut param_name: Value, mut default_value: Value) -> Value { Value::Undefined }
-
-fn handle_param_bool_2(&mut self, mut params: Value, mut param_name_1: Value, mut param_name_2: Value, mut default_value: Value) -> Value { Value::Undefined }
-
-fn handle_request_network(&mut self, mut params: Value, mut request: Value, mut exchange_specific_key: Value, mut currency_code: Value, mut is_required: Value) -> Value { Value::Undefined }
-
-fn resolve_path(&mut self, mut path: Value, mut params: Value) -> Value { Value::Undefined }
-
-fn get_list_from_object_values(&mut self, mut objects: Value, mut key: Value) -> Value { Value::Undefined }
-
-fn get_symbols_for_market_type(&mut self, mut market_type: Value, mut sub_type: Value, mut symbol_with_active_status: Value, mut symbol_with_unknown_status: Value) -> Value { Value::Undefined }
-
-fn filter_by_array(&self, mut objects: Value, mut key: Value, mut values: Value, mut indexed: Value) -> Value { Value::Undefined }
-
-async fn fetch2(&mut self, mut path: Value, mut api: Value, mut method: Value, mut params: Value, mut headers: Value, mut body: Value, mut config: Value) -> Value { Value::Undefined }
-
-async fn request(&mut self, mut path: Value, mut api: Value, mut method: Value, mut params: Value, mut headers: Value, mut body: Value, mut config: Value) -> Value {
-        fn first_string(v: &serde_json::Value) -> Option<String> {
-            match v {
-                serde_json::Value::String(s) => Some(s.clone()),
-                serde_json::Value::Object(map) => {
-                    for (_k, vv) in map {
-                        if let Some(found) = first_string(vv) {
-                            return Some(found);
-                        }
-                    }
-                    None
-                }
-                serde_json::Value::Array(arr) => {
-                    for vv in arr {
-                        if let Some(found) = first_string(vv) {
-                            return Some(found);
-                        }
-                    }
-                    None
-                }
-                _ => None,
-            }
-        }
-
-        let urls_api = Binancecoinm::describe(self).get("urls".into()).get("api".into());
-        let mut base = urls_api.get(api.clone());
-        if !base.is_string() {
-            base = urls_api.get("public".into());
-        }
-        if !base.is_string() {
-            if let Value::Json(json_api) = urls_api.clone() {
-                if let Some(found) = first_string(&json_api) {
-                    base = Value::from(found);
-                }
-            }
-        }
-        if !base.is_string() {
-            base = urls_api.clone();
-        }
-        if !base.is_string() || !path.is_string() {
-            eprintln!(
-                "ccxt-rs request skipped: base url missing (api='{}', path='{}')",
-                api.unwrap_str(),
-                path.unwrap_str()
-            );
-            return Value::Undefined;
-        }
-        let mut base_url = base.unwrap_str().to_string();
-        let hostname = Binancecoinm::describe(self).get("hostname".into());
-        if hostname.is_string() {
-            base_url = base_url.replace("{hostname}", hostname.unwrap_str());
-        }
-        // Last-resort placeholder cleanup for templated domains in describe().
-        while let Some(start) = base_url.find('{') {
-            if let Some(rel_end) = base_url[start..].find('}') {
-                let end = start + rel_end;
-                let replacement = if hostname.is_string() { hostname.unwrap_str() } else { "" };
-                base_url.replace_range(start..=end, replacement);
-            } else {
-                break;
-            }
-        }
-
-        let mut url = format!("{}/{}", base_url.trim_end_matches('/'), path.unwrap_str());
-        let method_upper = method.unwrap_str().to_uppercase();
-
-        let mut query_pairs: Vec<String> = vec![];
-        if let Value::Json(serde_json::Value::Object(map)) = params.clone() {
-            for (k, v) in map {
-                if v.is_null() {
-                    continue;
-                }
-                let value_str = match v {
-                    serde_json::Value::String(s) => s,
-                    serde_json::Value::Number(n) => n.to_string(),
-                    serde_json::Value::Bool(b) => if b { "true".into() } else { "false".into() },
-                    _ => v.to_string(),
-                };
-                query_pairs.push(format!("{}={}", urlencoding::encode(&k), urlencoding::encode(&value_str)));
-            }
-        }
-
-        if method_upper == "GET" && !query_pairs.is_empty() {
-            url.push('?');
-            url.push_str(&query_pairs.join("&"));
-        }
-
-        let client = match reqwest::Client::builder()
-            .no_proxy()
-            .timeout(std::time::Duration::from_secs(20))
-            .user_agent("ccxt-rs-smoke/0.1")
-            .build()
-        {
-            Ok(c) => c,
-            Err(err) => {
-                eprintln!("ccxt-rs request client build failed for {}: {}", url, err);
-                return Value::Undefined;
-            }
-        };
-        let mut req = match method_upper.as_str() {
-            "POST" => client.post(&url),
-            "PUT" => client.put(&url),
-            "DELETE" => client.delete(&url),
-            _ => client.get(&url),
-        };
-        if method_upper != "GET" {
-            if let Value::Json(serde_json::Value::Object(map)) = params.clone() {
-                let body_text = serde_json::to_string(&map).unwrap_or_else(|_| "{}".to_string());
-                req = req.header("content-type", "application/json").body(body_text);
-            }
-        }
-
-        let response = match req.send().await {
-            Ok(r) => r,
-            Err(err) => {
-                eprintln!("ccxt-rs request send failed for {} {}: {}", method_upper, url, err);
-                return Value::Undefined;
-            }
-        };
-        let text = match response.text().await {
-            Ok(t) => t,
-            Err(err) => {
-                eprintln!("ccxt-rs request body read failed for {} {}: {}", method_upper, url, err);
-                return Value::Undefined;
-            }
-        };
-        match serde_json::from_str::<serde_json::Value>(&text) {
-            Ok(json) => Value::Json(json),
-            Err(_) => Value::from(text),
-        }
-    }
-
-async fn load_accounts(&mut self, mut reload: Value, mut params: Value) -> Value { Value::Undefined }
-
-fn build_ohlcvc(&mut self, mut trades: Value, mut timeframe: Value, mut since: Value, mut limit: Value) -> Value { Value::Undefined }
-
-fn parse_trading_view_ohlcv(&self, mut ohlcvs: Value, mut market: Value, mut timeframe: Value, mut since: Value, mut limit: Value) -> Value { Value::Undefined }
-
-async fn edit_limit_buy_order(&mut self, mut id: Value, mut symbol: Value, mut amount: Value, mut price: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn edit_limit_sell_order(&mut self, mut id: Value, mut symbol: Value, mut amount: Value, mut price: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn edit_limit_order(&mut self, mut id: Value, mut symbol: Value, mut side: Value, mut amount: Value, mut price: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn edit_order(&mut self, mut id: Value, mut symbol: Value, mut r#type: Value, mut side: Value, mut amount: Value, mut price: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn edit_order_with_client_order_id(&mut self, mut client_order_id: Value, mut symbol: Value, mut r#type: Value, mut side: Value, mut amount: Value, mut price: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn edit_order_ws(&mut self, mut id: Value, mut symbol: Value, mut r#type: Value, mut side: Value, mut amount: Value, mut price: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_position(&mut self, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_position_ws(&mut self, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn watch_position(&mut self, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn watch_positions(&mut self, mut symbols: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn watch_position_for_symbols(&mut self, mut symbols: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_positions_for_symbol(&mut self, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_positions_for_symbol_ws(&mut self, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_positions(&mut self, mut symbols: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_positions_ws(&mut self, mut symbols: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_positions_risk(&mut self, mut symbols: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_bids_asks(&mut self, mut symbols: Value, mut params: Value) -> Value {
-        let mut request = if params.is_object() { params.clone() } else { Value::new_object() };
-        if symbols.is_nonnullish() {
-            request.set("symbols".into(), symbols.clone());
-        }
-        let candidates = vec![
-            ("public", "GET", "ticker/bookTicker"),
-            ("public", "GET", "bookticker"),
-            ("public", "GET", "bidsasks"),
-            ("public", "GET", "tickers"),
-        ];
-        for (api_name, method_name, path_name) in candidates {
-            let rv = Binancecoinm::request(self, path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
-            if !rv.is_undefined() {
-                return rv;
-            }
-        }
-        Value::Undefined
-    }
-
-async fn fetch_borrow_interest(&mut self, mut code: Value, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_ledger(&mut self, mut code: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_ledger_entry(&mut self, mut id: Value, mut code: Value, mut params: Value) -> Value { Value::Undefined }
-
-
-fn safe_currency(&self, mut currency_id: Value, mut currency: Value) -> Value { Value::Undefined }
-
-fn safe_market(&self, mut market_id: Value, mut market: Value, mut delimiter: Value, mut market_type: Value) -> Value { Value::Undefined }
-
-fn market_or_null(&mut self, mut symbol: Value) -> Value { Value::Undefined }
-
-fn check_required_credentials(&mut self, mut error: Value) -> Value { Value::Undefined }
-
-fn oath(&mut self) -> Value { Value::Undefined }
-
-async fn fetch_balance(&mut self, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_balance_ws(&mut self, mut params: Value) -> Value { Value::Undefined }
-
-fn parse_balance(&self, mut response: Value) -> Value { Value::Undefined }
-
-async fn watch_balance(&mut self, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_partial_balance(&mut self, mut part: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_free_balance(&mut self, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_used_balance(&mut self, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_total_balance(&mut self, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_status(&mut self, mut params: Value) -> Value {
-        fn collect_routes(node: &serde_json::Value, api_name: &str, out: &mut Vec<(String, String, String)>) {
-            if let serde_json::Value::Object(map) = node {
-                for (k, v) in map {
-                    let kl = k.to_lowercase();
-                    if kl == "get" || kl == "post" || kl == "put" || kl == "delete" {
-                        if let serde_json::Value::Object(paths) = v {
-                            for (p, _cost) in paths {
-                                out.push((api_name.to_string(), kl.to_uppercase(), p.clone()));
-                            }
-                        }
-                    } else {
-                        collect_routes(v, api_name, out);
-                    }
-                }
-            }
-        }
-        let mut dynamic_calls: Vec<(String, String, String)> = vec![];
-        if let Value::Json(serde_json::Value::Object(api_map)) = Binancecoinm::describe(self).get("api".into()) {
-            for (api_name, node) in api_map {
-                collect_routes(&node, &api_name, &mut dynamic_calls);
-            }
-        }
-        for token in ["status", "ping", "time", "system/status"] {
-            for (api_name, method_name, path_name) in &dynamic_calls {
-                if method_name.as_str() != "GET" || path_name.contains('{') {
-                    continue;
-                }
-                let p = path_name.to_lowercase();
-                if p == token || p.contains(token) {
-                    let rv = Binancecoinm::request(self, path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
-                    if !rv.is_undefined() {
-                        return rv;
-                    }
-                }
-            }
-        }
-        let candidates = vec![
-            ("public", "GET", "status"),
-            ("public", "GET", "ping"),
-            ("public", "GET", "time"),
-            ("sapi", "GET", "system/status"),
-        ];
-        for (api_name, method_name, path_name) in candidates {
-            let rv = Binancecoinm::request(self, path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
-            if !rv.is_undefined() {
-                return rv;
-            }
-        }
-        Value::Undefined
-    }
-
-async fn fetch_transaction_fee(&mut self, mut code: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_transaction_fees(&mut self, mut codes: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_deposit_withdraw_fees(&mut self, mut codes: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_deposit_withdraw_fee(&mut self, mut code: Value, mut params: Value) -> Value { Value::Undefined }
-
-fn get_supported_mapping(&self, mut key: Value, mut mapping: Value) -> Value { Value::Undefined }
-
-async fn fetch_cross_borrow_rate(&mut self, mut code: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_isolated_borrow_rate(&mut self, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
-
-fn handle_option_and_params(&mut self, mut params: Value, mut method_name: Value, mut option_name: Value, mut default_value: Value) -> Value { Value::Undefined }
-
-fn handle_option_and_params_2(&mut self, mut params: Value, mut method_name_1: Value, mut option_name_1: Value, mut option_name_2: Value, mut default_value: Value) -> Value { Value::Undefined }
-
-fn handle_option(&mut self, mut method_name: Value, mut option_name: Value, mut default_value: Value) -> Value { Value::Undefined }
-
-fn handle_market_type_and_params(&mut self, mut method_name: Value, mut market: Value, mut params: Value, mut default_value: Value) -> Value { Value::Undefined }
-
-fn handle_sub_type_and_params(&mut self, mut method_name: Value, mut market: Value, mut params: Value, mut default_value: Value) -> Value { Value::Undefined }
-
-fn handle_margin_mode_and_params(&mut self, mut method_name: Value, mut params: Value, mut default_value: Value) -> Value { Value::Undefined }
-
-fn throw_exactly_matched_exception(&mut self, mut exact: Value, mut string: Value, mut message: Value) -> Value { Value::Undefined }
-
-fn throw_broadly_matched_exception(&mut self, mut broad: Value, mut string: Value, mut message: Value) -> Value { Value::Undefined }
-
-fn find_broadly_matched_key(&mut self, mut broad: Value, mut string: Value) -> Value { Value::Undefined }
-
-fn handle_errors(&mut self, mut status_code: Value, mut status_text: Value, mut url: Value, mut method: Value, mut response_headers: Value, mut response_body: Value, mut response: Value, mut request_headers: Value, mut request_body: Value) -> Value { Value::Undefined }
-
-fn calculate_rate_limiter_cost(&mut self, mut api: Value, mut method: Value, mut path: Value, mut params: Value, mut config: Value) -> Value { Value::Undefined }
-
-async fn fetch_ticker(&mut self, mut symbol: Value, mut params: Value) -> Value {
-        fn collect_routes(node: &serde_json::Value, api_name: &str, out: &mut Vec<(String, String, String)>) {
-            if let serde_json::Value::Object(map) = node {
-                for (k, v) in map {
-                    let kl = k.to_lowercase();
-                    if kl == "get" || kl == "post" || kl == "put" || kl == "delete" {
-                        if let serde_json::Value::Object(paths) = v {
-                            for (p, _cost) in paths {
-                                out.push((api_name.to_string(), kl.to_uppercase(), p.clone()));
-                            }
-                        }
-                    } else {
-                        collect_routes(v, api_name, out);
-                    }
-                }
-            }
-        }
-        let mut request = if params.is_object() { params.clone() } else { Value::new_object() };
-        request.set("symbol".into(), symbol.clone());
-        let mut dynamic_calls: Vec<(String, String, String)> = vec![];
-        if let Value::Json(serde_json::Value::Object(api_map)) = Binancecoinm::describe(self).get("api".into()) {
-            for (api_name, node) in api_map {
-                collect_routes(&node, &api_name, &mut dynamic_calls);
-            }
-        }
-        for token in ["ticker/24hr", "ticker", "ticker/price", "bookticker", "tickers"] {
-            for (api_name, method_name, path_name) in &dynamic_calls {
-                if method_name.as_str() != "GET" || path_name.contains('{') {
-                    continue;
-                }
-                let p = path_name.to_lowercase();
-                if p == token || p.contains(token) {
-                    let rv = Binancecoinm::request(self, path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
-                    if !rv.is_undefined() {
-                        return rv;
-                    }
-                }
-            }
-        }
-        let candidates = vec![
-            ("public", "GET", "ticker/24hr"),
-            ("public", "GET", "ticker"),
-            ("public", "GET", "ticker/price"),
-        ];
-        for (api_name, method_name, path_name) in candidates {
-            let rv = Binancecoinm::request(self, path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
-            if !rv.is_undefined() {
-                return rv;
-            }
-        }
-        Value::Undefined
-    }
-
-async fn fetch_mark_price(&mut self, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_ticker_ws(&mut self, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn watch_ticker(&mut self, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_tickers(&mut self, mut symbols: Value, mut params: Value) -> Value {
-        fn collect_routes(node: &serde_json::Value, api_name: &str, out: &mut Vec<(String, String, String)>) {
-            if let serde_json::Value::Object(map) = node {
-                for (k, v) in map {
-                    let kl = k.to_lowercase();
-                    if kl == "get" || kl == "post" || kl == "put" || kl == "delete" {
-                        if let serde_json::Value::Object(paths) = v {
-                            for (p, _cost) in paths {
-                                out.push((api_name.to_string(), kl.to_uppercase(), p.clone()));
-                            }
-                        }
-                    } else {
-                        collect_routes(v, api_name, out);
-                    }
-                }
-            }
-        }
-        let mut dynamic_calls: Vec<(String, String, String)> = vec![];
-        if let Value::Json(serde_json::Value::Object(api_map)) = Binancecoinm::describe(self).get("api".into()) {
-            for (api_name, node) in api_map {
-                collect_routes(&node, &api_name, &mut dynamic_calls);
-            }
-        }
-        for token in ["tickers", "ticker/24hr", "ticker", "bookticker"] {
-            for (api_name, method_name, path_name) in &dynamic_calls {
-                if method_name.as_str() != "GET" || path_name.contains('{') {
-                    continue;
-                }
-                let p = path_name.to_lowercase();
-                if p == token || p.contains(token) {
-                    let rv = Binancecoinm::request(self, path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
-                    if !rv.is_undefined() {
-                        return rv;
-                    }
-                }
-            }
-        }
-        let candidates = vec![
-            ("public", "GET", "ticker/24hr"),
-            ("public", "GET", "tickers"),
-            ("public", "GET", "ticker"),
-        ];
-        for (api_name, method_name, path_name) in candidates {
-            let rv = Binancecoinm::request(self, path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
-            if !rv.is_undefined() {
-                return rv;
-            }
-        }
-        Value::Undefined
-    }
-
-async fn fetch_mark_prices(&mut self, mut symbols: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_tickers_ws(&mut self, mut symbols: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_order_books(&mut self, mut symbols: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn watch_bids_asks(&mut self, mut symbols: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn watch_tickers(&mut self, mut symbols: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn un_watch_tickers(&mut self, mut symbols: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_order(&mut self, mut id: Value, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_order_with_client_order_id(&mut self, mut client_order_id: Value, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_order_ws(&mut self, mut id: Value, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_order_status(&mut self, mut id: Value, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_unified_order(&mut self, mut order: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn create_order(&mut self, mut symbol: Value, mut r#type: Value, mut side: Value, mut amount: Value, mut price: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn create_twap_order(&mut self, mut symbol: Value, mut side: Value, mut amount: Value, mut duration: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn create_convert_trade(&mut self, mut id: Value, mut from_code: Value, mut to_code: Value, mut amount: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_convert_trade(&mut self, mut id: Value, mut code: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_convert_trade_history(&mut self, mut code: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_position_mode(&mut self, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn create_trailing_amount_order(&mut self, mut symbol: Value, mut r#type: Value, mut side: Value, mut amount: Value, mut price: Value, mut trailing_amount: Value, mut trailing_trigger_price: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn create_trailing_amount_order_ws(&mut self, mut symbol: Value, mut r#type: Value, mut side: Value, mut amount: Value, mut price: Value, mut trailing_amount: Value, mut trailing_trigger_price: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn create_trailing_percent_order(&mut self, mut symbol: Value, mut r#type: Value, mut side: Value, mut amount: Value, mut price: Value, mut trailing_percent: Value, mut trailing_trigger_price: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn create_trailing_percent_order_ws(&mut self, mut symbol: Value, mut r#type: Value, mut side: Value, mut amount: Value, mut price: Value, mut trailing_percent: Value, mut trailing_trigger_price: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn create_market_order_with_cost(&mut self, mut symbol: Value, mut side: Value, mut cost: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn create_market_buy_order_with_cost(&mut self, mut symbol: Value, mut cost: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn create_market_sell_order_with_cost(&mut self, mut symbol: Value, mut cost: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn create_market_order_with_cost_ws(&mut self, mut symbol: Value, mut side: Value, mut cost: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn create_trigger_order(&mut self, mut symbol: Value, mut r#type: Value, mut side: Value, mut amount: Value, mut price: Value, mut trigger_price: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn create_trigger_order_ws(&mut self, mut symbol: Value, mut r#type: Value, mut side: Value, mut amount: Value, mut price: Value, mut trigger_price: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn create_stop_loss_order(&mut self, mut symbol: Value, mut r#type: Value, mut side: Value, mut amount: Value, mut price: Value, mut stop_loss_price: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn create_stop_loss_order_ws(&mut self, mut symbol: Value, mut r#type: Value, mut side: Value, mut amount: Value, mut price: Value, mut stop_loss_price: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn create_take_profit_order(&mut self, mut symbol: Value, mut r#type: Value, mut side: Value, mut amount: Value, mut price: Value, mut take_profit_price: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn create_take_profit_order_ws(&mut self, mut symbol: Value, mut r#type: Value, mut side: Value, mut amount: Value, mut price: Value, mut take_profit_price: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn create_order_with_take_profit_and_stop_loss(&mut self, mut symbol: Value, mut r#type: Value, mut side: Value, mut amount: Value, mut price: Value, mut take_profit: Value, mut stop_loss: Value, mut params: Value) -> Value { Value::Undefined }
-
-fn set_take_profit_and_stop_loss_params(&mut self, mut symbol: Value, mut r#type: Value, mut side: Value, mut amount: Value, mut price: Value, mut take_profit: Value, mut stop_loss: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn create_order_with_take_profit_and_stop_loss_ws(&mut self, mut symbol: Value, mut r#type: Value, mut side: Value, mut amount: Value, mut price: Value, mut take_profit: Value, mut stop_loss: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn create_orders(&mut self, mut orders: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn edit_orders(&mut self, mut orders: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn create_order_ws(&mut self, mut symbol: Value, mut r#type: Value, mut side: Value, mut amount: Value, mut price: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn cancel_order(&mut self, mut id: Value, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn cancel_order_with_client_order_id(&mut self, mut client_order_id: Value, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn cancel_order_ws(&mut self, mut id: Value, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn cancel_orders(&mut self, mut ids: Value, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn cancel_orders_with_client_order_ids(&mut self, mut client_order_ids: Value, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn cancel_orders_ws(&mut self, mut ids: Value, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn cancel_all_orders(&mut self, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn cancel_all_orders_after(&mut self, mut timeout: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn cancel_orders_for_symbols(&mut self, mut orders: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn cancel_all_orders_ws(&mut self, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn cancel_unified_order(&mut self, mut order: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_orders(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_orders_ws(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_order_trades(&mut self, mut id: Value, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn watch_orders(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_open_orders(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_open_orders_ws(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_closed_orders(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_canceled_orders(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_canceled_and_closed_orders(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_closed_orders_ws(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_my_trades(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_my_liquidations(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_liquidations(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_my_trades_ws(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn watch_my_trades(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_greeks(&mut self, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_all_greeks(&mut self, mut symbols: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_option_chain(&mut self, mut code: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_option(&mut self, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_convert_quote(&mut self, mut from_code: Value, mut to_code: Value, mut amount: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_deposits_withdrawals(&mut self, mut code: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_deposits(&mut self, mut code: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_withdrawals(&mut self, mut code: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_deposits_ws(&mut self, mut code: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_withdrawals_ws(&mut self, mut code: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_funding_rate_history(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_funding_history(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn close_position(&mut self, mut symbol: Value, mut side: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn close_all_positions(&mut self, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_l3_order_book(&mut self, mut symbol: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-fn parse_last_price(&self, mut price: Value, mut market: Value) -> Value { Value::Undefined }
-
-async fn fetch_deposit_address(&mut self, mut code: Value, mut params: Value) -> Value { Value::Undefined }
-
-fn account(&self) -> Value { Value::Undefined }
-
-fn common_currency_code(&self, mut code: Value) -> Value { Value::Undefined }
-
-fn currency(&self, mut code: Value) -> Value { Value::Undefined }
-
-fn market(&self, mut symbol: Value) -> Value { Value::Undefined }
-
-fn create_expired_option_market(&mut self, mut symbol: Value) -> Value { Value::Undefined }
-
-fn is_leveraged_currency(&mut self, mut currency_code: Value, mut check_base_coin: Value, mut existing_currencies: Value) -> Value { Value::Undefined }
-
-fn handle_withdraw_tag_and_params(&mut self, mut tag: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn create_limit_order(&mut self, mut symbol: Value, mut side: Value, mut amount: Value, mut price: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn create_limit_order_ws(&mut self, mut symbol: Value, mut side: Value, mut amount: Value, mut price: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn create_market_order(&mut self, mut symbol: Value, mut side: Value, mut amount: Value, mut price: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn create_market_order_ws(&mut self, mut symbol: Value, mut side: Value, mut amount: Value, mut price: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn create_limit_buy_order(&mut self, mut symbol: Value, mut amount: Value, mut price: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn create_limit_buy_order_ws(&mut self, mut symbol: Value, mut amount: Value, mut price: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn create_limit_sell_order(&mut self, mut symbol: Value, mut amount: Value, mut price: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn create_limit_sell_order_ws(&mut self, mut symbol: Value, mut amount: Value, mut price: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn create_market_buy_order(&mut self, mut symbol: Value, mut amount: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn create_market_buy_order_ws(&mut self, mut symbol: Value, mut amount: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn create_market_sell_order(&mut self, mut symbol: Value, mut amount: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn create_market_sell_order_ws(&mut self, mut symbol: Value, mut amount: Value, mut params: Value) -> Value { Value::Undefined }
-
-fn cost_to_precision(&mut self, mut symbol: Value, mut cost: Value) -> Value { Value::Undefined }
-
-fn price_to_precision(&mut self, mut symbol: Value, mut price: Value) -> Value { Value::Undefined }
-
-fn amount_to_precision(&mut self, mut symbol: Value, mut amount: Value) -> Value { Value::Undefined }
-
-fn fee_to_precision(&mut self, mut symbol: Value, mut fee: Value) -> Value { Value::Undefined }
-
-fn currency_to_precision(&mut self, mut code: Value, mut fee: Value, mut network_code: Value) -> Value { Value::Undefined }
-
-fn force_string(&mut self, mut value: Value) -> Value { Value::Undefined }
-
-fn is_tick_precision(&mut self) -> Value { Value::Undefined }
-
-fn is_decimal_precision(&mut self) -> Value { Value::Undefined }
-
-fn is_significant_precision(&mut self) -> Value { Value::Undefined }
-
-
-
-fn parse_precision(&self, mut precision: Value) -> Value { Value::Undefined }
-
-fn integer_precision_to_amount(&mut self, mut precision: Value) -> Value { Value::Undefined }
-
-async fn load_time_difference(&mut self, mut params: Value) -> Value { Value::Undefined }
-
-fn implode_hostname(&mut self, mut url: Value) -> Value { Value::Undefined }
-
-async fn fetch_market_leverage_tiers(&mut self, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn create_post_only_order(&mut self, mut symbol: Value, mut r#type: Value, mut side: Value, mut amount: Value, mut price: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn create_post_only_order_ws(&mut self, mut symbol: Value, mut r#type: Value, mut side: Value, mut amount: Value, mut price: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn create_reduce_only_order(&mut self, mut symbol: Value, mut r#type: Value, mut side: Value, mut amount: Value, mut price: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn create_reduce_only_order_ws(&mut self, mut symbol: Value, mut r#type: Value, mut side: Value, mut amount: Value, mut price: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn create_stop_order(&mut self, mut symbol: Value, mut r#type: Value, mut side: Value, mut amount: Value, mut price: Value, mut trigger_price: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn create_stop_order_ws(&mut self, mut symbol: Value, mut r#type: Value, mut side: Value, mut amount: Value, mut price: Value, mut trigger_price: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn create_stop_limit_order(&mut self, mut symbol: Value, mut side: Value, mut amount: Value, mut price: Value, mut trigger_price: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn create_stop_limit_order_ws(&mut self, mut symbol: Value, mut side: Value, mut amount: Value, mut price: Value, mut trigger_price: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn create_stop_market_order(&mut self, mut symbol: Value, mut side: Value, mut amount: Value, mut trigger_price: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn create_stop_market_order_ws(&mut self, mut symbol: Value, mut side: Value, mut amount: Value, mut trigger_price: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn create_sub_account(&mut self, mut name: Value, mut params: Value) -> Value { Value::Undefined }
-
-fn safe_currency_code(&self, mut currency_id: Value, mut currency: Value) -> Value { Value::Undefined }
-
-fn filter_by_symbol_since_limit(&self, mut array: Value, mut symbol: Value, mut since: Value, mut limit: Value, mut tail: Value) -> Value { Value::Undefined }
-
-fn filter_by_currency_since_limit(&self, mut array: Value, mut code: Value, mut since: Value, mut limit: Value, mut tail: Value) -> Value { Value::Undefined }
-
-fn filter_by_symbols_since_limit(&self, mut array: Value, mut symbols: Value, mut since: Value, mut limit: Value, mut tail: Value) -> Value { Value::Undefined }
-
-fn parse_last_prices(&self, mut prices_data: Value, mut symbols: Value, mut params: Value) -> Value { Value::Undefined }
-
-fn parse_tickers(&self, mut tickers: Value, mut symbols: Value, mut params: Value) -> Value { Value::Undefined }
-
-fn parse_deposit_addresses(&self, mut addresses: Value, mut codes: Value, mut indexed: Value, mut params: Value) -> Value { Value::Undefined }
-
-fn parse_borrow_interests(&self, mut response: Value, mut market: Value) -> Value { Value::Undefined }
-
-fn parse_borrow_rate(&self, mut info: Value, mut currency: Value) -> Value { Value::Undefined }
-
-fn parse_borrow_rate_history(&self, mut response: Value, mut code: Value, mut since: Value, mut limit: Value) -> Value { Value::Undefined }
-
-fn parse_isolated_borrow_rates(&self, mut info: Value) -> Value { Value::Undefined }
-
-fn parse_funding_rate_histories(&self, mut response: Value, mut market: Value, mut since: Value, mut limit: Value) -> Value { Value::Undefined }
-
-fn safe_symbol(&self, mut market_id: Value, mut market: Value, mut delimiter: Value, mut market_type: Value) -> Value { Value::Undefined }
-
-fn parse_funding_rate(&self, mut contract: Value, mut market: Value) -> Value { Value::Undefined }
-
-fn parse_funding_rates(&self, mut response: Value, mut symbols: Value) -> Value { Value::Undefined }
-
-fn parse_long_short_ratio(&self, mut info: Value, mut market: Value) -> Value { Value::Undefined }
-
-fn parse_long_short_ratio_history(&self, mut response: Value, mut market: Value, mut since: Value, mut limit: Value) -> Value { Value::Undefined }
-
-fn handle_trigger_prices_and_params(&mut self, mut symbol: Value, mut params: Value, mut omit_params: Value) -> Value { Value::Undefined }
-
-fn handle_trigger_direction_and_params(&mut self, mut params: Value, mut exchange_specific_key: Value, mut allow_empty: Value) -> Value { Value::Undefined }
-
-fn handle_trigger_and_params(&mut self, mut params: Value) -> Value { Value::Undefined }
-
-fn is_trigger_order(&mut self, mut params: Value) -> Value { Value::Undefined }
-
-fn is_post_only(&mut self, mut is_market_order: Value, mut exchange_specific_param: Value, mut params: Value) -> Value { Value::Undefined }
-
-fn handle_post_only(&mut self, mut is_market_order: Value, mut exchange_specific_post_only_option: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_last_prices(&mut self, mut symbols: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_trading_fees(&mut self, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_trading_fees_ws(&mut self, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_trading_fee(&mut self, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_convert_currencies(&mut self, mut params: Value) -> Value { Value::Undefined }
-
-fn parse_open_interest(&self, mut interest: Value, mut market: Value) -> Value { Value::Undefined }
-
-fn parse_open_interests(&self, mut response: Value, mut symbols: Value) -> Value { Value::Undefined }
-
-fn parse_open_interests_history(&self, mut response: Value, mut market: Value, mut since: Value, mut limit: Value) -> Value { Value::Undefined }
-
-async fn fetch_funding_rate(&mut self, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_funding_interval(&mut self, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_mark_ohlcv(&mut self, mut symbol: Value, mut timeframe: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_index_ohlcv(&mut self, mut symbol: Value, mut timeframe: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_premium_index_ohlcv(&mut self, mut symbol: Value, mut timeframe: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-fn handle_time_in_force(&mut self, mut params: Value) -> Value { Value::Undefined }
-
-fn convert_type_to_account(&self, mut account: Value) -> Value { Value::Undefined }
-
-fn check_required_argument(&mut self, mut method_name: Value, mut argument: Value, mut argument_name: Value, mut options: Value) -> Value { Value::Undefined }
-
-fn check_required_margin_argument(&mut self, mut method_name: Value, mut symbol: Value, mut margin_mode: Value) -> Value { Value::Undefined }
-
-fn parse_deposit_withdraw_fees(&self, mut response: Value, mut codes: Value, mut currency_id_key: Value) -> Value { Value::Undefined }
-
-fn parse_deposit_withdraw_fee(&self, mut fee: Value, mut currency: Value) -> Value { Value::Undefined }
-
-fn deposit_withdraw_fee(&mut self, mut info: Value) -> Value { Value::Undefined }
-
-fn assign_default_deposit_withdraw_fees(&mut self, mut fee: Value, mut currency: Value) -> Value { Value::Undefined }
-
-fn parse_income(&self, mut info: Value, mut market: Value) -> Value { Value::Undefined }
-
-fn parse_incomes(&self, mut incomes: Value, mut market: Value, mut since: Value, mut limit: Value) -> Value { Value::Undefined }
-
-fn get_market_from_symbols(&mut self, mut symbols: Value) -> Value { Value::Undefined }
-
-fn parse_ws_ohlcvs(&self, mut ohlcvs: Value, mut market: Value, mut timeframe: Value, mut since: Value, mut limit: Value) -> Value { Value::Undefined }
-
-async fn fetch_transactions(&mut self, mut code: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-fn filter_by_array_positions(&self, mut objects: Value, mut key: Value, mut values: Value, mut indexed: Value) -> Value { Value::Undefined }
-
-fn filter_by_array_tickers(&self, mut objects: Value, mut key: Value, mut values: Value, mut indexed: Value) -> Value { Value::Undefined }
-
-fn create_ohlcv_object(&mut self, mut symbol: Value, mut timeframe: Value, mut data: Value) -> Value { Value::Undefined }
-
-fn handle_max_entries_per_request_and_params(&mut self, mut method: Value, mut max_entries_per_request: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_paginated_call_dynamic(&mut self, mut method: Value, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value, mut max_entries_per_request: Value, mut remove_repeated: Value) -> Value { Value::Undefined }
-
-async fn safe_deterministic_call(&self, mut method: Value, mut symbol: Value, mut since: Value, mut limit: Value, mut timeframe: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_paginated_call_deterministic(&mut self, mut method: Value, mut symbol: Value, mut since: Value, mut limit: Value, mut timeframe: Value, mut params: Value, mut max_entries_per_request: Value) -> Value { Value::Undefined }
-
-async fn fetch_paginated_call_cursor(&mut self, mut method: Value, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value, mut cursor_received: Value, mut cursor_sent: Value, mut cursor_increment: Value, mut max_entries_per_request: Value) -> Value { Value::Undefined }
-
-async fn fetch_paginated_call_incremental(&mut self, mut method: Value, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value, mut page_key: Value, mut max_entries_per_request: Value) -> Value { Value::Undefined }
-
-fn sort_cursor_paginated_result(&mut self, mut result: Value) -> Value { Value::Undefined }
-
-fn remove_repeated_elements_from_array(&mut self, mut input: Value, mut fallback_to_timestamp: Value) -> Value { Value::Undefined }
-
-fn remove_repeated_trades_from_array(&mut self, mut input: Value) -> Value { Value::Undefined }
-
-fn remove_keys_from_dict(&mut self, mut dict: Value, mut remove_keys: Value) -> Value { Value::Undefined }
-
-fn handle_until_option(&mut self, mut key: Value, mut request: Value, mut params: Value, mut multiplier: Value) -> Value { Value::Undefined }
-
-fn safe_open_interest(&self, mut interest: Value, mut market: Value) -> Value { Value::Undefined }
-
-fn parse_liquidation(&self, mut liquidation: Value, mut market: Value) -> Value { Value::Undefined }
-
-fn parse_liquidations(&self, mut liquidations: Value, mut market: Value, mut since: Value, mut limit: Value) -> Value { Value::Undefined }
-
-fn parse_greeks(&self, mut greeks: Value, mut market: Value) -> Value { Value::Undefined }
-
-fn parse_all_greeks(&self, mut greeks: Value, mut symbols: Value, mut params: Value) -> Value { Value::Undefined }
-
-fn parse_option(&self, mut chain: Value, mut currency: Value, mut market: Value) -> Value { Value::Undefined }
-
-fn parse_option_chain(&self, mut response: Value, mut currency_key: Value, mut symbol_key: Value) -> Value { Value::Undefined }
-
-fn parse_margin_modes(&self, mut response: Value, mut symbols: Value, mut symbol_key: Value, mut market_type: Value) -> Value { Value::Undefined }
-
-fn parse_margin_mode(&self, mut margin_mode: Value, mut market: Value) -> Value { Value::Undefined }
-
-fn parse_leverages(&self, mut response: Value, mut symbols: Value, mut symbol_key: Value, mut market_type: Value) -> Value { Value::Undefined }
-
-fn parse_leverage(&self, mut leverage: Value, mut market: Value) -> Value { Value::Undefined }
-
-fn parse_conversions(&self, mut conversions: Value, mut code: Value, mut from_currency_key: Value, mut to_currency_key: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-fn parse_conversion(&self, mut conversion: Value, mut from_currency: Value, mut to_currency: Value) -> Value { Value::Undefined }
-
-fn convert_expire_date(&self, mut date: Value) -> Value { Value::Undefined }
-
-fn convert_expire_date_to_market_id_date(&self, mut date: Value) -> Value { Value::Undefined }
-
-fn convert_market_id_expire_date(&self, mut date: Value) -> Value { Value::Undefined }
-
-async fn fetch_position_history(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn load_markets_and_sign_in(&mut self) -> Value { Value::Undefined }
-
-async fn fetch_positions_history(&mut self, mut symbols: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-fn parse_margin_modification(&self, mut data: Value, mut market: Value) -> Value { Value::Undefined }
-
-fn parse_margin_modifications(&self, mut response: Value, mut symbols: Value, mut symbol_key: Value, mut market_type: Value) -> Value { Value::Undefined }
-
-async fn fetch_transfer(&mut self, mut id: Value, mut code: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_transfers(&mut self, mut code: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn un_watch_ohlcv(&mut self, mut symbol: Value, mut timeframe: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn watch_mark_price(&mut self, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn watch_mark_prices(&mut self, mut symbols: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn withdraw_ws(&mut self, mut code: Value, mut amount: Value, mut address: Value, mut tag: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn un_watch_my_trades(&mut self, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn create_orders_ws(&mut self, mut orders: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_orders_by_status_ws(&mut self, mut status: Value, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn un_watch_bids_asks(&mut self, mut symbols: Value, mut params: Value) -> Value { Value::Undefined }
-
-fn clean_unsubscription(&mut self, mut client: Value, mut sub_hash: Value, mut unsub_hash: Value, mut sub_hash_is_prefix: Value) -> Value { Value::Undefined }
-
-fn clean_cache(&mut self, mut subscription: Value) -> Value { Value::Undefined }
-
-fn timeframe_from_milliseconds(&mut self, mut ms: Value) -> Value { Value::Undefined }
 
     
     async fn dispatch(&mut self, method: Value, params: Value, context: Value) -> Value {

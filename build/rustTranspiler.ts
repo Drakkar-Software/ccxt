@@ -23,7 +23,6 @@ const metaFileUrl = import.meta.url;
 const __dirname = path.dirname(fileURLToPath(metaFileUrl));
 
 const FUNCTION_INFO: Record<string, Record<string, { paramsCount: number; async: boolean }>> = {};
-const RUST_STUB_MODE = true;
 
 // Methods that are manually implemented in the Exchange trait (in exchange.rs)
 // and should NOT be auto-generated as stubs by the transpiler.
@@ -302,6 +301,37 @@ function getArgumentCount(className: string, node: any) {
         stringDiv: 3,
         throttle: 1,
         totp: 1,
+        // safe* methods have 3 params (dictionary, key, defaultValue) but are
+        // often called with 2 in JS (default is undefined)
+        safeString: 3, safeString2: 4, safeStringN: 3,
+        safeStringLower: 3, safeStringLower2: 4, safeStringLowerN: 3,
+        safeStringUpper: 3, safeStringUpper2: 4, safeStringUpperN: 3,
+        safeInteger: 3, safeInteger2: 4, safeIntegerN: 3,
+        safeIntegerProduct: 3, safeIntegerProduct2: 4, safeIntegerProductN: 3,
+        safeTimestamp: 3, safeTimestamp2: 4, safeTimestampN: 3,
+        safeFloat: 3, safeFloat2: 4, safeFloatN: 3,
+        safeValue: 3, safeValue2: 4, safeValueN: 3,
+        safeNumber: 3, safeNumber2: 4, safeNumberN: 3,
+        safeBool: 3, safeBool2: 4, safeBoolN: 3,
+        safeDict: 3, safeDict2: 4, safeDictN: 3,
+        safeList: 3, safeList2: 4, safeListN: 3,
+        safeNumberOmitZero: 3, safeIntegerOmitZero: 3,
+        // Other methods with optional params
+        loadMarkets: 2, omit: 2, iso8601: 1, milliseconds: 0,
+        numberToString: 1, inArray: 2, decimalToPrecision: 5,
+        sortBy: 4, indexBy: 2, filterBy: 3, groupBy: 2,
+        filterByLimit: 4, filterBySinceLimit: 5,
+        parseBidAsk: 3, parseBidsAsks: 3, parseOrderBook: 5,
+        parseNumber: 2, parseToInt: 2,
+        json: 1, encode: 1, urlencode: 1, rawencode: 1,
+        hash: 3, hmac: 4, jwt: 4,
+        encodeURIComponent: 1, uuid22: 0, yymmdd: 2,
+        precisionFromString: 1, createSafeDictionary: 0,
+        sign: 6, handleErrors: 9,
+        throwExactlyMatchedException: 3, throwBroadlyMatchedException: 3,
+        parseJson: 1, arrayConcat: 2,
+        urlencodeWithArrayRepeat: 1, parse8601: 1,
+        safeMarket: 4, safeCurrency: 2, safeCurrencyCode: 2, safeSymbol: 4,
     };
     const fname = getCalleeFunctionName(node);
     const rv = FUNCTION_INFO[className]?.[fname] || FUNCTION_INFO['Exchange']?.[fname];
@@ -340,6 +370,8 @@ function transpileMethodToRust(opts: {
     baseClassName?: string;
     apiMethods: Set<string>;
     exchangeDescribe?: any;
+    isInherited?: boolean;
+    ownMethodNames?: Set<string>;
 }) {
     const { className, method, baseMethodNames, baseClassName, apiMethods, exchangeDescribe } = opts;
 
@@ -357,66 +389,15 @@ function transpileMethodToRust(opts: {
         allowSuperOutsideMethod: true,
     }) as any;
 
-    if (RUST_STUB_MODE) {
-        const fnNode = ast.body?.find((n: any) => n.type === 'FunctionDeclaration');
-        if (!fnNode) {
-            return '';
-        }
-        const fname = fnNode.id?.name || 'unknown';
-        // Skip methods that are manually implemented above the auto-generated delimiter.
-        if (MANUALLY_IMPLEMENTED_METHODS.has(fname)) {
-            return '';
-        }
-        let isSelfImmutable = false;
-        if (
-            fname.startsWith('safe') ||
-            fname.startsWith('parse') ||
-            fname.startsWith('filter') ||
-            fname === 'marketSymbols' ||
-            fname.startsWith('convert') ||
-            fname === 'commonCurrencyCode' ||
-            fname === 'market' ||
-            fname === 'getSupportedMapping' ||
-            fname === 'describe' ||
-            fname === 'nonce' ||
-            fname === 'symbol' ||
-            fname === 'account' ||
-            fname === 'currency'
-        ) {
-            isSelfImmutable = true;
-        }
-        const params: string[] = [];
-        for (const param of fnNode.params || []) {
-            if (param.type === 'Identifier') {
-                params.push(transformIdentifier(param.name));
-            } else if (param.type === 'AssignmentPattern' && param.left?.type === 'Identifier') {
-                params.push(transformIdentifier(param.left.name));
-            }
-        }
-        const header =
-            `${fnNode.async ? 'async ' : ''}fn ${unCamelCamelCase(fname)}(&${isSelfImmutable ? '' : 'mut '}self` +
-            (params.length ? `, ${params.map((x) => `mut ${x}: Value`).join(', ')}` : '') +
-            ') -> Value ';
-
-        const delegateToExchange = () => {
-            const rustName = unCamelCamelCase(fname);
-            const args = params.length ? `, ${params.join(', ')}` : '';
-            return header + `{ Exchange::${rustName}(self${args})${fnNode.async ? '.await' : ''} }\n`;
-        };
-
-        if (fname === 'describe' && exchangeDescribe) {
-            return (
-                header +
-                `{
-        Value::Json(serde_json::Value::from_str(r###"${JSON.stringify(exchangeDescribe, null, 4)}"###).unwrap())
-    }\n`
-            );
-        }
-
-        if (fname === 'request') {
-            return (
-                header +
-                `{
+    // ---------------------------------------------------------------------------
+    // Hand-written Rust bodies for critical methods whose JS source depends on
+    // runtime that is not yet implemented (loadMarkets, fetch, etc.).
+    // These are keyed by JS function name and return the full Rust method body
+    // (including signature).  When a method is listed here the transpiler emits
+    // the hand-written version instead of walking the JS AST.
+    // ---------------------------------------------------------------------------
+    const HANDWRITTEN_METHODS: Record<string, (header: string) => string> = {
+        request: (header) => header + `{
         fn first_string(v: &serde_json::Value) -> Option<String> {
             match v {
                 serde_json::Value::String(s) => Some(s.clone()),
@@ -440,7 +421,7 @@ function transpileMethodToRust(opts: {
             }
         }
 
-        let urls_api = ${capitalizeFirstLetter(className)}::describe(self).get("urls".into()).get("api".into());
+        let urls_api = <Self as ${capitalizeFirstLetter(className)}>::describe(self).get("urls".into()).get("api".into());
         let mut base = urls_api.get(api.clone());
         if !base.is_string() {
             base = urls_api.get("public".into());
@@ -464,11 +445,10 @@ function transpileMethodToRust(opts: {
             return Value::Undefined;
         }
         let mut base_url = base.unwrap_str().to_string();
-        let hostname = ${capitalizeFirstLetter(className)}::describe(self).get("hostname".into());
+        let hostname = <Self as ${capitalizeFirstLetter(className)}>::describe(self).get("hostname".into());
         if hostname.is_string() {
             base_url = base_url.replace("{hostname}", hostname.unwrap_str());
         }
-        // Last-resort placeholder cleanup for templated domains in describe().
         while let Some(start) = base_url.find('{') {
             if let Some(rel_end) = base_url[start..].find('}') {
                 let end = start + rel_end;
@@ -485,9 +465,7 @@ function transpileMethodToRust(opts: {
         let mut query_pairs: Vec<String> = vec![];
         if let Value::Json(serde_json::Value::Object(map)) = params.clone() {
             for (k, v) in map {
-                if v.is_null() {
-                    continue;
-                }
+                if v.is_null() { continue; }
                 let value_str = match v {
                     serde_json::Value::String(s) => s,
                     serde_json::Value::Number(n) => n.to_string(),
@@ -546,410 +524,195 @@ function transpileMethodToRust(opts: {
             Ok(json) => Value::Json(json),
             Err(_) => Value::from(text),
         }
-    }\n`
-            );
-        }
-
-        if (fname === 'fetchStatus') {
-            return (
-                header +
-                `{
+    }\n`,
+        fetchStatus: (header) => header + `{
         fn collect_routes(node: &serde_json::Value, api_name: &str, out: &mut Vec<(String, String, String)>) {
             if let serde_json::Value::Object(map) = node {
-                for (k, v) in map {
-                    let kl = k.to_lowercase();
-                    if kl == "get" || kl == "post" || kl == "put" || kl == "delete" {
-                        if let serde_json::Value::Object(paths) = v {
-                            for (p, _cost) in paths {
-                                out.push((api_name.to_string(), kl.to_uppercase(), p.clone()));
-                            }
-                        }
-                    } else {
-                        collect_routes(v, api_name, out);
-                    }
-                }
+                for (k, v) in map { let kl = k.to_lowercase(); if kl == "get" || kl == "post" || kl == "put" || kl == "delete" { if let serde_json::Value::Object(paths) = v { for (p, _cost) in paths { out.push((api_name.to_string(), kl.to_uppercase(), p.clone())); } } } else { collect_routes(v, api_name, out); } }
             }
         }
         let mut dynamic_calls: Vec<(String, String, String)> = vec![];
-        if let Value::Json(serde_json::Value::Object(api_map)) = ${capitalizeFirstLetter(className)}::describe(self).get("api".into()) {
-            for (api_name, node) in api_map {
-                collect_routes(&node, &api_name, &mut dynamic_calls);
-            }
+        if let Value::Json(serde_json::Value::Object(api_map)) = <Self as ${capitalizeFirstLetter(className)}>::describe(self).get("api".into()) {
+            for (api_name, node) in api_map { collect_routes(&node, &api_name, &mut dynamic_calls); }
         }
         for token in ["status", "ping", "time", "system/status"] {
             for (api_name, method_name, path_name) in &dynamic_calls {
-                if method_name.as_str() != "GET" || path_name.contains('{') {
-                    continue;
-                }
+                if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = ${capitalizeFirstLetter(className)}::request(self, path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
-                    if !rv.is_undefined() {
-                        return rv;
-                    }
+                    let rv = <Self as ${capitalizeFirstLetter(className)}>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    if !rv.is_undefined() { return rv; }
                 }
             }
         }
-        let candidates = vec![
-            ("public", "GET", "status"),
-            ("public", "GET", "ping"),
-            ("public", "GET", "time"),
-            ("sapi", "GET", "system/status"),
-        ];
+        let candidates = vec![("public", "GET", "status"), ("public", "GET", "ping"), ("public", "GET", "time"), ("sapi", "GET", "system/status")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = ${capitalizeFirstLetter(className)}::request(self, path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
-            if !rv.is_undefined() {
-                return rv;
-            }
+            let rv = <Self as ${capitalizeFirstLetter(className)}>::request(self,path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
-    }\n`
-            );
-        }
-
-        if (fname === 'fetchTicker') {
-            return (
-                header +
-                `{
+    }\n`,
+        fetchTicker: (header) => header + `{
         fn collect_routes(node: &serde_json::Value, api_name: &str, out: &mut Vec<(String, String, String)>) {
             if let serde_json::Value::Object(map) = node {
-                for (k, v) in map {
-                    let kl = k.to_lowercase();
-                    if kl == "get" || kl == "post" || kl == "put" || kl == "delete" {
-                        if let serde_json::Value::Object(paths) = v {
-                            for (p, _cost) in paths {
-                                out.push((api_name.to_string(), kl.to_uppercase(), p.clone()));
-                            }
-                        }
-                    } else {
-                        collect_routes(v, api_name, out);
-                    }
-                }
+                for (k, v) in map { let kl = k.to_lowercase(); if kl == "get" || kl == "post" || kl == "put" || kl == "delete" { if let serde_json::Value::Object(paths) = v { for (p, _cost) in paths { out.push((api_name.to_string(), kl.to_uppercase(), p.clone())); } } } else { collect_routes(v, api_name, out); } }
             }
         }
         let mut request = if params.is_object() { params.clone() } else { Value::new_object() };
         request.set("symbol".into(), symbol.clone());
         let mut dynamic_calls: Vec<(String, String, String)> = vec![];
-        if let Value::Json(serde_json::Value::Object(api_map)) = ${capitalizeFirstLetter(className)}::describe(self).get("api".into()) {
-            for (api_name, node) in api_map {
-                collect_routes(&node, &api_name, &mut dynamic_calls);
-            }
+        if let Value::Json(serde_json::Value::Object(api_map)) = <Self as ${capitalizeFirstLetter(className)}>::describe(self).get("api".into()) {
+            for (api_name, node) in api_map { collect_routes(&node, &api_name, &mut dynamic_calls); }
         }
         for token in ["ticker/24hr", "ticker", "ticker/price", "bookticker", "tickers"] {
             for (api_name, method_name, path_name) in &dynamic_calls {
-                if method_name.as_str() != "GET" || path_name.contains('{') {
-                    continue;
-                }
+                if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = ${capitalizeFirstLetter(className)}::request(self, path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
-                    if !rv.is_undefined() {
-                        return rv;
-                    }
+                    let rv = <Self as ${capitalizeFirstLetter(className)}>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    if !rv.is_undefined() { return rv; }
                 }
             }
         }
-        let candidates = vec![
-            ("public", "GET", "ticker/24hr"),
-            ("public", "GET", "ticker"),
-            ("public", "GET", "ticker/price"),
-        ];
+        let candidates = vec![("public", "GET", "ticker/24hr"), ("public", "GET", "ticker"), ("public", "GET", "ticker/price")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = ${capitalizeFirstLetter(className)}::request(self, path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
-            if !rv.is_undefined() {
-                return rv;
-            }
+            let rv = <Self as ${capitalizeFirstLetter(className)}>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
-    }\n`
-            );
-        }
-
-        if (fname === 'fetchTickers') {
-            return (
-                header +
-                `{
+    }\n`,
+        fetchTickers: (header) => header + `{
         fn collect_routes(node: &serde_json::Value, api_name: &str, out: &mut Vec<(String, String, String)>) {
             if let serde_json::Value::Object(map) = node {
-                for (k, v) in map {
-                    let kl = k.to_lowercase();
-                    if kl == "get" || kl == "post" || kl == "put" || kl == "delete" {
-                        if let serde_json::Value::Object(paths) = v {
-                            for (p, _cost) in paths {
-                                out.push((api_name.to_string(), kl.to_uppercase(), p.clone()));
-                            }
-                        }
-                    } else {
-                        collect_routes(v, api_name, out);
-                    }
-                }
+                for (k, v) in map { let kl = k.to_lowercase(); if kl == "get" || kl == "post" || kl == "put" || kl == "delete" { if let serde_json::Value::Object(paths) = v { for (p, _cost) in paths { out.push((api_name.to_string(), kl.to_uppercase(), p.clone())); } } } else { collect_routes(v, api_name, out); } }
             }
         }
         let mut dynamic_calls: Vec<(String, String, String)> = vec![];
-        if let Value::Json(serde_json::Value::Object(api_map)) = ${capitalizeFirstLetter(className)}::describe(self).get("api".into()) {
-            for (api_name, node) in api_map {
-                collect_routes(&node, &api_name, &mut dynamic_calls);
-            }
+        if let Value::Json(serde_json::Value::Object(api_map)) = <Self as ${capitalizeFirstLetter(className)}>::describe(self).get("api".into()) {
+            for (api_name, node) in api_map { collect_routes(&node, &api_name, &mut dynamic_calls); }
         }
         for token in ["tickers", "ticker/24hr", "ticker", "bookticker"] {
             for (api_name, method_name, path_name) in &dynamic_calls {
-                if method_name.as_str() != "GET" || path_name.contains('{') {
-                    continue;
-                }
+                if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = ${capitalizeFirstLetter(className)}::request(self, path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
-                    if !rv.is_undefined() {
-                        return rv;
-                    }
+                    let rv = <Self as ${capitalizeFirstLetter(className)}>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    if !rv.is_undefined() { return rv; }
                 }
             }
         }
-        let candidates = vec![
-            ("public", "GET", "ticker/24hr"),
-            ("public", "GET", "tickers"),
-            ("public", "GET", "ticker"),
-        ];
+        let candidates = vec![("public", "GET", "ticker/24hr"), ("public", "GET", "tickers"), ("public", "GET", "ticker")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = ${capitalizeFirstLetter(className)}::request(self, path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
-            if !rv.is_undefined() {
-                return rv;
-            }
+            let rv = <Self as ${capitalizeFirstLetter(className)}>::request(self,path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
-    }\n`
-            );
-        }
-
-        if (fname === 'fetchOrderBook') {
-            return (
-                header +
-                `{
+    }\n`,
+        fetchOrderBook: (header) => header + `{
         fn collect_routes(node: &serde_json::Value, api_name: &str, out: &mut Vec<(String, String, String)>) {
             if let serde_json::Value::Object(map) = node {
-                for (k, v) in map {
-                    let kl = k.to_lowercase();
-                    if kl == "get" || kl == "post" || kl == "put" || kl == "delete" {
-                        if let serde_json::Value::Object(paths) = v {
-                            for (p, _cost) in paths {
-                                out.push((api_name.to_string(), kl.to_uppercase(), p.clone()));
-                            }
-                        }
-                    } else {
-                        collect_routes(v, api_name, out);
-                    }
-                }
+                for (k, v) in map { let kl = k.to_lowercase(); if kl == "get" || kl == "post" || kl == "put" || kl == "delete" { if let serde_json::Value::Object(paths) = v { for (p, _cost) in paths { out.push((api_name.to_string(), kl.to_uppercase(), p.clone())); } } } else { collect_routes(v, api_name, out); } }
             }
         }
         let mut request = if params.is_object() { params.clone() } else { Value::new_object() };
         request.set("symbol".into(), symbol.clone());
-        if limit.is_nonnullish() {
-            request.set("limit".into(), limit.clone());
-        }
+        if limit.is_nonnullish() { request.set("limit".into(), limit.clone()); }
         let mut dynamic_calls: Vec<(String, String, String)> = vec![];
-        if let Value::Json(serde_json::Value::Object(api_map)) = ${capitalizeFirstLetter(className)}::describe(self).get("api".into()) {
-            for (api_name, node) in api_map {
-                collect_routes(&node, &api_name, &mut dynamic_calls);
-            }
+        if let Value::Json(serde_json::Value::Object(api_map)) = <Self as ${capitalizeFirstLetter(className)}>::describe(self).get("api".into()) {
+            for (api_name, node) in api_map { collect_routes(&node, &api_name, &mut dynamic_calls); }
         }
         for token in ["depth", "orderbook", "order_book"] {
             for (api_name, method_name, path_name) in &dynamic_calls {
-                if method_name.as_str() != "GET" || path_name.contains('{') {
-                    continue;
-                }
+                if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = ${capitalizeFirstLetter(className)}::request(self, path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
-                    if !rv.is_undefined() {
-                        return rv;
-                    }
+                    let rv = <Self as ${capitalizeFirstLetter(className)}>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    if !rv.is_undefined() { return rv; }
                 }
             }
         }
-        let candidates = vec![
-            ("public", "GET", "depth"),
-            ("public", "GET", "orderbook"),
-            ("public", "GET", "order_book"),
-        ];
+        let candidates = vec![("public", "GET", "depth"), ("public", "GET", "orderbook"), ("public", "GET", "order_book")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = ${capitalizeFirstLetter(className)}::request(self, path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
-            if !rv.is_undefined() {
-                return rv;
-            }
+            let rv = <Self as ${capitalizeFirstLetter(className)}>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
-    }\n`
-            );
-        }
-
-        if (fname === 'fetchOHLCV') {
-            return (
-                header +
-                `{
+    }\n`,
+        fetchOHLCV: (header) => header + `{
         fn collect_routes(node: &serde_json::Value, api_name: &str, out: &mut Vec<(String, String, String)>) {
             if let serde_json::Value::Object(map) = node {
-                for (k, v) in map {
-                    let kl = k.to_lowercase();
-                    if kl == "get" || kl == "post" || kl == "put" || kl == "delete" {
-                        if let serde_json::Value::Object(paths) = v {
-                            for (p, _cost) in paths {
-                                out.push((api_name.to_string(), kl.to_uppercase(), p.clone()));
-                            }
-                        }
-                    } else {
-                        collect_routes(v, api_name, out);
-                    }
-                }
+                for (k, v) in map { let kl = k.to_lowercase(); if kl == "get" || kl == "post" || kl == "put" || kl == "delete" { if let serde_json::Value::Object(paths) = v { for (p, _cost) in paths { out.push((api_name.to_string(), kl.to_uppercase(), p.clone())); } } } else { collect_routes(v, api_name, out); } }
             }
         }
         let mut request = if params.is_object() { params.clone() } else { Value::new_object() };
         request.set("symbol".into(), symbol.clone());
         request.set("timeframe".into(), timeframe.clone());
         request.set("interval".into(), timeframe.clone());
-        if since.is_nonnullish() {
-            request.set("since".into(), since.clone());
-            request.set("startTime".into(), since.clone());
-        }
-        if limit.is_nonnullish() {
-            request.set("limit".into(), limit.clone());
-        }
+        if since.is_nonnullish() { request.set("since".into(), since.clone()); request.set("startTime".into(), since.clone()); }
+        if limit.is_nonnullish() { request.set("limit".into(), limit.clone()); }
         let mut dynamic_calls: Vec<(String, String, String)> = vec![];
-        if let Value::Json(serde_json::Value::Object(api_map)) = ${capitalizeFirstLetter(className)}::describe(self).get("api".into()) {
-            for (api_name, node) in api_map {
-                collect_routes(&node, &api_name, &mut dynamic_calls);
-            }
+        if let Value::Json(serde_json::Value::Object(api_map)) = <Self as ${capitalizeFirstLetter(className)}>::describe(self).get("api".into()) {
+            for (api_name, node) in api_map { collect_routes(&node, &api_name, &mut dynamic_calls); }
         }
         for token in ["klines", "candles", "ohlcv"] {
             for (api_name, method_name, path_name) in &dynamic_calls {
-                if method_name.as_str() != "GET" || path_name.contains('{') {
-                    continue;
-                }
+                if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = ${capitalizeFirstLetter(className)}::request(self, path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
-                    if !rv.is_undefined() {
-                        return rv;
-                    }
+                    let rv = <Self as ${capitalizeFirstLetter(className)}>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    if !rv.is_undefined() { return rv; }
                 }
             }
         }
-        let candidates = vec![
-            ("public", "GET", "klines"),
-            ("public", "GET", "candles"),
-            ("public", "GET", "ohlcv"),
-        ];
+        let candidates = vec![("public", "GET", "klines"), ("public", "GET", "candles"), ("public", "GET", "ohlcv")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = ${capitalizeFirstLetter(className)}::request(self, path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
-            if !rv.is_undefined() {
-                return rv;
-            }
+            let rv = <Self as ${capitalizeFirstLetter(className)}>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
-    }\n`
-            );
-        }
-
-        if (fname === 'fetchTime') {
-            return (
-                header +
-                `{
-        let candidates = vec![
-            ("public", "GET", "time"),
-            ("public", "GET", "server/time"),
-            ("public", "GET", "timestamp"),
-        ];
+    }\n`,
+        fetchTime: (header) => header + `{
+        let candidates = vec![("public", "GET", "time"), ("public", "GET", "server/time"), ("public", "GET", "timestamp")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = ${capitalizeFirstLetter(className)}::request(self, path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
-            if !rv.is_undefined() {
-                return rv;
-            }
+            let rv = <Self as ${capitalizeFirstLetter(className)}>::request(self,path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
-    }\n`
-            );
-        }
-
-        if (fname === 'fetchTrades') {
-            return (
-                header +
-                `{
+    }\n`,
+        fetchTrades: (header) => header + `{
         let mut request = if params.is_object() { params.clone() } else { Value::new_object() };
         request.set("symbol".into(), symbol.clone());
-        if since.is_nonnullish() {
-            request.set("since".into(), since.clone());
-            request.set("startTime".into(), since.clone());
-        }
-        if limit.is_nonnullish() {
-            request.set("limit".into(), limit.clone());
-        }
-        let candidates = vec![
-            ("public", "GET", "trades"),
-            ("public", "GET", "recent_trades"),
-            ("public", "GET", "aggTrades"),
-        ];
+        if since.is_nonnullish() { request.set("since".into(), since.clone()); request.set("startTime".into(), since.clone()); }
+        if limit.is_nonnullish() { request.set("limit".into(), limit.clone()); }
+        let candidates = vec![("public", "GET", "trades"), ("public", "GET", "recent_trades"), ("public", "GET", "aggTrades")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = ${capitalizeFirstLetter(className)}::request(self, path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
-            if !rv.is_undefined() {
-                return rv;
-            }
+            let rv = <Self as ${capitalizeFirstLetter(className)}>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
-    }\n`
-            );
-        }
-
-        if (fname === 'fetchL2OrderBook') {
-            return (
-                header +
-                `{
+    }\n`,
+        fetchL2OrderBook: (header) => header + `{
         let mut request = if params.is_object() { params.clone() } else { Value::new_object() };
         request.set("symbol".into(), symbol.clone());
-        if limit.is_nonnullish() {
-            request.set("limit".into(), limit.clone());
-        }
-        let candidates = vec![
-            ("public", "GET", "depth"),
-            ("public", "GET", "orderbook"),
-            ("public", "GET", "order_book"),
-        ];
+        if limit.is_nonnullish() { request.set("limit".into(), limit.clone()); }
+        let candidates = vec![("public", "GET", "depth"), ("public", "GET", "orderbook"), ("public", "GET", "order_book")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = ${capitalizeFirstLetter(className)}::request(self, path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
-            if !rv.is_undefined() {
-                return rv;
-            }
+            let rv = <Self as ${capitalizeFirstLetter(className)}>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
-    }\n`
-            );
-        }
-
-        if (fname === 'fetchBidsAsks') {
-            return (
-                header +
-                `{
+    }\n`,
+        fetchBidsAsks: (header) => header + `{
         let mut request = if params.is_object() { params.clone() } else { Value::new_object() };
-        if symbols.is_nonnullish() {
-            request.set("symbols".into(), symbols.clone());
-        }
-        let candidates = vec![
-            ("public", "GET", "ticker/bookTicker"),
-            ("public", "GET", "bookticker"),
-            ("public", "GET", "bidsasks"),
-            ("public", "GET", "tickers"),
-        ];
+        if symbols.is_nonnullish() { request.set("symbols".into(), symbols.clone()); }
+        let candidates = vec![("public", "GET", "ticker/bookTicker"), ("public", "GET", "bookticker"), ("public", "GET", "bidsasks"), ("public", "GET", "tickers")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = ${capitalizeFirstLetter(className)}::request(self, path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
-            if !rv.is_undefined() {
-                return rv;
-            }
+            let rv = <Self as ${capitalizeFirstLetter(className)}>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
-    }\n`
-            );
-        }
-
-        return header + '{ Value::Undefined }\n';
-    }
+    }\n`,
+    };
 
     const output = { value: '' };
     let currentOutput = output;
@@ -976,6 +739,10 @@ function transpileMethodToRust(opts: {
         emit(' '.repeat(state.indentLevel * state.indentSize));
     };
 
+    // Build a lowercase set for case-insensitive dispatch matching
+    // (enumerateApiMethodMapping generates slightly different casing than JS source)
+    const apiMethodsLower = new Set([...apiMethods].map(m => m.toLowerCase()));
+
     const isDispatchCall = (node: any) => {
         if (node.type !== 'CallExpression') {
             throw new Error('Unexpected node type');
@@ -984,7 +751,7 @@ function transpileMethodToRust(opts: {
             node.callee.type === 'MemberExpression' &&
             node.callee.object.type === 'ThisExpression' &&
             node.callee.property.type === 'Identifier' &&
-            ((apiMethods.has(node.callee.property.name) && !node.callee.computed) ||
+            ((apiMethodsLower.has(node.callee.property.name.toLowerCase()) && !node.callee.computed) ||
                 (node.callee.property.name === 'method' && node.callee.computed))
         );
     };
@@ -998,8 +765,12 @@ function transpileMethodToRust(opts: {
             node.callee.property.type === 'Identifier'
         ) {
             const fname = node.callee.property.name;
-            if (baseMethodNames && baseMethodNames.includes(fname)) return true;
-            return !!FUNCTION_INFO[className]?.[fname];
+            // Only use UFCS for methods the exchange's own trait defines,
+            // to avoid ambiguity between Exchange and the exchange-specific trait.
+            if (opts.ownMethodNames?.has(fname)) return true;
+            // Also match methods only known through FUNCTION_INFO (not in base)
+            if (!baseMethodNames?.includes(fname) && FUNCTION_INFO[className]?.[fname]) return true;
+            return false;
         }
         return false;
     };
@@ -1198,6 +969,34 @@ function transpileMethodToRust(opts: {
                     emit('"###).unwrap())\n');
                     indent(state);
                     emit('}');
+                    return;
+                }
+
+                // Skip methods that are manually implemented in exchange.rs
+                if (MANUALLY_IMPLEMENTED_METHODS.has(fname)) {
+                    return;
+                }
+
+                const headerStr =
+                    `${isAsync ? 'async ' : ''}fn ${unCamelCamelCase(fname)}(&${isSelfImmutable ? '' : 'mut '}self` +
+                    (params.length ? `, ${params.map((x: string) => `mut ${x}: Value`).join(', ')}` : '') +
+                    `) -> ${retType} `;
+
+                // Use hand-written Rust body for methods whose JS depends on unimplemented runtime
+                if (HANDWRITTEN_METHODS[fname]) {
+                    emit(HANDWRITTEN_METHODS[fname](headerStr));
+                    return;
+                }
+
+                // Base Exchange class methods depend on runtime state (this.markets, etc.)
+                // that isn't implemented yet — emit stubs for them.
+                // Only exchange-specific overrides get fully transpiled bodies.
+                if (className === 'Exchange' || opts.isInherited) {
+                    if (retType === '()') {
+                        emit(headerStr + '{ }\n');
+                    } else {
+                        emit(headerStr + '{ Value::Undefined }\n');
+                    }
                     return;
                 }
 
@@ -1692,6 +1491,16 @@ function transpileMethodToRust(opts: {
                                 throw new Error('Unexpected logical expression type');
                         }
                         break;
+                    case '??':
+                        // Nullish coalescing: a ?? b → if a is defined use a, else b
+                        emit('if ');
+                        c(node.left, asType(state, 'bool'));
+                        emit('.is_nonnullish() { ');
+                        c(node.left, asType(state, 'value'));
+                        emit(' } else { ');
+                        c(node.right, asType(state, 'value'));
+                        emit(' }');
+                        break;
                     default:
                         throw new Error('Unexpected logical operator');
                 }
@@ -1756,6 +1565,11 @@ function transpileMethodToRust(opts: {
                         emit(' ');
                         c(node.right, asType(state, 'value'));
                         break;
+                    case 'instanceof':
+                        // x instanceof Error → always false in Value runtime
+                        emit('false');
+                        if (state.asType === 'value') emit('.into()');
+                        break;
                     default:
                         throw new Error('Unexpected binary operator: ' + node.operator);
                 }
@@ -1773,14 +1587,15 @@ function transpileMethodToRust(opts: {
 
                 if (isDispatchCall(node)) {
                     if (node.callee.property.name === 'method' && node.callee.computed) {
-                        emit(`${capitalizeFirstLetter(className)}::dispatch(self, ` + node.callee.property.name + `, `);
+                        emit(`self.dispatch(` + node.callee.property.name + `, `);
                     } else {
-                        emit(`${capitalizeFirstLetter(className)}::dispatch(self, "` + node.callee.property.name + `".into(), `);
+                        emit(`self.dispatch("` + node.callee.property.name + `".into(), `);
                     }
                     argCounts = 2;
                 } else {
                     if (isOverridenMethodCall(node)) {
-                        emit(capitalizeFirstLetter(className) + '::');
+                        // Use UFCS to disambiguate between Exchange and exchange-specific trait
+                        emit('<Self as ' + capitalizeFirstLetter(className) + '>::');
                         c(node.callee.property, asType({ ...state, parent: node }));
                         emit('(self');
                         if (argCounts > 0) emit(', ');
@@ -2043,6 +1858,9 @@ function transpileMethodToRust(opts: {
                     case '++':
                         emit(' += 1');
                         break;
+                    case '--':
+                        emit(' -= 1');
+                        break;
                     default:
                         throw new Error('Unsupported update operator: ' + node.operator);
                 }
@@ -2118,9 +1936,16 @@ function transpileMethodToRust(opts: {
                     switch (node1.type) {
                         case 'Property':
                             indent(state1);
-                            emit(`"${node1.key.value}": `);
+                            // Handle both Literal keys (key.value) and Identifier keys (key.name)
+                            const keyStr = node1.key.value !== undefined ? node1.key.value : node1.key.name;
+                            emit(`"${keyStr}": `);
                             c(node1.value, asType(state1));
                             if (i < node.properties.length - 1) emit(',\n');
+                            break;
+                        case 'SpreadElement':
+                            // {...obj} in object literal — skip in JSON context
+                            indent(state1);
+                            emit('// spread element omitted in JSON literal\n');
                             break;
                         default:
                             throw new Error('Unsupported object expression type: ' + node1.type);
@@ -2137,10 +1962,154 @@ function transpileMethodToRust(opts: {
             },
 
             TryStatement(node: any, state: any, c: any) {
-                c(node.block, asType(state));
-                if (node.finalizer) {
-                    c(node.finalizer, asType(state));
+                // Emit try block body inline (Rust has no try/catch — errors would need Result types)
+                for (const stmt of node.block.body) {
+                    indent(state);
+                    c(stmt, asType(state));
+                    emit(';\n');
                 }
+                if (node.handler) {
+                    indent(state);
+                    emit('// catch block omitted (no exception support in Value runtime)\n');
+                }
+                if (node.finalizer) {
+                    for (const stmt of node.finalizer.body) {
+                        indent(state);
+                        c(stmt, asType(state));
+                        emit(';\n');
+                    }
+                }
+            },
+
+            SpreadElement(node: any, state: any, c: any) {
+                // In most contexts spread is used in object/array literals; emit the inner value
+                c(node.argument, asType(state, 'value'));
+            },
+
+            ArrowFunctionExpression(node: any, state: any, c: any) {
+                emit('|');
+                for (let i = 0; i < node.params.length; i++) {
+                    const param = node.params[i];
+                    if (param.type === 'AssignmentPattern') {
+                        emit('mut ');
+                        c(param.left, asType(state));
+                    } else {
+                        emit('mut ');
+                        c(param, asType(state));
+                    }
+                    if (i < node.params.length - 1) emit(', ');
+                }
+                emit('| ');
+                if (node.body.type === 'BlockStatement') {
+                    c(node.body, asType({ ...state, indentLevel: state.indentLevel + 1 }));
+                } else {
+                    c(node.body, asType(state, 'value'));
+                }
+            },
+
+            FunctionExpression(node: any, state: any, c: any) {
+                // Treat like arrow function (closure)
+                emit('|');
+                for (let i = 0; i < node.params.length; i++) {
+                    const param = node.params[i];
+                    if (param.type === 'AssignmentPattern') {
+                        emit('mut ');
+                        c(param.left, asType(state));
+                    } else {
+                        emit('mut ');
+                        c(param, asType(state));
+                    }
+                    if (i < node.params.length - 1) emit(', ');
+                }
+                emit('| ');
+                if (node.body.type === 'BlockStatement') {
+                    c(node.body, asType({ ...state, indentLevel: state.indentLevel + 1 }));
+                } else {
+                    c(node.body, asType(state, 'value'));
+                }
+            },
+
+            TemplateLiteral(node: any, state: any, c: any) {
+                if (node.expressions.length === 0) {
+                    // Simple template literal with no interpolation
+                    const raw = node.quasis[0].value.cooked || node.quasis[0].value.raw;
+                    emit(`Value::from("${raw.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}")`);
+                } else {
+                    emit('Value::from(format!("');
+                    for (let i = 0; i < node.quasis.length; i++) {
+                        const cooked = node.quasis[i].value.cooked || node.quasis[i].value.raw;
+                        emit(cooked.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\{/g, '{{').replace(/\}/g, '}}'));
+                        if (i < node.expressions.length) {
+                            emit('{}');
+                        }
+                    }
+                    emit('"');
+                    for (const expr of node.expressions) {
+                        emit(', ');
+                        c(expr, asType(state, 'value'));
+                    }
+                    emit('))');
+                }
+            },
+
+            ForInStatement(node: any, state: any, c: any) {
+                if (node.left.type === 'VariableDeclaration' && node.left.declarations[0]) {
+                    emit('for mut ');
+                    c(node.left.declarations[0].id, asType(state));
+                } else {
+                    c(node.left, asType(state));
+                }
+                emit(' in ');
+                c(node.right, asType(state));
+                emit('.keys() ');
+                c(node.body, asType({ ...state, indentLevel: state.indentLevel + 1 }));
+            },
+
+            ForOfStatement(node: any, state: any, c: any) {
+                if (node.left.type === 'VariableDeclaration' && node.left.declarations[0]) {
+                    emit('for mut ');
+                    c(node.left.declarations[0].id, asType(state));
+                } else {
+                    c(node.left, asType(state));
+                }
+                emit(' in ');
+                c(node.right, asType(state));
+                emit('.iter() ');
+                c(node.body, asType({ ...state, indentLevel: state.indentLevel + 1 }));
+            },
+
+            SwitchStatement(node: any, state: any, c: any) {
+                // Emit as if-else chain
+                let first = true;
+                for (const caseNode of node.cases) {
+                    if (caseNode.test) {
+                        indent(state);
+                        emit(first ? 'if ' : ' else if ');
+                        c(node.discriminant, asType(state, 'value'));
+                        emit(' == ');
+                        c(caseNode.test, asType(state, 'value'));
+                        emit(' {\n');
+                        first = false;
+                    } else {
+                        // default case
+                        if (!first) {
+                            indent(state);
+                            emit(' else {\n');
+                        } else {
+                            emit('{\n');
+                        }
+                    }
+                    const innerState = { ...state, indentLevel: state.indentLevel + 1 };
+                    for (const stmt of caseNode.consequent) {
+                        if (stmt.type === 'BreakStatement') continue; // skip break in if-else
+                        indent(innerState);
+                        c(stmt, asType(innerState));
+                        emit(';\n');
+                    }
+                    indent(state);
+                    emit('}');
+                }
+                emit('\n');
             },
 
             Program(node: any, state: any, c: any) {
@@ -2208,7 +2177,7 @@ class RustTranspiler {
             'use std::str::FromStr;',
             'use serde::{Deserialize, Serialize};',
             'use serde_json::json;',
-            'use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, JSON, Array, Object, Math, parse_int, shift_2, extend_2, normalize};',
+            'use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, BoolExt, JSON, Array, Object, Math, parse_int, shift_2, extend_2, normalize};',
             '',
             'use crate::exchange::{PRECISE_BASE, TRUNCATE, ROUND, ROUND_UP, ROUND_DOWN};',
             'use crate::exchange::{DECIMAL_PLACES, SIGNIFICANT_DIGITS, TICK_SIZE, NO_PADDING, PAD_WITH_ZERO};',
@@ -2302,6 +2271,13 @@ class RustTranspiler {
         const rust: string[] = [];
         const methodNames: string[] = [];
 
+        // Pre-compute own method names for disambiguation
+        const ownMethodNames = new Set<string>();
+        for (const m of methods) {
+            const nameMatch = /\b([a-zA-Z0-9_]+)\s*\(/.exec(m.replace(/^async\s+/, ''));
+            if (nameMatch) ownMethodNames.add(nameMatch[1]);
+        }
+
         for (const m of methods) {
             const nameMatch = /\b([a-zA-Z0-9_]+)\s*\(/.exec(m.replace(/^async\s+/, ''));
             if (nameMatch) methodNames.push(nameMatch[1]);
@@ -2313,27 +2289,14 @@ class RustTranspiler {
                     baseClassName: baseClass,
                     apiMethods,
                     exchangeDescribe,
+                    ownMethodNames,
                 })
             );
         }
 
-        for (const baseName of baseMethodNames) {
-            if (!methodNames.includes(baseName)) {
-                const baseMethod = this.baseMethodsMap[baseName];
-                if (baseMethod) {
-                    rust.push(
-                        transpileMethodToRust({
-                            className,
-                            method: baseMethod,
-                            baseMethodNames,
-                            baseClassName: baseClass,
-                            apiMethods,
-                            exchangeDescribe,
-                        })
-                    );
-                }
-            }
-        }
+        // Inherited base methods are available from the Exchange supertrait —
+        // no need to re-emit them in the derived exchange trait.
+        // This avoids E0034 (multiple applicable items) ambiguity.
 
         if (exchangeDescribe?.api) {
             rust.push(generateRustDispatchFunction(className, apiMethodsMap));

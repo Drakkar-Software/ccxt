@@ -21,2359 +21,2169 @@ use crate::exchange::{DECIMAL_PLACES, SIGNIFICANT_DIGITS, TICK_SIZE, NO_PADDING,
 
 #[async_trait]
 pub trait Xt : Exchange {
-fn describe(&self) -> Value {
+    fn describe(&self) -> Value {
         Value::Json(serde_json::Value::from_str(r###"{
-    "id": "xt",
-    "name": "XT",
-    "countries": [
-        "SC"
-    ],
-    "enableRateLimit": true,
-    "rateLimit": 100,
-    "timeout": 10000,
-    "certified": false,
-    "pro": true,
-    "alias": false,
-    "dex": false,
-    "has": {
-        "publicAPI": true,
-        "privateAPI": true,
-        "CORS": false,
-        "spot": true,
-        "margin": true,
-        "swap": true,
-        "future": true,
-        "option": false,
-        "addMargin": true,
-        "borrowMargin": false,
-        "cancelAllOrders": true,
-        "cancelOrder": true,
-        "cancelOrders": true,
-        "createDepositAddress": false,
-        "createLimitOrder": true,
-        "createMarketBuyOrderWithCost": true,
-        "createMarketOrder": true,
-        "createMarketOrderWs": true,
-        "createMarketSellOrderWithCost": false,
-        "createOrder": true,
-        "createPostOnlyOrder": false,
-        "createReduceOnlyOrder": true,
-        "editOrder": true,
-        "fetchAccounts": false,
-        "fetchBalance": true,
-        "fetchBidsAsks": true,
-        "fetchBorrowInterest": false,
-        "fetchBorrowRate": false,
-        "fetchBorrowRateHistories": false,
-        "fetchBorrowRateHistory": false,
-        "fetchBorrowRatesPerSymbol": false,
-        "fetchCanceledOrders": true,
-        "fetchClosedOrders": true,
-        "fetchCurrencies": true,
-        "fetchCurrenciesWs": "emulated",
-        "fetchDeposit": false,
-        "fetchDepositAddress": true,
-        "fetchDepositAddresses": false,
-        "fetchDepositAddressesByNetwork": false,
-        "fetchDeposits": true,
-        "fetchDepositWithdrawFee": false,
-        "fetchDepositWithdrawFees": false,
-        "fetchFundingHistory": true,
-        "fetchFundingRate": true,
-        "fetchFundingRateHistory": true,
-        "fetchFundingInterval": true,
-        "fetchFundingIntervals": false,
-        "fetchFundingRates": false,
-        "fetchGreeks": false,
-        "fetchIndexOHLCV": false,
-        "fetchL2OrderBook": true,
-        "fetchL3OrderBook": false,
-        "fetchLedger": true,
-        "fetchLedgerEntry": false,
-        "fetchLeverage": false,
-        "fetchLeverageTiers": true,
-        "fetchMarketLeverageTiers": true,
-        "fetchMarkets": true,
-        "fetchMarkOHLCV": false,
-        "fetchMyTrades": true,
-        "fetchOHLCV": true,
-        "fetchOpenInterest": false,
-        "fetchOpenInterestHistory": false,
-        "fetchOpenOrders": true,
-        "fetchOption": false,
-        "fetchOptionChain": false,
-        "fetchOrder": true,
-        "fetchOrderBook": true,
-        "fetchOrderBooks": false,
-        "fetchOrders": true,
-        "fetchOrdersByStatus": true,
-        "fetchOrderTrades": false,
-        "fetchPosition": true,
-        "fetchPositions": true,
-        "fetchPremiumIndexOHLCV": false,
-        "fetchSettlementHistory": false,
-        "fetchStatus": false,
-        "fetchTicker": true,
-        "fetchTickers": true,
-        "fetchTime": true,
-        "fetchTrades": true,
-        "fetchTradingFee": false,
-        "fetchTradingFees": false,
-        "fetchTradingLimits": false,
-        "fetchTransactionFee": false,
-        "fetchTransactionFees": false,
-        "fetchTransactions": false,
-        "fetchTransfer": false,
-        "fetchTransfers": false,
-        "fetchVolatilityHistory": false,
-        "fetchWithdrawal": false,
-        "fetchWithdrawals": true,
-        "fetchWithdrawalWhitelist": false,
-        "reduceMargin": true,
-        "setLeverage": true,
-        "setMargin": false,
-        "setMarginMode": true,
-        "setPositionMode": false,
-        "signIn": false,
-        "transfer": true,
-        "watchBalance": true,
-        "watchMyTrades": true,
-        "watchOHLCV": true,
-        "watchOrderBook": true,
-        "watchOrders": true,
-        "watchPositions": true,
-        "watchTicker": true,
-        "watchTickers": true,
-        "watchTrades": true,
-        "watchTradesForSymbols": false,
-        "unWatchTrades": true,
-        "unWatchOrderBook": true,
-        "unWatchTickers": true,
-        "unWatchTicker": true,
-        "unWatchOHLCV": true,
-        "withdraw": true,
-        "ws": true,
-        "fetchAllGreeks": false,
-        "fetchDepositWithdrawals": false,
-        "repayMargin": false
-    },
-    "urls": {
-        "logo": "https://user-images.githubusercontent.com/14319357/232636712-466df2fc-560a-4ca4-aab2-b1d954a58e24.jpg",
-        "api": {
-            "spot": "https://sapi.xt.com",
-            "linear": "https://fapi.xt.com",
-            "inverse": "https://dapi.xt.com",
-            "user": "https://api.xt.com",
-            "ws": {
-                "spot": "wss://stream.xt.com",
-                "contract": "wss://fstream.xt.com/ws"
-            }
-        },
-        "www": "https://xt.com",
-        "doc": [
-            "https://doc.xt.com/",
-            "https://github.com/xtpub/api-doc"
-        ],
-        "fees": "https://www.xt.com/en/rate",
-        "referral": "https://www.xt.com/en/accounts/register?ref=9PTM9VW"
-    },
-    "api": {
-        "public": {
-            "spot": {
-                "get": {
-                    "currencies": 1,
-                    "depth": 10,
-                    "kline": 1,
-                    "symbol": 1,
-                    "ticker": 1,
-                    "ticker/book": 1,
-                    "ticker/price": 1,
-                    "ticker/24h": 1,
-                    "time": 1,
-                    "trade/history": 1,
-                    "trade/recent": 1,
-                    "wallet/support/currency": 1
-                }
+            "id": "xt",
+            "name": "XT",
+            "countries": [
+                "SC"
+            ],
+            "enableRateLimit": true,
+            "rateLimit": 100,
+            "timeout": 10000,
+            "certified": false,
+            "pro": true,
+            "alias": false,
+            "dex": false,
+            "has": {
+                "publicAPI": true,
+                "privateAPI": true,
+                "CORS": false,
+                "spot": true,
+                "margin": true,
+                "swap": true,
+                "future": true,
+                "option": false,
+                "addMargin": true,
+                "borrowMargin": false,
+                "cancelAllOrders": true,
+                "cancelOrder": true,
+                "cancelOrders": true,
+                "createDepositAddress": false,
+                "createLimitOrder": true,
+                "createMarketBuyOrderWithCost": true,
+                "createMarketOrder": true,
+                "createMarketOrderWs": true,
+                "createMarketSellOrderWithCost": false,
+                "createOrder": true,
+                "createPostOnlyOrder": false,
+                "createReduceOnlyOrder": true,
+                "editOrder": true,
+                "fetchAccounts": false,
+                "fetchBalance": true,
+                "fetchBidsAsks": true,
+                "fetchBorrowInterest": false,
+                "fetchBorrowRate": false,
+                "fetchBorrowRateHistories": false,
+                "fetchBorrowRateHistory": false,
+                "fetchBorrowRatesPerSymbol": false,
+                "fetchCanceledOrders": true,
+                "fetchClosedOrders": true,
+                "fetchCurrencies": true,
+                "fetchCurrenciesWs": "emulated",
+                "fetchDeposit": false,
+                "fetchDepositAddress": true,
+                "fetchDepositAddresses": false,
+                "fetchDepositAddressesByNetwork": false,
+                "fetchDeposits": true,
+                "fetchDepositWithdrawFee": false,
+                "fetchDepositWithdrawFees": false,
+                "fetchFundingHistory": true,
+                "fetchFundingRate": true,
+                "fetchFundingRateHistory": true,
+                "fetchFundingInterval": true,
+                "fetchFundingIntervals": false,
+                "fetchFundingRates": false,
+                "fetchGreeks": false,
+                "fetchIndexOHLCV": false,
+                "fetchL2OrderBook": true,
+                "fetchL3OrderBook": false,
+                "fetchLedger": true,
+                "fetchLedgerEntry": false,
+                "fetchLeverage": false,
+                "fetchLeverageTiers": true,
+                "fetchMarketLeverageTiers": true,
+                "fetchMarkets": true,
+                "fetchMarkOHLCV": false,
+                "fetchMyTrades": true,
+                "fetchOHLCV": true,
+                "fetchOpenInterest": false,
+                "fetchOpenInterestHistory": false,
+                "fetchOpenOrders": true,
+                "fetchOption": false,
+                "fetchOptionChain": false,
+                "fetchOrder": true,
+                "fetchOrderBook": true,
+                "fetchOrderBooks": false,
+                "fetchOrders": true,
+                "fetchOrdersByStatus": true,
+                "fetchOrderTrades": false,
+                "fetchPosition": true,
+                "fetchPositions": true,
+                "fetchPremiumIndexOHLCV": false,
+                "fetchSettlementHistory": false,
+                "fetchStatus": false,
+                "fetchTicker": true,
+                "fetchTickers": true,
+                "fetchTime": true,
+                "fetchTrades": true,
+                "fetchTradingFee": false,
+                "fetchTradingFees": false,
+                "fetchTradingLimits": false,
+                "fetchTransactionFee": false,
+                "fetchTransactionFees": false,
+                "fetchTransactions": false,
+                "fetchTransfer": false,
+                "fetchTransfers": false,
+                "fetchVolatilityHistory": false,
+                "fetchWithdrawal": false,
+                "fetchWithdrawals": true,
+                "fetchWithdrawalWhitelist": false,
+                "reduceMargin": true,
+                "setLeverage": true,
+                "setMargin": false,
+                "setMarginMode": true,
+                "setPositionMode": false,
+                "signIn": false,
+                "transfer": true,
+                "watchBalance": true,
+                "watchMyTrades": true,
+                "watchOHLCV": true,
+                "watchOrderBook": true,
+                "watchOrders": true,
+                "watchPositions": true,
+                "watchTicker": true,
+                "watchTickers": true,
+                "watchTrades": true,
+                "watchTradesForSymbols": false,
+                "unWatchTrades": true,
+                "unWatchOrderBook": true,
+                "unWatchTickers": true,
+                "unWatchTicker": true,
+                "unWatchOHLCV": true,
+                "withdraw": true,
+                "ws": true,
+                "fetchAllGreeks": false,
+                "fetchDepositWithdrawals": false,
+                "repayMargin": false
             },
-            "linear": {
-                "get": {
-                    "future/market/v1/public/contract/risk-balance": 1,
-                    "future/market/v1/public/contract/open-interest": 1,
-                    "future/market/v1/public/leverage/bracket/detail": 1,
-                    "future/market/v1/public/leverage/bracket/list": 1,
-                    "future/market/v1/public/q/agg-ticker": 1,
-                    "future/market/v1/public/q/agg-tickers": 1,
-                    "future/market/v1/public/q/deal": 1,
-                    "future/market/v1/public/q/depth": 1,
-                    "future/market/v1/public/q/funding-rate": 1,
-                    "future/market/v1/public/q/funding-rate-record": 1,
-                    "future/market/v1/public/q/index-price": 1,
-                    "future/market/v1/public/q/kline": 1,
-                    "future/market/v1/public/q/mark-price": 1,
-                    "future/market/v1/public/q/symbol-index-price": 1,
-                    "future/market/v1/public/q/symbol-mark-price": 1,
-                    "future/market/v1/public/q/ticker": 1,
-                    "future/market/v1/public/q/tickers": 1,
-                    "future/market/v1/public/symbol/coins": 3.33,
-                    "future/market/v1/public/symbol/detail": 3.33,
-                    "future/market/v1/public/symbol/list": 1
-                }
-            },
-            "inverse": {
-                "get": {
-                    "future/market/v1/public/contract/risk-balance": 1,
-                    "future/market/v1/public/contract/open-interest": 1,
-                    "future/market/v1/public/leverage/bracket/detail": 1,
-                    "future/market/v1/public/leverage/bracket/list": 1,
-                    "future/market/v1/public/q/agg-ticker": 1,
-                    "future/market/v1/public/q/agg-tickers": 1,
-                    "future/market/v1/public/q/deal": 1,
-                    "future/market/v1/public/q/depth": 1,
-                    "future/market/v1/public/q/funding-rate": 1,
-                    "future/market/v1/public/q/funding-rate-record": 1,
-                    "future/market/v1/public/q/index-price": 1,
-                    "future/market/v1/public/q/kline": 1,
-                    "future/market/v1/public/q/mark-price": 1,
-                    "future/market/v1/public/q/symbol-index-price": 1,
-                    "future/market/v1/public/q/symbol-mark-price": 1,
-                    "future/market/v1/public/q/ticker": 1,
-                    "future/market/v1/public/q/tickers": 1,
-                    "future/market/v1/public/symbol/coins": 3.33,
-                    "future/market/v1/public/symbol/detail": 3.33,
-                    "future/market/v1/public/symbol/list": 1
-                }
-            }
-        },
-        "private": {
-            "spot": {
-                "get": {
-                    "balance": 1,
-                    "balances": 1,
-                    "batch-order": 1,
-                    "deposit/address": 1,
-                    "deposit/history": 1,
-                    "history-order": 1,
-                    "open-order": 1,
-                    "order": 1,
-                    "order/{orderId}": 1,
-                    "trade": 1,
-                    "withdraw/history": 1
+            "urls": {
+                "logo": "https://user-images.githubusercontent.com/14319357/232636712-466df2fc-560a-4ca4-aab2-b1d954a58e24.jpg",
+                "api": {
+                    "spot": "https://sapi.xt.com",
+                    "linear": "https://fapi.xt.com",
+                    "inverse": "https://dapi.xt.com",
+                    "user": "https://api.xt.com",
+                    "ws": {
+                        "spot": "wss://stream.xt.com",
+                        "contract": "wss://fstream.xt.com/ws"
+                    }
                 },
-                "post": {
-                    "order": 0.2,
-                    "withdraw": 10,
-                    "balance/transfer": 1,
-                    "balance/account/transfer": 1,
-                    "ws-token": 1
-                },
-                "delete": {
-                    "batch-order": 1,
-                    "open-order": 1,
-                    "order/{orderId}": 1
-                },
-                "put": {
-                    "order/{orderId}": 1
-                }
-            },
-            "linear": {
-                "get": {
-                    "future/trade/v1/entrust/plan-detail": 1,
-                    "future/trade/v1/entrust/plan-list": 1,
-                    "future/trade/v1/entrust/plan-list-history": 1,
-                    "future/trade/v1/entrust/profit-detail": 1,
-                    "future/trade/v1/entrust/profit-list": 1,
-                    "future/trade/v1/order/detail": 1,
-                    "future/trade/v1/order/list": 1,
-                    "future/trade/v1/order/list-history": 1,
-                    "future/trade/v1/order/trade-list": 1,
-                    "future/user/v1/account/info": 1,
-                    "future/user/v1/balance/bills": 1,
-                    "future/user/v1/balance/detail": 1,
-                    "future/user/v1/balance/funding-rate-list": 1,
-                    "future/user/v1/balance/list": 1,
-                    "future/user/v1/position/adl": 1,
-                    "future/user/v1/position/list": 1,
-                    "future/user/v1/user/collection/list": 1,
-                    "future/user/v1/user/listen-key": 1
-                },
-                "post": {
-                    "future/trade/v1/entrust/cancel-all-plan": 1,
-                    "future/trade/v1/entrust/cancel-all-profit-stop": 1,
-                    "future/trade/v1/entrust/cancel-plan": 1,
-                    "future/trade/v1/entrust/cancel-profit-stop": 1,
-                    "future/trade/v1/entrust/create-plan": 1,
-                    "future/trade/v1/entrust/create-profit": 1,
-                    "future/trade/v1/entrust/update-profit-stop": 1,
-                    "future/trade/v1/order/cancel": 1,
-                    "future/trade/v1/order/cancel-all": 1,
-                    "future/trade/v1/order/create": 1,
-                    "future/trade/v1/order/create-batch": 1,
-                    "future/trade/v1/order/update": 1,
-                    "future/user/v1/account/open": 1,
-                    "future/user/v1/position/adjust-leverage": 1,
-                    "future/user/v1/position/auto-margin": 1,
-                    "future/user/v1/position/close-all": 1,
-                    "future/user/v1/position/margin": 1,
-                    "future/user/v1/user/collection/add": 1,
-                    "future/user/v1/user/collection/cancel": 1,
-                    "future/user/v1/position/change-type": 1
-                }
-            },
-            "inverse": {
-                "get": {
-                    "future/trade/v1/entrust/plan-detail": 1,
-                    "future/trade/v1/entrust/plan-list": 1,
-                    "future/trade/v1/entrust/plan-list-history": 1,
-                    "future/trade/v1/entrust/profit-detail": 1,
-                    "future/trade/v1/entrust/profit-list": 1,
-                    "future/trade/v1/order/detail": 1,
-                    "future/trade/v1/order/list": 1,
-                    "future/trade/v1/order/list-history": 1,
-                    "future/trade/v1/order/trade-list": 1,
-                    "future/user/v1/account/info": 1,
-                    "future/user/v1/balance/bills": 1,
-                    "future/user/v1/balance/detail": 1,
-                    "future/user/v1/balance/funding-rate-list": 1,
-                    "future/user/v1/balance/list": 1,
-                    "future/user/v1/position/adl": 1,
-                    "future/user/v1/position/list": 1,
-                    "future/user/v1/user/collection/list": 1,
-                    "future/user/v1/user/listen-key": 1
-                },
-                "post": {
-                    "future/trade/v1/entrust/cancel-all-plan": 1,
-                    "future/trade/v1/entrust/cancel-all-profit-stop": 1,
-                    "future/trade/v1/entrust/cancel-plan": 1,
-                    "future/trade/v1/entrust/cancel-profit-stop": 1,
-                    "future/trade/v1/entrust/create-plan": 1,
-                    "future/trade/v1/entrust/create-profit": 1,
-                    "future/trade/v1/entrust/update-profit-stop": 1,
-                    "future/trade/v1/order/cancel": 1,
-                    "future/trade/v1/order/cancel-all": 1,
-                    "future/trade/v1/order/create": 1,
-                    "future/trade/v1/order/create-batch": 1,
-                    "future/trade/v1/order/update": 1,
-                    "future/user/v1/account/open": 1,
-                    "future/user/v1/position/adjust-leverage": 1,
-                    "future/user/v1/position/auto-margin": 1,
-                    "future/user/v1/position/close-all": 1,
-                    "future/user/v1/position/margin": 1,
-                    "future/user/v1/user/collection/add": 1,
-                    "future/user/v1/user/collection/cancel": 1
-                }
-            },
-            "user": {
-                "get": {
-                    "user/account": 1,
-                    "user/account/api-key": 1
-                },
-                "post": {
-                    "user/account": 1,
-                    "user/account/api-key": 1
-                },
-                "put": {
-                    "user/account/api-key": 1
-                },
-                "delete": {
-                    "user/account/{apiKeyId}": 1
-                }
-            }
-        }
-    },
-    "requiredCredentials": {
-        "apiKey": true,
-        "secret": true,
-        "uid": false,
-        "accountId": false,
-        "login": false,
-        "password": false,
-        "twofa": false,
-        "privateKey": false,
-        "walletAddress": false,
-        "token": false
-    },
-    "currencies": {},
-    "timeframes": {
-        "1m": "1m",
-        "5m": "5m",
-        "15m": "15m",
-        "30m": "30m",
-        "1h": "1h",
-        "2h": "2h",
-        "4h": "4h",
-        "6h": "6h",
-        "8h": "8h",
-        "1d": "1d",
-        "3d": "3d",
-        "1w": "1w",
-        "1M": "1M"
-    },
-    "fees": {
-        "trading": {},
-        "funding": {
-            "withdraw": {},
-            "deposit": {}
-        },
-        "spot": {
-            "tierBased": true,
-            "percentage": true,
-            "maker": 0.002,
-            "taker": 0.002,
-            "tiers": {
-                "maker": [
-                    [
-                        0,
-                        0.002
-                    ],
-                    [
-                        5000,
-                        0.0018
-                    ],
-                    [
-                        10000,
-                        0.0016
-                    ],
-                    [
-                        20000,
-                        0.0014
-                    ],
-                    [
-                        50000,
-                        0.0012
-                    ],
-                    [
-                        150000,
-                        0.001
-                    ],
-                    [
-                        300000,
-                        0.0008
-                    ],
-                    [
-                        600000,
-                        0.0007
-                    ],
-                    [
-                        1200000,
-                        0.0006
-                    ],
-                    [
-                        2500000,
-                        0.0005
-                    ],
-                    [
-                        6000000,
-                        0.0004
-                    ],
-                    [
-                        15000000,
-                        0.0003
-                    ],
-                    [
-                        30000000,
-                        0.0002
-                    ]
+                "www": "https://xt.com",
+                "doc": [
+                    "https://doc.xt.com/",
+                    "https://github.com/xtpub/api-doc"
                 ],
-                "taker": [
-                    [
-                        0,
-                        0.002
-                    ],
-                    [
-                        5000,
-                        0.0018
-                    ],
-                    [
-                        10000,
-                        0.0016
-                    ],
-                    [
-                        20000,
-                        0.0014
-                    ],
-                    [
-                        50000,
-                        0.0012
-                    ],
-                    [
-                        150000,
-                        0.001
-                    ],
-                    [
-                        300000,
-                        0.0008
-                    ],
-                    [
-                        600000,
-                        0.0007
-                    ],
-                    [
-                        1200000,
-                        0.0006
-                    ],
-                    [
-                        2500000,
-                        0.0005
-                    ],
-                    [
-                        6000000,
-                        0.0004
-                    ],
-                    [
-                        15000000,
-                        0.0003
-                    ],
-                    [
-                        30000000,
-                        0.0002
-                    ]
-                ]
-            }
-        },
-        "contract": {
-            "tierBased": true,
-            "percentage": true,
-            "maker": 0.0004,
-            "taker": 0.0006,
-            "tiers": {
-                "maker": [
-                    [
-                        0,
-                        0.0004
-                    ],
-                    [
-                        200000,
-                        0.00038
-                    ],
-                    [
-                        1000000,
-                        0.00036
-                    ],
-                    [
-                        5000000,
-                        0.00034
-                    ],
-                    [
-                        10000000,
-                        0.00032
-                    ],
-                    [
-                        15000000,
-                        0.00028
-                    ],
-                    [
-                        30000000,
-                        0.00024
-                    ],
-                    [
-                        50000000,
-                        0.0002
-                    ],
-                    [
-                        100000000,
-                        0.00016
-                    ],
-                    [
-                        300000000,
-                        0.00012
-                    ],
-                    [
-                        500000000,
-                        0.00008
-                    ]
-                ],
-                "taker": [
-                    [
-                        0,
-                        0.0006
-                    ],
-                    [
-                        200000,
-                        0.000588
-                    ],
-                    [
-                        1000000,
-                        0.00057
-                    ],
-                    [
-                        5000000,
-                        0.00054
-                    ],
-                    [
-                        10000000,
-                        0.00051
-                    ],
-                    [
-                        15000000,
-                        0.00048
-                    ],
-                    [
-                        30000000,
-                        0.00045
-                    ],
-                    [
-                        50000000,
-                        0.00045
-                    ],
-                    [
-                        100000000,
-                        0.00036
-                    ],
-                    [
-                        300000000,
-                        0.00033
-                    ],
-                    [
-                        500000000,
-                        0.0003
-                    ]
-                ]
-            }
-        }
-    },
-    "status": {
-        "status": "ok"
-    },
-    "exceptions": {
-        "exact": {},
-        "broad": {}
-    },
-    "httpExceptions": {},
-    "commonCurrencies": {
-        "XBT": "BTC",
-        "BCHSV": "BSV"
-    },
-    "precisionMode": 4,
-    "paddingMode": 5,
-    "limits": {
-        "leverage": {},
-        "amount": {},
-        "price": {},
-        "cost": {}
-    },
-    "rollingWindowSize": 60000,
-    "version": "v4",
-    "options": {
-        "adjustForTimeDifference": false,
-        "timeDifference": 0,
-        "accountsById": {
-            "spot": "SPOT",
-            "leverage": "LEVER",
-            "finance": "FINANCE",
-            "swap": "FUTURES_U",
-            "future": "FUTURES_U",
-            "linear": "FUTURES_U",
-            "inverse": "FUTURES_C"
-        },
-        "networks": {
-            "ERC20": "Ethereum",
-            "TRC20": "Tron",
-            "BEP20": "BNB Smart Chain",
-            "BEP2": "BNB-BEP2",
-            "ETH": "Ethereum",
-            "TRON": "Tron",
-            "BNB": "BNB Smart Chain",
-            "AVAX": "AVAX C-Chain",
-            "GAL": "GAL(FT)",
-            "ALEO": "ALEO(IOU)",
-            "BTC": "Bitcoin",
-            "XT": "XT Smart Chain",
-            "ETC": "Ethereum Classic",
-            "MATIC": "Polygon",
-            "LTC": "Litecoin",
-            "BTS": "BitShares",
-            "XRP": "Ripple",
-            "XLM": "Stellar Network",
-            "ADA": "Cardano",
-            "XWC": "XWC-XWC",
-            "DOGE": "dogecoin",
-            "DCR": "Decred",
-            "SC": "Siacoin",
-            "XTZ": "Tezos",
-            "ZEC": "Zcash",
-            "XMR": "Monero",
-            "LSK": "Lisk",
-            "ATOM": "Cosmos",
-            "ONT": "Ontology",
-            "ALGO": "Algorand",
-            "SOL": "SOL-SOL",
-            "DOT": "Polkadot",
-            "ZEN": "Horizen",
-            "FIL": "Filecoin",
-            "CHZ": "chz",
-            "ICP": "Internet Computer",
-            "KSM": "Kusama",
-            "LUNA": "Terra",
-            "THETA": "Theta Token",
-            "FTM": "Fantom",
-            "VET": "VeChain",
-            "NEAR": "NEAR Protocol",
-            "ONE": "Harmony",
-            "KLAY": "Klaytn",
-            "AR": "Arweave",
-            "CELT": "OKT",
-            "EGLD": "Elrond eGold",
-            "CRO": "CRO-CRONOS",
-            "BCH": "Bitcoin Cash",
-            "GLMR": "Moonbeam",
-            "LOOP": "LOOP-LRC",
-            "REI": "REI Network",
-            "ASTR": "Astar Network",
-            "OP": "OPT",
-            "MMT": "MMT-MMT",
-            "TBC": "TBC-TBC",
-            "OMAX": "OMAX-OMAX CHAIN",
-            "GMMT": "GMMT chain",
-            "ZIL": "Zilliqa"
-        },
-        "networksById": {
-            "Ethereum": "ERC20",
-            "Tron": "TRC20",
-            "BNB Smart Chain": "BEP20",
-            "BNB-BEP2": "BEP2",
-            "Bitcoin": "BTC",
-            "XT Smart Chain": "XT",
-            "Ethereum Classic": "ETC",
-            "Polygon": "MATIC",
-            "Litecoin": "LTC",
-            "BitShares": "BTS",
-            "Ripple": "XRP",
-            "Stellar Network": "XLM",
-            "Cardano": "ADA",
-            "XWC-XWC": "XWC",
-            "dogecoin": "DOGE",
-            "Decred": "DCR",
-            "Siacoin": "SC",
-            "Tezos": "XTZ",
-            "Zcash": "ZEC",
-            "Monero": "XMR",
-            "Lisk": "LSK",
-            "Cosmos": "ATOM",
-            "Ontology": "ONT",
-            "Algorand": "ALGO",
-            "SOL-SOL": "SOL",
-            "Polkadot": "DOT",
-            "Horizen": "ZEN",
-            "Filecoin": "FIL",
-            "chz": "CHZ",
-            "Internet Computer": "ICP",
-            "Kusama": "KSM",
-            "Terra": "LUNA",
-            "Theta Token": "THETA",
-            "Fantom": "FTM",
-            "VeChain": "VET",
-            "AVAX C-Chain": "AVAX",
-            "NEAR Protocol": "NEAR",
-            "Harmony": "ONE",
-            "Klaytn": "KLAY",
-            "Arweave": "AR",
-            "OKT": "CELT",
-            "Elrond eGold": "EGLD",
-            "CRO-CRONOS": "CRO",
-            "Bitcoin Cash": "BCH",
-            "Moonbeam": "GLMR",
-            "LOOP-LRC": "LOOP",
-            "REI Network": "REI",
-            "Astar Network": "ASTR",
-            "GAL(FT)": "GAL",
-            "ALEO(IOU)": "ALEO",
-            "OPT": "OP",
-            "MMT-MMT": "MMT",
-            "TBC-TBC": "TBC",
-            "OMAX-OMAX CHAIN": "OMAX",
-            "GMMT chain": "GMMT",
-            "Zilliqa": "ZIL"
-        },
-        "createMarketBuyOrderRequiresPrice": true,
-        "recvWindow": "5000",
-        "tradesLimit": 1000,
-        "ordersLimit": 1000,
-        "OHLCVLimit": 1000,
-        "watchTicker": {
-            "method": "ticker"
-        },
-        "watchTickers": {
-            "method": "tickers"
-        },
-        "watchPositions": {
-            "type": "swap",
-            "fetchPositionsSnapshot": true,
-            "awaitPositionsSnapshot": true
-        }
-    },
-    "features": {
-        "default": {
-            "sandbox": false,
-            "createOrder": {
-                "marginMode": false,
-                "triggerPrice": false,
-                "triggerDirection": false,
-                "stopLossPrice": false,
-                "takeProfitPrice": false,
-                "timeInForce": {
-                    "IOC": true,
-                    "FOK": true,
-                    "PO": true,
-                    "GTD": false
+                "fees": "https://www.xt.com/en/rate",
+                "referral": "https://www.xt.com/en/accounts/register?ref=9PTM9VW"
+            },
+            "api": {
+                "public": {
+                    "spot": {
+                        "get": {
+                            "currencies": 1,
+                            "depth": 10,
+                            "kline": 1,
+                            "symbol": 1,
+                            "ticker": 1,
+                            "ticker/book": 1,
+                            "ticker/price": 1,
+                            "ticker/24h": 1,
+                            "time": 1,
+                            "trade/history": 1,
+                            "trade/recent": 1,
+                            "wallet/support/currency": 1
+                        }
+                    },
+                    "linear": {
+                        "get": {
+                            "future/market/v1/public/contract/risk-balance": 1,
+                            "future/market/v1/public/contract/open-interest": 1,
+                            "future/market/v1/public/leverage/bracket/detail": 1,
+                            "future/market/v1/public/leverage/bracket/list": 1,
+                            "future/market/v1/public/q/agg-ticker": 1,
+                            "future/market/v1/public/q/agg-tickers": 1,
+                            "future/market/v1/public/q/deal": 1,
+                            "future/market/v1/public/q/depth": 1,
+                            "future/market/v1/public/q/funding-rate": 1,
+                            "future/market/v1/public/q/funding-rate-record": 1,
+                            "future/market/v1/public/q/index-price": 1,
+                            "future/market/v1/public/q/kline": 1,
+                            "future/market/v1/public/q/mark-price": 1,
+                            "future/market/v1/public/q/symbol-index-price": 1,
+                            "future/market/v1/public/q/symbol-mark-price": 1,
+                            "future/market/v1/public/q/ticker": 1,
+                            "future/market/v1/public/q/tickers": 1,
+                            "future/market/v1/public/symbol/coins": 3.33,
+                            "future/market/v1/public/symbol/detail": 3.33,
+                            "future/market/v1/public/symbol/list": 1
+                        }
+                    },
+                    "inverse": {
+                        "get": {
+                            "future/market/v1/public/contract/risk-balance": 1,
+                            "future/market/v1/public/contract/open-interest": 1,
+                            "future/market/v1/public/leverage/bracket/detail": 1,
+                            "future/market/v1/public/leverage/bracket/list": 1,
+                            "future/market/v1/public/q/agg-ticker": 1,
+                            "future/market/v1/public/q/agg-tickers": 1,
+                            "future/market/v1/public/q/deal": 1,
+                            "future/market/v1/public/q/depth": 1,
+                            "future/market/v1/public/q/funding-rate": 1,
+                            "future/market/v1/public/q/funding-rate-record": 1,
+                            "future/market/v1/public/q/index-price": 1,
+                            "future/market/v1/public/q/kline": 1,
+                            "future/market/v1/public/q/mark-price": 1,
+                            "future/market/v1/public/q/symbol-index-price": 1,
+                            "future/market/v1/public/q/symbol-mark-price": 1,
+                            "future/market/v1/public/q/ticker": 1,
+                            "future/market/v1/public/q/tickers": 1,
+                            "future/market/v1/public/symbol/coins": 3.33,
+                            "future/market/v1/public/symbol/detail": 3.33,
+                            "future/market/v1/public/symbol/list": 1
+                        }
+                    }
                 },
-                "hedged": false,
-                "trailing": false,
-                "leverage": false,
-                "marketBuyByCost": true,
-                "marketBuyRequiresPrice": false,
-                "selfTradePrevention": false,
-                "iceberg": false
+                "private": {
+                    "spot": {
+                        "get": {
+                            "balance": 1,
+                            "balances": 1,
+                            "batch-order": 1,
+                            "deposit/address": 1,
+                            "deposit/history": 1,
+                            "history-order": 1,
+                            "open-order": 1,
+                            "order": 1,
+                            "order/{orderId}": 1,
+                            "trade": 1,
+                            "withdraw/history": 1
+                        },
+                        "post": {
+                            "order": 0.2,
+                            "withdraw": 10,
+                            "balance/transfer": 1,
+                            "balance/account/transfer": 1,
+                            "ws-token": 1
+                        },
+                        "delete": {
+                            "batch-order": 1,
+                            "open-order": 1,
+                            "order/{orderId}": 1
+                        },
+                        "put": {
+                            "order/{orderId}": 1
+                        }
+                    },
+                    "linear": {
+                        "get": {
+                            "future/trade/v1/entrust/plan-detail": 1,
+                            "future/trade/v1/entrust/plan-list": 1,
+                            "future/trade/v1/entrust/plan-list-history": 1,
+                            "future/trade/v1/entrust/profit-detail": 1,
+                            "future/trade/v1/entrust/profit-list": 1,
+                            "future/trade/v1/order/detail": 1,
+                            "future/trade/v1/order/list": 1,
+                            "future/trade/v1/order/list-history": 1,
+                            "future/trade/v1/order/trade-list": 1,
+                            "future/user/v1/account/info": 1,
+                            "future/user/v1/balance/bills": 1,
+                            "future/user/v1/balance/detail": 1,
+                            "future/user/v1/balance/funding-rate-list": 1,
+                            "future/user/v1/balance/list": 1,
+                            "future/user/v1/position/adl": 1,
+                            "future/user/v1/position/list": 1,
+                            "future/user/v1/user/collection/list": 1,
+                            "future/user/v1/user/listen-key": 1
+                        },
+                        "post": {
+                            "future/trade/v1/entrust/cancel-all-plan": 1,
+                            "future/trade/v1/entrust/cancel-all-profit-stop": 1,
+                            "future/trade/v1/entrust/cancel-plan": 1,
+                            "future/trade/v1/entrust/cancel-profit-stop": 1,
+                            "future/trade/v1/entrust/create-plan": 1,
+                            "future/trade/v1/entrust/create-profit": 1,
+                            "future/trade/v1/entrust/update-profit-stop": 1,
+                            "future/trade/v1/order/cancel": 1,
+                            "future/trade/v1/order/cancel-all": 1,
+                            "future/trade/v1/order/create": 1,
+                            "future/trade/v1/order/create-batch": 1,
+                            "future/trade/v1/order/update": 1,
+                            "future/user/v1/account/open": 1,
+                            "future/user/v1/position/adjust-leverage": 1,
+                            "future/user/v1/position/auto-margin": 1,
+                            "future/user/v1/position/close-all": 1,
+                            "future/user/v1/position/margin": 1,
+                            "future/user/v1/user/collection/add": 1,
+                            "future/user/v1/user/collection/cancel": 1,
+                            "future/user/v1/position/change-type": 1
+                        }
+                    },
+                    "inverse": {
+                        "get": {
+                            "future/trade/v1/entrust/plan-detail": 1,
+                            "future/trade/v1/entrust/plan-list": 1,
+                            "future/trade/v1/entrust/plan-list-history": 1,
+                            "future/trade/v1/entrust/profit-detail": 1,
+                            "future/trade/v1/entrust/profit-list": 1,
+                            "future/trade/v1/order/detail": 1,
+                            "future/trade/v1/order/list": 1,
+                            "future/trade/v1/order/list-history": 1,
+                            "future/trade/v1/order/trade-list": 1,
+                            "future/user/v1/account/info": 1,
+                            "future/user/v1/balance/bills": 1,
+                            "future/user/v1/balance/detail": 1,
+                            "future/user/v1/balance/funding-rate-list": 1,
+                            "future/user/v1/balance/list": 1,
+                            "future/user/v1/position/adl": 1,
+                            "future/user/v1/position/list": 1,
+                            "future/user/v1/user/collection/list": 1,
+                            "future/user/v1/user/listen-key": 1
+                        },
+                        "post": {
+                            "future/trade/v1/entrust/cancel-all-plan": 1,
+                            "future/trade/v1/entrust/cancel-all-profit-stop": 1,
+                            "future/trade/v1/entrust/cancel-plan": 1,
+                            "future/trade/v1/entrust/cancel-profit-stop": 1,
+                            "future/trade/v1/entrust/create-plan": 1,
+                            "future/trade/v1/entrust/create-profit": 1,
+                            "future/trade/v1/entrust/update-profit-stop": 1,
+                            "future/trade/v1/order/cancel": 1,
+                            "future/trade/v1/order/cancel-all": 1,
+                            "future/trade/v1/order/create": 1,
+                            "future/trade/v1/order/create-batch": 1,
+                            "future/trade/v1/order/update": 1,
+                            "future/user/v1/account/open": 1,
+                            "future/user/v1/position/adjust-leverage": 1,
+                            "future/user/v1/position/auto-margin": 1,
+                            "future/user/v1/position/close-all": 1,
+                            "future/user/v1/position/margin": 1,
+                            "future/user/v1/user/collection/add": 1,
+                            "future/user/v1/user/collection/cancel": 1
+                        }
+                    },
+                    "user": {
+                        "get": {
+                            "user/account": 1,
+                            "user/account/api-key": 1
+                        },
+                        "post": {
+                            "user/account": 1,
+                            "user/account/api-key": 1
+                        },
+                        "put": {
+                            "user/account/api-key": 1
+                        },
+                        "delete": {
+                            "user/account/{apiKeyId}": 1
+                        }
+                    }
+                }
             },
-            "fetchMyTrades": {
-                "marginMode": true,
-                "limit": 100,
-                "daysBack": 100000,
-                "untilDays": 100000,
-                "marketType": true,
-                "subType": true,
-                "symbolRequired": false
+            "requiredCredentials": {
+                "apiKey": true,
+                "secret": true,
+                "uid": false,
+                "accountId": false,
+                "login": false,
+                "password": false,
+                "twofa": false,
+                "privateKey": false,
+                "walletAddress": false,
+                "token": false
             },
-            "fetchOrder": {
-                "marginMode": false,
-                "trigger": true,
-                "trailing": false,
-                "marketType": true,
-                "subType": true,
-                "symbolRequired": false
+            "currencies": {},
+            "timeframes": {
+                "1m": "1m",
+                "5m": "5m",
+                "15m": "15m",
+                "30m": "30m",
+                "1h": "1h",
+                "2h": "2h",
+                "4h": "4h",
+                "6h": "6h",
+                "8h": "8h",
+                "1d": "1d",
+                "3d": "3d",
+                "1w": "1w",
+                "1M": "1M"
             },
-            "fetchOpenOrders": {
-                "marginMode": true,
-                "limit": 100,
-                "trigger": true,
-                "trailing": false,
-                "marketType": true,
-                "subType": true,
-                "symbolRequired": false
-            },
-            "fetchOrders": {
-                "marginMode": true,
-                "limit": 100,
-                "daysBack": 100000,
-                "untilDays": 100000,
-                "trigger": true,
-                "trailing": false,
-                "marketType": true,
-                "subType": true,
-                "symbolRequired": false
-            },
-            "fetchClosedOrders": {
-                "marginMode": true,
-                "limit": 100,
-                "daysBack": 100000,
-                "daysBackCanceled": 1,
-                "untilDays": 100000,
-                "trigger": true,
-                "trailing": false,
-                "marketType": true,
-                "subType": true,
-                "symbolRequired": false
-            },
-            "fetchOHLCV": {
-                "limit": 1000
-            }
-        },
-        "spot": {
-            "extends": "default"
-        },
-        "forDerivatives": {
-            "extends": "default",
-            "createOrder": {
-                "triggerPrice": true,
-                "triggerPriceType": {
-                    "last": true,
-                    "mark": true,
-                    "index": true
+            "fees": {
+                "trading": {},
+                "funding": {
+                    "withdraw": {},
+                    "deposit": {}
                 },
-                "stopLossPrice": true,
-                "takeProfitPrice": true
+                "spot": {
+                    "tierBased": true,
+                    "percentage": true,
+                    "maker": 0.002,
+                    "taker": 0.002,
+                    "tiers": {
+                        "maker": [
+                            [
+                                0,
+                                0.002
+                            ],
+                            [
+                                5000,
+                                0.0018
+                            ],
+                            [
+                                10000,
+                                0.0016
+                            ],
+                            [
+                                20000,
+                                0.0014
+                            ],
+                            [
+                                50000,
+                                0.0012
+                            ],
+                            [
+                                150000,
+                                0.001
+                            ],
+                            [
+                                300000,
+                                0.0008
+                            ],
+                            [
+                                600000,
+                                0.0007
+                            ],
+                            [
+                                1200000,
+                                0.0006
+                            ],
+                            [
+                                2500000,
+                                0.0005
+                            ],
+                            [
+                                6000000,
+                                0.0004
+                            ],
+                            [
+                                15000000,
+                                0.0003
+                            ],
+                            [
+                                30000000,
+                                0.0002
+                            ]
+                        ],
+                        "taker": [
+                            [
+                                0,
+                                0.002
+                            ],
+                            [
+                                5000,
+                                0.0018
+                            ],
+                            [
+                                10000,
+                                0.0016
+                            ],
+                            [
+                                20000,
+                                0.0014
+                            ],
+                            [
+                                50000,
+                                0.0012
+                            ],
+                            [
+                                150000,
+                                0.001
+                            ],
+                            [
+                                300000,
+                                0.0008
+                            ],
+                            [
+                                600000,
+                                0.0007
+                            ],
+                            [
+                                1200000,
+                                0.0006
+                            ],
+                            [
+                                2500000,
+                                0.0005
+                            ],
+                            [
+                                6000000,
+                                0.0004
+                            ],
+                            [
+                                15000000,
+                                0.0003
+                            ],
+                            [
+                                30000000,
+                                0.0002
+                            ]
+                        ]
+                    }
+                },
+                "contract": {
+                    "tierBased": true,
+                    "percentage": true,
+                    "maker": 0.0004,
+                    "taker": 0.0006,
+                    "tiers": {
+                        "maker": [
+                            [
+                                0,
+                                0.0004
+                            ],
+                            [
+                                200000,
+                                0.00038
+                            ],
+                            [
+                                1000000,
+                                0.00036
+                            ],
+                            [
+                                5000000,
+                                0.00034
+                            ],
+                            [
+                                10000000,
+                                0.00032
+                            ],
+                            [
+                                15000000,
+                                0.00028
+                            ],
+                            [
+                                30000000,
+                                0.00024
+                            ],
+                            [
+                                50000000,
+                                0.0002
+                            ],
+                            [
+                                100000000,
+                                0.00016
+                            ],
+                            [
+                                300000000,
+                                0.00012
+                            ],
+                            [
+                                500000000,
+                                0.00008
+                            ]
+                        ],
+                        "taker": [
+                            [
+                                0,
+                                0.0006
+                            ],
+                            [
+                                200000,
+                                0.000588
+                            ],
+                            [
+                                1000000,
+                                0.00057
+                            ],
+                            [
+                                5000000,
+                                0.00054
+                            ],
+                            [
+                                10000000,
+                                0.00051
+                            ],
+                            [
+                                15000000,
+                                0.00048
+                            ],
+                            [
+                                30000000,
+                                0.00045
+                            ],
+                            [
+                                50000000,
+                                0.00045
+                            ],
+                            [
+                                100000000,
+                                0.00036
+                            ],
+                            [
+                                300000000,
+                                0.00033
+                            ],
+                            [
+                                500000000,
+                                0.0003
+                            ]
+                        ]
+                    }
+                }
             },
-            "fetchMyTrades": {}
-        },
-        "swap": {
-            "linear": {
-                "extends": "forDerivatives"
+            "status": {
+                "status": "ok"
             },
-            "inverse": {
-                "extends": "forDerivatives"
-            }
-        },
-        "future": {
-            "linear": {
-                "extends": "forDerivatives"
+            "exceptions": {
+                "exact": {},
+                "broad": {}
             },
-            "inverse": {
-                "extends": "forDerivatives"
-            }
-        }
-    },
-    "streaming": {
-        "keepAlive": 20000
-    }
-}"###).unwrap())
-    }
-
-async fn get_listen_key(&mut self, mut is_contract: Value) -> Value { Value::Undefined }
-
-fn get_cache_index(&mut self, mut orderbook: Value, mut cache: Value) -> Value { Value::Undefined }
-
-fn handle_delta(&mut self, mut orderbook: Value, mut delta: Value) -> Value { Value::Undefined }
-
-async fn subscribe(&mut self, mut name: Value, mut access: Value, mut method_name: Value, mut market: Value, mut symbols: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn un_subscribe(&mut self, mut message_hash: Value, mut name: Value, mut access: Value, mut method_name: Value, mut topic: Value, mut market: Value, mut symbols: Value, mut params: Value, mut subscription_params: Value) -> Value { Value::Undefined }
-
-async fn watch_ticker(&mut self, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn un_watch_ticker(&mut self, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn watch_tickers(&mut self, mut symbols: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn un_watch_tickers(&mut self, mut symbols: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn watch_ohlcv(&mut self, mut symbol: Value, mut timeframe: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn un_watch_ohlcv(&mut self, mut symbol: Value, mut timeframe: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn watch_trades(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn un_watch_trades(&mut self, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn watch_order_book(&mut self, mut symbol: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn un_watch_order_book(&mut self, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn watch_orders(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn watch_my_trades(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn watch_balance(&mut self, mut params: Value) -> Value { Value::Undefined }
-
-async fn watch_positions(&mut self, mut symbols: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-fn set_positions_cache(&mut self, mut client: Value) -> Value { Value::Undefined }
-
-async fn load_positions_snapshot(&mut self, mut client: Value, mut message_hash: Value) -> Value { Value::Undefined }
-
-fn handle_position(&mut self, mut client: Value, mut message: Value) -> Value { Value::Undefined }
-
-fn handle_ticker(&mut self, mut client: Value, mut message: Value) -> Value { Value::Undefined }
-
-fn handle_tickers(&mut self, mut client: Value, mut message: Value) -> Value { Value::Undefined }
-
-fn handle_ohlcv(&mut self, mut client: Value, mut message: Value) -> Value { Value::Undefined }
-
-fn handle_trade(&mut self, mut client: Value, mut message: Value) -> Value { Value::Undefined }
-
-fn handle_order_book(&mut self, mut client: Value, mut message: Value) -> Value { Value::Undefined }
-
-fn parse_ws_order_trade(&self, mut trade: Value, mut market: Value) -> Value { Value::Undefined }
-
-fn parse_ws_order(&self, mut order: Value, mut market: Value) -> Value { Value::Undefined }
-
-fn handle_order(&mut self, mut client: Value, mut message: Value) -> Value { Value::Undefined }
-
-fn handle_balance(&mut self, mut client: Value, mut message: Value) -> Value { Value::Undefined }
-
-fn handle_my_trades(&mut self, mut client: Value, mut message: Value) -> Value { Value::Undefined }
-
-fn handle_message(&mut self, mut client: Value, mut message: Value) -> Value { Value::Undefined }
-
-fn ping(&mut self, mut client: Value) -> Value { Value::Undefined }
-
-fn handle_subscription_status(&mut self, mut client: Value, mut message: Value) -> Value { Value::Undefined }
-
-fn handle_un_subscription(&mut self, mut client: Value, mut subscription: Value) -> Value { Value::Undefined }
-
-fn handle_error_message(&mut self, mut client: Value, mut message: Value) -> Value { Value::Undefined }
-
-
-
-
-
-
-
-
-
-
-fn handle_deltas(&mut self, mut orderbook: Value, mut deltas: Value) -> Value { Value::Undefined }
-
-fn handle_deltas_with_keys(&mut self, mut book_side: Value, mut deltas: Value, mut price_key: Value, mut amount_key: Value, mut count_or_id_key: Value) -> Value { Value::Undefined }
-
-fn arrays_concat(&mut self, mut arrays_of_arrays: Value) -> Value { Value::Undefined }
-
-fn find_timeframe(&mut self, mut timeframe: Value, mut timeframes: Value) -> Value { Value::Undefined }
-
-fn check_proxy_url_settings(&mut self, mut url: Value, mut method: Value, mut headers: Value, mut body: Value) -> Value { Value::Undefined }
-
-fn url_encoder_for_proxy_url(&mut self, mut target_url: Value) -> Value { Value::Undefined }
-
-fn check_proxy_settings(&mut self, mut url: Value, mut method: Value, mut headers: Value, mut body: Value) -> Value { Value::Undefined }
-
-fn check_ws_proxy_settings(&mut self) -> Value { Value::Undefined }
-
-fn check_conflicting_proxies(&mut self, mut proxy_agent_set: Value, mut proxy_url_set: Value) -> Value { Value::Undefined }
-
-fn check_address(&mut self, mut address: Value) -> Value { Value::Undefined }
-
-fn find_message_hashes(&mut self, mut client: Value, mut element: Value) -> Value { Value::Undefined }
-
-
-
-fn filter_by_value_since_limit(&self, mut array: Value, mut field: Value, mut value: Value, mut since: Value, mut limit: Value, mut key: Value, mut tail: Value) -> Value { Value::Undefined }
-
-fn set_sandbox_mode(&mut self, mut enabled: Value) -> Value { Value::Undefined }
-
-fn enable_demo_trading(&mut self, mut enable: Value) -> Value { Value::Undefined }
-
-fn sign(&mut self, mut path: Value, mut api: Value, mut method: Value, mut params: Value, mut headers: Value, mut body: Value) -> Value { Value::Undefined }
-
-async fn fetch_accounts(&mut self, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_trades(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
-        let mut request = if params.is_object() { params.clone() } else { Value::new_object() };
-        request.set("symbol".into(), symbol.clone());
-        if since.is_nonnullish() {
-            request.set("since".into(), since.clone());
-            request.set("startTime".into(), since.clone());
-        }
-        if limit.is_nonnullish() {
-            request.set("limit".into(), limit.clone());
-        }
-        let candidates = vec![
-            ("public", "GET", "trades"),
-            ("public", "GET", "recent_trades"),
-            ("public", "GET", "aggTrades"),
-        ];
-        for (api_name, method_name, path_name) in candidates {
-            let rv = Xt::request(self, path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
-            if !rv.is_undefined() {
-                return rv;
-            }
-        }
-        Value::Undefined
-    }
-
-async fn fetch_trades_ws(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn watch_liquidations(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn watch_liquidations_for_symbols(&mut self, mut symbols: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn watch_my_liquidations(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn watch_my_liquidations_for_symbols(&mut self, mut symbols: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn un_watch_orders(&mut self, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn watch_trades_for_symbols(&mut self, mut symbols: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn un_watch_trades_for_symbols(&mut self, mut symbols: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn watch_my_trades_for_symbols(&mut self, mut symbols: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn watch_orders_for_symbols(&mut self, mut symbols: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn watch_ohlcv_for_symbols(&mut self, mut symbols_and_timeframes: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn un_watch_ohlcv_for_symbols(&mut self, mut symbols_and_timeframes: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn watch_order_book_for_symbols(&mut self, mut symbols: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn un_watch_order_book_for_symbols(&mut self, mut symbols: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn un_watch_positions(&mut self, mut symbols: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn un_watch_mark_price(&mut self, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn un_watch_mark_prices(&mut self, mut symbols: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_deposit_addresses(&mut self, mut codes: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_order_book(&mut self, mut symbol: Value, mut limit: Value, mut params: Value) -> Value {
-        fn collect_routes(node: &serde_json::Value, api_name: &str, out: &mut Vec<(String, String, String)>) {
-            if let serde_json::Value::Object(map) = node {
-                for (k, v) in map {
-                    let kl = k.to_lowercase();
-                    if kl == "get" || kl == "post" || kl == "put" || kl == "delete" {
-                        if let serde_json::Value::Object(paths) = v {
-                            for (p, _cost) in paths {
-                                out.push((api_name.to_string(), kl.to_uppercase(), p.clone()));
-                            }
-                        }
-                    } else {
-                        collect_routes(v, api_name, out);
+            "httpExceptions": {},
+            "commonCurrencies": {
+                "XBT": "BTC",
+                "BCHSV": "BSV"
+            },
+            "precisionMode": 4,
+            "paddingMode": 5,
+            "limits": {
+                "leverage": {},
+                "amount": {},
+                "price": {},
+                "cost": {}
+            },
+            "rollingWindowSize": 60000,
+            "version": "v4",
+            "options": {
+                "adjustForTimeDifference": false,
+                "timeDifference": 0,
+                "accountsById": {
+                    "spot": "SPOT",
+                    "leverage": "LEVER",
+                    "finance": "FINANCE",
+                    "swap": "FUTURES_U",
+                    "future": "FUTURES_U",
+                    "linear": "FUTURES_U",
+                    "inverse": "FUTURES_C"
+                },
+                "networks": {
+                    "ERC20": "Ethereum",
+                    "TRC20": "Tron",
+                    "BEP20": "BNB Smart Chain",
+                    "BEP2": "BNB-BEP2",
+                    "ETH": "Ethereum",
+                    "TRON": "Tron",
+                    "BNB": "BNB Smart Chain",
+                    "AVAX": "AVAX C-Chain",
+                    "GAL": "GAL(FT)",
+                    "ALEO": "ALEO(IOU)",
+                    "BTC": "Bitcoin",
+                    "XT": "XT Smart Chain",
+                    "ETC": "Ethereum Classic",
+                    "MATIC": "Polygon",
+                    "LTC": "Litecoin",
+                    "BTS": "BitShares",
+                    "XRP": "Ripple",
+                    "XLM": "Stellar Network",
+                    "ADA": "Cardano",
+                    "XWC": "XWC-XWC",
+                    "DOGE": "dogecoin",
+                    "DCR": "Decred",
+                    "SC": "Siacoin",
+                    "XTZ": "Tezos",
+                    "ZEC": "Zcash",
+                    "XMR": "Monero",
+                    "LSK": "Lisk",
+                    "ATOM": "Cosmos",
+                    "ONT": "Ontology",
+                    "ALGO": "Algorand",
+                    "SOL": "SOL-SOL",
+                    "DOT": "Polkadot",
+                    "ZEN": "Horizen",
+                    "FIL": "Filecoin",
+                    "CHZ": "chz",
+                    "ICP": "Internet Computer",
+                    "KSM": "Kusama",
+                    "LUNA": "Terra",
+                    "THETA": "Theta Token",
+                    "FTM": "Fantom",
+                    "VET": "VeChain",
+                    "NEAR": "NEAR Protocol",
+                    "ONE": "Harmony",
+                    "KLAY": "Klaytn",
+                    "AR": "Arweave",
+                    "CELT": "OKT",
+                    "EGLD": "Elrond eGold",
+                    "CRO": "CRO-CRONOS",
+                    "BCH": "Bitcoin Cash",
+                    "GLMR": "Moonbeam",
+                    "LOOP": "LOOP-LRC",
+                    "REI": "REI Network",
+                    "ASTR": "Astar Network",
+                    "OP": "OPT",
+                    "MMT": "MMT-MMT",
+                    "TBC": "TBC-TBC",
+                    "OMAX": "OMAX-OMAX CHAIN",
+                    "GMMT": "GMMT chain",
+                    "ZIL": "Zilliqa"
+                },
+                "networksById": {
+                    "Ethereum": "ERC20",
+                    "Tron": "TRC20",
+                    "BNB Smart Chain": "BEP20",
+                    "BNB-BEP2": "BEP2",
+                    "Bitcoin": "BTC",
+                    "XT Smart Chain": "XT",
+                    "Ethereum Classic": "ETC",
+                    "Polygon": "MATIC",
+                    "Litecoin": "LTC",
+                    "BitShares": "BTS",
+                    "Ripple": "XRP",
+                    "Stellar Network": "XLM",
+                    "Cardano": "ADA",
+                    "XWC-XWC": "XWC",
+                    "dogecoin": "DOGE",
+                    "Decred": "DCR",
+                    "Siacoin": "SC",
+                    "Tezos": "XTZ",
+                    "Zcash": "ZEC",
+                    "Monero": "XMR",
+                    "Lisk": "LSK",
+                    "Cosmos": "ATOM",
+                    "Ontology": "ONT",
+                    "Algorand": "ALGO",
+                    "SOL-SOL": "SOL",
+                    "Polkadot": "DOT",
+                    "Horizen": "ZEN",
+                    "Filecoin": "FIL",
+                    "chz": "CHZ",
+                    "Internet Computer": "ICP",
+                    "Kusama": "KSM",
+                    "Terra": "LUNA",
+                    "Theta Token": "THETA",
+                    "Fantom": "FTM",
+                    "VeChain": "VET",
+                    "AVAX C-Chain": "AVAX",
+                    "NEAR Protocol": "NEAR",
+                    "Harmony": "ONE",
+                    "Klaytn": "KLAY",
+                    "Arweave": "AR",
+                    "OKT": "CELT",
+                    "Elrond eGold": "EGLD",
+                    "CRO-CRONOS": "CRO",
+                    "Bitcoin Cash": "BCH",
+                    "Moonbeam": "GLMR",
+                    "LOOP-LRC": "LOOP",
+                    "REI Network": "REI",
+                    "Astar Network": "ASTR",
+                    "GAL(FT)": "GAL",
+                    "ALEO(IOU)": "ALEO",
+                    "OPT": "OP",
+                    "MMT-MMT": "MMT",
+                    "TBC-TBC": "TBC",
+                    "OMAX-OMAX CHAIN": "OMAX",
+                    "GMMT chain": "GMMT",
+                    "Zilliqa": "ZIL"
+                },
+                "createMarketBuyOrderRequiresPrice": true,
+                "recvWindow": "5000",
+                "tradesLimit": 1000,
+                "ordersLimit": 1000,
+                "OHLCVLimit": 1000,
+                "watchTicker": {
+                    "method": "ticker"
+                },
+                "watchTickers": {
+                    "method": "tickers"
+                },
+                "watchPositions": {
+                    "type": "swap",
+                    "fetchPositionsSnapshot": true,
+                    "awaitPositionsSnapshot": true
+                }
+            },
+            "features": {
+                "default": {
+                    "sandbox": false,
+                    "createOrder": {
+                        "marginMode": false,
+                        "triggerPrice": false,
+                        "triggerDirection": false,
+                        "stopLossPrice": false,
+                        "takeProfitPrice": false,
+                        "timeInForce": {
+                            "IOC": true,
+                            "FOK": true,
+                            "PO": true,
+                            "GTD": false
+                        },
+                        "hedged": false,
+                        "trailing": false,
+                        "leverage": false,
+                        "marketBuyByCost": true,
+                        "marketBuyRequiresPrice": false,
+                        "selfTradePrevention": false,
+                        "iceberg": false
+                    },
+                    "fetchMyTrades": {
+                        "marginMode": true,
+                        "limit": 100,
+                        "daysBack": 100000,
+                        "untilDays": 100000,
+                        "marketType": true,
+                        "subType": true,
+                        "symbolRequired": false
+                    },
+                    "fetchOrder": {
+                        "marginMode": false,
+                        "trigger": true,
+                        "trailing": false,
+                        "marketType": true,
+                        "subType": true,
+                        "symbolRequired": false
+                    },
+                    "fetchOpenOrders": {
+                        "marginMode": true,
+                        "limit": 100,
+                        "trigger": true,
+                        "trailing": false,
+                        "marketType": true,
+                        "subType": true,
+                        "symbolRequired": false
+                    },
+                    "fetchOrders": {
+                        "marginMode": true,
+                        "limit": 100,
+                        "daysBack": 100000,
+                        "untilDays": 100000,
+                        "trigger": true,
+                        "trailing": false,
+                        "marketType": true,
+                        "subType": true,
+                        "symbolRequired": false
+                    },
+                    "fetchClosedOrders": {
+                        "marginMode": true,
+                        "limit": 100,
+                        "daysBack": 100000,
+                        "daysBackCanceled": 1,
+                        "untilDays": 100000,
+                        "trigger": true,
+                        "trailing": false,
+                        "marketType": true,
+                        "subType": true,
+                        "symbolRequired": false
+                    },
+                    "fetchOHLCV": {
+                        "limit": 1000
+                    }
+                },
+                "spot": {
+                    "extends": "default"
+                },
+                "forDerivatives": {
+                    "extends": "default",
+                    "createOrder": {
+                        "triggerPrice": true,
+                        "triggerPriceType": {
+                            "last": true,
+                            "mark": true,
+                            "index": true
+                        },
+                        "stopLossPrice": true,
+                        "takeProfitPrice": true
+                    },
+                    "fetchMyTrades": {}
+                },
+                "swap": {
+                    "linear": {
+                        "extends": "forDerivatives"
+                    },
+                    "inverse": {
+                        "extends": "forDerivatives"
+                    }
+                },
+                "future": {
+                    "linear": {
+                        "extends": "forDerivatives"
+                    },
+                    "inverse": {
+                        "extends": "forDerivatives"
                     }
                 }
+            },
+            "streaming": {
+                "keepAlive": 20000
             }
-        }
-        let mut request = if params.is_object() { params.clone() } else { Value::new_object() };
-        request.set("symbol".into(), symbol.clone());
-        if limit.is_nonnullish() {
-            request.set("limit".into(), limit.clone());
-        }
-        let mut dynamic_calls: Vec<(String, String, String)> = vec![];
-        if let Value::Json(serde_json::Value::Object(api_map)) = Xt::describe(self).get("api".into()) {
-            for (api_name, node) in api_map {
-                collect_routes(&node, &api_name, &mut dynamic_calls);
-            }
-        }
-        for token in ["depth", "orderbook", "order_book"] {
-            for (api_name, method_name, path_name) in &dynamic_calls {
-                if method_name.as_str() != "GET" || path_name.contains('{') {
-                    continue;
-                }
-                let p = path_name.to_lowercase();
-                if p == token || p.contains(token) {
-                    let rv = Xt::request(self, path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
-                    if !rv.is_undefined() {
-                        return rv;
-                    }
-                }
-            }
-        }
-        let candidates = vec![
-            ("public", "GET", "depth"),
-            ("public", "GET", "orderbook"),
-            ("public", "GET", "order_book"),
-        ];
-        for (api_name, method_name, path_name) in candidates {
-            let rv = Xt::request(self, path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
-            if !rv.is_undefined() {
-                return rv;
-            }
-        }
-        Value::Undefined
+        }"###).unwrap())
     }
 
-async fn fetch_order_book_ws(&mut self, mut symbol: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_margin_mode(&mut self, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_margin_modes(&mut self, mut symbols: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_rest_order_book_safe(&mut self, mut symbol: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_time(&mut self, mut params: Value) -> Value {
-        let candidates = vec![
-            ("public", "GET", "time"),
-            ("public", "GET", "server/time"),
-            ("public", "GET", "timestamp"),
-        ];
-        for (api_name, method_name, path_name) in candidates {
-            let rv = Xt::request(self, path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
-            if !rv.is_undefined() {
-                return rv;
-            }
-        }
-        Value::Undefined
-    }
-
-async fn fetch_trading_limits(&mut self, mut symbols: Value, mut params: Value) -> Value { Value::Undefined }
-
-fn parse_currency(&self, mut raw_currency: Value) -> Value { Value::Undefined }
-
-fn parse_currencies(&self, mut raw_currencies: Value) -> Value { Value::Undefined }
-
-fn parse_market(&self, mut market: Value) -> Value { Value::Undefined }
-
-fn parse_markets(&self, mut markets: Value) -> Value { Value::Undefined }
-
-fn parse_ticker(&self, mut ticker: Value, mut market: Value) -> Value { Value::Undefined }
-
-fn parse_deposit_address(&self, mut deposit_address: Value, mut currency: Value) -> Value { Value::Undefined }
-
-fn parse_trade(&self, mut trade: Value, mut market: Value) -> Value { Value::Undefined }
-
-fn parse_transaction(&self, mut transaction: Value, mut currency: Value) -> Value { Value::Undefined }
-
-fn parse_transfer(&self, mut transfer: Value, mut currency: Value) -> Value { Value::Undefined }
-
-fn parse_account(&self, mut account: Value) -> Value { Value::Undefined }
-
-fn parse_ledger_entry(&self, mut item: Value, mut currency: Value) -> Value { Value::Undefined }
-
-fn parse_order(&self, mut order: Value, mut market: Value) -> Value { Value::Undefined }
-
-async fn fetch_cross_borrow_rates(&mut self, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_isolated_borrow_rates(&mut self, mut params: Value) -> Value { Value::Undefined }
-
-fn parse_market_leverage_tiers(&self, mut info: Value, mut market: Value) -> Value { Value::Undefined }
-
-async fn fetch_leverage_tiers(&mut self, mut symbols: Value, mut params: Value) -> Value { Value::Undefined }
-
-fn parse_position(&self, mut position: Value, mut market: Value) -> Value { Value::Undefined }
-
-fn parse_funding_rate_history(&self, mut info: Value, mut market: Value) -> Value { Value::Undefined }
-
-fn parse_borrow_interest(&self, mut info: Value, mut market: Value) -> Value { Value::Undefined }
-
-fn parse_isolated_borrow_rate(&self, mut info: Value, mut market: Value) -> Value { Value::Undefined }
-
-fn parse_ws_trade(&self, mut trade: Value, mut market: Value) -> Value { Value::Undefined }
-
-fn parse_ws_ohlcv(&self, mut ohlcv: Value, mut market: Value) -> Value { Value::Undefined }
-
-async fn fetch_funding_rates(&mut self, mut symbols: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_funding_intervals(&mut self, mut symbols: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn watch_funding_rate(&mut self, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn watch_funding_rates(&mut self, mut symbols: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn watch_funding_rates_for_symbols(&mut self, mut symbols: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn transfer(&mut self, mut code: Value, mut amount: Value, mut from_account: Value, mut to_account: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn withdraw(&mut self, mut code: Value, mut amount: Value, mut address: Value, mut tag: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn create_deposit_address(&mut self, mut code: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn set_leverage(&mut self, mut leverage: Value, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_leverage(&mut self, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_leverages(&mut self, mut symbols: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn set_position_mode(&mut self, mut hedged: Value, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn add_margin(&mut self, mut symbol: Value, mut amount: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn reduce_margin(&mut self, mut symbol: Value, mut amount: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn set_margin(&mut self, mut symbol: Value, mut amount: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_long_short_ratio(&mut self, mut symbol: Value, mut timeframe: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_long_short_ratio_history(&mut self, mut symbol: Value, mut timeframe: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_margin_adjustment_history(&mut self, mut symbol: Value, mut r#type: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn set_margin_mode(&mut self, mut margin_mode: Value, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_deposit_addresses_by_network(&mut self, mut code: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_open_interest_history(&mut self, mut symbol: Value, mut timeframe: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_open_interest(&mut self, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_open_interests(&mut self, mut symbols: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn sign_in(&mut self, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_payment_methods(&mut self, mut params: Value) -> Value { Value::Undefined }
-
-
-
-fn is_round_number(&mut self, mut value: Value) -> Value { Value::Undefined }
-
-
-
-fn after_construct(&mut self) -> Value { Value::Undefined }
-
-fn init_rest_rate_limiter(&mut self) -> Value { Value::Undefined }
-
-fn features_generator(&mut self) -> Value { Value::Undefined }
-
-fn features_mapper(&mut self, mut initial_features: Value, mut market_type: Value, mut sub_type: Value) -> Value { Value::Undefined }
-
-fn feature_value(&mut self, mut symbol: Value, mut method_name: Value, mut param_name: Value, mut default_value: Value) -> Value { Value::Undefined }
-
-fn feature_value_by_type(&mut self, mut market_type: Value, mut sub_type: Value, mut method_name: Value, mut param_name: Value, mut default_value: Value) -> Value { Value::Undefined }
-
-fn orderbook_checksum_message(&mut self, mut symbol: Value) -> Value { Value::Undefined }
-
-fn create_networks_by_id_object(&mut self) -> Value { Value::Undefined }
-
-fn get_default_options(&mut self) -> Value { Value::Undefined }
-
-fn safe_ledger_entry(&self, mut entry: Value, mut currency: Value) -> Value { Value::Undefined }
-
-fn safe_currency_structure(&self, mut currency: Value) -> Value { Value::Undefined }
-
-fn safe_market_structure(&self, mut market: Value) -> Value { Value::Undefined }
-
-fn set_markets(&mut self, mut markets: Value, mut currencies: Value) -> Value { Value::Undefined }
-
-fn set_markets_from_exchange(&mut self, mut source_exchange: Value) -> Value { Value::Undefined }
-
-fn get_describe_for_extended_ws_exchange(&mut self, mut current_rest_instance: Value, mut parent_rest_instance: Value, mut ws_base_describe: Value) -> Value { Value::Undefined }
-
-fn safe_balance(&self, mut balance: Value) -> Value { Value::Undefined }
-
-fn safe_order(&self, mut order: Value, mut market: Value) -> Value { Value::Undefined }
-
-fn parse_orders(&self, mut orders: Value, mut market: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-fn calculate_fee_with_rate(&mut self, mut symbol: Value, mut r#type: Value, mut side: Value, mut amount: Value, mut price: Value, mut taker_or_maker: Value, mut fee_rate: Value, mut params: Value) -> Value { Value::Undefined }
-
-fn calculate_fee(&mut self, mut symbol: Value, mut r#type: Value, mut side: Value, mut amount: Value, mut price: Value, mut taker_or_maker: Value, mut params: Value) -> Value { Value::Undefined }
-
-fn safe_liquidation(&self, mut liquidation: Value, mut market: Value) -> Value { Value::Undefined }
-
-fn safe_trade(&self, mut trade: Value, mut market: Value) -> Value { Value::Undefined }
-
-fn create_ccxt_trade_id(&mut self, mut timestamp: Value, mut side: Value, mut amount: Value, mut price: Value, mut taker_or_maker: Value) -> Value { Value::Undefined }
-
-fn parsed_fee_and_fees(&self, mut container: Value) -> Value { Value::Undefined }
-
-fn parse_fee_numeric(&self, mut fee: Value) -> Value { Value::Undefined }
-
-fn find_nearest_ceiling(&mut self, mut arr: Value, mut provided_value: Value) -> Value { Value::Undefined }
-
-fn invert_flat_string_dictionary(&mut self, mut dict: Value) -> Value { Value::Undefined }
-
-fn reduce_fees_by_currency(&mut self, mut fees: Value) -> Value { Value::Undefined }
-
-fn safe_ticker(&self, mut ticker: Value, mut market: Value) -> Value { Value::Undefined }
-
-async fn fetch_borrow_rate(&mut self, mut code: Value, mut amount: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn repay_cross_margin(&mut self, mut code: Value, mut amount: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn repay_isolated_margin(&mut self, mut symbol: Value, mut code: Value, mut amount: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn borrow_cross_margin(&mut self, mut code: Value, mut amount: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn borrow_isolated_margin(&mut self, mut symbol: Value, mut code: Value, mut amount: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn borrow_margin(&mut self, mut code: Value, mut amount: Value, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn repay_margin(&mut self, mut code: Value, mut amount: Value, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_ohlcv(&mut self, mut symbol: Value, mut timeframe: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
-        fn collect_routes(node: &serde_json::Value, api_name: &str, out: &mut Vec<(String, String, String)>) {
-            if let serde_json::Value::Object(map) = node {
-                for (k, v) in map {
-                    let kl = k.to_lowercase();
-                    if kl == "get" || kl == "post" || kl == "put" || kl == "delete" {
-                        if let serde_json::Value::Object(paths) = v {
-                            for (p, _cost) in paths {
-                                out.push((api_name.to_string(), kl.to_uppercase(), p.clone()));
-                            }
-                        }
-                    } else {
-                        collect_routes(v, api_name, out);
-                    }
-                }
-            }
-        }
-        let mut request = if params.is_object() { params.clone() } else { Value::new_object() };
-        request.set("symbol".into(), symbol.clone());
-        request.set("timeframe".into(), timeframe.clone());
-        request.set("interval".into(), timeframe.clone());
-        if since.is_nonnullish() {
-            request.set("since".into(), since.clone());
-            request.set("startTime".into(), since.clone());
-        }
-        if limit.is_nonnullish() {
-            request.set("limit".into(), limit.clone());
-        }
-        let mut dynamic_calls: Vec<(String, String, String)> = vec![];
-        if let Value::Json(serde_json::Value::Object(api_map)) = Xt::describe(self).get("api".into()) {
-            for (api_name, node) in api_map {
-                collect_routes(&node, &api_name, &mut dynamic_calls);
-            }
-        }
-        for token in ["klines", "candles", "ohlcv"] {
-            for (api_name, method_name, path_name) in &dynamic_calls {
-                if method_name.as_str() != "GET" || path_name.contains('{') {
-                    continue;
-                }
-                let p = path_name.to_lowercase();
-                if p == token || p.contains(token) {
-                    let rv = Xt::request(self, path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
-                    if !rv.is_undefined() {
-                        return rv;
-                    }
-                }
-            }
-        }
-        let candidates = vec![
-            ("public", "GET", "klines"),
-            ("public", "GET", "candles"),
-            ("public", "GET", "ohlcv"),
-        ];
-        for (api_name, method_name, path_name) in candidates {
-            let rv = Xt::request(self, path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
-            if !rv.is_undefined() {
-                return rv;
-            }
-        }
-        Value::Undefined
-    }
-
-async fn fetch_ohlcv_ws(&mut self, mut symbol: Value, mut timeframe: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-fn convert_trading_view_to_ohlcv(&self, mut ohlcvs: Value, mut timestamp: Value, mut open: Value, mut high: Value, mut low: Value, mut close: Value, mut volume: Value, mut ms: Value) -> Value { Value::Undefined }
-
-fn convert_ohlcv_to_trading_view(&self, mut ohlcvs: Value, mut timestamp: Value, mut open: Value, mut high: Value, mut low: Value, mut close: Value, mut volume: Value, mut ms: Value) -> Value { Value::Undefined }
-
-async fn fetch_web_endpoint(&mut self, mut method: Value, mut endpoint_method: Value, mut return_as_json: Value, mut start_regex: Value, mut end_regex: Value) -> Value { Value::Undefined }
-
-fn market_ids(&mut self, mut symbols: Value) -> Value { Value::Undefined }
-
-fn currency_ids(&mut self, mut codes: Value) -> Value { Value::Undefined }
-
-fn markets_for_symbols(&mut self, mut symbols: Value) -> Value { Value::Undefined }
-
-fn market_symbols(&self, mut symbols: Value, mut r#type: Value, mut allow_empty: Value, mut same_type_only: Value, mut same_sub_type_only: Value) -> Value { Value::Undefined }
-
-fn market_codes(&mut self, mut codes: Value) -> Value { Value::Undefined }
-
-
-async fn fetch_l2_order_book(&mut self, mut symbol: Value, mut limit: Value, mut params: Value) -> Value {
-        let mut request = if params.is_object() { params.clone() } else { Value::new_object() };
-        request.set("symbol".into(), symbol.clone());
-        if limit.is_nonnullish() {
-            request.set("limit".into(), limit.clone());
-        }
-        let candidates = vec![
-            ("public", "GET", "depth"),
-            ("public", "GET", "orderbook"),
-            ("public", "GET", "order_book"),
-        ];
-        for (api_name, method_name, path_name) in candidates {
-            let rv = Xt::request(self, path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
-            if !rv.is_undefined() {
-                return rv;
-            }
-        }
-        Value::Undefined
-    }
-
-fn filter_by_symbol(&self, mut objects: Value, mut symbol: Value) -> Value { Value::Undefined }
-
-fn parse_ohlcv(&self, mut ohlcv: Value, mut market: Value) -> Value { Value::Undefined }
-
-fn network_code_to_id(&mut self, mut network_code: Value, mut currency_code: Value) -> Value { Value::Undefined }
-
-fn network_id_to_code(&mut self, mut network_id: Value, mut currency_code: Value) -> Value { Value::Undefined }
-
-fn handle_network_code_and_params(&mut self, mut params: Value) -> Value { Value::Undefined }
-
-fn default_network_code(&mut self, mut currency_code: Value) -> Value { Value::Undefined }
-
-fn select_network_code_from_unified_networks(&mut self, mut currency_code: Value, mut network_code: Value, mut indexed_network_entries: Value) -> Value { Value::Undefined }
-
-fn select_network_id_from_raw_networks(&mut self, mut currency_code: Value, mut network_code: Value, mut indexed_network_entries: Value) -> Value { Value::Undefined }
-
-fn select_network_key_from_networks(&mut self, mut currency_code: Value, mut network_code: Value, mut indexed_network_entries: Value, mut is_indexed_by_unified_network_code: Value) -> Value { Value::Undefined }
-
-
-
-fn parse_ohlcvs(&self, mut ohlcvs: Value, mut market: Value, mut timeframe: Value, mut since: Value, mut limit: Value, mut tail: Value) -> Value { Value::Undefined }
-
-fn parse_leverage_tiers(&self, mut response: Value, mut symbols: Value, mut market_id_key: Value) -> Value { Value::Undefined }
-
-async fn load_trading_limits(&mut self, mut symbols: Value, mut reload: Value, mut params: Value) -> Value { Value::Undefined }
-
-fn safe_position(&self, mut position: Value) -> Value { Value::Undefined }
-
-fn parse_positions(&self, mut positions: Value, mut symbols: Value, mut params: Value) -> Value { Value::Undefined }
-
-fn parse_accounts(&self, mut accounts: Value, mut params: Value) -> Value { Value::Undefined }
-
-fn parse_trades_helper(&self, mut is_ws: Value, mut trades: Value, mut market: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-fn parse_trades(&self, mut trades: Value, mut market: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-fn parse_ws_trades(&self, mut trades: Value, mut market: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-fn parse_transactions(&self, mut transactions: Value, mut currency: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-fn parse_transfers(&self, mut transfers: Value, mut currency: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-fn parse_ledger(&self, mut data: Value, mut currency: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-fn nonce(&self) -> Value { Value::Undefined }
-
-fn set_headers(&mut self, mut headers: Value) -> Value { Value::Undefined }
-
-fn currency_id(&mut self, mut code: Value) -> Value { Value::Undefined }
-
-fn market_id(&mut self, mut symbol: Value) -> Value { Value::Undefined }
-
-fn symbol(&self, mut symbol: Value) -> Value { Value::Undefined }
-
-fn handle_param_string(&mut self, mut params: Value, mut param_name: Value, mut default_value: Value) -> Value { Value::Undefined }
-
-fn handle_param_string_2(&mut self, mut params: Value, mut param_name_1: Value, mut param_name_2: Value, mut default_value: Value) -> Value { Value::Undefined }
-
-fn handle_param_integer(&mut self, mut params: Value, mut param_name: Value, mut default_value: Value) -> Value { Value::Undefined }
-
-fn handle_param_integer_2(&mut self, mut params: Value, mut param_name_1: Value, mut param_name_2: Value, mut default_value: Value) -> Value { Value::Undefined }
-
-fn handle_param_bool(&mut self, mut params: Value, mut param_name: Value, mut default_value: Value) -> Value { Value::Undefined }
-
-fn handle_param_bool_2(&mut self, mut params: Value, mut param_name_1: Value, mut param_name_2: Value, mut default_value: Value) -> Value { Value::Undefined }
-
-fn handle_request_network(&mut self, mut params: Value, mut request: Value, mut exchange_specific_key: Value, mut currency_code: Value, mut is_required: Value) -> Value { Value::Undefined }
-
-fn resolve_path(&mut self, mut path: Value, mut params: Value) -> Value { Value::Undefined }
-
-fn get_list_from_object_values(&mut self, mut objects: Value, mut key: Value) -> Value { Value::Undefined }
-
-fn get_symbols_for_market_type(&mut self, mut market_type: Value, mut sub_type: Value, mut symbol_with_active_status: Value, mut symbol_with_unknown_status: Value) -> Value { Value::Undefined }
-
-fn filter_by_array(&self, mut objects: Value, mut key: Value, mut values: Value, mut indexed: Value) -> Value { Value::Undefined }
-
-async fn fetch2(&mut self, mut path: Value, mut api: Value, mut method: Value, mut params: Value, mut headers: Value, mut body: Value, mut config: Value) -> Value { Value::Undefined }
-
-async fn request(&mut self, mut path: Value, mut api: Value, mut method: Value, mut params: Value, mut headers: Value, mut body: Value, mut config: Value) -> Value {
-        fn first_string(v: &serde_json::Value) -> Option<String> {
-            match v {
-                serde_json::Value::String(s) => Some(s.clone()),
-                serde_json::Value::Object(map) => {
-                    for (_k, vv) in map {
-                        if let Some(found) = first_string(vv) {
-                            return Some(found);
-                        }
-                    }
-                    None
-                }
-                serde_json::Value::Array(arr) => {
-                    for vv in arr {
-                        if let Some(found) = first_string(vv) {
-                            return Some(found);
-                        }
-                    }
-                    None
-                }
-                _ => None,
-            }
-        }
-
-        let urls_api = Xt::describe(self).get("urls".into()).get("api".into());
-        let mut base = urls_api.get(api.clone());
-        if !base.is_string() {
-            base = urls_api.get("public".into());
-        }
-        if !base.is_string() {
-            if let Value::Json(json_api) = urls_api.clone() {
-                if let Some(found) = first_string(&json_api) {
-                    base = Value::from(found);
-                }
-            }
-        }
-        if !base.is_string() {
-            base = urls_api.clone();
-        }
-        if !base.is_string() || !path.is_string() {
-            eprintln!(
-                "ccxt-rs request skipped: base url missing (api='{}', path='{}')",
-                api.unwrap_str(),
-                path.unwrap_str()
-            );
-            return Value::Undefined;
-        }
-        let mut base_url = base.unwrap_str().to_string();
-        let hostname = Xt::describe(self).get("hostname".into());
-        if hostname.is_string() {
-            base_url = base_url.replace("{hostname}", hostname.unwrap_str());
-        }
-        // Last-resort placeholder cleanup for templated domains in describe().
-        while let Some(start) = base_url.find('{') {
-            if let Some(rel_end) = base_url[start..].find('}') {
-                let end = start + rel_end;
-                let replacement = if hostname.is_string() { hostname.unwrap_str() } else { "" };
-                base_url.replace_range(start..=end, replacement);
+    async fn get_listen_key(&mut self, mut is_contract: Value) -> Value {
+        self.check_required_credentials(Value::Undefined);
+        let mut trade_type: Value = if is_contract.is_truthy() { Value::from("contract") } else { Value::from("spot") };
+        let mut url: Value = self.get("urls".into()).get(Value::from("api")).get(Value::from("ws")).get(trade_type.clone());
+        if !is_contract.is_truthy() {
+            url = url.clone() + Value::from("/private");
+        };
+        let mut client: Value = self.client(url.clone());
+        let mut token: Value = self.safe_string(client.get(subscriptions.clone()), Value::from("token"));
+        if token.clone().is_nullish() {
+            if is_contract.is_truthy() {
+                let mut response: Value = self.private_linear_get_future_user_v1_user_listen_key().await;
+                //
+                //    {
+                //        returnCode: '0',
+                //        msgInfo: 'success',
+                //        error: null,
+                //        result: '3BC1D71D6CF96DA3458FC35B05B633351684511731128'
+                //    }
+                //
+                client.get(subscriptions.clone()).set("token".into(), self.safe_string(response.clone(), Value::from("result")));
             } else {
-                break;
-            }
-        }
+                let mut response: Value = self.private_spot_post_ws_token().await;
+                //
+                //    {
+                //        "rc": 0,
+                //        "mc": "SUCCESS",
+                //        "ma": [],
+                //        "result": {
+                //            "token": "eyJhbqGciOiJSUzI1NiJ9.eyJhY2NvdW50SWQiOiIyMTQ2Mjg1MzIyNTU5Iiwic3ViIjoibGh4dDRfMDAwMUBzbmFwbWFpbC5jYyIsInNjb3BlIjoiYXV0aCIsImlzcyI6Inh0LmNvbSIsImxhc3RBdXRoVGltZSI6MTY2MzgxMzY5MDk1NSwic2lnblR5cGUiOiJBSyIsInVzZXJOYW1lIjoibGh4dDRfMDAwMUBzbmFwbWFpbC5jYyIsImV4cCI6MTY2NjQwNTY5MCwiZGV2aWNlIjoidW5rbm93biIsInVzZXJJZCI6MjE0NjI4NTMyMjU1OX0.h3zJlJBQrK2x1HvUxsKivnn6PlSrSDXXXJ7WqHAYSrN2CG5XPTKc4zKnTVoYFbg6fTS0u1fT8wH7wXqcLWXX71vm0YuP8PCvdPAkUIq4-HyzltbPr5uDYd0UByx0FPQtq1exvsQGe7evXQuDXx3SEJXxEqUbq_DNlXPTq_JyScI",
+                //            "refreshToken": "eyJhbGciOiqJSUzI1NiJ9.eyJhY2NvdW50SWQiOiIyMTQ2Mjg1MzIyNTU5Iiwic3ViIjoibGh4dDRfMDAwMUBzbmFwbWFpbC5jYyIsInNjb3BlIjoicmVmcmVzaCIsImlzcyI6Inh0LmNvbSIsImxhc3RBdXRoVGltZSI6MTY2MzgxMzY5MDk1NSwic2lnblR5cGUiOiJBSyIsInVzZXJOYW1lIjoibGh4dDRfMDAwMUBzbmFwbWFpbC5jYyIsImV4cCI6MTY2NjQwNTY5MCwiZGV2aWNlIjoidW5rbm93biIsInVzZXJJZCI6MjE0NjI4NTMyMjU1OX0.Fs3YVm5YrEOzzYOSQYETSmt9iwxUHBovh2u73liv1hLUec683WGfktA_s28gMk4NCpZKFeQWFii623FvdfNoteXR0v1yZ2519uNvNndtuZICDdv3BQ4wzW1wIHZa1skxFfqvsDnGdXpjqu9UFSbtHwxprxeYfnxChNk4ssei430"
+                //        }
+                //    }
+                //
+                let mut result: Value = self.safe_dict(response.clone(), Value::from("result"), Value::Undefined);
+                client.get(subscriptions.clone()).set("token".into(), self.safe_string(result.clone(), Value::from("accessToken")));
+            };
+        };
+        return client.get(subscriptions.clone()).get(Value::from("token"));
+    }
 
-        let mut url = format!("{}/{}", base_url.trim_end_matches('/'), path.unwrap_str());
-        let method_upper = method.unwrap_str().to_uppercase();
+    fn get_cache_index(&mut self, mut orderbook: Value, mut cache: Value) -> Value {
+        // return the first index of the cache that can be applied to the orderbook or -1 if not possible
+        let mut nonce: Value = self.safe_integer(orderbook.clone(), Value::from("nonce"));
+        let mut first_delta: Value = self.safe_value(cache.clone(), Value::from(0));
+        let mut first_delta_nonce: Value = self.safe_integer_2(first_delta.clone(), Value::from("i"), Value::from("u"));
+        if nonce.clone() < first_delta_nonce.clone() - Value::from(1) {
+            return Value::from(1).neg();
+        };
+        let mut i: usize = 0;
+        while i < cache.len() {
+            let mut delta: Value = cache.get(i.into());
+            let mut delta_nonce: Value = self.safe_integer_2(delta.clone(), Value::from("i"), Value::from("u"));
+            if delta_nonce.clone() >= nonce.clone() {
+                return Value::from(i);
+            };
+            i += 1;
+        };
+        return cache.len().into();
+    }
 
-        let mut query_pairs: Vec<String> = vec![];
-        if let Value::Json(serde_json::Value::Object(map)) = params.clone() {
-            for (k, v) in map {
-                if v.is_null() {
-                    continue;
-                }
-                let value_str = match v {
-                    serde_json::Value::String(s) => s,
-                    serde_json::Value::Number(n) => n.to_string(),
-                    serde_json::Value::Bool(b) => if b { "true".into() } else { "false".into() },
-                    _ => v.to_string(),
+    fn handle_delta(&mut self, mut orderbook: Value, mut delta: Value) -> Value {
+        orderbook.set("nonce".into(), self.safe_integer_2(delta.clone(), Value::from("i"), Value::from("u")));
+        let mut ob_asks: Value = self.safe_list(delta.clone(), Value::from("a"), Value::new_array());
+        let mut ob_bids: Value = self.safe_list(delta.clone(), Value::from("b"), Value::new_array());
+        let mut bids: Value = orderbook.get(Value::from("bids"));
+        let mut asks: Value = orderbook.get(Value::from("asks"));
+        let mut i: usize = 0;
+        while i < ob_bids.len() {
+            let mut bid: Value = ob_bids.get(i.into());
+            let mut price: Value = self.safe_number(bid.clone(), Value::from(0), Value::Undefined);
+            let mut quantity: Value = self.safe_number(bid.clone(), Value::from(1), Value::Undefined);
+            bids.store(price.clone(), quantity.clone());
+            i += 1;
+        };
+        let mut i: usize = 0;
+        while i < ob_asks.len() {
+            let mut ask: Value = ob_asks.get(i.into());
+            let mut price: Value = self.safe_number(ask.clone(), Value::from(0), Value::Undefined);
+            let mut quantity: Value = self.safe_number(ask.clone(), Value::from(1), Value::Undefined);
+            asks.store(price.clone(), quantity.clone());
+            i += 1;
+        };
+        Value::Undefined
+    }
+
+    async fn subscribe(&mut self, mut name: Value, mut access: Value, mut method_name: Value, mut market: Value, mut symbols: Value, mut params: Value) -> Value {
+        params = params.or_default(Value::new_object());
+        let mut private_access: Value = (access.clone() == Value::from("private")).into();
+        let mut r#type: Value = Value::Undefined;
+        (r#type, params) = shift_2(self.handle_market_type_and_params(method_name.clone(), market.clone(), params.clone(), Value::Undefined));
+        let mut is_contract: Value = (r#type.clone() != Value::from("spot")).into();
+        let mut id: Value = self.number_to_string(self.milliseconds()) + name.clone();
+        // call back ID
+        let mut subscribe: Value = Value::Json(normalize(&Value::Json(json!({
+            "method": if is_contract.is_truthy() { Value::from("SUBSCRIBE") } else { Value::from("subscribe") },
+            "id": id
+        }))).unwrap());
+        if private_access.is_truthy() {
+            if !is_contract.is_truthy() {
+                subscribe.set("params".into(), Value::Json(serde_json::Value::Array(vec![name.clone().into()])));
+                subscribe.set("listenKey".into(), <Self as Xt>::get_listen_key(self, is_contract.clone()).await);
+            } else {
+                let mut listen_key: Value = <Self as Xt>::get_listen_key(self, is_contract.clone()).await;
+                let mut param: Value = name.clone() + Value::from("@") + listen_key.clone();
+                subscribe.set("params".into(), Value::Json(serde_json::Value::Array(vec![param.clone().into()])));
+            };
+        } else {
+            subscribe.set("params".into(), Value::Json(serde_json::Value::Array(vec![name.clone().into()])));
+        };
+        let mut trade_type: Value = if is_contract.is_truthy() { Value::from("contract") } else { Value::from("spot") };
+        let mut message_hash: Value = name.clone() + Value::from("::") + trade_type.clone();
+        if symbols.clone().is_nonnullish() {
+            message_hash = message_hash.clone() + Value::from("::") + symbols.join(Value::from(","));
+        };
+        let mut request: Value = extend_2(subscribe.clone(), params.clone());
+        let mut tail: Value = access.clone();
+        if is_contract.is_truthy() {
+            tail = if private_access.is_truthy() { Value::from("user") } else { Value::from("market") };
+        };
+        let mut subscription: Value = Value::Json(normalize(&Value::Json(json!({
+            "id": id
+        }))).unwrap());
+        let mut url: Value = self.get("urls".into()).get(Value::from("api")).get(Value::from("ws")).get(trade_type.clone()) + Value::from("/") + tail.clone();
+        return self.watch(url.clone(), message_hash.clone(), request.clone(), message_hash.clone(), subscription.clone()).await;
+    }
+
+    async fn un_subscribe(&mut self, mut message_hash: Value, mut name: Value, mut access: Value, mut method_name: Value, mut topic: Value, mut market: Value, mut symbols: Value, mut params: Value, mut subscription_params: Value) -> Value {
+        params = params.or_default(Value::new_object());
+        subscription_params = subscription_params.or_default(Value::new_object());
+        let mut private_access: Value = (access.clone() == Value::from("private")).into();
+        let mut r#type: Value = Value::Undefined;
+        (r#type, params) = shift_2(self.handle_market_type_and_params(method_name.clone(), market.clone(), params.clone(), Value::Undefined));
+        let mut is_contract: Value = (r#type.clone() != Value::from("spot")).into();
+        let mut id: Value = self.number_to_string(self.milliseconds()) + name.clone();
+        // call back ID
+        let mut unsubscribe: Value = Value::Json(normalize(&Value::Json(json!({
+            "method": if is_contract.is_truthy() { Value::from("UNSUBSCRIBE") } else { Value::from("unsubscribe") },
+            "id": id
+        }))).unwrap());
+        if private_access.is_truthy() {
+            if !is_contract.is_truthy() {
+                unsubscribe.set("params".into(), Value::Json(serde_json::Value::Array(vec![name.clone().into()])));
+                unsubscribe.set("listenKey".into(), <Self as Xt>::get_listen_key(self, is_contract.clone()).await);
+            } else {
+                let mut listen_key: Value = <Self as Xt>::get_listen_key(self, is_contract.clone()).await;
+                let mut param: Value = name.clone() + Value::from("@") + listen_key.clone();
+                unsubscribe.set("params".into(), Value::Json(serde_json::Value::Array(vec![param.clone().into()])));
+            };
+        } else {
+            unsubscribe.set("params".into(), Value::Json(serde_json::Value::Array(vec![name.clone().into()])));
+        };
+        let mut trade_type: Value = if is_contract.is_truthy() { Value::from("contract") } else { Value::from("spot") };
+        let mut sub_message_hash: Value = name.clone() + Value::from("::") + trade_type.clone();
+        let mut request: Value = extend_2(unsubscribe.clone(), params.clone());
+        let mut tail: Value = access.clone();
+        if is_contract.is_truthy() {
+            tail = if private_access.is_truthy() { Value::from("user") } else { Value::from("market") };
+        };
+        let mut url: Value = self.get("urls".into()).get(Value::from("api")).get(Value::from("ws")).get(trade_type.clone()) + Value::from("/") + tail.clone();
+        let mut subscription: Value = Value::Json(normalize(&Value::Json(json!({
+            "unsubscribe": true,
+            "id": id,
+            "subMessageHashes": Value::Json(serde_json::Value::Array(vec![sub_message_hash.clone().into()])),
+            "messageHashes": Value::Json(serde_json::Value::Array(vec![message_hash.clone().into()])),
+            "symbols": symbols,
+            "topic": topic
+        }))).unwrap());
+        let mut symbols_and_timeframes: Value = self.safe_list(subscription_params.clone(), Value::from("symbolsAndTimeframes"), Value::Undefined);
+        if symbols_and_timeframes.clone().is_nonnullish() {
+            subscription.set("symbolsAndTimeframes".into(), symbols_and_timeframes.clone());
+            subscription_params = self.omit(subscription_params.clone(), Value::from("symbolsAndTimeframes"));
+        };
+        return self.watch(url.clone(), message_hash.clone(), extend_2(request.clone(), params.clone()), message_hash.clone(), extend_2(subscription.clone(), subscription_params.clone())).await;
+    }
+
+    async fn watch_ticker(&mut self, mut symbol: Value, mut params: Value) -> Value {
+        params = params.or_default(Value::new_object());
+        self.load_markets(Value::Undefined, Value::Undefined).await;
+        let mut market: Value = self.market(symbol.clone());
+        let mut options: Value = self.safe_dict(self.get("options".into()), Value::from("watchTicker"), Value::Undefined);
+        let mut default_method: Value = self.safe_string(options.clone(), Value::from("method"), Value::from("ticker"));
+        let mut method: Value = self.safe_string(params.clone(), Value::from("method"), default_method.clone());
+        let mut name: Value = method.clone() + Value::from("@") + market.get(Value::from("id"));
+        return <Self as Xt>::subscribe(self, name.clone(), Value::from("public"), Value::from("watchTicker"), market.clone(), Value::Undefined, params.clone()).await;
+    }
+
+    async fn un_watch_ticker(&mut self, mut symbol: Value, mut params: Value) -> Value {
+        params = params.or_default(Value::new_object());
+        self.load_markets(Value::Undefined, Value::Undefined).await;
+        let mut market: Value = self.market(symbol.clone());
+        let mut options: Value = self.safe_dict(self.get("options".into()), Value::from("unWatchTicker"), Value::Undefined);
+        let mut default_method: Value = self.safe_string(options.clone(), Value::from("method"), Value::from("ticker"));
+        let mut method: Value = self.safe_string(params.clone(), Value::from("method"), default_method.clone());
+        let mut name: Value = method.clone() + Value::from("@") + market.get(Value::from("id"));
+        let mut message_hash: Value = Value::from("unsubscribe::") + name.clone();
+        return <Self as Xt>::un_subscribe(self, message_hash.clone(), name.clone(), Value::from("public"), Value::from("unWatchTicker"), default_method.clone(), market.clone(), Value::Undefined, params.clone(), Value::Undefined).await;
+    }
+
+    async fn watch_tickers(&mut self, mut symbols: Value, mut params: Value) -> Value {
+        params = params.or_default(Value::new_object());
+        self.load_markets(Value::Undefined, Value::Undefined).await;
+        let mut options: Value = self.safe_dict(self.get("options".into()), Value::from("watchTickers"), Value::Undefined);
+        let mut default_method: Value = self.safe_string(options.clone(), Value::from("method"), Value::from("tickers"));
+        let mut name: Value = self.safe_string(params.clone(), Value::from("method"), default_method.clone());
+        let mut market: Value = Value::Undefined;
+        if symbols.clone().is_nonnullish() {
+            market = self.market(symbols.get(Value::from(0)));
+        };
+        let mut tickers: Value = <Self as Xt>::subscribe(self, name.clone(), Value::from("public"), Value::from("watchTickers"), market.clone(), symbols.clone(), params.clone()).await;
+        if self.get("newUpdates".into()).is_truthy() {
+            return tickers.clone();
+        };
+        return self.filter_by_array(self.get("tickers".into()), Value::from("symbol"), symbols.clone(), Value::Undefined);
+    }
+
+    async fn un_watch_tickers(&mut self, mut symbols: Value, mut params: Value) -> Value {
+        params = params.or_default(Value::new_object());
+        self.load_markets(Value::Undefined, Value::Undefined).await;
+        let mut options: Value = self.safe_dict(self.get("options".into()), Value::from("unWatchTickers"), Value::Undefined);
+        let mut default_method: Value = self.safe_string(options.clone(), Value::from("method"), Value::from("tickers"));
+        let mut name: Value = self.safe_string(params.clone(), Value::from("method"), default_method.clone());
+        if symbols.clone().is_nonnullish() {
+            panic!(r###"NotSupported::new(self.get("id".into()) + Value::from(" unWatchTickers() does not support symbols argument, unsubscribtion is for all tickers at once only"))"###);
+        };
+        let mut message_hash: Value = Value::from("unsubscribe::") + name.clone();
+        let mut tickers: Value = <Self as Xt>::un_subscribe(self, message_hash.clone(), name.clone(), Value::from("public"), Value::from("unWatchTickers"), Value::from("ticker"), Value::Undefined, symbols.clone(), params.clone(), Value::Undefined).await;
+        if self.get("newUpdates".into()).is_truthy() {
+            return tickers.clone();
+        };
+        return self.filter_by_array(self.get("tickers".into()), Value::from("symbol"), symbols.clone(), Value::Undefined);
+    }
+
+    async fn watch_ohlcv(&mut self, mut symbol: Value, mut timeframe: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
+        timeframe = timeframe.or_default(Value::from("1m"));
+        params = params.or_default(Value::new_object());
+        self.load_markets(Value::Undefined, Value::Undefined).await;
+        let mut market: Value = self.market(symbol.clone());
+        let mut name: Value = Value::from("kline@") + market.get(Value::from("id")) + Value::from(",") + timeframe.clone();
+        let mut ohlcv: Value = <Self as Xt>::subscribe(self, name.clone(), Value::from("public"), Value::from("watchOHLCV"), market.clone(), Value::Undefined, params.clone()).await;
+        if self.get("newUpdates".into()).is_truthy() {
+            limit = ohlcv.get_limit(symbol.clone(), limit.clone());
+        };
+        return self.filter_by_since_limit(ohlcv.clone(), since.clone(), limit.clone(), Value::from(0), true.into());
+    }
+
+    async fn un_watch_ohlcv(&mut self, mut symbol: Value, mut timeframe: Value, mut params: Value) -> Value {
+        timeframe = timeframe.or_default(Value::from("1m"));
+        params = params.or_default(Value::new_object());
+        self.load_markets(Value::Undefined, Value::Undefined).await;
+        let mut market: Value = self.market(symbol.clone());
+        let mut name: Value = Value::from("kline@") + market.get(Value::from("id")) + Value::from(",") + timeframe.clone();
+        let mut message_hash: Value = Value::from("unsubscribe::") + name.clone();
+        let mut symbols_and_timeframes: Value = Value::Json(serde_json::Value::Array(vec![Value::Json(serde_json::Value::Array(vec![market.get(Value::from("symbol")).into(), timeframe.clone().into()])).into()]));
+        return <Self as Xt>::un_subscribe(self, message_hash.clone(), name.clone(), Value::from("public"), Value::from("unWatchOHLCV"), Value::from("ohlcv"), market.clone(), Value::Json(serde_json::Value::Array(vec![symbol.clone().into()])), params.clone(), Value::Json(normalize(&Value::Json(json!({
+            "symbolsAndTimeframes": symbols_and_timeframes
+        }))).unwrap())).await;
+    }
+
+    async fn watch_trades(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
+        params = params.or_default(Value::new_object());
+        self.load_markets(Value::Undefined, Value::Undefined).await;
+        let mut market: Value = self.market(symbol.clone());
+        let mut name: Value = Value::from("trade@") + market.get(Value::from("id"));
+        let mut trades: Value = <Self as Xt>::subscribe(self, name.clone(), Value::from("public"), Value::from("watchTrades"), market.clone(), Value::Undefined, params.clone()).await;
+        if self.get("newUpdates".into()).is_truthy() {
+            limit = trades.get_limit(symbol.clone(), limit.clone());
+        };
+        return self.filter_by_since_limit(trades.clone(), since.clone(), limit.clone(), Value::from("timestamp"), Value::Undefined);
+    }
+
+    async fn un_watch_trades(&mut self, mut symbol: Value, mut params: Value) -> Value {
+        params = params.or_default(Value::new_object());
+        self.load_markets(Value::Undefined, Value::Undefined).await;
+        let mut market: Value = self.market(symbol.clone());
+        let mut name: Value = Value::from("trade@") + market.get(Value::from("id"));
+        let mut message_hash: Value = Value::from("unsubscribe::") + name.clone();
+        return <Self as Xt>::un_subscribe(self, message_hash.clone(), name.clone(), Value::from("public"), Value::from("unWatchTrades"), Value::from("trades"), market.clone(), Value::Json(serde_json::Value::Array(vec![symbol.clone().into()])), params.clone(), Value::Undefined).await;
+    }
+
+    async fn watch_order_book(&mut self, mut symbol: Value, mut limit: Value, mut params: Value) -> Value {
+        params = params.or_default(Value::new_object());
+        self.load_markets(Value::Undefined, Value::Undefined).await;
+        let mut market: Value = self.market(symbol.clone());
+        let mut levels: Value = self.safe_string(params.clone(), Value::from("levels"));
+        params = self.omit(params.clone(), Value::from("levels"));
+        let mut name: Value = Value::from("depth_update@") + market.get(Value::from("id"));
+        if levels.clone().is_nonnullish() {
+            name = Value::from("depth@") + market.get(Value::from("id")) + Value::from(",") + levels.clone();
+        };
+        let mut orderbook: Value = <Self as Xt>::subscribe(self, name.clone(), Value::from("public"), Value::from("watchOrderBook"), market.clone(), Value::Undefined, params.clone()).await;
+        return orderbook.limit();
+    }
+
+    async fn un_watch_order_book(&mut self, mut symbol: Value, mut params: Value) -> Value {
+        params = params.or_default(Value::new_object());
+        self.load_markets(Value::Undefined, Value::Undefined).await;
+        let mut market: Value = self.market(symbol.clone());
+        let mut levels: Value = self.safe_string(params.clone(), Value::from("levels"));
+        params = self.omit(params.clone(), Value::from("levels"));
+        let mut name: Value = Value::from("depth_update@") + market.get(Value::from("id"));
+        if levels.clone().is_nonnullish() {
+            name = Value::from("depth@") + market.get(Value::from("id")) + Value::from(",") + levels.clone();
+        };
+        let mut message_hash: Value = Value::from("unsubscribe::") + name.clone();
+        return <Self as Xt>::un_subscribe(self, message_hash.clone(), name.clone(), Value::from("public"), Value::from("unWatchOrderBook"), Value::from("orderbook"), market.clone(), Value::Json(serde_json::Value::Array(vec![symbol.clone().into()])), params.clone(), Value::Undefined).await;
+    }
+
+    async fn watch_orders(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
+        params = params.or_default(Value::new_object());
+        self.load_markets(Value::Undefined, Value::Undefined).await;
+        let mut name: Value = Value::from("order");
+        let mut market: Value = Value::Undefined;
+        if symbol.clone().is_nonnullish() {
+            market = self.market(symbol.clone());
+        };
+        let mut orders: Value = <Self as Xt>::subscribe(self, name.clone(), Value::from("private"), Value::from("watchOrders"), market.clone(), Value::Undefined, params.clone()).await;
+        if self.get("newUpdates".into()).is_truthy() {
+            limit = orders.get_limit(symbol.clone(), limit.clone());
+        };
+        return self.filter_by_since_limit(orders.clone(), since.clone(), limit.clone(), Value::from("timestamp"), Value::Undefined);
+    }
+
+    async fn watch_my_trades(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
+        params = params.or_default(Value::new_object());
+        self.load_markets(Value::Undefined, Value::Undefined).await;
+        let mut name: Value = Value::from("trade");
+        let mut market: Value = Value::Undefined;
+        if symbol.clone().is_nonnullish() {
+            market = self.market(symbol.clone());
+        };
+        let mut trades: Value = <Self as Xt>::subscribe(self, name.clone(), Value::from("private"), Value::from("watchMyTrades"), market.clone(), Value::Undefined, params.clone()).await;
+        if self.get("newUpdates".into()).is_truthy() {
+            limit = trades.get_limit(symbol.clone(), limit.clone());
+        };
+        return self.filter_by_since_limit(trades.clone(), since.clone(), limit.clone(), Value::from("timestamp"), Value::Undefined);
+    }
+
+    async fn watch_balance(&mut self, mut params: Value) -> Value {
+        params = params.or_default(Value::new_object());
+        self.load_markets(Value::Undefined, Value::Undefined).await;
+        let mut name: Value = Value::from("balance");
+        return <Self as Xt>::subscribe(self, name.clone(), Value::from("private"), Value::from("watchBalance"), Value::Undefined, Value::Undefined, params.clone()).await;
+    }
+
+    async fn watch_positions(&mut self, mut symbols: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
+        params = params.or_default(Value::new_object());
+        self.load_markets(Value::Undefined, Value::Undefined).await;
+        let mut url: Value = self.get("urls".into()).get(Value::from("api")).get(Value::from("ws")).get(Value::from("contract")) + Value::from("/") + Value::from("user");
+        let mut client: Value = self.client(url.clone());
+        <Self as Xt>::set_positions_cache(self, client.clone());
+        let mut fetch_positions_snapshot: Value = self.handle_option(Value::from("watchPositions"), Value::from("fetchPositionsSnapshot"), true.into());
+        let mut await_positions_snapshot: Value = self.handle_option(Value::from("watchPositions"), Value::from("awaitPositionsSnapshot"), true.into());
+        let mut cache: Value = self.get("positions".into());
+        if fetch_positions_snapshot.is_truthy() && await_positions_snapshot.is_truthy() && self.is_empty(cache.clone()).is_truthy() {
+            let mut snapshot: Value = client.future(Value::from("fetchPositionsSnapshot")).await;
+            return self.filter_by_symbols_since_limit(snapshot.clone(), symbols.clone(), since.clone(), limit.clone(), true.into());
+        };
+        let mut name: Value = Value::from("position");
+        let mut new_positions: Value = <Self as Xt>::subscribe(self, name.clone(), Value::from("private"), Value::from("watchPositions"), Value::Undefined, Value::Undefined, params.clone()).await;
+        if self.get("newUpdates".into()).is_truthy() {
+            return new_positions.clone();
+        };
+        return self.filter_by_symbols_since_limit(cache.clone(), symbols.clone(), since.clone(), limit.clone(), true.into());
+    }
+
+    fn set_positions_cache(&mut self, mut client: Value) -> Value {
+        if self.get("positions".into()).is_nullish() {
+            self.set("positions".into(), ArrayCacheBySymbolBySide::new());
+        };
+        let mut fetch_positions_snapshot: Value = self.handle_option(Value::from("watchPositions"), Value::from("fetchPositionsSnapshot"), Value::Undefined);
+        if fetch_positions_snapshot.is_truthy() {
+            let mut message_hash: Value = Value::from("fetchPositionsSnapshot");
+            if !client.get(futures.clone()).contains_key(message_hash.clone()) {
+                client.future(message_hash.clone());
+                self.spawn(self.get("loadPositionsSnapshot".into()), client.clone(), message_hash.clone());
+            };
+        };
+        Value::Undefined
+    }
+
+    async fn load_positions_snapshot(&mut self, mut client: Value, mut message_hash: Value) -> Value {
+        let mut positions: Value = self.fetch_positions(Value::Undefined, Value::Undefined).await;
+        self.set("positions".into(), ArrayCacheBySymbolBySide::new());
+        let mut cache: Value = self.get("positions".into());
+        let mut i: usize = 0;
+        while i < positions.len() {
+            let mut position: Value = positions.get(i.into());
+            let mut contracts: Value = self.safe_number(position.clone(), Value::from("contracts"), Value::from(0));
+            if contracts.clone() > Value::from(0) {
+                cache.append(position.clone());
+            };
+            i += 1;
+        };
+        // don't remove the future from the .futures cache
+        if client.get(futures.clone()).contains_key(message_hash.clone()) {
+            let mut future: Value = client.get(futures.clone()).get(message_hash.clone());
+            future.resolve(cache.clone());
+            client.resolve(cache.clone(), Value::from("position::contract"));
+        };
+        Value::Undefined
+    }
+
+    fn handle_position(&mut self, mut client: Value, mut message: Value) -> Value {
+        //
+        //    {
+        //      topic: 'position',
+        //      event: 'position',
+        //      data: {
+        //        accountId: 245296,
+        //        accountType: 0,
+        //        symbol: 'eth_usdt',
+        //        contractType: 'PERPETUAL',
+        //        positionType: 'CROSSED',
+        //        positionSide: 'LONG',
+        //        positionSize: '1',
+        //        closeOrderSize: '0',
+        //        availableCloseSize: '1',
+        //        realizedProfit: '-0.0121',
+        //        entryPrice: '2637.87',
+        //        openOrderSize: '1',
+        //        isolatedMargin: '2.63787',
+        //        openOrderMarginFrozen: '2.78832014',
+        //        underlyingType: 'U_BASED',
+        //        leverage: 10,
+        //        welfareAccount: false,
+        //        profitFixedLatest: {},
+        //        closeProfit: '0.0000',
+        //        totalFee: '-0.0158',
+        //        totalFundFee: '0.0037',
+        //        markPrice: '2690.96'
+        //      }
+        //    }
+        //
+        if self.get("positions".into()).is_nullish() {
+            self.set("positions".into(), ArrayCacheBySymbolBySide::new());
+        };
+        let mut cache: Value = self.get("positions".into());
+        let mut data: Value = self.safe_dict(message.clone(), Value::from("data"), Value::new_object());
+        let mut position: Value = self.parse_position(data.clone(), Value::Undefined);
+        cache.append(position.clone());
+        let mut message_hashes: Value = self.find_message_hashes(client.clone(), Value::from("position::contract"));
+        let mut i: usize = 0;
+        while i < message_hashes.len() {
+            let mut message_hash: Value = message_hashes.get(i.into());
+            let mut parts: Value = message_hash.split(Value::from("::"));
+            let mut symbols_string: Value = parts.get(Value::from(1));
+            let mut symbols: Value = symbols_string.split(Value::from(","));
+            let mut positions: Value = self.filter_by_array(Value::Json(serde_json::Value::Array(vec![position.clone().into()])), Value::from("symbol"), symbols.clone(), false.into());
+            if !self.is_empty(positions.clone()).is_truthy() {
+                client.resolve(positions.clone(), message_hash.clone());
+            };
+            i += 1;
+        };
+        client.resolve(Value::Json(serde_json::Value::Array(vec![position.clone().into()])), Value::from("position::contract"));
+        Value::Undefined
+    }
+
+    fn handle_ticker(&mut self, mut client: Value, mut message: Value) -> Value {
+        //
+        // spot
+        //
+        //    {
+        //        topic: 'ticker',
+        //        event: 'ticker@btc_usdt',
+        //        data: {
+        //           s: 'btc_usdt',            // symbol
+        //           t: 1683501935877,         // time(Last transaction time)
+        //           cv: '-82.67',             // priceChangeValue(24 hour price change)
+        //           cr: '-0.0028',            // priceChangeRate 24-hour price change (percentage)
+        //           o: '28823.87',            // open price
+        //           c: '28741.20',            // close price
+        //           h: '29137.64',            // highest price
+        //           l: '28660.93',            // lowest price
+        //           q: '6372.601573',         // quantity
+        //           v: '184086075.2772391'    // volume
+        //        }
+        //    }
+        //
+        // contract
+        //
+        //    {
+        //        "topic": "ticker",
+        //        "event": "ticker@btc_usdt",
+        //        "data": {
+        //            "s": "btc_index",  // trading pair
+        //            "o": "49000",      // opening price
+        //            "c": "50000",      // closing price
+        //            "h": "0.1",        // highest price
+        //            "l": "0.1",        // lowest price
+        //            "a": "0.1",        // volume
+        //            "v": "0.1",        // turnover
+        //            "ch": "0.21",      // quote change
+        //            "t": 123124124     // timestamp
+        //       }
+        //    }
+        //
+        // agg_ticker (contract)
+        //
+        //    {
+        //        "topic": "agg_ticker",
+        //        "event": "agg_ticker@btc_usdt",
+        //        "data": {
+        //            "s": "btc_index",          // trading pair
+        //            "o": "49000",              // opening price
+        //            "c": "50000",              // closing price
+        //            "h": "0.1",                // highest price
+        //            "l": "0.1",                // lowest price
+        //            "a": "0.1",                // volume
+        //            "v": "0.1",                // turnover
+        //            "ch": "0.21",              // quote change
+        //            "i": "0.21" ,              // index price
+        //            "m": "0.21",               // mark price
+        //            "bp": "0.21",              // bid price
+        //            "ap": "0.21" ,             // ask price
+        //            "t": 123124124             // timestamp
+        //       }
+        //    }
+        //
+        let mut data: Value = self.safe_dict(message.clone(), Value::from("data"), Value::Undefined);
+        let mut market_id: Value = self.safe_string(data.clone(), Value::from("s"));
+        if market_id.clone().is_nonnullish() {
+            let mut cv: Value = self.safe_string(data.clone(), Value::from("cv"));
+            let mut is_spot: Value = (cv.clone().is_nonnullish()).into();
+            let mut ticker: Value = self.parse_ticker(data.clone(), Value::Undefined);
+            let mut symbol: Value = ticker.get(Value::from("symbol"));
+            self.get("tickers".into()).set(symbol.clone(), ticker.clone());
+            let mut event: Value = self.safe_string(message.clone(), Value::from("event"));
+            let mut message_hash_tail: Value = if is_spot.is_truthy() { Value::from("spot") } else { Value::from("contract") };
+            let mut message_hash: Value = event.clone() + Value::from("::") + message_hash_tail.clone();
+            client.resolve(ticker.clone(), message_hash.clone());
+        };
+        return message.clone();
+    }
+
+    fn handle_tickers(&mut self, mut client: Value, mut message: Value) -> Value {
+        //
+        // spot
+        //
+        //    {
+        //        topic: 'tickers',
+        //        event: 'tickers',
+        //        data: [
+        //            {
+        //                s: 'elon_usdt',
+        //                t: 1683502958381,
+        //                cv: '-0.0000000125',
+        //                cr: '-0.0495',
+        //                o: '0.0000002522',
+        //                c: '0.0000002397',
+        //                h: '0.0000002690',
+        //                l: '0.0000002371',
+        //                q: '3803783034.0000000000',
+        //                v: '955.3260820022'
+        //            },
+        //            ...
+        //        ]
+        //    }
+        //
+        // contract
+        //
+        //    {
+        //        "topic": "tickers",
+        //        "event": "tickers",
+        //        "data": [
+        //            {
+        //                "s": "btc_index",  // trading pair
+        //                "o": "49000",      // opening price
+        //                "c": "50000",      // closing price
+        //                "h": "0.1",        // highest price
+        //                "l": "0.1",        // lowest price
+        //                "a": "0.1",        // volume
+        //                "v": "0.1",        // turnover
+        //                "ch": "0.21",      // quote change
+        //                "t": 123124124     // timestamp
+        //            }
+        //        ]
+        //    }
+        //
+        // agg_ticker (contract)
+        //
+        //    {
+        //        "topic": "agg_tickers",
+        //        "event": "agg_tickers",
+        //        "data": [
+        //            {
+        //                "s": "btc_index",          // trading pair
+        //                "o": "49000",              // opening price
+        //                "c": "50000",              // closing price
+        //                "h": "0.1",                // highest price
+        //                "l": "0.1",                // lowest price
+        //                "a": "0.1",                // volume
+        //                "v": "0.1",                // turnover
+        //                "ch": "0.21",              // quote change
+        //                "i": "0.21" ,              // index price
+        //                "m": "0.21",               // mark price
+        //                "bp": "0.21",              // bid price
+        //                "ap": "0.21" ,             // ask price
+        //                "t": 123124124             // timestamp
+        //            }
+        //        ]
+        //    }
+        //
+        let mut data: Value = self.safe_list(message.clone(), Value::from("data"), Value::new_array());
+        let mut first_ticker: Value = self.safe_dict(data.clone(), Value::from(0), Value::Undefined);
+        let mut spot_test: Value = self.safe_string_2(first_ticker.clone(), Value::from("cv"), Value::from("aq"));
+        let mut trade_type: Value = if spot_test.clone().is_nonnullish() { Value::from("spot") } else { Value::from("contract") };
+        let mut new_tickers: Value = Value::new_array();
+        let mut i: usize = 0;
+        while i < data.len() {
+            let mut ticker_data: Value = data.get(i.into());
+            let mut ticker: Value = self.parse_ticker(ticker_data.clone(), Value::Undefined);
+            let mut symbol: Value = ticker.get(Value::from("symbol"));
+            self.get("tickers".into()).set(symbol.clone(), ticker.clone());
+            new_tickers.push(ticker.clone());
+            i += 1;
+        };
+        let mut message_hash_start: Value = self.safe_string(message.clone(), Value::from("topic")) + Value::from("::") + trade_type.clone();
+        let mut message_hashes: Value = self.find_message_hashes(client.clone(), message_hash_start.clone() + Value::from("::"));
+        let mut i: usize = 0;
+        while i < message_hashes.len() {
+            let mut message_hash: Value = message_hashes.get(i.into());
+            let mut parts: Value = message_hash.split(Value::from("::"));
+            let mut symbols_string: Value = parts.get(Value::from(2));
+            let mut symbols: Value = symbols_string.split(Value::from(","));
+            let mut tickers: Value = self.filter_by_array(new_tickers.clone(), Value::from("symbol"), symbols.clone(), Value::Undefined);
+            let mut tickers_symbols: Value = Object::keys(tickers.clone());
+            let mut num_tickers: usize = tickers_symbols.len();
+            if num_tickers.clone() > Value::from(0) {
+                client.resolve(tickers.clone(), message_hash.clone());
+            };
+            i += 1;
+        };
+        client.resolve(self.get("tickers".into()), message_hash_start.clone());
+        return message.clone();
+    }
+
+    fn handle_ohlcv(&mut self, mut client: Value, mut message: Value) -> Value {
+        //
+        // spot
+        //
+        //    {
+        //        "topic": "kline",
+        //        "event": "kline@btc_usdt,5m",
+        //        "data": {
+        //            "s": "btc_usdt",        // symbol
+        //            "t": 1656043200000,     // time
+        //            "i": "5m",              // interval
+        //            "o": "44000",           // open price
+        //            "c": "50000",           // close price
+        //            "h": "52000",           // highest price
+        //            "l": "36000",           // lowest price
+        //            "q": "34.2",            // qty(quantity)
+        //            "v": "230000"           // volume
+        //        }
+        //    }
+        //
+        // contract
+        //
+        //    {
+        //        "topic": "kline",
+        //        "event": "kline@btc_usdt,5m",
+        //        "data": {
+        //            "s": "btc_index",      // trading pair
+        //            "o": "49000",          // opening price
+        //            "c": "50000",          // closing price
+        //            "h": "0.1",            // highest price
+        //            "l": "0.1",            // lowest price
+        //            "a": "0.1",            // volume
+        //            "v": "0.1",            // turnover
+        //            "ch": "0.21",          // quote change
+        //            "t": 123124124         // timestamp
+        //        }
+        //    }
+        //
+        let mut data: Value = self.safe_dict(message.clone(), Value::from("data"), Value::new_object());
+        let mut market_id: Value = self.safe_string(data.clone(), Value::from("s"));
+        if market_id.clone().is_nonnullish() {
+            let mut timeframe: Value = self.safe_string(data.clone(), Value::from("i"));
+            let mut trade_type: Value = if data.contains_key(Value::from("q")) { Value::from("spot") } else { Value::from("contract") };
+            let mut market: Value = self.safe_market(market_id.clone(), Value::Undefined, Value::Undefined, trade_type.clone());
+            let mut symbol: Value = market.get(Value::from("symbol"));
+            let mut parsed: Value = self.parse_ohlcv(data.clone(), market.clone());
+            self.get("ohlcvs".into()).set(symbol.clone(), self.safe_dict(self.get("ohlcvs".into()), symbol.clone(), Value::new_object()));
+            let mut stored: Value = self.safe_value(self.get("ohlcvs".into()).get(symbol.clone()), timeframe.clone());
+            if stored.clone().is_nullish() {
+                let mut limit: Value = self.safe_integer(self.get("options".into()), Value::from("OHLCVLimit"), Value::from(1000));
+                stored = ArrayCacheByTimestamp::new(limit);
+                self.get("ohlcvs".into()).get(symbol.clone()).set(timeframe.clone(), stored.clone());
+            };
+            stored.append(parsed.clone());
+            let mut event: Value = self.safe_string(message.clone(), Value::from("event"));
+            let mut message_hash: Value = event.clone() + Value::from("::") + trade_type.clone();
+            client.resolve(stored.clone(), message_hash.clone());
+        };
+        return message.clone();
+    }
+
+    fn handle_trade(&mut self, mut client: Value, mut message: Value) -> Value {
+        //
+        // spot
+        //
+        //    {
+        //        topic: 'trade',
+        //        event: 'trade@btc_usdt',
+        //        data: {
+        //            s: 'btc_usdt',
+        //            i: '228825383103928709',
+        //            t: 1684258222702,
+        //            p: '27003.65',
+        //            q: '0.000796',
+        //            b: true
+        //        }
+        //    }
+        //
+        // contract
+        //
+        //    {
+        //        "topic": "trade",
+        //        "event": "trade@btc_usdt",
+        //        "data": {
+        //            "s": "btc_index",  // trading pair
+        //            "p": "50000",      // price
+        //            "a": "0.1"         // Quantity
+        //            "m": "BID"         // Deal side  BID:Buy ASK:Sell
+        //            "t": 123124124     // timestamp
+        //        }
+        //    }
+        //
+        let mut data: Value = self.safe_dict(message.clone(), Value::from("data"), Value::Undefined);
+        let mut market_id: Value = self.safe_string_lower(data.clone(), Value::from("s"));
+        if market_id.clone().is_nonnullish() {
+            let mut trade: Value = self.parse_trade(data.clone(), Value::Undefined);
+            let mut i: Value = self.safe_string(data.clone(), Value::from("i"));
+            let mut trade_type: Value = if i.clone().is_nonnullish() { Value::from("spot") } else { Value::from("contract") };
+            let mut market: Value = self.safe_market(market_id.clone(), Value::Undefined, Value::Undefined, trade_type.clone());
+            let mut symbol: Value = market.get(Value::from("symbol"));
+            let mut event: Value = self.safe_string(message.clone(), Value::from("event"));
+            let mut trades_array: Value = self.safe_value(self.get("trades".into()), symbol.clone());
+            if trades_array.clone().is_nullish() {
+                let mut trades_limit: Value = self.safe_integer(self.get("options".into()), Value::from("tradesLimit"), Value::from(1000));
+                trades_array = ArrayCache::new(trades_limit);
+                self.get("trades".into()).set(symbol.clone(), trades_array.clone());
+            };
+            trades_array.append(trade.clone());
+            let mut message_hash: Value = event.clone() + Value::from("::") + trade_type.clone();
+            client.resolve(trades_array.clone(), message_hash.clone());
+        };
+        return message.clone();
+    }
+
+    fn handle_order_book(&mut self, mut client: Value, mut message: Value) -> Value {
+        //
+        // spot
+        //
+        //    {
+        //        "topic": "depth",
+        //        "event": "depth@btc_usdt,20",
+        //        "data": {
+        //            "s": "btc_usdt",        // symbol
+        //            "fi": 1681433733351,    // firstUpdateId = previous lastUpdateId + 1
+        //            "i": 1681433733371,     // updateId
+        //            "a": [                  // asks(sell order)
+        //                [                   // [0]price, [1]quantity
+        //                    "34000",        // price
+        //                    "1.2"           // quantity
+        //                ],
+        //                [
+        //                    "34001",
+        //                    "2.3"
+        //                ]
+        //            ],
+        //            "b": [                   // bids(buy order)
+        //                [
+        //                    "32000",
+        //                    "0.2"
+        //                ],
+        //                [
+        //                    "31000",
+        //                    "0.5"
+        //                ]
+        //            ]
+        //        }
+        //    }
+        //
+        // contract
+        //
+        //    {
+        //        "topic": "depth",
+        //        "event": "depth@btc_usdt,20",
+        //        "data": {
+        //            s: "btc_usdt",
+        //            pu: "548111455664",
+        //            fu: "548111455665",
+        //            u: "548111455667",
+        //            a: [
+        //                [
+        //                    "26841.5",
+        //                    "50210",
+        //                ],
+        //            ],
+        //            b: [
+        //                [
+        //                    "26841",
+        //                    "67075",
+        //                ],
+        //            ],
+        //            t: 1684530667083,
+        //        }
+        //    }
+        //
+        let mut data: Value = self.safe_dict(message.clone(), Value::from("data"), Value::Undefined);
+        let mut market_id: Value = self.safe_string(data.clone(), Value::from("s"));
+        if market_id.clone().is_nonnullish() {
+            let mut event: Value = self.safe_string(message.clone(), Value::from("event"));
+            let mut split_event: Value = event.split(Value::from(","));
+            event = self.safe_string(split_event.clone(), Value::from(0));
+            let mut trade_type: Value = if data.contains_key(Value::from("fu")) { Value::from("contract") } else { Value::from("spot") };
+            let mut market: Value = self.safe_market(market_id.clone(), Value::Undefined, Value::Undefined, trade_type.clone());
+            let mut symbol: Value = market.get(Value::from("symbol"));
+            let mut ob_asks: Value = self.safe_list(data.clone(), Value::from("a"), Value::Undefined);
+            let mut ob_bids: Value = self.safe_list(data.clone(), Value::from("b"), Value::Undefined);
+            let mut message_hash: Value = event.clone() + Value::from("::") + trade_type.clone();
+            if !self.get("orderbooks".into()).contains_key(symbol.clone()) {
+                let mut subscription: Value = self.safe_dict(client.get(subscriptions.clone()), message_hash.clone(), Value::new_object());
+                let mut limit: Value = self.safe_integer(subscription.clone(), Value::from("limit"));
+                self.get("orderbooks".into()).set(symbol.clone(), self.order_book(Value::new_object(), limit.clone()));
+            };
+            let mut orderbook: Value = self.get("orderbooks".into()).get(symbol.clone());
+            let mut nonce: Value = self.safe_integer(orderbook.clone(), Value::from("nonce"));
+            if nonce.clone().is_nullish() {
+                let mut cache_length: usize = orderbook.get(cache.clone()).len();
+                let mut snapshot_delay: Value = self.handle_option(Value::from("watchOrderBook"), Value::from("snapshotDelay"), Value::from(25));
+                if cache_length.clone() == snapshot_delay.clone() {
+                    self.spawn(self.get("loadOrderBook".into()), client.clone(), message_hash.clone(), symbol.clone());
                 };
-                query_pairs.push(format!("{}={}", urlencoding::encode(&k), urlencoding::encode(&value_str)));
-            }
-        }
-
-        if method_upper == "GET" && !query_pairs.is_empty() {
-            url.push('?');
-            url.push_str(&query_pairs.join("&"));
-        }
-
-        let client = match reqwest::Client::builder()
-            .no_proxy()
-            .timeout(std::time::Duration::from_secs(20))
-            .user_agent("ccxt-rs-smoke/0.1")
-            .build()
-        {
-            Ok(c) => c,
-            Err(err) => {
-                eprintln!("ccxt-rs request client build failed for {}: {}", url, err);
+                orderbook.get(cache.clone()).push(data.clone());
                 return Value::Undefined;
-            }
+            };
+            if ob_asks.clone().is_nonnullish() {
+                let mut asks: Value = orderbook.get(Value::from("asks"));
+                let mut i: usize = 0;
+                while i < ob_asks.len() {
+                    let mut ask: Value = ob_asks.get(i.into());
+                    let mut price: Value = self.safe_number(ask.clone(), Value::from(0), Value::Undefined);
+                    let mut quantity: Value = self.safe_number(ask.clone(), Value::from(1), Value::Undefined);
+                    asks.store(price.clone(), quantity.clone());
+                    i += 1;
+                };
+            };
+            if ob_bids.clone().is_nonnullish() {
+                let mut bids: Value = orderbook.get(Value::from("bids"));
+                let mut i: usize = 0;
+                while i < ob_bids.len() {
+                    let mut bid: Value = ob_bids.get(i.into());
+                    let mut price: Value = self.safe_number(bid.clone(), Value::from(0), Value::Undefined);
+                    let mut quantity: Value = self.safe_number(bid.clone(), Value::from(1), Value::Undefined);
+                    bids.store(price.clone(), quantity.clone());
+                    i += 1;
+                };
+            };
+            let mut timestamp: Value = self.safe_integer(data.clone(), Value::from("t"));
+            orderbook.set("nonce".into(), self.safe_integer_2(data.clone(), Value::from("i"), Value::from("u")));
+            orderbook.set("timestamp".into(), timestamp.clone());
+            orderbook.set("datetime".into(), self.iso8601(timestamp.clone()));
+            orderbook.set("symbol".into(), symbol.clone());
+            client.resolve(orderbook.clone(), message_hash.clone());
         };
-        let mut req = match method_upper.as_str() {
-            "POST" => client.post(&url),
-            "PUT" => client.put(&url),
-            "DELETE" => client.delete(&url),
-            _ => client.get(&url),
-        };
-        if method_upper != "GET" {
-            if let Value::Json(serde_json::Value::Object(map)) = params.clone() {
-                let body_text = serde_json::to_string(&map).unwrap_or_else(|_| "{}".to_string());
-                req = req.header("content-type", "application/json").body(body_text);
-            }
-        }
-
-        let response = match req.send().await {
-            Ok(r) => r,
-            Err(err) => {
-                eprintln!("ccxt-rs request send failed for {} {}: {}", method_upper, url, err);
-                return Value::Undefined;
-            }
-        };
-        let text = match response.text().await {
-            Ok(t) => t,
-            Err(err) => {
-                eprintln!("ccxt-rs request body read failed for {} {}: {}", method_upper, url, err);
-                return Value::Undefined;
-            }
-        };
-        match serde_json::from_str::<serde_json::Value>(&text) {
-            Ok(json) => Value::Json(json),
-            Err(_) => Value::from(text),
-        }
-    }
-
-async fn load_accounts(&mut self, mut reload: Value, mut params: Value) -> Value { Value::Undefined }
-
-fn build_ohlcvc(&mut self, mut trades: Value, mut timeframe: Value, mut since: Value, mut limit: Value) -> Value { Value::Undefined }
-
-fn parse_trading_view_ohlcv(&self, mut ohlcvs: Value, mut market: Value, mut timeframe: Value, mut since: Value, mut limit: Value) -> Value { Value::Undefined }
-
-async fn edit_limit_buy_order(&mut self, mut id: Value, mut symbol: Value, mut amount: Value, mut price: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn edit_limit_sell_order(&mut self, mut id: Value, mut symbol: Value, mut amount: Value, mut price: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn edit_limit_order(&mut self, mut id: Value, mut symbol: Value, mut side: Value, mut amount: Value, mut price: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn edit_order(&mut self, mut id: Value, mut symbol: Value, mut r#type: Value, mut side: Value, mut amount: Value, mut price: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn edit_order_with_client_order_id(&mut self, mut client_order_id: Value, mut symbol: Value, mut r#type: Value, mut side: Value, mut amount: Value, mut price: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn edit_order_ws(&mut self, mut id: Value, mut symbol: Value, mut r#type: Value, mut side: Value, mut amount: Value, mut price: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_position(&mut self, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_position_ws(&mut self, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn watch_position(&mut self, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn watch_position_for_symbols(&mut self, mut symbols: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_positions_for_symbol(&mut self, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_positions_for_symbol_ws(&mut self, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_positions(&mut self, mut symbols: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_positions_ws(&mut self, mut symbols: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_positions_risk(&mut self, mut symbols: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_bids_asks(&mut self, mut symbols: Value, mut params: Value) -> Value {
-        let mut request = if params.is_object() { params.clone() } else { Value::new_object() };
-        if symbols.is_nonnullish() {
-            request.set("symbols".into(), symbols.clone());
-        }
-        let candidates = vec![
-            ("public", "GET", "ticker/bookTicker"),
-            ("public", "GET", "bookticker"),
-            ("public", "GET", "bidsasks"),
-            ("public", "GET", "tickers"),
-        ];
-        for (api_name, method_name, path_name) in candidates {
-            let rv = Xt::request(self, path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
-            if !rv.is_undefined() {
-                return rv;
-            }
-        }
         Value::Undefined
     }
 
-async fn fetch_borrow_interest(&mut self, mut code: Value, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
+    fn parse_ws_order_trade(&self, mut trade: Value, mut market: Value) -> Value {
+        //
+        //    {
+        //        "s": "btc_usdt",                         // symbol
+        //        "t": 1656043204763,                      // time happened time
+        //        "i": "6216559590087220004",              // orderId,
+        //        "ci": "test123",                         // clientOrderId
+        //        "st": "PARTIALLY_FILLED",                // state
+        //        "sd": "BUY",                             // side BUY/SELL
+        //        "eq": "2",                               // executedQty executed quantity
+        //        "ap": "30000",                           // avg price
+        //        "f": "0.002"                             // fee
+        //    }
+        //
+        // contract
+        //
+        //    {
+        //        "symbol": "btc_usdt",                    // Trading pair
+        //        "orderId": "1234",                       // Order Id
+        //        "origQty": "34244",                      // Original Quantity
+        //        "avgPrice": "123",                       // Quantity
+        //        "price": "1111",                         // Average price
+        //        "executedQty": "34244",                  // Volume (Cont)
+        //        "orderSide": "BUY",                      // BUY, SELL
+        //        "positionSide": "LONG",                  // LONG, SHORT
+        //        "marginFrozen": "123",                   // Occupied margin
+        //        "sourceType": "default",                 // DEFAULT:normal order,ENTRUST:plan commission,PROFIR:Take Profit and Stop Loss
+        //        "sourceId" : "1231231",                  // Triggering conditions ID
+        //        "state": "",                             // state:NEW：New order (unfilled);PARTIALLY_FILLED:Partial deal;PARTIALLY_CANCELED:Partial revocation;FILLED:Filled;CANCELED:Cancled;REJECTED:Order failed;EXPIRED：Expired
+        //        "createTime": 1731231231,                // CreateTime
+        //        "clientOrderId": "204788317630342726"
+        //    }
+        //
+        let mut market_id: Value = self.safe_string(trade.clone(), Value::from("s"));
+        let mut trade_type: Value = if trade.contains_key(Value::from("symbol")) { Value::from("contract") } else { Value::from("spot") };
+        market = self.safe_market(market_id.clone(), market.clone(), Value::Undefined, trade_type.clone());
+        let mut timestamp: Value = self.safe_string(trade.clone(), Value::from("t"));
+        return self.safe_trade(Value::Json(normalize(&Value::Json(json!({
+            "info": trade,
+            "id": Value::Undefined,
+            "timestamp": timestamp,
+            "datetime": self.iso8601(timestamp.clone()),
+            "symbol": market.get(Value::from("symbol")),
+            "order": self.safe_string(trade.clone(), Value::from("i"), Value::from("orderId")),
+            "type": self.parse_order_status(self.safe_string(trade.clone(), Value::from("st"), Value::from("state"))),
+            "side": self.safe_string_lower(trade.clone(), Value::from("sd"), Value::from("orderSide")),
+            "takerOrMaker": Value::Undefined,
+            "price": self.safe_number(trade.clone(), Value::from("price"), Value::Undefined),
+            "amount": self.safe_string(trade.clone(), Value::from("origQty")),
+            "cost": Value::Undefined,
+            "fee": Value::Json(normalize(&Value::Json(json!({
+                "currency": Value::Undefined,
+                "cost": self.safe_number(trade.clone(), Value::from("f"), Value::Undefined),
+                "rate": Value::Undefined
+            }))).unwrap())
+        }))).unwrap()), market.clone());
+    }
 
-async fn fetch_ledger(&mut self, mut code: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
+    fn parse_ws_order(&self, mut order: Value, mut market: Value) -> Value {
+        //
+        // spot
+        //
+        //    {
+        //        "s": "btc_usdt",                // symbol
+        //        "bc": "btc",                    // base currency
+        //        "qc": "usdt",                   // quotation currency
+        //        "t": 1656043204763,             // happened time
+        //        "ct": 1656043204663,            // create time
+        //        "i": "6216559590087220004",     // order id,
+        //        "ci": "test123",                // client order id
+        //        "st": "PARTIALLY_FILLED",       // state NEW/PARTIALLY_FILLED/FILLED/CANCELED/REJECTED/EXPIRED
+        //        "sd": "BUY",                    // side BUY/SELL
+        //        "tp": "LIMIT",                  // type LIMIT/MARKET
+        //        "oq":  "4"                      // original quantity
+        //        "oqq":  48000,                  // original quotation quantity
+        //        "eq": "2",                      // executed quantity
+        //        "lq": "2",                      // remaining quantity
+        //        "p": "4000",                    // price
+        //        "ap": "30000",                  // avg price
+        //        "f":"0.002"                     // fee
+        //    }
+        //
+        // contract
+        //
+        //    {
+        //        "symbol": "btc_usdt",                    // Trading pair
+        //        "orderId": "1234",                       // Order Id
+        //        "origQty": "34244",                      // Original Quantity
+        //        "avgPrice": "123",                       // Quantity
+        //        "price": "1111",                         // Average price
+        //        "executedQty": "34244",                  // Volume (Cont)
+        //        "orderSide": "BUY",                      // BUY, SELL
+        //        "positionSide": "LONG",                  // LONG, SHORT
+        //        "marginFrozen": "123",                   // Occupied margin
+        //        "sourceType": "default",                 // DEFAULT:normal order,ENTRUST:plan commission,PROFIR:Take Profit and Stop Loss
+        //        "sourceId" : "1231231",                  // Triggering conditions ID
+        //        "state": "",                             // state:NEW：New order (unfilled);PARTIALLY_FILLED:Partial deal;PARTIALLY_CANCELED:Partial revocation;FILLED:Filled;CANCELED:Cancled;REJECTED:Order failed;EXPIRED：Expired
+        //        "createTime": 1731231231,                // CreateTime
+        //        "clientOrderId": "204788317630342726"
+        //    }
+        //
+        let mut market_id: Value = self.safe_string_2(order.clone(), Value::from("s"), Value::from("symbol"));
+        let mut trade_type: Value = if order.contains_key(Value::from("symbol")) { Value::from("contract") } else { Value::from("spot") };
+        market = self.safe_market(market_id.clone(), market.clone(), Value::Undefined, trade_type.clone());
+        let mut timestamp: Value = self.safe_integer_2(order.clone(), Value::from("ct"), Value::from("createTime"));
+        return self.safe_order(Value::Json(normalize(&Value::Json(json!({
+            "info": order,
+            "id": self.safe_string_2(order.clone(), Value::from("i"), Value::from("orderId")),
+            "clientOrderId": self.safe_string_2(order.clone(), Value::from("ci"), Value::from("clientOrderId")),
+            "timestamp": timestamp,
+            "datetime": self.iso8601(timestamp.clone()),
+            "lastTradeTimestamp": Value::Undefined,
+            "symbol": market.get(Value::from("symbol")),
+            "type": market.get(Value::from("type")),
+            "timeInForce": Value::Undefined,
+            "postOnly": Value::Undefined,
+            "side": self.safe_string_lower_2(order.clone(), Value::from("sd"), Value::from("orderSide")),
+            "price": self.safe_number_2(order.clone(), Value::from("p"), Value::from("price"), Value::Undefined),
+            "stopPrice": Value::Undefined,
+            "stopLoss": Value::Undefined,
+            "takeProfit": Value::Undefined,
+            "amount": self.safe_string_2(order.clone(), Value::from("oq"), Value::from("origQty")),
+            "filled": self.safe_string_2(order.clone(), Value::from("eq"), Value::from("executedQty")),
+            "remaining": self.safe_string(order.clone(), Value::from("lq")),
+            "cost": Value::Undefined,
+            "average": self.safe_string_2(order.clone(), Value::from("ap"), Value::from("avgPrice")),
+            "status": self.parse_order_status(self.safe_string(order.clone(), Value::from("st"), Value::from("state"))),
+            "fee": Value::Json(normalize(&Value::Json(json!({
+                "currency": Value::Undefined,
+                "cost": self.safe_number(order.clone(), Value::from("f"), Value::Undefined)
+            }))).unwrap()),
+            "trades": Value::Undefined
+        }))).unwrap()), market.clone());
+    }
 
-async fn fetch_ledger_entry(&mut self, mut id: Value, mut code: Value, mut params: Value) -> Value { Value::Undefined }
+    fn handle_order(&mut self, mut client: Value, mut message: Value) -> Value {
+        //
+        // spot
+        //
+        //    {
+        //        "topic": "order",
+        //        "event": "order",
+        //        "data": {
+        //            "s": "btc_usdt",                // symbol
+        //            "t": 1656043204763,             // time happened time
+        //            "i": "6216559590087220004",     // orderId,
+        //            "ci": "test123",                // clientOrderId
+        //            "st": "PARTIALLY_FILLED",       // state
+        //            "sd": "BUY",                    // side BUY/SELL
+        //            "eq": "2",                      // executedQty executed quantity
+        //            "ap": "30000",                  // avg price
+        //            "f": "0.002"                    // fee
+        //        }
+        //    }
+        //
+        // contract
+        //
+        //    {
+        //        "topic": "order",
+        //        "event": "order@123456",
+        //        "data": {
+        //             "symbol": "btc_usdt",                    // Trading pair
+        //             "orderId": "1234",                       // Order Id
+        //             "origQty": "34244",                      // Original Quantity
+        //             "avgPrice": "123",                       // Quantity
+        //             "price": "1111",                         // Average price
+        //             "executedQty": "34244",                  // Volume (Cont)
+        //             "orderSide": "BUY",                      // BUY, SELL
+        //             "positionSide": "LONG",                  // LONG, SHORT
+        //             "marginFrozen": "123",                   // Occupied margin
+        //             "sourceType": "default",                 // DEFAULT:normal order,ENTRUST:plan commission,PROFIR:Take Profit and Stop Loss
+        //             "sourceId" : "1231231",                  // Triggering conditions ID
+        //             "state": "",                             // state:NEW：New order (unfilled);PARTIALLY_FILLED:Partial deal;PARTIALLY_CANCELED:Partial revocation;FILLED:Filled;CANCELED:Cancled;REJECTED:Order failed;EXPIRED：Expired
+        //             "createTime": 1731231231,                // CreateTime
+        //             "clientOrderId": "204788317630342726"
+        //           }
+        //    }
+        //
+        let mut orders: Value = self.get("orders".into());
+        if orders.clone().is_nullish() {
+            let mut limit: Value = self.safe_integer(self.get("options".into()), Value::from("ordersLimit"));
+            orders = ArrayCacheBySymbolById::new(limit);
+            self.set("orders".into(), orders.clone());
+        };
+        let mut order: Value = self.safe_dict(message.clone(), Value::from("data"), Value::new_object());
+        let mut market_id: Value = self.safe_string_2(order.clone(), Value::from("s"), Value::from("symbol"));
+        if market_id.clone().is_nonnullish() {
+            let mut trade_type: Value = if order.contains_key(Value::from("symbol")) { Value::from("contract") } else { Value::from("spot") };
+            let mut market: Value = self.safe_market(market_id.clone(), Value::Undefined, Value::Undefined, trade_type.clone());
+            let mut parsed: Value = <Self as Xt>::parse_ws_order(self, order.clone(), market.clone());
+            orders.append(parsed.clone());
+            client.resolve(orders.clone(), Value::from("order::") + trade_type.clone());
+        };
+        return message.clone();
+    }
 
-
-fn safe_currency(&self, mut currency_id: Value, mut currency: Value) -> Value { Value::Undefined }
-
-fn safe_market(&self, mut market_id: Value, mut market: Value, mut delimiter: Value, mut market_type: Value) -> Value { Value::Undefined }
-
-fn market_or_null(&mut self, mut symbol: Value) -> Value { Value::Undefined }
-
-fn check_required_credentials(&mut self, mut error: Value) -> Value { Value::Undefined }
-
-fn oath(&mut self) -> Value { Value::Undefined }
-
-async fn fetch_balance(&mut self, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_balance_ws(&mut self, mut params: Value) -> Value { Value::Undefined }
-
-fn parse_balance(&self, mut response: Value) -> Value { Value::Undefined }
-
-async fn fetch_partial_balance(&mut self, mut part: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_free_balance(&mut self, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_used_balance(&mut self, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_total_balance(&mut self, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_status(&mut self, mut params: Value) -> Value {
-        fn collect_routes(node: &serde_json::Value, api_name: &str, out: &mut Vec<(String, String, String)>) {
-            if let serde_json::Value::Object(map) = node {
-                for (k, v) in map {
-                    let kl = k.to_lowercase();
-                    if kl == "get" || kl == "post" || kl == "put" || kl == "delete" {
-                        if let serde_json::Value::Object(paths) = v {
-                            for (p, _cost) in paths {
-                                out.push((api_name.to_string(), kl.to_uppercase(), p.clone()));
-                            }
-                        }
-                    } else {
-                        collect_routes(v, api_name, out);
-                    }
-                }
-            }
-        }
-        let mut dynamic_calls: Vec<(String, String, String)> = vec![];
-        if let Value::Json(serde_json::Value::Object(api_map)) = Xt::describe(self).get("api".into()) {
-            for (api_name, node) in api_map {
-                collect_routes(&node, &api_name, &mut dynamic_calls);
-            }
-        }
-        for token in ["status", "ping", "time", "system/status"] {
-            for (api_name, method_name, path_name) in &dynamic_calls {
-                if method_name.as_str() != "GET" || path_name.contains('{') {
-                    continue;
-                }
-                let p = path_name.to_lowercase();
-                if p == token || p.contains(token) {
-                    let rv = Xt::request(self, path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
-                    if !rv.is_undefined() {
-                        return rv;
-                    }
-                }
-            }
-        }
-        let candidates = vec![
-            ("public", "GET", "status"),
-            ("public", "GET", "ping"),
-            ("public", "GET", "time"),
-            ("sapi", "GET", "system/status"),
-        ];
-        for (api_name, method_name, path_name) in candidates {
-            let rv = Xt::request(self, path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
-            if !rv.is_undefined() {
-                return rv;
-            }
-        }
+    fn handle_balance(&mut self, mut client: Value, mut message: Value) -> Value {
+        //
+        // spot
+        //
+        //    {
+        //        topic: 'balance',
+        //        event: 'balance',
+        //        data: {
+        //            a: 3513677381884,
+        //            t: 1684250056775,
+        //            c: 'usdt',
+        //            b: '7.71000000',
+        //            f: '0.00000000',
+        //            z: 'SPOT'
+        //        }
+        //    }
+        //
+        // contract
+        //
+        //    {
+        //        "topic": "balance",
+        //        "event": "balance@123456",
+        //        "data": {
+        //            "coin": "usdt",
+        //            "underlyingType": 1,                          // 1:Coin-M,2:USDT-M
+        //            "walletBalance": "123",                       // Balance
+        //            "openOrderMarginFrozen": "123",               // Frozen order
+        //            "isolatedMargin": "213",                      // Isolated Margin
+        //            "crossedMargin": "0"                          // Crossed Margin
+        //            "availableBalance": '2.256114450000000000',
+        //            "coupon": '0',
+        //            "bonus": '0'
+        //        }
+        //    }
+        //
+        let mut data: Value = self.safe_dict(message.clone(), Value::from("data"), Value::new_object());
+        let mut currency_id: Value = self.safe_string_2(data.clone(), Value::from("c"), Value::from("coin"));
+        let mut code: Value = self.safe_currency_code(currency_id.clone(), Value::Undefined);
+        let mut account: Value = self.account();
+        account.set("free".into(), self.safe_string(data.clone(), Value::from("availableBalance")));
+        account.set("used".into(), self.safe_string(data.clone(), Value::from("f")));
+        account.set("total".into(), self.safe_string_2(data.clone(), Value::from("b"), Value::from("walletBalance")));
+        self.get("balance".into()).set(code.clone(), account.clone());
+        self.set("balance".into(), self.safe_balance(self.get("balance".into())));
+        let mut trade_type: Value = if data.contains_key(Value::from("coin")) { Value::from("contract") } else { Value::from("spot") };
+        client.resolve(self.get("balance".into()), Value::from("balance::") + trade_type.clone());
         Value::Undefined
     }
 
-async fn fetch_transaction_fee(&mut self, mut code: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_transaction_fees(&mut self, mut codes: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_deposit_withdraw_fees(&mut self, mut codes: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_deposit_withdraw_fee(&mut self, mut code: Value, mut params: Value) -> Value { Value::Undefined }
-
-fn get_supported_mapping(&self, mut key: Value, mut mapping: Value) -> Value { Value::Undefined }
-
-async fn fetch_cross_borrow_rate(&mut self, mut code: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_isolated_borrow_rate(&mut self, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
-
-fn handle_option_and_params(&mut self, mut params: Value, mut method_name: Value, mut option_name: Value, mut default_value: Value) -> Value { Value::Undefined }
-
-fn handle_option_and_params_2(&mut self, mut params: Value, mut method_name_1: Value, mut option_name_1: Value, mut option_name_2: Value, mut default_value: Value) -> Value { Value::Undefined }
-
-fn handle_option(&mut self, mut method_name: Value, mut option_name: Value, mut default_value: Value) -> Value { Value::Undefined }
-
-fn handle_market_type_and_params(&mut self, mut method_name: Value, mut market: Value, mut params: Value, mut default_value: Value) -> Value { Value::Undefined }
-
-fn handle_sub_type_and_params(&mut self, mut method_name: Value, mut market: Value, mut params: Value, mut default_value: Value) -> Value { Value::Undefined }
-
-fn handle_margin_mode_and_params(&mut self, mut method_name: Value, mut params: Value, mut default_value: Value) -> Value { Value::Undefined }
-
-fn throw_exactly_matched_exception(&mut self, mut exact: Value, mut string: Value, mut message: Value) -> Value { Value::Undefined }
-
-fn throw_broadly_matched_exception(&mut self, mut broad: Value, mut string: Value, mut message: Value) -> Value { Value::Undefined }
-
-fn find_broadly_matched_key(&mut self, mut broad: Value, mut string: Value) -> Value { Value::Undefined }
-
-fn handle_errors(&mut self, mut status_code: Value, mut status_text: Value, mut url: Value, mut method: Value, mut response_headers: Value, mut response_body: Value, mut response: Value, mut request_headers: Value, mut request_body: Value) -> Value { Value::Undefined }
-
-fn calculate_rate_limiter_cost(&mut self, mut api: Value, mut method: Value, mut path: Value, mut params: Value, mut config: Value) -> Value { Value::Undefined }
-
-async fn fetch_ticker(&mut self, mut symbol: Value, mut params: Value) -> Value {
-        fn collect_routes(node: &serde_json::Value, api_name: &str, out: &mut Vec<(String, String, String)>) {
-            if let serde_json::Value::Object(map) = node {
-                for (k, v) in map {
-                    let kl = k.to_lowercase();
-                    if kl == "get" || kl == "post" || kl == "put" || kl == "delete" {
-                        if let serde_json::Value::Object(paths) = v {
-                            for (p, _cost) in paths {
-                                out.push((api_name.to_string(), kl.to_uppercase(), p.clone()));
-                            }
-                        }
-                    } else {
-                        collect_routes(v, api_name, out);
-                    }
-                }
-            }
-        }
-        let mut request = if params.is_object() { params.clone() } else { Value::new_object() };
-        request.set("symbol".into(), symbol.clone());
-        let mut dynamic_calls: Vec<(String, String, String)> = vec![];
-        if let Value::Json(serde_json::Value::Object(api_map)) = Xt::describe(self).get("api".into()) {
-            for (api_name, node) in api_map {
-                collect_routes(&node, &api_name, &mut dynamic_calls);
-            }
-        }
-        for token in ["ticker/24hr", "ticker", "ticker/price", "bookticker", "tickers"] {
-            for (api_name, method_name, path_name) in &dynamic_calls {
-                if method_name.as_str() != "GET" || path_name.contains('{') {
-                    continue;
-                }
-                let p = path_name.to_lowercase();
-                if p == token || p.contains(token) {
-                    let rv = Xt::request(self, path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
-                    if !rv.is_undefined() {
-                        return rv;
-                    }
-                }
-            }
-        }
-        let candidates = vec![
-            ("public", "GET", "ticker/24hr"),
-            ("public", "GET", "ticker"),
-            ("public", "GET", "ticker/price"),
-        ];
-        for (api_name, method_name, path_name) in candidates {
-            let rv = Xt::request(self, path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
-            if !rv.is_undefined() {
-                return rv;
-            }
-        }
+    fn handle_my_trades(&mut self, mut client: Value, mut message: Value) -> Value {
+        //
+        // spot
+        //
+        //    {
+        //        "topic": "trade",
+        //        "event": "trade",
+        //        "data": {
+        //            "s": "btc_usdt",                // symbol
+        //            "t": 1656043204763,             // time
+        //            "i": "6316559590087251233",     // tradeId
+        //            "oi": "6216559590087220004",    // orderId
+        //            "p": "30000",                   // trade price
+        //            "q": "3",                       // qty quantity
+        //            "v": "90000"                    // volume trade amount
+        //        }
+        //    }
+        //
+        // contract
+        //
+        //    {
+        //       "topic": "trade",
+        //       "event": "trade@123456",
+        //       "data": {
+        //            "symbol": 'btc_usdt',
+        //            "orderSide": 'SELL',
+        //            "positionSide": 'LONG',
+        //            "orderId": '231485367663419328',
+        //            "price": '27152.7',
+        //            "quantity": '33',
+        //            "marginUnfrozen": '2.85318000',
+        //            "timestamp": 1684892412565
+        //        }
+        //    }
+        //
+        let mut data: Value = self.safe_dict(message.clone(), Value::from("data"), Value::new_object());
+        let mut stored: Value = self.get("myTrades".into());
+        if stored.clone().is_nullish() {
+            let mut limit: Value = self.safe_integer(self.get("options".into()), Value::from("tradesLimit"), Value::from(1000));
+            stored = ArrayCacheBySymbolById::new(limit);
+            self.set("my_trades".into(), stored.clone());
+        };
+        let mut parsed_trade: Value = self.parse_trade(data.clone(), Value::Undefined);
+        let mut market: Value = self.market(parsed_trade.get(Value::from("symbol")));
+        stored.append(parsed_trade.clone());
+        let mut trade_type: Value = if market.get(Value::from("contract")).is_truthy() { Value::from("contract") } else { Value::from("spot") };
+        client.resolve(stored.clone(), Value::from("trade::") + trade_type.clone());
         Value::Undefined
     }
 
-async fn fetch_mark_price(&mut self, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_ticker_ws(&mut self, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_tickers(&mut self, mut symbols: Value, mut params: Value) -> Value {
-        fn collect_routes(node: &serde_json::Value, api_name: &str, out: &mut Vec<(String, String, String)>) {
-            if let serde_json::Value::Object(map) = node {
-                for (k, v) in map {
-                    let kl = k.to_lowercase();
-                    if kl == "get" || kl == "post" || kl == "put" || kl == "delete" {
-                        if let serde_json::Value::Object(paths) = v {
-                            for (p, _cost) in paths {
-                                out.push((api_name.to_string(), kl.to_uppercase(), p.clone()));
-                            }
-                        }
-                    } else {
-                        collect_routes(v, api_name, out);
-                    }
-                }
-            }
-        }
-        let mut dynamic_calls: Vec<(String, String, String)> = vec![];
-        if let Value::Json(serde_json::Value::Object(api_map)) = Xt::describe(self).get("api".into()) {
-            for (api_name, node) in api_map {
-                collect_routes(&node, &api_name, &mut dynamic_calls);
-            }
-        }
-        for token in ["tickers", "ticker/24hr", "ticker", "bookticker"] {
-            for (api_name, method_name, path_name) in &dynamic_calls {
-                if method_name.as_str() != "GET" || path_name.contains('{') {
-                    continue;
-                }
-                let p = path_name.to_lowercase();
-                if p == token || p.contains(token) {
-                    let rv = Xt::request(self, path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
-                    if !rv.is_undefined() {
-                        return rv;
-                    }
-                }
-            }
-        }
-        let candidates = vec![
-            ("public", "GET", "ticker/24hr"),
-            ("public", "GET", "tickers"),
-            ("public", "GET", "ticker"),
-        ];
-        for (api_name, method_name, path_name) in candidates {
-            let rv = Xt::request(self, path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
-            if !rv.is_undefined() {
-                return rv;
-            }
-        }
+    fn handle_message(&mut self, mut client: Value, mut message: Value) -> Value {
+        let mut event: Value = self.safe_string(message.clone(), Value::from("event"));
+        if event.clone() == Value::from("pong") {
+            client.on_pong();
+        } else if event.clone().is_nonnullish() {
+            let mut topic: Value = self.safe_string(message.clone(), Value::from("topic"));
+            let mut methods: Value = Value::Json(normalize(&Value::Json(json!({
+                "kline": self.get("handleOHLCV".into()),
+                "depth": self.get("handleOrderBook".into()),
+                "depth_update": self.get("handleOrderBook".into()),
+                "ticker": self.get("handleTicker".into()),
+                "agg_ticker": self.get("handleTicker".into()),
+                "tickers": self.get("handleTickers".into()),
+                "agg_tickers": self.get("handleTickers".into()),
+                "balance": self.get("handleBalance".into()),
+                "order": self.get("handleOrder".into()),
+                "position": self.get("handlePosition".into())
+            }))).unwrap());
+            let mut method: Value = self.safe_value(methods.clone(), topic.clone());
+            if topic.clone() == Value::from("trade") {
+                let mut data: Value = self.safe_dict(message.clone(), Value::from("data"), Value::Undefined);
+                if data.contains_key(Value::from("oi")) || data.contains_key(Value::from("orderId")) {
+                    method = self.get("handleMyTrades".into());
+                } else {
+                    method = self.get("handleTrade".into());
+                };
+            };
+            if method.clone().is_nonnullish() {
+                method.call(self, client.clone(), message.clone());
+            };
+        } else {
+            <Self as Xt>::handle_subscription_status(self, client.clone(), message.clone());
+        };
         Value::Undefined
     }
 
-async fn fetch_mark_prices(&mut self, mut symbols: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_tickers_ws(&mut self, mut symbols: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_order_books(&mut self, mut symbols: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn watch_bids_asks(&mut self, mut symbols: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_order(&mut self, mut id: Value, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_order_with_client_order_id(&mut self, mut client_order_id: Value, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_order_ws(&mut self, mut id: Value, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_order_status(&mut self, mut id: Value, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_unified_order(&mut self, mut order: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn create_order(&mut self, mut symbol: Value, mut r#type: Value, mut side: Value, mut amount: Value, mut price: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn create_twap_order(&mut self, mut symbol: Value, mut side: Value, mut amount: Value, mut duration: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn create_convert_trade(&mut self, mut id: Value, mut from_code: Value, mut to_code: Value, mut amount: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_convert_trade(&mut self, mut id: Value, mut code: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_convert_trade_history(&mut self, mut code: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_position_mode(&mut self, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn create_trailing_amount_order(&mut self, mut symbol: Value, mut r#type: Value, mut side: Value, mut amount: Value, mut price: Value, mut trailing_amount: Value, mut trailing_trigger_price: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn create_trailing_amount_order_ws(&mut self, mut symbol: Value, mut r#type: Value, mut side: Value, mut amount: Value, mut price: Value, mut trailing_amount: Value, mut trailing_trigger_price: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn create_trailing_percent_order(&mut self, mut symbol: Value, mut r#type: Value, mut side: Value, mut amount: Value, mut price: Value, mut trailing_percent: Value, mut trailing_trigger_price: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn create_trailing_percent_order_ws(&mut self, mut symbol: Value, mut r#type: Value, mut side: Value, mut amount: Value, mut price: Value, mut trailing_percent: Value, mut trailing_trigger_price: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn create_market_order_with_cost(&mut self, mut symbol: Value, mut side: Value, mut cost: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn create_market_buy_order_with_cost(&mut self, mut symbol: Value, mut cost: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn create_market_sell_order_with_cost(&mut self, mut symbol: Value, mut cost: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn create_market_order_with_cost_ws(&mut self, mut symbol: Value, mut side: Value, mut cost: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn create_trigger_order(&mut self, mut symbol: Value, mut r#type: Value, mut side: Value, mut amount: Value, mut price: Value, mut trigger_price: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn create_trigger_order_ws(&mut self, mut symbol: Value, mut r#type: Value, mut side: Value, mut amount: Value, mut price: Value, mut trigger_price: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn create_stop_loss_order(&mut self, mut symbol: Value, mut r#type: Value, mut side: Value, mut amount: Value, mut price: Value, mut stop_loss_price: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn create_stop_loss_order_ws(&mut self, mut symbol: Value, mut r#type: Value, mut side: Value, mut amount: Value, mut price: Value, mut stop_loss_price: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn create_take_profit_order(&mut self, mut symbol: Value, mut r#type: Value, mut side: Value, mut amount: Value, mut price: Value, mut take_profit_price: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn create_take_profit_order_ws(&mut self, mut symbol: Value, mut r#type: Value, mut side: Value, mut amount: Value, mut price: Value, mut take_profit_price: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn create_order_with_take_profit_and_stop_loss(&mut self, mut symbol: Value, mut r#type: Value, mut side: Value, mut amount: Value, mut price: Value, mut take_profit: Value, mut stop_loss: Value, mut params: Value) -> Value { Value::Undefined }
-
-fn set_take_profit_and_stop_loss_params(&mut self, mut symbol: Value, mut r#type: Value, mut side: Value, mut amount: Value, mut price: Value, mut take_profit: Value, mut stop_loss: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn create_order_with_take_profit_and_stop_loss_ws(&mut self, mut symbol: Value, mut r#type: Value, mut side: Value, mut amount: Value, mut price: Value, mut take_profit: Value, mut stop_loss: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn create_orders(&mut self, mut orders: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn edit_orders(&mut self, mut orders: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn create_order_ws(&mut self, mut symbol: Value, mut r#type: Value, mut side: Value, mut amount: Value, mut price: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn cancel_order(&mut self, mut id: Value, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn cancel_order_with_client_order_id(&mut self, mut client_order_id: Value, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn cancel_order_ws(&mut self, mut id: Value, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn cancel_orders(&mut self, mut ids: Value, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn cancel_orders_with_client_order_ids(&mut self, mut client_order_ids: Value, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn cancel_orders_ws(&mut self, mut ids: Value, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn cancel_all_orders(&mut self, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn cancel_all_orders_after(&mut self, mut timeout: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn cancel_orders_for_symbols(&mut self, mut orders: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn cancel_all_orders_ws(&mut self, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn cancel_unified_order(&mut self, mut order: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_orders(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_orders_ws(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_order_trades(&mut self, mut id: Value, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_open_orders(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_open_orders_ws(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_closed_orders(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_canceled_orders(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_canceled_and_closed_orders(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_closed_orders_ws(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_my_trades(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_my_liquidations(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_liquidations(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_my_trades_ws(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_greeks(&mut self, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_all_greeks(&mut self, mut symbols: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_option_chain(&mut self, mut code: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_option(&mut self, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_convert_quote(&mut self, mut from_code: Value, mut to_code: Value, mut amount: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_deposits_withdrawals(&mut self, mut code: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_deposits(&mut self, mut code: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_withdrawals(&mut self, mut code: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_deposits_ws(&mut self, mut code: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_withdrawals_ws(&mut self, mut code: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_funding_rate_history(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_funding_history(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn close_position(&mut self, mut symbol: Value, mut side: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn close_all_positions(&mut self, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_l3_order_book(&mut self, mut symbol: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-fn parse_last_price(&self, mut price: Value, mut market: Value) -> Value { Value::Undefined }
-
-async fn fetch_deposit_address(&mut self, mut code: Value, mut params: Value) -> Value { Value::Undefined }
-
-fn account(&self) -> Value { Value::Undefined }
-
-fn common_currency_code(&self, mut code: Value) -> Value { Value::Undefined }
-
-fn currency(&self, mut code: Value) -> Value { Value::Undefined }
-
-fn market(&self, mut symbol: Value) -> Value { Value::Undefined }
-
-fn create_expired_option_market(&mut self, mut symbol: Value) -> Value { Value::Undefined }
-
-fn is_leveraged_currency(&mut self, mut currency_code: Value, mut check_base_coin: Value, mut existing_currencies: Value) -> Value { Value::Undefined }
-
-fn handle_withdraw_tag_and_params(&mut self, mut tag: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn create_limit_order(&mut self, mut symbol: Value, mut side: Value, mut amount: Value, mut price: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn create_limit_order_ws(&mut self, mut symbol: Value, mut side: Value, mut amount: Value, mut price: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn create_market_order(&mut self, mut symbol: Value, mut side: Value, mut amount: Value, mut price: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn create_market_order_ws(&mut self, mut symbol: Value, mut side: Value, mut amount: Value, mut price: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn create_limit_buy_order(&mut self, mut symbol: Value, mut amount: Value, mut price: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn create_limit_buy_order_ws(&mut self, mut symbol: Value, mut amount: Value, mut price: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn create_limit_sell_order(&mut self, mut symbol: Value, mut amount: Value, mut price: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn create_limit_sell_order_ws(&mut self, mut symbol: Value, mut amount: Value, mut price: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn create_market_buy_order(&mut self, mut symbol: Value, mut amount: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn create_market_buy_order_ws(&mut self, mut symbol: Value, mut amount: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn create_market_sell_order(&mut self, mut symbol: Value, mut amount: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn create_market_sell_order_ws(&mut self, mut symbol: Value, mut amount: Value, mut params: Value) -> Value { Value::Undefined }
-
-fn cost_to_precision(&mut self, mut symbol: Value, mut cost: Value) -> Value { Value::Undefined }
-
-fn price_to_precision(&mut self, mut symbol: Value, mut price: Value) -> Value { Value::Undefined }
-
-fn amount_to_precision(&mut self, mut symbol: Value, mut amount: Value) -> Value { Value::Undefined }
-
-fn fee_to_precision(&mut self, mut symbol: Value, mut fee: Value) -> Value { Value::Undefined }
-
-fn currency_to_precision(&mut self, mut code: Value, mut fee: Value, mut network_code: Value) -> Value { Value::Undefined }
-
-fn force_string(&mut self, mut value: Value) -> Value { Value::Undefined }
-
-fn is_tick_precision(&mut self) -> Value { Value::Undefined }
-
-fn is_decimal_precision(&mut self) -> Value { Value::Undefined }
-
-fn is_significant_precision(&mut self) -> Value { Value::Undefined }
-
-
-
-fn parse_precision(&self, mut precision: Value) -> Value { Value::Undefined }
-
-fn integer_precision_to_amount(&mut self, mut precision: Value) -> Value { Value::Undefined }
-
-async fn load_time_difference(&mut self, mut params: Value) -> Value { Value::Undefined }
-
-fn implode_hostname(&mut self, mut url: Value) -> Value { Value::Undefined }
-
-async fn fetch_market_leverage_tiers(&mut self, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn create_post_only_order(&mut self, mut symbol: Value, mut r#type: Value, mut side: Value, mut amount: Value, mut price: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn create_post_only_order_ws(&mut self, mut symbol: Value, mut r#type: Value, mut side: Value, mut amount: Value, mut price: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn create_reduce_only_order(&mut self, mut symbol: Value, mut r#type: Value, mut side: Value, mut amount: Value, mut price: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn create_reduce_only_order_ws(&mut self, mut symbol: Value, mut r#type: Value, mut side: Value, mut amount: Value, mut price: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn create_stop_order(&mut self, mut symbol: Value, mut r#type: Value, mut side: Value, mut amount: Value, mut price: Value, mut trigger_price: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn create_stop_order_ws(&mut self, mut symbol: Value, mut r#type: Value, mut side: Value, mut amount: Value, mut price: Value, mut trigger_price: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn create_stop_limit_order(&mut self, mut symbol: Value, mut side: Value, mut amount: Value, mut price: Value, mut trigger_price: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn create_stop_limit_order_ws(&mut self, mut symbol: Value, mut side: Value, mut amount: Value, mut price: Value, mut trigger_price: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn create_stop_market_order(&mut self, mut symbol: Value, mut side: Value, mut amount: Value, mut trigger_price: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn create_stop_market_order_ws(&mut self, mut symbol: Value, mut side: Value, mut amount: Value, mut trigger_price: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn create_sub_account(&mut self, mut name: Value, mut params: Value) -> Value { Value::Undefined }
-
-fn safe_currency_code(&self, mut currency_id: Value, mut currency: Value) -> Value { Value::Undefined }
-
-fn filter_by_symbol_since_limit(&self, mut array: Value, mut symbol: Value, mut since: Value, mut limit: Value, mut tail: Value) -> Value { Value::Undefined }
-
-fn filter_by_currency_since_limit(&self, mut array: Value, mut code: Value, mut since: Value, mut limit: Value, mut tail: Value) -> Value { Value::Undefined }
-
-fn filter_by_symbols_since_limit(&self, mut array: Value, mut symbols: Value, mut since: Value, mut limit: Value, mut tail: Value) -> Value { Value::Undefined }
-
-fn parse_last_prices(&self, mut prices_data: Value, mut symbols: Value, mut params: Value) -> Value { Value::Undefined }
-
-fn parse_tickers(&self, mut tickers: Value, mut symbols: Value, mut params: Value) -> Value { Value::Undefined }
-
-fn parse_deposit_addresses(&self, mut addresses: Value, mut codes: Value, mut indexed: Value, mut params: Value) -> Value { Value::Undefined }
-
-fn parse_borrow_interests(&self, mut response: Value, mut market: Value) -> Value { Value::Undefined }
-
-fn parse_borrow_rate(&self, mut info: Value, mut currency: Value) -> Value { Value::Undefined }
-
-fn parse_borrow_rate_history(&self, mut response: Value, mut code: Value, mut since: Value, mut limit: Value) -> Value { Value::Undefined }
-
-fn parse_isolated_borrow_rates(&self, mut info: Value) -> Value { Value::Undefined }
-
-fn parse_funding_rate_histories(&self, mut response: Value, mut market: Value, mut since: Value, mut limit: Value) -> Value { Value::Undefined }
-
-fn safe_symbol(&self, mut market_id: Value, mut market: Value, mut delimiter: Value, mut market_type: Value) -> Value { Value::Undefined }
-
-fn parse_funding_rate(&self, mut contract: Value, mut market: Value) -> Value { Value::Undefined }
-
-fn parse_funding_rates(&self, mut response: Value, mut symbols: Value) -> Value { Value::Undefined }
-
-fn parse_long_short_ratio(&self, mut info: Value, mut market: Value) -> Value { Value::Undefined }
-
-fn parse_long_short_ratio_history(&self, mut response: Value, mut market: Value, mut since: Value, mut limit: Value) -> Value { Value::Undefined }
-
-fn handle_trigger_prices_and_params(&mut self, mut symbol: Value, mut params: Value, mut omit_params: Value) -> Value { Value::Undefined }
-
-fn handle_trigger_direction_and_params(&mut self, mut params: Value, mut exchange_specific_key: Value, mut allow_empty: Value) -> Value { Value::Undefined }
-
-fn handle_trigger_and_params(&mut self, mut params: Value) -> Value { Value::Undefined }
-
-fn is_trigger_order(&mut self, mut params: Value) -> Value { Value::Undefined }
-
-fn is_post_only(&mut self, mut is_market_order: Value, mut exchange_specific_param: Value, mut params: Value) -> Value { Value::Undefined }
-
-fn handle_post_only(&mut self, mut is_market_order: Value, mut exchange_specific_post_only_option: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_last_prices(&mut self, mut symbols: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_trading_fees(&mut self, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_trading_fees_ws(&mut self, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_trading_fee(&mut self, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_convert_currencies(&mut self, mut params: Value) -> Value { Value::Undefined }
-
-fn parse_open_interest(&self, mut interest: Value, mut market: Value) -> Value { Value::Undefined }
-
-fn parse_open_interests(&self, mut response: Value, mut symbols: Value) -> Value { Value::Undefined }
-
-fn parse_open_interests_history(&self, mut response: Value, mut market: Value, mut since: Value, mut limit: Value) -> Value { Value::Undefined }
-
-async fn fetch_funding_rate(&mut self, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_funding_interval(&mut self, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_mark_ohlcv(&mut self, mut symbol: Value, mut timeframe: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_index_ohlcv(&mut self, mut symbol: Value, mut timeframe: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_premium_index_ohlcv(&mut self, mut symbol: Value, mut timeframe: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-fn handle_time_in_force(&mut self, mut params: Value) -> Value { Value::Undefined }
-
-fn convert_type_to_account(&self, mut account: Value) -> Value { Value::Undefined }
-
-fn check_required_argument(&mut self, mut method_name: Value, mut argument: Value, mut argument_name: Value, mut options: Value) -> Value { Value::Undefined }
-
-fn check_required_margin_argument(&mut self, mut method_name: Value, mut symbol: Value, mut margin_mode: Value) -> Value { Value::Undefined }
-
-fn parse_deposit_withdraw_fees(&self, mut response: Value, mut codes: Value, mut currency_id_key: Value) -> Value { Value::Undefined }
-
-fn parse_deposit_withdraw_fee(&self, mut fee: Value, mut currency: Value) -> Value { Value::Undefined }
-
-fn deposit_withdraw_fee(&mut self, mut info: Value) -> Value { Value::Undefined }
-
-fn assign_default_deposit_withdraw_fees(&mut self, mut fee: Value, mut currency: Value) -> Value { Value::Undefined }
-
-fn parse_income(&self, mut info: Value, mut market: Value) -> Value { Value::Undefined }
-
-fn parse_incomes(&self, mut incomes: Value, mut market: Value, mut since: Value, mut limit: Value) -> Value { Value::Undefined }
-
-fn get_market_from_symbols(&mut self, mut symbols: Value) -> Value { Value::Undefined }
-
-fn parse_ws_ohlcvs(&self, mut ohlcvs: Value, mut market: Value, mut timeframe: Value, mut since: Value, mut limit: Value) -> Value { Value::Undefined }
-
-async fn fetch_transactions(&mut self, mut code: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-fn filter_by_array_positions(&self, mut objects: Value, mut key: Value, mut values: Value, mut indexed: Value) -> Value { Value::Undefined }
-
-fn filter_by_array_tickers(&self, mut objects: Value, mut key: Value, mut values: Value, mut indexed: Value) -> Value { Value::Undefined }
-
-fn create_ohlcv_object(&mut self, mut symbol: Value, mut timeframe: Value, mut data: Value) -> Value { Value::Undefined }
-
-fn handle_max_entries_per_request_and_params(&mut self, mut method: Value, mut max_entries_per_request: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_paginated_call_dynamic(&mut self, mut method: Value, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value, mut max_entries_per_request: Value, mut remove_repeated: Value) -> Value { Value::Undefined }
-
-async fn safe_deterministic_call(&self, mut method: Value, mut symbol: Value, mut since: Value, mut limit: Value, mut timeframe: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_paginated_call_deterministic(&mut self, mut method: Value, mut symbol: Value, mut since: Value, mut limit: Value, mut timeframe: Value, mut params: Value, mut max_entries_per_request: Value) -> Value { Value::Undefined }
-
-async fn fetch_paginated_call_cursor(&mut self, mut method: Value, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value, mut cursor_received: Value, mut cursor_sent: Value, mut cursor_increment: Value, mut max_entries_per_request: Value) -> Value { Value::Undefined }
-
-async fn fetch_paginated_call_incremental(&mut self, mut method: Value, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value, mut page_key: Value, mut max_entries_per_request: Value) -> Value { Value::Undefined }
-
-fn sort_cursor_paginated_result(&mut self, mut result: Value) -> Value { Value::Undefined }
-
-fn remove_repeated_elements_from_array(&mut self, mut input: Value, mut fallback_to_timestamp: Value) -> Value { Value::Undefined }
-
-fn remove_repeated_trades_from_array(&mut self, mut input: Value) -> Value { Value::Undefined }
-
-fn remove_keys_from_dict(&mut self, mut dict: Value, mut remove_keys: Value) -> Value { Value::Undefined }
-
-fn handle_until_option(&mut self, mut key: Value, mut request: Value, mut params: Value, mut multiplier: Value) -> Value { Value::Undefined }
-
-fn safe_open_interest(&self, mut interest: Value, mut market: Value) -> Value { Value::Undefined }
-
-fn parse_liquidation(&self, mut liquidation: Value, mut market: Value) -> Value { Value::Undefined }
-
-fn parse_liquidations(&self, mut liquidations: Value, mut market: Value, mut since: Value, mut limit: Value) -> Value { Value::Undefined }
-
-fn parse_greeks(&self, mut greeks: Value, mut market: Value) -> Value { Value::Undefined }
-
-fn parse_all_greeks(&self, mut greeks: Value, mut symbols: Value, mut params: Value) -> Value { Value::Undefined }
-
-fn parse_option(&self, mut chain: Value, mut currency: Value, mut market: Value) -> Value { Value::Undefined }
-
-fn parse_option_chain(&self, mut response: Value, mut currency_key: Value, mut symbol_key: Value) -> Value { Value::Undefined }
-
-fn parse_margin_modes(&self, mut response: Value, mut symbols: Value, mut symbol_key: Value, mut market_type: Value) -> Value { Value::Undefined }
-
-fn parse_margin_mode(&self, mut margin_mode: Value, mut market: Value) -> Value { Value::Undefined }
-
-fn parse_leverages(&self, mut response: Value, mut symbols: Value, mut symbol_key: Value, mut market_type: Value) -> Value { Value::Undefined }
-
-fn parse_leverage(&self, mut leverage: Value, mut market: Value) -> Value { Value::Undefined }
-
-fn parse_conversions(&self, mut conversions: Value, mut code: Value, mut from_currency_key: Value, mut to_currency_key: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-fn parse_conversion(&self, mut conversion: Value, mut from_currency: Value, mut to_currency: Value) -> Value { Value::Undefined }
-
-fn convert_expire_date(&self, mut date: Value) -> Value { Value::Undefined }
-
-fn convert_expire_date_to_market_id_date(&self, mut date: Value) -> Value { Value::Undefined }
-
-fn convert_market_id_expire_date(&self, mut date: Value) -> Value { Value::Undefined }
-
-async fn fetch_position_history(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn load_markets_and_sign_in(&mut self) -> Value { Value::Undefined }
-
-async fn fetch_positions_history(&mut self, mut symbols: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-fn parse_margin_modification(&self, mut data: Value, mut market: Value) -> Value { Value::Undefined }
-
-fn parse_margin_modifications(&self, mut response: Value, mut symbols: Value, mut symbol_key: Value, mut market_type: Value) -> Value { Value::Undefined }
-
-async fn fetch_transfer(&mut self, mut id: Value, mut code: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_transfers(&mut self, mut code: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn watch_mark_price(&mut self, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn watch_mark_prices(&mut self, mut symbols: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn withdraw_ws(&mut self, mut code: Value, mut amount: Value, mut address: Value, mut tag: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn un_watch_my_trades(&mut self, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn create_orders_ws(&mut self, mut orders: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn fetch_orders_by_status_ws(&mut self, mut status: Value, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
-async fn un_watch_bids_asks(&mut self, mut symbols: Value, mut params: Value) -> Value { Value::Undefined }
-
-fn clean_unsubscription(&mut self, mut client: Value, mut sub_hash: Value, mut unsub_hash: Value, mut sub_hash_is_prefix: Value) -> Value { Value::Undefined }
-
-fn clean_cache(&mut self, mut subscription: Value) -> Value { Value::Undefined }
-
-fn timeframe_from_milliseconds(&mut self, mut ms: Value) -> Value { Value::Undefined }
+    fn ping(&mut self, mut client: Value) -> Value {
+        client.set("last_pong".into(), self.milliseconds());
+        return Value::from("ping");
+    }
+
+    fn handle_subscription_status(&mut self, mut client: Value, mut message: Value) -> Value {
+        //
+        //     {
+        //         id: '1763045665228ticker@eth_usdt',
+        //         code: 0,
+        //         msg: 'SUCCESS',
+        //         method: 'unsubscribe'
+        //     }
+        //
+        //     {
+        //         code: 0,
+        //         msg: 'success',
+        //         id: '1764032903806ticker@btc_usdt',
+        //         sessionId: '5e1597fffeb08f50-00000001-06401597-943ec6d3c64310dd-9b247bee'
+        //     }
+        //
+        let mut id: Value = self.safe_string(message.clone(), Value::from("id"));
+        let mut subscriptions_by_id: Value = self.index_by(client.get(subscriptions.clone()), Value::from("id"));
+        let mut unsubscribe: Value = false.into();
+        if id.clone().is_nonnullish() {
+            let mut subscription: Value = self.safe_dict(subscriptions_by_id.clone(), id.clone(), Value::new_object());
+            unsubscribe = self.safe_bool(subscription.clone(), Value::from("unsubscribe"), false.into());
+            if unsubscribe.is_truthy() {
+                <Self as Xt>::handle_un_subscription(self, client.clone(), subscription.clone());
+            };
+        };
+        return message.clone();
+    }
+
+    fn handle_un_subscription(&mut self, mut client: Value, mut subscription: Value) -> Value {
+        let mut message_hashes: Value = self.safe_list(subscription.clone(), Value::from("messageHashes"), Value::new_array());
+        let mut sub_message_hashes: Value = self.safe_list(subscription.clone(), Value::from("subMessageHashes"), Value::new_array());
+        let mut j: usize = 0;
+        while j < message_hashes.len() {
+            let mut unsub_hash: Value = message_hashes.get(j.into());
+            let mut sub_hash: Value = sub_message_hashes.get(j.into());
+            self.clean_unsubscription(client.clone(), sub_hash.clone(), unsub_hash.clone(), Value::Undefined);
+            j += 1;
+        };
+        self.clean_cache(subscription.clone());
+        Value::Undefined
+    }
+
+    fn handle_error_message(&mut self, mut client: Value, mut message: Value) -> Value {
+        //
+        //    {
+        //        "id": "123",
+        //        "code": 401,
+        //        "msg": "token expire"
+        //    }
+        //
+        let mut msg: Value = self.safe_string(message.clone(), Value::from("msg"));
+        if msg.clone() == Value::from("invalid_listen_key") || msg.clone() == Value::from("token expire") {
+            client.get(subscriptions.clone()).set("token".into(), Value::Undefined);
+            <Self as Xt>::get_listen_key(self, true.into());
+            return Value::Undefined;
+        };
+        client.reject(message.clone());
+        Value::Undefined
+    }
 
     
     async fn dispatch(&mut self, method: Value, params: Value, context: Value) -> Value {
