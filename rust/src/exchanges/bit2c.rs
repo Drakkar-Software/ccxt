@@ -1,4 +1,5 @@
 #![allow(clippy::all)]
+#![allow(non_snake_case)]
 #![allow(dead_code)]
 #![allow(unreachable_code)]
 #![allow(unused_imports)]
@@ -750,7 +751,7 @@ pub trait Bit2c : Exchange {
             let mut amount_string: Value = self.number_to_string(amount.clone());
             let mut price_string: Value = self.number_to_string(price.clone());
             request.set("Total".into(), self.parse_to_numeric(Precise::string_mul(amount_string.clone(), price_string.clone()), Value::Undefined));
-            request.set("IsBid".into(), side.clone() == Value::from("buy"));
+            request.set("IsBid".into(), Value::from(side.clone() == Value::from("buy")));
         };
         let mut response: Value = self.dispatch(method, extend_2(request.clone(), params.clone()), Value::Undefined).await;
         return <Self as Bit2c>::parse_order(self, response.clone(), market.clone());

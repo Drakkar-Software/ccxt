@@ -900,8 +900,30 @@ pub trait ValueTrait {
 pub struct ExchangeImpl;
 
 impl ExchangeImpl {
-    pub fn init(_value: &mut Value) {
-        // TODO: initialize exchange defaults
+    /// Initializes exchange defaults (precision modes, padding modes, etc.)
+    pub fn init(value: &mut Value) {
+        // Set defaults matching Exchange.js constructor
+        if value.get(Value::from("precisionMode")).is_nullish() {
+            value.set(Value::from("precisionMode"), Value::from(DECIMAL_PLACES as i64));
+        }
+        if value.get(Value::from("paddingMode")).is_nullish() {
+            value.set(Value::from("paddingMode"), Value::from(NO_PADDING as i64));
+        }
+        if value.get(Value::from("markets")).is_nullish() {
+            value.set(Value::from("markets"), Value::new_object());
+        }
+        if value.get(Value::from("currencies")).is_nullish() {
+            value.set(Value::from("currencies"), Value::new_object());
+        }
+        if value.get(Value::from("markets_by_id")).is_nullish() {
+            value.set(Value::from("markets_by_id"), Value::new_object());
+        }
+        if value.get(Value::from("symbols")).is_nullish() {
+            value.set(Value::from("symbols"), Value::Json(JSON::Array(vec![])));
+        }
+        if value.get(Value::from("ids")).is_nullish() {
+            value.set(Value::from("ids"), Value::Json(JSON::Array(vec![])));
+        }
     }
 }
 
@@ -1479,22 +1501,138 @@ pub trait Exchange: ValueTrait {
     }
 
     // ---------------------------------------------------------------------------
-    // Methods stubbed due to transpilation issues (borrow checker, type inference).
-    // They exist in Exchange.js but their transpiled output doesn't compile yet.
+    // Base class defaults — these mirror the default implementations in Exchange.js.
+    // Individual exchanges override these via their own trait impls.
     // ---------------------------------------------------------------------------
-    async fn fetch_markets(&mut self, _params: Value) -> Value { Value::Undefined }
-    async fn fetch_my_dust_trades(&mut self, _symbol: Value, _since: Value, _limit: Value, _params: Value) -> Value { Value::Undefined }
-    fn parse_account_position(&self, _position: Value, _market: Value) -> Value { Value::Undefined }
-    fn parse_position_risk(&self, _position: Value, _market: Value) -> Value { Value::Undefined }
-    async fn set_margin_mode(&mut self, _margin_mode: Value, _symbol: Value, _params: Value) -> Value { Value::Undefined }
-    fn get_network_code_by_network_url(&self, _currency_code: Value, _url: Value) -> Value { Value::Undefined }
-    fn get_base_domain_from_url(&self, _url: Value) -> Value { Value::Undefined }
-    fn sign(&self, _path: Value, _api: Value, _method: Value, _params: Value, _headers: Value, _body: Value) -> Value { Value::new_object() }
-    fn handle_errors(&mut self, _code: Value, _reason: Value, _url: Value, _method: Value, _headers: Value, _body: Value, _response: Value, _request_headers: Value, _request_body: Value) -> Value { Value::Undefined }
-    async fn fetch_convert_trade(&mut self, _id: Value, _code: Value, _since: Value, _limit: Value, _params: Value) -> Value { Value::Undefined }
-    async fn fetch_convert_trade_history(&mut self, _code: Value, _since: Value, _limit: Value, _params: Value) -> Value { Value::Undefined }
-    async fn fetch_all_greeks(&mut self, _underlying: Value, _params: Value) -> Value { Value::Undefined }
-    async fn fetch_option_positions(&mut self, _symbols: Value, _params: Value) -> Value { Value::Undefined }
+
+    /// Default fetchMarkets returns the values of self.markets (empty when not loaded).
+    async fn fetch_markets(&mut self, _params: Value) -> Value {
+        // In JS: return Object.values(this.markets)
+        // Before load_markets is called, this.markets is empty.
+        let markets = self.get(Value::from("markets"));
+        match &markets {
+            Value::Json(JSON::Object(m)) => {
+                let vals: Vec<JSON> = m.values().cloned().collect();
+                Value::Json(JSON::Array(vals))
+            }
+            _ => Value::Json(JSON::Array(vec![])),
+        }
+    }
+
+    /// Binance-specific: fetch dust trade history. Not in base Exchange.js.
+    async fn fetch_my_dust_trades(&mut self, _symbol: Value, _since: Value, _limit: Value, _params: Value) -> Value {
+        // Exchange-specific (Binance). Base returns undefined.
+        Value::Undefined
+    }
+
+    /// Exchange-specific position parser (Binance/Aster). Not in base Exchange.js.
+    fn parse_account_position(&self, _position: Value, _market: Value) -> Value {
+        Value::Undefined
+    }
+
+    /// Exchange-specific position risk parser (Binance/Aster). Not in base Exchange.js.
+    fn parse_position_risk(&self, _position: Value, _market: Value) -> Value {
+        Value::Undefined
+    }
+
+    /// Default setMarginMode — throws NotSupported in JS. Returns undefined here.
+    async fn set_margin_mode(&mut self, _margin_mode: Value, _symbol: Value, _params: Value) -> Value {
+        Value::Undefined
+    }
+
+    /// Utility: extract network code by matching a deposit URL against currency network
+    /// contract address URLs. Binance-specific but available on base class.
+    fn get_network_code_by_network_url(&self, currency_code: Value, deposit_url: Value) -> Value {
+        if deposit_url.is_nullish() {
+            return Value::Undefined;
+        }
+        let currencies = self.get(Value::from("currencies"));
+        let currency = match &currency_code {
+            Value::Json(JSON::String(code)) => {
+                currencies.get(Value::from(code.as_str()))
+            }
+            _ => return Value::Undefined,
+        };
+        let networks = match &currency {
+            v if v.is_nonnullish() => {
+                let n = v.get(Value::from("networks"));
+                if n.is_nullish() { return Value::Undefined; }
+                n
+            }
+            _ => return Value::Undefined,
+        };
+        if let Value::Json(JSON::Object(nets)) = &networks {
+            for (network_code, network_info) in nets.iter() {
+                let info = match network_info.get("info") {
+                    Some(v) => v,
+                    None => continue,
+                };
+                let site_url = match info.get("contractAddressUrl").and_then(|v| v.as_str()) {
+                    Some(s) => s,
+                    None => continue,
+                };
+                let base_domain = self.get_base_domain_from_url(Value::from(site_url));
+                if let (Value::Json(JSON::String(base)), Value::Json(JSON::String(dep))) = (&base_domain, &deposit_url) {
+                    if dep.starts_with(base.as_str()) {
+                        return Value::from(network_code.as_str());
+                    }
+                }
+            }
+        }
+        Value::Undefined
+    }
+
+    /// Utility: extract scheme + domain from a URL (e.g. "https://example.com/path" -> "https://example.com/")
+    fn get_base_domain_from_url(&self, url: Value) -> Value {
+        if url.is_nullish() {
+            return Value::Undefined;
+        }
+        match &url {
+            Value::Json(JSON::String(s)) => {
+                let parts: Vec<&str> = s.split('/').collect();
+                let scheme = match parts.first() {
+                    Some(s) => *s,
+                    None => return Value::Undefined,
+                };
+                let domain = match parts.get(2) {
+                    Some(d) => *d,
+                    None => return Value::Undefined,
+                };
+                Value::from(format!("{}//{}/", scheme, domain))
+            }
+            _ => Value::Undefined,
+        }
+    }
+
+    /// Default sign — returns empty request object. Exchanges override with auth logic.
+    fn sign(&self, _path: Value, _api: Value, _method: Value, _params: Value, _headers: Value, _body: Value) -> Value {
+        Value::new_object()
+    }
+
+    /// Default handleErrors — stub that exchanges override with error detection logic.
+    fn handle_errors(&mut self, _code: Value, _reason: Value, _url: Value, _method: Value, _headers: Value, _body: Value, _response: Value, _request_headers: Value, _request_body: Value) -> Value {
+        Value::Undefined
+    }
+
+    /// Default fetchConvertTrade — not supported by default in base Exchange.js.
+    async fn fetch_convert_trade(&mut self, _id: Value, _code: Value, _since: Value, _limit: Value, _params: Value) -> Value {
+        Value::Undefined
+    }
+
+    /// Default fetchConvertTradeHistory — not supported by default in base Exchange.js.
+    async fn fetch_convert_trade_history(&mut self, _code: Value, _since: Value, _limit: Value, _params: Value) -> Value {
+        Value::Undefined
+    }
+
+    /// Default fetchAllGreeks — not supported by default in base Exchange.js.
+    async fn fetch_all_greeks(&mut self, _underlying: Value, _params: Value) -> Value {
+        Value::Undefined
+    }
+
+    /// Default fetchOptionPositions — not supported by default in base Exchange.js.
+    async fn fetch_option_positions(&mut self, _symbols: Value, _params: Value) -> Value {
+        Value::Undefined
+    }
 
     // ---------------------------------------------------------------------------
     // Runtime methods — defined before the delimiter in Exchange.js, so the

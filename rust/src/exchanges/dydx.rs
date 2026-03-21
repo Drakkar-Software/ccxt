@@ -1,4 +1,5 @@
 #![allow(clippy::all)]
+#![allow(non_snake_case)]
 #![allow(dead_code)]
 #![allow(unreachable_code)]
 #![allow(unused_imports)]
@@ -984,7 +985,8 @@ pub trait Dydx : Exchange {
     }
 
     fn sign_message(&mut self, mut message: Value, mut private_key: Value) -> Value {
-        return <Self as Dydx>::sign_hash(self, <Self as Dydx>::hash_message(self, message.clone()), private_key.slice(Value::from(64).neg(), Value::Undefined));
+        let tmp_hash = <Self as Dydx>::hash_message(self, message.clone());
+        return <Self as Dydx>::sign_hash(self, tmp_hash, private_key.slice(Value::from(64).neg(), Value::Undefined));
     }
 
     fn sign_onboarding_action(&mut self) -> Value {
@@ -1011,7 +1013,14 @@ pub trait Dydx : Exchange {
     }
 
     fn sign_dydx_tx(&mut self, mut private_key: Value, mut message: Value, mut memo: Value, mut chain_id: Value, mut account: Value, mut authenticators: Value, mut fee: Value) -> Value {
-        let (mut encoded_tx, mut sign_doc) = shift_2(self.encode_dydx_tx_for_signing(message.clone(), memo.clone(), chain_id.clone(), account.clone(), authenticators.clone(), fee.clone()));
+        let (mut encoded_tx, mut sign_doc) = shift_2(self.encode_dydx_tx_for_signing(Value::Json(normalize(&Value::Json(json!({
+            "message": message,
+            "memo": memo,
+            "chainId": chain_id,
+            "account": account,
+            "authenticators": authenticators,
+            "fee": fee
+        }))).unwrap())));
         let mut signature: Value = <Self as Dydx>::sign_hash(self, encoded_tx.clone(), private_key.clone());
         return self.encode_dydx_tx_raw(sign_doc.clone(), signature.get(Value::from("r")) + signature.get(Value::from("s")));
     }
@@ -1026,7 +1035,7 @@ pub trait Dydx : Exchange {
             let mut signature: Value = <Self as Dydx>::sign_onboarding_action(self);
             entropy = <Self as Dydx>::hash_message(self, self.base16_to_binary(signature.get(Value::from("r")) + signature.get(Value::from("s"))));
         };
-        credentials = self.retrieve_dydx_credentials(entropy.clone());
+        credentials = self.retrieve_dydx_credentials();
         credentials.set("privateKey".into(), self.binary_to_base16(credentials.get(Value::from("privateKey"))));
         credentials.set("publicKey".into(), self.binary_to_base16(credentials.get(Value::from("publicKey"))));
         self.get("options".into()).set("dydxCredentials".into(), credentials.clone());
@@ -1035,7 +1044,7 @@ pub trait Dydx : Exchange {
 
     async fn fetch_dydx_account(&mut self) -> Value {
         // required in js
-        self.load_dydx_protos().await;
+        self.load_dydx_protos();
         let mut dydx_account: Value = self.safe_dict(self.get("options".into()), Value::from("dydxAccount"), Value::Undefined);
         if dydx_account.clone().is_nonnullish() {
             return dydx_account.clone();
@@ -1076,10 +1085,10 @@ pub trait Dydx : Exchange {
         let mut r: Value = Precise::string_mul(n.clone(), Value::from("1"));
         let mut c: Value = self.parse_to_int(m.clone());
         // TODO: cap
-        let mut i: usize = 1;
-        while i < c.clone().into() {
+        let mut i: Value = Value::from(1);
+        while (i.clone() < c.clone()).is_truthy() {
             r = Precise::string_mul(r.clone(), n.clone());
-            i += 1;
+            i = i + Value::from(1);
         };
         return r.clone();
     }
@@ -1090,7 +1099,7 @@ pub trait Dydx : Exchange {
         let mut order_type: Value = r#type.to_upper_case();
         let mut market: Value = self.market(symbol.clone());
         let mut order_side: Value = side.to_upper_case();
-        let mut subaccount_id: usize = 0;
+        let mut subaccount_id: Value = Value::from(0);
         (subaccount_id, params) = shift_2(self.handle_option_and_params(params.clone(), Value::from("createOrder"), Value::from("subAccountId"), subaccount_id.clone()));
         let mut trigger_price: Value = self.safe_string_2(params.clone(), Value::from("triggerPrice"), Value::from("stopPrice"), Value::Undefined);
         let mut stop_loss_price: Value = self.safe_value(params.clone(), Value::from("stopLossPrice"), trigger_price.clone());
@@ -1108,8 +1117,8 @@ pub trait Dydx : Exchange {
         let mut quantum_conversion_exponent: Value = market_info.get(Value::from("quantumConversionExponent"));
         let mut price_scale: Value = <Self as Dydx>::pow(self, Value::from("10"), Precise::string_sub(Precise::string_sub(atomic_resolution.clone(), quantum_conversion_exponent.clone()), Value::from("-6")));
         let mut subticks: Value = Precise::string_mul(price_str.clone(), price_scale.clone());
-        let mut client_metadata: usize = 0;
-        let mut conditional_type: usize = 0;
+        let mut client_metadata: Value = Value::from(0);
+        let mut conditional_type: Value = Value::from(0);
         let mut conditional_order_trigger_subticks: Value = Value::from("0");
         let mut order_flag: Value = Value::Undefined;
         let mut time_in_force_number: Value = Value::Undefined;
@@ -1158,7 +1167,7 @@ pub trait Dydx : Exchange {
         let mut latest_block_height: Value = self.safe_integer(params.clone(), Value::from("latestBlockHeight"), Value::Undefined);
         let mut good_till_block: Value = self.safe_integer(params.clone(), Value::from("goodTillBlock"), Value::Undefined);
         let mut good_till_block_time: Value = Value::Undefined;
-        let mut good_till_block_time_in_seconds: usize = 2592000;
+        let mut good_till_block_time_in_seconds: Value = Value::from(2592000);
         (good_till_block_time_in_seconds, params) = shift_2(self.handle_option_and_params(params.clone(), Value::from("createOrder"), Value::from("goodTillBlockTimeInSeconds"), good_till_block_time_in_seconds.clone()));
         // default is 30 days
         if order_flag.clone() == Value::from(0) {
@@ -1205,7 +1214,8 @@ pub trait Dydx : Exchange {
             "value": order_payload
         }))).unwrap());
         params = self.omit(params.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("reduceOnly").into(), Value::from("reduce_only").into(), Value::from("clientOrderId").into(), Value::from("postOnly").into(), Value::from("timeInForce").into(), Value::from("stopPrice").into(), Value::from("triggerPrice").into(), Value::from("stopLoss").into(), Value::from("takeProfit").into(), Value::from("latestBlockHeight").into(), Value::from("goodTillBlock").into(), Value::from("goodTillBlockTimeInSeconds").into(), Value::from("subaccountId").into()])));
-        let mut order_id: Value = <Self as Dydx>::create_order_id_from_parts(self, <Self as Dydx>::get_wallet_address(self), subaccount_id.clone(), client_order_id.clone(), order_flag.clone(), market_info.get(Value::from("clobPairId")));
+        let tmp_wallet_address = <Self as Dydx>::get_wallet_address(self);
+        let mut order_id: Value = <Self as Dydx>::create_order_id_from_parts(self, tmp_wallet_address, subaccount_id.clone(), client_order_id.clone(), order_flag.clone(), market_info.get(Value::from("clobPairId")));
         return Value::Json(serde_json::Value::Array(vec![order_id.clone().into(), extend_2(signing_payload.clone(), params.clone()).into()]));
     }
 
@@ -1298,13 +1308,13 @@ pub trait Dydx : Exchange {
             panic!(r###"NotSupported::new(self.get("id".into()) + Value::from(" cancelOrder() cancelling using id is not currently supported, please use provide the clientOrderId parameter."))"###);
         };
         let mut good_till_block: Value = self.safe_integer(params.clone(), Value::from("goodTillBlock"), Value::Undefined);
-        let mut good_till_block_time_in_seconds: usize = 2592000;
+        let mut good_till_block_time_in_seconds: Value = Value::from(2592000);
         (good_till_block_time_in_seconds, params) = shift_2(self.handle_option_and_params(params.clone(), Value::from("cancelOrder"), Value::from("goodTillBlockTimeInSeconds"), good_till_block_time_in_seconds.clone()));
         // default is 30 days
         let mut good_till_block_time: Value = Value::Undefined;
         let mut default_order_flags: Value = if is_trigger.is_truthy() { Value::from(32) } else { Value::from(64) };
         let mut order_flags: Value = self.safe_integer(params.clone(), Value::from("orderFlags"), default_order_flags.clone());
-        let mut sub_account_id: usize = 0;
+        let mut sub_account_id: Value = Value::from(0);
         (sub_account_id, params) = shift_2(self.handle_option_and_params(params.clone(), Value::from("cancelOrder"), Value::from("subAccountId"), sub_account_id.clone()));
         params = self.omit(params.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("clientOrderId").into(), Value::from("orderFlags").into(), Value::from("goodTillBlock").into(), Value::from("goodTillBlockTime").into(), Value::from("goodTillBlockTimeInSeconds").into(), Value::from("subaccountId").into(), Value::from("clientId").into()])));
         if order_flags.clone() != Value::from(0) && order_flags.clone() != Value::from(64) && order_flags.clone() != Value::from(32) {
@@ -1377,7 +1387,7 @@ pub trait Dydx : Exchange {
         if !client_order_ids.is_truthy() {
             panic!(r###"NotSupported::new(self.get("id".into()) + Value::from(" cancelOrders only support clientOrderIds."))"###);
         };
-        let mut sub_account_id: usize = 0;
+        let mut sub_account_id: Value = Value::from(0);
         (sub_account_id, params) = shift_2(self.handle_option_and_params(params.clone(), Value::from("cancelOrders"), Value::from("subAccountId"), sub_account_id.clone()));
         let mut good_till_block: Value = self.safe_integer(params.clone(), Value::from("goodTillBlock"), Value::Undefined);
         if good_till_block.clone().is_nullish() {
@@ -1540,7 +1550,12 @@ pub trait Dydx : Exchange {
     }
 
     async fn estimate_tx_fee(&mut self, mut message: Value, mut memo: Value, mut account: Value) -> Value {
-        let mut tx_bytes: Value = self.encode_dydx_tx_for_simulation(message.clone(), memo.clone(), account.get(Value::from("sequence")), account.get(Value::from("pub_key")));
+        let mut tx_bytes: Value = self.encode_dydx_tx_for_simulation(Value::Json(normalize(&Value::Json(json!({
+            "message": message,
+            "memo": memo,
+            "sequence": account.get(Value::from("sequence")),
+            "pub_key": account.get(Value::from("pub_key"))
+        }))).unwrap()));
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
             "txBytes": tx_bytes
         }))).unwrap());

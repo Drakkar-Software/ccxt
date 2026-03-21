@@ -1,4 +1,5 @@
 #![allow(clippy::all)]
+#![allow(non_snake_case)]
 #![allow(dead_code)]
 #![allow(unreachable_code)]
 #![allow(unused_imports)]
@@ -610,6 +611,22 @@ pub trait Phemex : Exchange {
             // "1.0"
             contract_size = self.parse_number(contract_size_string.clone(), Value::Undefined);
         };
+        let taker_tmp = <Self as Phemex>::from_en(&*self, taker_fee_rate_er.clone(), ratio_scale.clone());
+        let taker_val = self.parse_number(taker_tmp, Value::Undefined);
+        let maker_tmp = <Self as Phemex>::from_en(&*self, maker_fee_rate_er.clone(), ratio_scale.clone());
+        let maker_val = self.parse_number(maker_tmp, Value::Undefined);
+        let min_price_tmp = <Self as Phemex>::from_en(&*self, min_price_ep.clone(), price_scale.clone());
+        let min_price_val = self.parse_number(min_price_tmp, Value::Undefined);
+        let max_price_tmp = <Self as Phemex>::from_en(&*self, max_price_ep.clone(), price_scale.clone());
+        let max_price_val = self.parse_number(max_price_tmp, Value::Undefined);
+        let active_val = Value::from(status.clone() == Value::from("Listed"));
+        let linear_val = Value::from(!inverse.is_truthy());
+        let precision_amount = self.safe_number_2(market.clone(), Value::from("lotSize"), Value::from("qtyStepSize"), Value::Undefined);
+        let precision_price = self.safe_number(market.clone(), Value::from("tickSize"), Value::Undefined);
+        let leverage_min = self.parse_number(Value::from("1"), Value::Undefined);
+        let leverage_max = self.safe_number(market.clone(), Value::from("maxLeverage"), Value::Undefined);
+        let max_order_qty_str = self.safe_string(market.clone(), Value::from("maxOrderQty"), Value::Undefined);
+        let cost_max = self.parse_number(max_order_qty_str, Value::Undefined);
         return self.safe_market_structure(Value::Json(normalize(&Value::Json(json!({
             "id": id,
             "symbol": base.clone() + Value::from("/") + quote.clone() + Value::from(":") + settle.clone(),
@@ -625,12 +642,12 @@ pub trait Phemex : Exchange {
             "swap": true,
             "future": false,
             "option": false,
-            "active": status.clone() == Value::from("Listed"),
+            "active": active_val,
             "contract": true,
-            "linear": !inverse.is_truthy(),
+            "linear": linear_val,
             "inverse": inverse,
-            "taker": self.parse_number(<Self as Phemex>::from_en(self, taker_fee_rate_er.clone(), ratio_scale.clone()), Value::Undefined),
-            "maker": self.parse_number(<Self as Phemex>::from_en(self, maker_fee_rate_er.clone(), ratio_scale.clone()), Value::Undefined),
+            "taker": taker_val,
+            "maker": maker_val,
             "contractSize": contract_size,
             "expiry": Value::Undefined,
             "expiryDatetime": Value::Undefined,
@@ -640,25 +657,25 @@ pub trait Phemex : Exchange {
             "valueScale": value_scale,
             "ratioScale": ratio_scale,
             "precision": Value::Json(normalize(&Value::Json(json!({
-                "amount": self.safe_number_2(market.clone(), Value::from("lotSize"), Value::from("qtyStepSize"), Value::Undefined),
-                "price": self.safe_number(market.clone(), Value::from("tickSize"), Value::Undefined)
+                "amount": precision_amount,
+                "price": precision_price
             }))).unwrap()),
             "limits": Value::Json(normalize(&Value::Json(json!({
                 "leverage": Value::Json(normalize(&Value::Json(json!({
-                    "min": self.parse_number(Value::from("1"), Value::Undefined),
-                    "max": self.safe_number(market.clone(), Value::from("maxLeverage"), Value::Undefined)
+                    "min": leverage_min,
+                    "max": leverage_max
                 }))).unwrap()),
                 "amount": Value::Json(normalize(&Value::Json(json!({
                     "min": Value::Undefined,
                     "max": Value::Undefined
                 }))).unwrap()),
                 "price": Value::Json(normalize(&Value::Json(json!({
-                    "min": self.parse_number(<Self as Phemex>::from_en(self, min_price_ep.clone(), price_scale.clone()), Value::Undefined),
-                    "max": self.parse_number(<Self as Phemex>::from_en(self, max_price_ep.clone(), price_scale.clone()), Value::Undefined)
+                    "min": min_price_val,
+                    "max": max_price_val
                 }))).unwrap()),
                 "cost": Value::Json(normalize(&Value::Json(json!({
                     "min": Value::Undefined,
-                    "max": self.parse_number(self.safe_string(market.clone(), Value::from("maxOrderQty"), Value::Undefined), Value::Undefined)
+                    "max": cost_max
                 }))).unwrap())
             }))).unwrap()),
             "created": Value::Undefined,
@@ -847,7 +864,11 @@ pub trait Phemex : Exchange {
         if market.get(Value::from("spot")).is_truthy() {
             amount = <Self as Phemex>::from_ev(self, amount.clone(), market.clone());
         };
-        return Value::Json(serde_json::Value::Array(vec![self.parse_number(<Self as Phemex>::from_ep(self, self.safe_string(bidask.clone(), price_key.clone(), Value::Undefined), market.clone()), Value::Undefined).into(), self.parse_number(amount.clone(), Value::Undefined).into()]));
+        let tmp_price_str = self.safe_string(bidask.clone(), price_key.clone(), Value::Undefined);
+        let tmp_price = <Self as Phemex>::from_ep(self, tmp_price_str, market.clone());
+        let tmp_price_num = self.parse_number(tmp_price, Value::Undefined);
+        let tmp_amount_num = self.parse_number(amount.clone(), Value::Undefined);
+        return Value::Json(serde_json::Value::Array(vec![tmp_price_num.into(), tmp_amount_num.into()]));
     }
 
     fn custom_parse_order_book(&mut self, mut orderbook: Value, mut symbol: Value, mut timestamp: Value, mut bids_key: Value, mut asks_key: Value, mut price_key: Value, mut amount_key: Value, mut market: Value) -> Value {
@@ -912,54 +933,54 @@ pub trait Phemex : Exchange {
     }
 
 
-    fn to_en(&mut self, mut n: Value, mut scale: Value) -> Value {
+    fn to_en(&self, mut n: Value, mut scale: Value) -> Value {
         let mut string_n: Value = self.number_to_string(n.clone());
         let mut precise: Value = Precise::new(string_n);
-        precise.set("decimals".into(), precise.get(decimals.clone()) - scale.clone());
+        precise.set("decimals".into(), precise.get(Value::from("decimals")) - scale.clone());
         precise.reduce();
         let mut precise_string: Value = precise.to_string();
         return self.parse_to_numeric(precise_string.clone(), Value::Undefined);
     }
 
-    fn to_ev(&mut self, mut amount: Value, mut market: Value) -> Value {
+    fn to_ev(&self, mut amount: Value, mut market: Value) -> Value {
         if amount.clone().is_nullish() || market.clone().is_nullish() {
             return amount.clone();
         };
         return <Self as Phemex>::to_en(self, amount.clone(), market.get(Value::from("valueScale")));
     }
 
-    fn to_ep(&mut self, mut price: Value, mut market: Value) -> Value {
+    fn to_ep(&self, mut price: Value, mut market: Value) -> Value {
         if price.clone().is_nullish() || market.clone().is_nullish() {
             return price.clone();
         };
         return <Self as Phemex>::to_en(self, price.clone(), market.get(Value::from("priceScale")));
     }
 
-    fn from_en(&mut self, mut en: Value, mut scale: Value) -> Value {
+    fn from_en(&self, mut en: Value, mut scale: Value) -> Value {
         if en.clone().is_nullish() || scale.clone().is_nullish() {
             return Value::Undefined;
         };
         let mut precise: Value = Precise::new(en);
-        precise.set("decimals".into(), self.sum(precise.get(decimals.clone()), scale.clone()));
+        precise.set("decimals".into(), self.sum(precise.get(Value::from("decimals")), scale.clone()));
         precise.reduce();
         return precise.to_string();
     }
 
-    fn from_ep(&mut self, mut ep: Value, mut market: Value) -> Value {
+    fn from_ep(&self, mut ep: Value, mut market: Value) -> Value {
         if ep.clone().is_nullish() || market.clone().is_nullish() {
             return ep.clone();
         };
         return <Self as Phemex>::from_en(self, ep.clone(), self.safe_integer(market.clone(), Value::from("priceScale"), Value::Undefined));
     }
 
-    fn from_ev(&mut self, mut ev: Value, mut market: Value) -> Value {
+    fn from_ev(&self, mut ev: Value, mut market: Value) -> Value {
         if ev.clone().is_nullish() || market.clone().is_nullish() {
             return ev.clone();
         };
         return <Self as Phemex>::from_en(self, ev.clone(), self.safe_integer(market.clone(), Value::from("valueScale"), Value::Undefined));
     }
 
-    fn from_er(&mut self, mut er: Value, mut market: Value) -> Value {
+    fn from_er(&self, mut er: Value, mut market: Value) -> Value {
         if er.clone().is_nullish() || market.clone().is_nullish() {
             return er.clone();
         };
@@ -982,11 +1003,26 @@ pub trait Phemex : Exchange {
         //
         let mut base_volume: Value = Value::Undefined;
         if market.clone().is_nonnullish() && market.get(Value::from("spot")).is_truthy() {
-            base_volume = self.parse_number(<Self as Phemex>::from_ev(self, self.safe_string(ohlcv.clone(), Value::from(7), Value::Undefined), market.clone()), Value::Undefined);
+            let tmp_str = self.safe_string(ohlcv.clone(), Value::from(7), Value::Undefined);
+            let tmp_ev = <Self as Phemex>::from_ev(self, tmp_str, market.clone());
+            base_volume = self.parse_number(tmp_ev, Value::Undefined);
         } else {
             base_volume = self.safe_number(ohlcv.clone(), Value::from(7), Value::Undefined);
         };
-        return Value::Json(serde_json::Value::Array(vec![self.safe_timestamp(ohlcv.clone(), Value::from(0), Value::Undefined).into(), self.parse_number(<Self as Phemex>::from_ep(self, self.safe_string(ohlcv.clone(), Value::from(3), Value::Undefined), market.clone()), Value::Undefined).into(), self.parse_number(<Self as Phemex>::from_ep(self, self.safe_string(ohlcv.clone(), Value::from(4), Value::Undefined), market.clone()), Value::Undefined).into(), self.parse_number(<Self as Phemex>::from_ep(self, self.safe_string(ohlcv.clone(), Value::from(5), Value::Undefined), market.clone()), Value::Undefined).into(), self.parse_number(<Self as Phemex>::from_ep(self, self.safe_string(ohlcv.clone(), Value::from(6), Value::Undefined), market.clone()), Value::Undefined).into(), base_volume.clone().into()]));
+        let tmp_ts = self.safe_timestamp(ohlcv.clone(), Value::from(0), Value::Undefined);
+        let tmp_s3 = self.safe_string(ohlcv.clone(), Value::from(3), Value::Undefined);
+        let tmp_e3 = <Self as Phemex>::from_ep(self, tmp_s3, market.clone());
+        let tmp_n3 = self.parse_number(tmp_e3, Value::Undefined);
+        let tmp_s4 = self.safe_string(ohlcv.clone(), Value::from(4), Value::Undefined);
+        let tmp_e4 = <Self as Phemex>::from_ep(self, tmp_s4, market.clone());
+        let tmp_n4 = self.parse_number(tmp_e4, Value::Undefined);
+        let tmp_s5 = self.safe_string(ohlcv.clone(), Value::from(5), Value::Undefined);
+        let tmp_e5 = <Self as Phemex>::from_ep(self, tmp_s5, market.clone());
+        let tmp_n5 = self.parse_number(tmp_e5, Value::Undefined);
+        let tmp_s6 = self.safe_string(ohlcv.clone(), Value::from(6), Value::Undefined);
+        let tmp_e6 = <Self as Phemex>::from_ep(self, tmp_s6, market.clone());
+        let tmp_n6 = self.parse_number(tmp_e6, Value::Undefined);
+        return Value::Json(serde_json::Value::Array(vec![tmp_ts.into(), tmp_n3.into(), tmp_n4.into(), tmp_n5.into(), tmp_n6.into(), base_volume.clone().into()]));
     }
 
     async fn fetch_ohlcv(&mut self, mut symbol: Value, mut timeframe: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
@@ -1386,7 +1422,7 @@ pub trait Phemex : Exchange {
         let mut order_id: Value = Value::Undefined;
         let mut taker_or_maker: Value = Value::Undefined;
         if Array::is_array(trade.clone()).is_truthy() {
-            let mut trade_length: usize = trade.len();
+            let mut trade_length: Value = Value::from(trade.len());
             timestamp = self.safe_integer_product(trade.clone(), Value::from(0), Value::from(0.000001), Value::Undefined);
             if trade_length.clone() > Value::from(4) {
                 id = self.safe_string(trade.clone(), trade_length.clone() - Value::from(4), Value::Undefined);
@@ -1394,7 +1430,7 @@ pub trait Phemex : Exchange {
             side = self.safe_string_lower(trade.clone(), trade_length.clone() - Value::from(3), Value::Undefined);
             price_string = self.safe_string(trade.clone(), trade_length.clone() - Value::from(2), Value::Undefined);
             amount_string = self.safe_string(trade.clone(), trade_length.clone() - Value::from(1), Value::Undefined);
-            if trade.get(trade_length.clone() - Value::from(2).clone()).typeof_() == Value::from("number") {
+            if trade.get(trade_length.clone() - Value::from(2)).typeof_() == Value::from("number") {
                 price_string = <Self as Phemex>::from_ep(self, price_string.clone(), market.clone());
                 amount_string = <Self as Phemex>::from_ev(self, amount_string.clone(), market.clone());
             };
@@ -1586,7 +1622,7 @@ pub trait Phemex : Exchange {
         let mut account: Value = self.account();
         let mut account_balance_ev: Value = self.safe_string_2(balance.clone(), Value::from("accountBalanceEv"), Value::from("accountBalanceRv"), Value::Undefined);
         let mut total_used_balance_ev: Value = self.safe_string_2(balance.clone(), Value::from("totalUsedBalanceEv"), Value::from("totalUsedBalanceRv"), Value::Undefined);
-        let mut needs_conversion: Value = (code.clone() != Value::from("USDT")).into();
+        let mut needs_conversion: Value = Value::from(code.clone() != Value::from("USDT"));
         account.set("total".into(), if needs_conversion.is_truthy() { <Self as Phemex>::from_en(self, account_balance_ev.clone(), value_scale.clone()) } else { account_balance_ev.clone() });
         account.set("used".into(), if needs_conversion.is_truthy() { <Self as Phemex>::from_en(self, total_used_balance_ev.clone(), value_scale.clone()) } else { total_used_balance_ev.clone() });
         result.set(code.clone(), account.clone());
@@ -1807,7 +1843,7 @@ pub trait Phemex : Exchange {
         return self.safe_string(time_in_forces.clone(), time_in_force.clone(), time_in_force.clone());
     }
 
-    fn parse_spot_order(&self, mut order: Value, mut market: Value) -> Value {
+    fn parse_spot_order(&mut self, mut order: Value, mut market: Value) -> Value {
         //
         // spot
         //
@@ -1892,7 +1928,7 @@ pub trait Phemex : Exchange {
         };
         let mut time_in_force: Value = <Self as Phemex>::parse_time_in_force(self, self.safe_string(order.clone(), Value::from("timeInForce"), Value::Undefined));
         let mut trigger_price: Value = self.parse_number(self.omit_zero(<Self as Phemex>::from_ep(self, self.safe_string(order.clone(), Value::from("stopPxEp"), Value::Undefined), Value::Undefined)), Value::Undefined);
-        let mut post_only: Value = (time_in_force.clone() == Value::from("PO")).into();
+        let mut post_only: Value = Value::from(time_in_force.clone() == Value::from("PO"));
         return self.safe_order(Value::Json(normalize(&Value::Json(json!({
             "info": order,
             "id": id,
@@ -1926,7 +1962,7 @@ pub trait Phemex : Exchange {
         return self.safe_string(sides.clone(), side.clone(), side.clone());
     }
 
-    fn parse_swap_order(&self, mut order: Value, mut market: Value) -> Value {
+    fn parse_swap_order(&mut self, mut order: Value, mut market: Value) -> Value {
         //
         //     {
         //         "bizError":0,
@@ -2057,7 +2093,7 @@ pub trait Phemex : Exchange {
         };
         let mut time_in_force: Value = <Self as Phemex>::parse_time_in_force(self, self.safe_string(order.clone(), Value::from("timeInForce"), Value::Undefined));
         let mut trigger_price: Value = self.omit_zero(self.safe_string_2(order.clone(), Value::from("stopPx"), Value::from("stopPxRp"), Value::Undefined));
-        let mut post_only: Value = (time_in_force.clone() == Value::from("PO")).into();
+        let mut post_only: Value = Value::from(time_in_force.clone() == Value::from("PO"));
         let mut reduce_only: Value = self.safe_value(order.clone(), Value::from("reduceOnly"), Value::Undefined);
         let mut exec_inst: Value = self.safe_string(order.clone(), Value::from("execInst"), Value::Undefined);
         if exec_inst.clone() == Value::from("ReduceOnly") {
@@ -2109,7 +2145,7 @@ pub trait Phemex : Exchange {
 
     fn parse_order(&mut self, mut order: Value, mut market: Value) -> Value {
         let mut is_swap: Value = self.safe_bool(market.clone(), Value::from("swap"), false.into());
-        let mut has_pnl: Value = (order.contains_key(Value::from("closedPnl")) || order.contains_key(Value::from("closedPnlRv")) || order.contains_key(Value::from("totalPnlRv"))).into();
+        let mut has_pnl: Value = Value::from(order.contains_key(Value::from("closedPnl")) || order.contains_key(Value::from("closedPnlRv")) || order.contains_key(Value::from("totalPnlRv")));
         if is_swap.is_truthy() || has_pnl.is_truthy() {
             return <Self as Phemex>::parse_swap_order(self, order.clone(), market.clone());
         };
@@ -2154,9 +2190,9 @@ pub trait Phemex : Exchange {
         let mut client_order_id: Value = self.safe_string_2(params.clone(), Value::from("clOrdID"), Value::from("clientOrderId"), Value::Undefined);
         let mut stop_loss: Value = self.safe_value(params.clone(), Value::from("stopLoss"), Value::Undefined);
         let mut take_profit: Value = self.safe_value(params.clone(), Value::from("takeProfit"), Value::Undefined);
-        let mut has_stop_loss: Value = (stop_loss.clone().is_nonnullish()).into();
-        let mut has_take_profit: Value = (take_profit.clone().is_nonnullish()).into();
-        let mut is_stable_settled: Value = (market.get(Value::from("settle")) == Value::from("USDT") || market.get(Value::from("settle")) == Value::from("USDC")).into();
+        let mut has_stop_loss: Value = Value::from(stop_loss.clone().is_nonnullish());
+        let mut has_take_profit: Value = Value::from(take_profit.clone().is_nonnullish());
+        let mut is_stable_settled: Value = Value::from(market.get(Value::from("settle")) == Value::from("USDT") || market.get(Value::from("settle")) == Value::from("USDC"));
         if client_order_id.clone().is_nullish() {
             let mut broker_id: Value = self.safe_string(self.get("options".into()), Value::from("brokerId"), Value::from("CCXT123456"));
             if broker_id.clone().is_nonnullish() {
@@ -2422,7 +2458,7 @@ pub trait Phemex : Exchange {
         }))).unwrap());
         let mut client_order_id: Value = self.safe_string_2(params.clone(), Value::from("clientOrderId"), Value::from("clOrdID"), Value::Undefined);
         params = self.omit(params.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("clientOrderId").into(), Value::from("clOrdID").into()])));
-        let mut is_stable_settled: Value = (market.get(Value::from("settle")) == Value::from("USDT") || market.get(Value::from("settle")) == Value::from("USDC")).into();
+        let mut is_stable_settled: Value = Value::from(market.get(Value::from("settle")) == Value::from("USDT") || market.get(Value::from("settle")) == Value::from("USDC"));
         if client_order_id.clone().is_nonnullish() {
             request.set("clOrdID".into(), client_order_id.clone());
         } else {
@@ -2652,7 +2688,6 @@ pub trait Phemex : Exchange {
             response = self.dispatch("privateGetSpotOrders".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         };
         // catch block omitted (no exception support in Value runtime)
-;
         let mut data: Value = self.safe_value(response.clone(), Value::from("data"), Value::new_object());
         if Array::is_array(data.clone()).is_truthy() {
             return self.parse_orders(data.clone(), market.clone(), since.clone(), limit.clone(), Value::Undefined);
@@ -2749,7 +2784,7 @@ pub trait Phemex : Exchange {
             limit = Math::min(Value::from(200), limit.clone());
             request.set("limit".into(), limit.clone());
         };
-        let mut is_usdt_settled: Value = (r#type.clone() != Value::from("spot") && symbol.clone().is_nullish() || self.safe_string(market.clone(), Value::from("settle"), Value::Undefined) == Value::from("USDT")).into();
+        let mut is_usdt_settled: Value = Value::from(r#type.clone() != Value::from("spot") && symbol.clone().is_nullish() || self.safe_string(market.clone(), Value::from("settle"), Value::Undefined) == Value::from("USDT"));
         if is_usdt_settled.is_truthy() {
             request.set("currency".into(), Value::from("USDT"));
             request.set("offset".into(), Value::from(0));
@@ -3154,7 +3189,7 @@ pub trait Phemex : Exchange {
             (settle, params) = shift_2(self.handle_option_and_params(params.clone(), Value::from("fetchPositions"), Value::from("settle"), code.clone()));
         };
         (sub_type, params) = shift_2(self.handle_sub_type_and_params(Value::from("fetchPositions"), market.clone(), params.clone(), Value::Undefined));
-        let mut is_usdt_settled: Value = (settle.clone() == Value::from("USDT")).into();
+        let mut is_usdt_settled: Value = Value::from(settle.clone() == Value::from("USDT"));
         if is_usdt_settled.is_truthy() {
             code = Value::from("USDT");
         } else if settle.clone() == Value::from("BTC") {
@@ -3434,7 +3469,7 @@ pub trait Phemex : Exchange {
             request.set("limit".into(), limit.clone());
         };
         let mut response: Value = Value::Undefined;
-        let mut is_stable_settled: Value = (market.get(Value::from("settle")) == Value::from("USDT") || market.get(Value::from("settle")) == Value::from("USDC")).into();
+        let mut is_stable_settled: Value = Value::from(market.get(Value::from("settle")) == Value::from("USDT") || market.get(Value::from("settle")) == Value::from("USDC"));
         if is_stable_settled.is_truthy() {
             response = self.dispatch("privateGetApiDataGFuturesFundingFees".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         } else {
@@ -3490,7 +3525,7 @@ pub trait Phemex : Exchange {
             return value.clone();
         };
         // it was confirmed by phemex support, that USDT contracts use direct amounts in funding fees, while USD & INVERSE needs 'valueScale'
-        let mut is_stable_settled: Value = (market.get(Value::from("settle")) == Value::from("USDT") || market.get(Value::from("settle")) == Value::from("USDC")).into();
+        let mut is_stable_settled: Value = Value::from(market.get(Value::from("settle")) == Value::from("USDT") || market.get(Value::from("settle")) == Value::from("USDC"));
         if !is_stable_settled.is_truthy() {
             let mut currency: Value = self.safe_currency(currency_code.clone(), Value::Undefined);
             let mut scale: Value = self.safe_string(currency.get(Value::from("info")), Value::from("valueScale"), Value::Undefined);
@@ -3799,7 +3834,7 @@ pub trait Phemex : Exchange {
         market = self.safe_market(market_id.clone(), market.clone(), Value::Undefined, Value::Undefined);
         let mut risk_limits: Value = market.get(Value::from("info")).get(Value::from("riskLimits"));
         let mut tiers: Value = Value::new_array();
-        let mut min_notional: usize = 0;
+        let mut min_notional: Value = Value::from(0);
         let mut i: usize = 0;
         while i < risk_limits.len() {
             let mut tier: Value = risk_limits.get(i.into());
@@ -4050,7 +4085,7 @@ pub trait Phemex : Exchange {
         };
         self.load_markets(Value::Undefined, Value::Undefined).await;
         let mut market: Value = self.market(symbol.clone());
-        let mut is_usdt_settled: Value = (market.get(Value::from("settle")) == Value::from("USDT") || market.get(Value::from("settle")) == Value::from("USDC")).into();
+        let mut is_usdt_settled: Value = Value::from(market.get(Value::from("settle")) == Value::from("USDT") || market.get(Value::from("settle")) == Value::from("USDC"));
         if !market.get(Value::from("swap")).is_truthy() {
             panic!(r###"BadRequest::new(self.get("id".into()) + Value::from(" fetchFundingRateHistory() supports swap contracts only"))"###);
         };

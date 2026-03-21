@@ -1,4 +1,5 @@
 #![allow(clippy::all)]
+#![allow(non_snake_case)]
 #![allow(dead_code)]
 #![allow(unreachable_code)]
 #![allow(unused_imports)]
@@ -822,7 +823,7 @@ pub trait Coinspot : Exchange {
             market = self.market(symbol.clone());
         };
         if since.clone().is_nonnullish() {
-            request.set("startdate".into(), self.yyyymmdd(since.clone()));
+            request.set("startdate".into(), self.yyyymmdd(since.clone(), Value::from("-")));
         };
         let mut response: Value = self.dispatch("privatePostRoMyTransactions".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         //  {

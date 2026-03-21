@@ -1,4 +1,5 @@
 #![allow(clippy::all)]
+#![allow(non_snake_case)]
 #![allow(dead_code)]
 #![allow(unreachable_code)]
 #![allow(unused_imports)]
@@ -823,7 +824,8 @@ pub trait Bingx : Exchange {
         if !self.check_required_credentials(false.into()).is_truthy() {
             return Value::new_object();
         };
-        let mut is_sandbox: Value = self.safe_bool(self.get("options".into()), Value::from("sandboxMode"), false.into());
+        let tmp_options = self.get("options".into());
+        let mut is_sandbox: Value = self.safe_bool(tmp_options, Value::from("sandboxMode"), false.into());
         if is_sandbox.is_truthy() {
             return Value::new_object();
         };
@@ -891,7 +893,9 @@ pub trait Bingx : Exchange {
                         "max": Value::Undefined
                     }))).unwrap())
                 }))).unwrap());
-                let mut precision: Value = self.parse_number(self.parse_precision(self.safe_string(raw_network.clone(), Value::from("withdrawPrecision"), Value::Undefined)), Value::Undefined);
+                let tmp_str = self.safe_string(raw_network.clone(), Value::from("withdrawPrecision"), Value::Undefined);
+                let tmp_prec = self.parse_precision(tmp_str);
+                let mut precision: Value = self.parse_number(tmp_prec, Value::Undefined);
                 networks.set(network_code.clone(), Value::Json(normalize(&Value::Json(json!({
                     "info": raw_network,
                     "id": network,
@@ -1064,11 +1068,15 @@ pub trait Bingx : Exchange {
         let mut settle: Value = self.safe_currency_code(currency.clone(), Value::Undefined);
         let mut price_precision: Value = self.safe_number(market.clone(), Value::from("tickSize"), Value::Undefined);
         if price_precision.clone().is_nullish() {
-            price_precision = self.parse_number(self.parse_precision(self.safe_string(market.clone(), Value::from("pricePrecision"), Value::Undefined)), Value::Undefined);
+            let tmp_str1 = self.safe_string(market.clone(), Value::from("pricePrecision"), Value::Undefined);
+            let tmp_prec1 = self.parse_precision(tmp_str1);
+            price_precision = self.parse_number(tmp_prec1, Value::Undefined);
         };
         let mut quantity_precision: Value = self.safe_number(market.clone(), Value::from("stepSize"), Value::Undefined);
         if quantity_precision.clone().is_nullish() {
-            quantity_precision = self.parse_number(self.parse_precision(self.safe_string(market.clone(), Value::from("quantityPrecision"), Value::Undefined)), Value::Undefined);
+            let tmp_str2 = self.safe_string(market.clone(), Value::from("quantityPrecision"), Value::Undefined);
+            let tmp_prec2 = self.parse_precision(tmp_str2);
+            quantity_precision = self.parse_number(tmp_prec2, Value::Undefined);
         };
         let mut r#type: Value = if settle.clone().is_nonnullish() { Value::from("swap") } else { Value::from("spot") };
         let mut spot: Value = (r#type.clone() == Value::from("spot")).into();
@@ -1077,7 +1085,8 @@ pub trait Bingx : Exchange {
         if settle.clone().is_nonnullish() {
             symbol = symbol +  Value::from(":") + settle.clone();
         };
-        let mut fees: Value = self.safe_dict(self.get("fees".into()), r#type.clone(), Value::new_object());
+        let tmp_fees = self.get("fees".into());
+        let mut fees: Value = self.safe_dict(tmp_fees, r#type.clone(), Value::new_object());
         let mut contract_size: Value = if swap.is_truthy() { self.parse_number(Value::from("1"), Value::Undefined) } else { Value::Undefined };
         let mut is_active: Value = false.into();
         if self.safe_string(market.clone(), Value::from("apiStateOpen"), Value::Undefined) == Value::from("true") && self.safe_string(market.clone(), Value::from("apiStateClose"), Value::Undefined) == Value::from("true") {
@@ -1573,9 +1582,11 @@ pub trait Bingx : Exchange {
         //     }
         //
         let mut timestamp: Value = self.safe_integer(contract.clone(), Value::from("fundingTime"), Value::Undefined);
+        let tmp_sym_str = self.safe_string(contract.clone(), Value::from("symbol"), Value::Undefined);
+        let tmp_symbol_val = self.safe_symbol(tmp_sym_str, market.clone(), Value::from("-"), Value::from("swap"));
         return Value::Json(normalize(&Value::Json(json!({
             "info": contract,
-            "symbol": self.safe_symbol(self.safe_string(contract.clone(), Value::from("symbol"), Value::Undefined), market.clone(), Value::from("-"), Value::from("swap")),
+            "symbol": tmp_symbol_val,
             "fundingRate": self.safe_number(contract.clone(), Value::from("fundingRate"), Value::Undefined),
             "timestamp": timestamp,
             "datetime": self.iso8601(timestamp.clone())
@@ -2652,18 +2663,21 @@ pub trait Bingx : Exchange {
             let mut cost: Value = self.safe_string_2(params.clone(), Value::from("cost"), Value::from("quoteOrderQty"), Value::Undefined);
             params = self.omit(params.clone(), Value::from("cost"));
             if cost.clone().is_nonnullish() {
-                request.set("quoteOrderQty".into(), self.parse_to_numeric(self.cost_to_precision(symbol.clone(), cost.clone()), Value::Undefined));
+                let tmp_cost = self.cost_to_precision(symbol.clone(), cost.clone());
+                request.set("quoteOrderQty".into(), self.parse_to_numeric(tmp_cost, Value::Undefined));
             } else {
                 if is_market_order.is_truthy() && price.clone().is_nonnullish() {
                     // keep the legacy behavior, to avoid  breaking the old spot-market-buying code
                     let mut calculated_cost: Value = Precise::string_mul(self.number_to_string(amount.clone()), self.number_to_string(price.clone()));
                     request.set("quoteOrderQty".into(), self.parse_to_numeric(calculated_cost.clone(), Value::Undefined));
                 } else {
-                    request.set("quantity".into(), self.parse_to_numeric(self.amount_to_precision(symbol.clone(), amount.clone()), Value::Undefined));
+                    let tmp_amt = self.amount_to_precision(symbol.clone(), amount.clone());
+                    request.set("quantity".into(), self.parse_to_numeric(tmp_amt, Value::Undefined));
                 };
             };
             if !is_market_order.is_truthy() {
-                request.set("price".into(), self.parse_to_numeric(self.price_to_precision(symbol.clone(), price.clone()), Value::Undefined));
+                let tmp_price = self.price_to_precision(symbol.clone(), price.clone());
+                request.set("price".into(), self.parse_to_numeric(tmp_price, Value::Undefined));
             };
             if trigger_price.clone().is_nonnullish() {
                 if is_market_order.is_truthy() && self.safe_string(request.clone(), Value::from("quoteOrderQty"), Value::Undefined).is_nullish() {
@@ -2682,16 +2696,21 @@ pub trait Bingx : Exchange {
                 } else if r#type.clone() == Value::from("MARKET") {
                     request.set("type".into(), Value::from("TAKE_STOP_MARKET"));
                 };
-                request.set("stopPrice".into(), self.parse_to_numeric(self.price_to_precision(symbol.clone(), stop_take_price.clone()), Value::Undefined));
+                let tmp_stop_take = self.price_to_precision(symbol.clone(), stop_take_price.clone());
+                request.set("stopPrice".into(), self.parse_to_numeric(tmp_stop_take, Value::Undefined));
             };
         } else {
             if is_twap_order.is_truthy() {
+                let tmp_trigger = self.price_to_precision(symbol.clone(), trigger_price.clone());
+                let tmp_trigger_num = self.parse_to_numeric(tmp_trigger, Value::Undefined);
+                let tmp_total = self.amount_to_precision(symbol.clone(), amount.clone());
+                let tmp_total_num = self.parse_to_numeric(tmp_total, Value::Undefined);
                 let mut twap_request: Value = Value::Json(normalize(&Value::Json(json!({
                     "symbol": request.get(Value::from("symbol")),
                     "side": request.get(Value::from("side")),
                     "positionSide": if side.clone() == Value::from("buy") { Value::from("LONG") } else { Value::from("SHORT") },
-                    "triggerPrice": self.parse_to_numeric(self.price_to_precision(symbol.clone(), trigger_price.clone()), Value::Undefined),
-                    "totalAmount": self.parse_to_numeric(self.amount_to_precision(symbol.clone(), amount.clone()), Value::Undefined)
+                    "triggerPrice": tmp_trigger_num,
+                    "totalAmount": tmp_total_num
                 }))).unwrap());
                 //     {
                 //         "symbol": "LTC-USDT",
@@ -2720,11 +2739,13 @@ pub trait Bingx : Exchange {
             let mut has_stop_loss: Value = (stop_loss.clone().is_nonnullish()).into();
             let mut has_take_profit: Value = (take_profit.clone().is_nonnullish()).into();
             if r#type.clone() == Value::from("LIMIT") || r#type.clone() == Value::from("TRIGGER_LIMIT") || r#type.clone() == Value::from("STOP") || r#type.clone() == Value::from("TAKE_PROFIT") && !is_trailing.is_truthy() {
-                request.set("price".into(), self.parse_to_numeric(self.price_to_precision(symbol.clone(), price.clone()), Value::Undefined));
+                let tmp_price2 = self.price_to_precision(symbol.clone(), price.clone());
+                request.set("price".into(), self.parse_to_numeric(tmp_price2, Value::Undefined));
             };
             let mut reduce_only: Value = self.safe_bool(params.clone(), Value::from("reduceOnly"), false.into());
             if is_trigger_order.is_truthy() {
-                request.set("stopPrice".into(), self.parse_to_numeric(self.price_to_precision(symbol.clone(), trigger_price.clone()), Value::Undefined));
+                let tmp_trig_price = self.price_to_precision(symbol.clone(), trigger_price.clone());
+                request.set("stopPrice".into(), self.parse_to_numeric(tmp_trig_price, Value::Undefined));
                 if is_market_order.is_truthy() || r#type.clone() == Value::from("TRIGGER_MARKET") {
                     request.set("type".into(), Value::from("TRIGGER_MARKET"));
                 } else if r#type.clone() == Value::from("LIMIT") || r#type.clone() == Value::from("TRIGGER_LIMIT") {
@@ -2734,14 +2755,16 @@ pub trait Bingx : Exchange {
                 // This can be used to set the stop loss and take profit, but the position needs to be opened first
                 reduce_only = true.into();
                 if is_stop_loss_price_order.is_truthy() {
-                    request.set("stopPrice".into(), self.parse_to_numeric(self.price_to_precision(symbol.clone(), stop_loss_price.clone()), Value::Undefined));
+                    let tmp_sl_price = self.price_to_precision(symbol.clone(), stop_loss_price.clone());
+                    request.set("stopPrice".into(), self.parse_to_numeric(tmp_sl_price, Value::Undefined));
                     if is_market_order.is_truthy() || r#type.clone() == Value::from("STOP_MARKET") {
                         request.set("type".into(), Value::from("STOP_MARKET"));
                     } else if r#type.clone() == Value::from("LIMIT") || r#type.clone() == Value::from("STOP") {
                         request.set("type".into(), Value::from("STOP"));
                     };
                 } else if is_take_profit_price_order.is_truthy() {
-                    request.set("stopPrice".into(), self.parse_to_numeric(self.price_to_precision(symbol.clone(), take_profit_price.clone()), Value::Undefined));
+                    let tmp_tp_price = self.price_to_precision(symbol.clone(), take_profit_price.clone());
+                    request.set("stopPrice".into(), self.parse_to_numeric(tmp_tp_price, Value::Undefined));
                     if is_market_order.is_truthy() || r#type.clone() == Value::from("TAKE_PROFIT_MARKET") {
                         request.set("type".into(), Value::from("TAKE_PROFIT_MARKET"));
                     } else if r#type.clone() == Value::from("LIMIT") || r#type.clone() == Value::from("TAKE_PROFIT") {
@@ -2763,34 +2786,42 @@ pub trait Bingx : Exchange {
                     let mut sl_trigger_price: Value = self.safe_string_2(stop_loss.clone(), Value::from("triggerPrice"), Value::from("stopPrice"), stop_loss.clone());
                     let mut sl_working_type: Value = self.safe_string(stop_loss.clone(), Value::from("workingType"), Value::from("MARK_PRICE"));
                     let mut sl_type: Value = self.safe_string(stop_loss.clone(), Value::from("type"), Value::from("STOP_MARKET"));
+                    let tmp_sl_trig = self.price_to_precision(symbol.clone(), sl_trigger_price.clone());
+                    let tmp_sl_trig_num = self.parse_to_numeric(tmp_sl_trig, Value::Undefined);
                     let mut sl_request: Value = Value::Json(normalize(&Value::Json(json!({
-                        "stopPrice": self.parse_to_numeric(self.price_to_precision(symbol.clone(), sl_trigger_price.clone()), Value::Undefined),
+                        "stopPrice": tmp_sl_trig_num,
                         "workingType": sl_working_type,
                         "type": sl_type
                     }))).unwrap());
                     let mut sl_price: Value = self.safe_string(stop_loss.clone(), Value::from("price"), Value::Undefined);
                     if sl_price.clone().is_nonnullish() {
-                        sl_request.set("price".into(), self.parse_to_numeric(self.price_to_precision(symbol.clone(), sl_price.clone()), Value::Undefined));
+                        let tmp_sl_p = self.price_to_precision(symbol.clone(), sl_price.clone());
+                        sl_request.set("price".into(), self.parse_to_numeric(tmp_sl_p, Value::Undefined));
                     };
                     let mut sl_quantity: Value = self.safe_string(stop_loss.clone(), Value::from("quantity"), stringified_amount.clone());
-                    sl_request.set("quantity".into(), self.parse_to_numeric(self.amount_to_precision(symbol.clone(), sl_quantity.clone()), Value::Undefined));
+                    let tmp_sl_qty = self.amount_to_precision(symbol.clone(), sl_quantity.clone());
+                    sl_request.set("quantity".into(), self.parse_to_numeric(tmp_sl_qty, Value::Undefined));
                     request.set("stopLoss".into(), self.json(sl_request.clone()));
                 };
                 if has_take_profit.is_truthy() {
                     let mut tk_trigger_price: Value = self.safe_string_2(take_profit.clone(), Value::from("triggerPrice"), Value::from("stopPrice"), take_profit.clone());
                     let mut tk_working_type: Value = self.safe_string(take_profit.clone(), Value::from("workingType"), Value::from("MARK_PRICE"));
                     let mut tp_type: Value = self.safe_string(take_profit.clone(), Value::from("type"), Value::from("TAKE_PROFIT_MARKET"));
+                    let tmp_tk_trig = self.price_to_precision(symbol.clone(), tk_trigger_price.clone());
+                    let tmp_tk_trig_num = self.parse_to_numeric(tmp_tk_trig, Value::Undefined);
                     let mut tp_request: Value = Value::Json(normalize(&Value::Json(json!({
-                        "stopPrice": self.parse_to_numeric(self.price_to_precision(symbol.clone(), tk_trigger_price.clone()), Value::Undefined),
+                        "stopPrice": tmp_tk_trig_num,
                         "workingType": tk_working_type,
                         "type": tp_type
                     }))).unwrap());
                     let mut sl_price: Value = self.safe_string(take_profit.clone(), Value::from("price"), Value::Undefined);
                     if sl_price.clone().is_nonnullish() {
-                        tp_request.set("price".into(), self.parse_to_numeric(self.price_to_precision(symbol.clone(), sl_price.clone()), Value::Undefined));
+                        let tmp_tp_p = self.price_to_precision(symbol.clone(), sl_price.clone());
+                        tp_request.set("price".into(), self.parse_to_numeric(tmp_tp_p, Value::Undefined));
                     };
                     let mut tk_quantity: Value = self.safe_string(take_profit.clone(), Value::from("quantity"), stringified_amount.clone());
-                    tp_request.set("quantity".into(), self.parse_to_numeric(self.amount_to_precision(symbol.clone(), tk_quantity.clone()), Value::Undefined));
+                    let tmp_tk_qty = self.amount_to_precision(symbol.clone(), tk_quantity.clone());
+                    tp_request.set("quantity".into(), self.parse_to_numeric(tmp_tk_qty, Value::Undefined));
                     request.set("takeProfit".into(), self.json(tp_request.clone()));
                 };
             };
@@ -2809,7 +2840,8 @@ pub trait Bingx : Exchange {
             request.set("positionSide".into(), position_side.clone());
             let mut amount_req: Value = amount.clone();
             if !market.get(Value::from("inverse")).is_truthy() {
-                amount_req = self.parse_to_numeric(self.amount_to_precision(symbol.clone(), amount.clone()), Value::Undefined);
+                let tmp_amt_req = self.amount_to_precision(symbol.clone(), amount.clone());
+                amount_req = self.parse_to_numeric(tmp_amt_req, Value::Undefined);
             };
             request.set("quantity".into(), amount_req.clone());
         };
@@ -2944,7 +2976,7 @@ pub trait Bingx : Exchange {
             i += 1;
         };
         let mut symbols: Value = self.market_symbols(market_ids.clone(), Value::Undefined, false.into(), true.into(), true.into());
-        let mut symbols_length: usize = symbols.len();
+        let mut symbols_length: Value = Value::from(symbols.len());
         let mut market: Value = self.market(symbols.get(Value::from(0)));
         let mut request: Value = Value::new_object();
         let mut response: Value = Value::Undefined;
@@ -3357,29 +3389,34 @@ pub trait Bingx : Exchange {
         let mut stop_loss: Value = self.safe_value(order.clone(), Value::from("stopLoss"), Value::Undefined);
         let mut stop_loss_price: Value = Value::Undefined;
         if stop_loss.clone().is_nonnullish() && stop_loss.clone() != Value::from("") {
-            stop_loss_price = self.omit_zero(self.safe_string(stop_loss.clone(), Value::from("stopLoss"), Value::Undefined));
+            let tmp_sl1 = self.safe_string(stop_loss.clone(), Value::from("stopLoss"), Value::Undefined);
+            stop_loss_price = self.omit_zero(tmp_sl1);
         };
         if stop_loss.clone().is_nonnullish() && stop_loss.typeof_() != Value::from("number") && stop_loss.clone() != Value::from("") {
             //  stopLoss: '{"stopPrice":50,"workingType":"MARK_PRICE","type":"STOP_MARKET","quantity":1}',
             if stop_loss.typeof_() == Value::from("string") {
                 stop_loss = self.parse_json(stop_loss.clone());
             };
-            stop_loss_price = self.omit_zero(self.safe_string(stop_loss.clone(), Value::from("stopPrice"), Value::Undefined));
+            let tmp_sl2 = self.safe_string(stop_loss.clone(), Value::from("stopPrice"), Value::Undefined);
+            stop_loss_price = self.omit_zero(tmp_sl2);
         };
         let mut take_profit: Value = self.safe_value(order.clone(), Value::from("takeProfit"), Value::Undefined);
         let mut take_profit_price: Value = Value::Undefined;
         if take_profit.clone().is_nonnullish() && take_profit.clone() != Value::from("") {
-            take_profit_price = self.omit_zero(self.safe_string(take_profit.clone(), Value::from("takeProfit"), Value::Undefined));
+            let tmp_tp1 = self.safe_string(take_profit.clone(), Value::from("takeProfit"), Value::Undefined);
+            take_profit_price = self.omit_zero(tmp_tp1);
         };
         if take_profit.clone().is_nonnullish() && take_profit.typeof_() != Value::from("number") && take_profit.clone() != Value::from("") {
             //  takeProfit: '{"stopPrice":150,"workingType":"MARK_PRICE","type":"TAKE_PROFIT_MARKET","quantity":1}',
             if take_profit.typeof_() == Value::from("string") {
                 take_profit = self.parse_json(take_profit.clone());
             };
-            take_profit_price = self.omit_zero(self.safe_string(take_profit.clone(), Value::from("stopPrice"), Value::Undefined));
+            let tmp_tp2 = self.safe_string(take_profit.clone(), Value::from("stopPrice"), Value::Undefined);
+            take_profit_price = self.omit_zero(tmp_tp2);
         };
         let mut raw_type: Value = self.safe_string_lower_2(order.clone(), Value::from("type"), Value::from("o"), Value::Undefined);
-        let mut stop_price: Value = self.omit_zero(self.safe_string_2(order.clone(), Value::from("StopPrice"), Value::from("stopPrice"), Value::Undefined));
+        let tmp_stop_str = self.safe_string_2(order.clone(), Value::from("StopPrice"), Value::from("stopPrice"), Value::Undefined);
+        let mut stop_price: Value = self.omit_zero(tmp_stop_str);
         let mut trigger_price: Value = stop_price.clone();
         if stop_price.clone().is_nonnullish() {
             if raw_type.index_of(Value::from("stop")) > Value::from(1).neg() && stop_loss_price.clone().is_nullish() {
@@ -4479,7 +4516,8 @@ pub trait Bingx : Exchange {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
         let mut currency: Value = self.currency(code.clone());
-        let mut accounts_by_type: Value = self.safe_dict(self.get("options".into()), Value::from("accountsByType"), Value::new_object());
+        let tmp_opts1 = self.get("options".into());
+        let mut accounts_by_type: Value = self.safe_dict(tmp_opts1, Value::from("accountsByType"), Value::new_object());
         let mut sub_type: Value = Value::Undefined;
         (sub_type, params) = shift_2(self.handle_sub_type_and_params(Value::from("transfer"), Value::Undefined, params.clone(), Value::Undefined));
         let mut from_id: Value = self.safe_string(accounts_by_type.clone(), from_account.clone(), from_account.clone());
@@ -4532,7 +4570,8 @@ pub trait Bingx : Exchange {
         if code.clone().is_nonnullish() {
             currency = self.currency(code.clone());
         };
-        let mut accounts_by_type: Value = self.safe_dict(self.get("options".into()), Value::from("accountsByType"), Value::new_object());
+        let tmp_opts_abt = self.get("options".into());
+        let mut accounts_by_type: Value = self.safe_dict(tmp_opts_abt, Value::from("accountsByType"), Value::new_object());
         let mut from_account: Value = self.safe_string(params.clone(), Value::from("fromAccount"), Value::Undefined);
         let mut to_account: Value = self.safe_string(params.clone(), Value::from("toAccount"), Value::Undefined);
         let mut from_id: Value = self.safe_string(accounts_by_type.clone(), from_account.clone(), from_account.clone());
@@ -4547,7 +4586,7 @@ pub trait Bingx : Exchange {
             request.set("toAccount".into(), to_id.clone());
         };
         params = self.omit(params.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("fromAccount").into(), Value::from("toAccount").into()])));
-        let mut max_limit: usize = 100;
+        let mut max_limit: Value = Value::from(100);
         let mut paginate: Value = false.into();
         (paginate, params) = shift_2(self.handle_option_and_params(params.clone(), Value::from("fetchTransfers"), Value::from("paginate"), false.into()));
         if paginate.is_truthy() {
@@ -4587,7 +4626,8 @@ pub trait Bingx : Exchange {
         let mut currency_id: Value = self.safe_string(transfer.clone(), Value::from("asset"), Value::Undefined);
         let mut currency_code: Value = self.safe_currency_code(currency_id.clone(), currency.clone());
         let mut status: Value = self.safe_string(transfer.clone(), Value::from("status"), Value::Undefined);
-        let mut accounts_by_id: Value = self.safe_dict(self.get("options".into()), Value::from("accountsById"), Value::new_object());
+        let tmp_opts_abi = self.get("options".into());
+        let mut accounts_by_id: Value = self.safe_dict(tmp_opts_abi, Value::from("accountsById"), Value::new_object());
         let mut from_id: Value = self.safe_string(transfer.clone(), Value::from("fromAccount"), Value::Undefined);
         let mut to_id: Value = self.safe_string(transfer.clone(), Value::from("toAccount"), Value::Undefined);
         let mut from_account: Value = self.safe_string(accounts_by_id.clone(), from_id.clone(), from_id.clone());
@@ -4616,8 +4656,10 @@ pub trait Bingx : Exchange {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
         let mut currency: Value = self.currency(code.clone());
-        let mut default_recv_window: Value = self.safe_integer(self.get("options".into()), Value::from("recvWindow"), Value::Undefined);
-        let mut recv_window: Value = self.safe_integer(self.get("parseParams".into()), Value::from("recvWindow"), default_recv_window.clone());
+        let tmp_opts_rw = self.get("options".into());
+        let mut default_recv_window: Value = self.safe_integer(tmp_opts_rw, Value::from("recvWindow"), Value::Undefined);
+        let tmp_pp_rw = self.get("parseParams".into());
+        let mut recv_window: Value = self.safe_integer(tmp_pp_rw, Value::from("recvWindow"), default_recv_window.clone());
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
             "coin": currency.get(Value::from("id")),
             "offset": 0,
@@ -4643,7 +4685,8 @@ pub trait Bingx : Exchange {
         //         }
         //     }
         //
-        let mut data: Value = self.safe_list(self.safe_dict(response.clone(), Value::from("data"), Value::Undefined), Value::from("data"), Value::Undefined);
+        let tmp_data_dict = self.safe_dict(response.clone(), Value::from("data"), Value::Undefined);
+        let mut data: Value = self.safe_list(tmp_data_dict, Value::from("data"), Value::Undefined);
         let mut parsed: Value = self.parse_deposit_addresses(data.clone(), Value::Json(serde_json::Value::Array(vec![currency.get(Value::from("code")).into()])), false.into(), Value::Undefined);
         return self.index_by(parsed.clone(), Value::from("network"));
     }
@@ -4656,7 +4699,8 @@ pub trait Bingx : Exchange {
         if network.clone().is_nonnullish() {
             return self.safe_dict(address_structures.clone(), network.clone(), Value::Undefined);
         } else {
-            let mut options: Value = self.safe_dict(self.get("options".into()), Value::from("defaultNetworks"), Value::Undefined);
+            let tmp_opts_dn = self.get("options".into());
+            let mut options: Value = self.safe_dict(tmp_opts_dn, Value::from("defaultNetworks"), Value::Undefined);
             let mut default_network_for_currency: Value = self.safe_string(options.clone(), code.clone(), Value::Undefined);
             if default_network_for_currency.clone().is_nonnullish() {
                 return self.safe_dict(address_structures.clone(), default_network_for_currency.clone(), Value::Undefined);
@@ -5221,7 +5265,7 @@ pub trait Bingx : Exchange {
         //
         let mut networks: Value = self.safe_dict(fee.clone(), Value::from("networks"), Value::new_object());
         let mut network_codes: Value = networks.clone().keys();
-        let mut networks_length: usize = network_codes.len();
+        let mut networks_length: Value = Value::from(network_codes.len());
         let mut result: Value = Value::Json(normalize(&Value::Json(json!({
             "info": networks,
             "withdraw": Value::Json(normalize(&Value::Json(json!({
@@ -5236,7 +5280,7 @@ pub trait Bingx : Exchange {
         }))).unwrap());
         if networks_length.clone() != Value::from(0) {
             let mut i: usize = 0;
-            while i < networks_length.clone().into() {
+            while i < network_codes.len() {
                 let mut network_code: Value = network_codes.get(i.into());
                 let mut network: Value = networks.get(network_code.clone());
                 result.get(Value::from("networks")).set(network_code.clone(), Value::Json(normalize(&Value::Json(json!({
@@ -5283,7 +5327,7 @@ pub trait Bingx : Exchange {
         self.check_address(address.clone());
         self.load_markets(Value::Undefined, Value::Undefined).await;
         let mut currency: Value = self.currency(code.clone());
-        let mut default_wallet_type: usize = 15;
+        let mut default_wallet_type: Value = Value::from(15);
         // spot
         let mut wallet_type: Value = Value::Undefined;
         (wallet_type, params) = shift_2(self.handle_option_and_params_2(params.clone(), Value::from("withdraw"), Value::from("type"), Value::from("walletType"), default_wallet_type.clone()));
@@ -5542,8 +5586,10 @@ pub trait Bingx : Exchange {
     async fn close_all_positions(&mut self, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        let mut default_recv_window: Value = self.safe_integer(self.get("options".into()), Value::from("recvWindow"), Value::Undefined);
-        let mut recv_window: Value = self.safe_integer(self.get("parseParams".into()), Value::from("recvWindow"), default_recv_window.clone());
+        let tmp_opts_rw2 = self.get("options".into());
+        let mut default_recv_window: Value = self.safe_integer(tmp_opts_rw2, Value::from("recvWindow"), Value::Undefined);
+        let tmp_pp_rw2 = self.get("parseParams".into());
+        let mut recv_window: Value = self.safe_integer(tmp_pp_rw2, Value::from("recvWindow"), default_recv_window.clone());
         let mut market_type: Value = Value::Undefined;
         (market_type, params) = shift_2(self.handle_market_type_and_params(Value::from("closeAllPositions"), Value::Undefined, params.clone(), Value::Undefined));
         let mut sub_type: Value = Value::Undefined;

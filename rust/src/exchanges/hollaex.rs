@@ -1,4 +1,5 @@
 #![allow(clippy::all)]
+#![allow(non_snake_case)]
 #![allow(dead_code)]
 #![allow(unreachable_code)]
 #![allow(unused_imports)]
@@ -1680,9 +1681,9 @@ pub trait Hollaex : Exchange {
         let mut withdrawal_fees: Value = self.safe_value(fee.clone(), Value::from("withdrawal_fees"), Value::Undefined);
         if withdrawal_fees.clone().is_nonnullish() {
             let mut keys: Value = withdrawal_fees.clone().keys();
-            let mut keys_length: usize = keys.len();
+            let mut keys_length: Value = Value::from(keys.len());
             let mut i: usize = 0;
-            while i < keys_length.clone().into() {
+            while i < keys_length.clone() {
                 let mut key: Value = keys.get(i.into());
                 let mut value: Value = withdrawal_fees.get(key.clone());
                 let mut currency_id: Value = self.safe_string(value.clone(), Value::from("symbol"), Value::Undefined);

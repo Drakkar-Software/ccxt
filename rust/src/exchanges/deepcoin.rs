@@ -1,4 +1,5 @@
 #![allow(clippy::all)]
+#![allow(non_snake_case)]
 #![allow(dead_code)]
 #![allow(unreachable_code)]
 #![allow(unused_imports)]
@@ -337,7 +338,7 @@ pub trait Deepcoin : Exchange {
                 "secret": true,
                 "password": true
             }))).unwrap()),
-            "precisionMode": TICK_SIZE.into(),
+            "precisionMode": Value::from(TICK_SIZE),
             "options": Value::Json(normalize(&Value::Json(json!({
                 "recvWindow": 5000,
                 "defaultNetworks": Value::Json(normalize(&Value::Json(json!({
@@ -397,7 +398,7 @@ pub trait Deepcoin : Exchange {
                     "no available": "NotSupported",
                     "field is required": "ArgumentsRequired",
                     "not in acceptable range": "BadRequest",
-                    "subscription cluster does not "exist"": "BadRequest",
+                    "subscription cluster does not exist": "BadRequest",
                     "must be equal or lesser than": "BadRequest"
                 }))).unwrap())
             }))).unwrap())
@@ -1528,7 +1529,7 @@ pub trait Deepcoin : Exchange {
         };
         let mut margin_mode: Value = Value::from("cross");
         (margin_mode, params) = shift_2(self.handle_margin_mode_and_params(Value::from("createOrder"), params.clone(), margin_mode.clone()));
-        let mut is_cross_margin: usize = 1;
+        let mut is_cross_margin: Value = Value::from(1);
         if margin_mode.clone() == Value::from("isolated") {
             is_cross_margin = Value::from(0);
         };
@@ -1961,7 +1962,7 @@ pub trait Deepcoin : Exchange {
         };
         let mut product_group: Value = <Self as Deepcoin>::get_product_group_from_market(self, market.clone());
         let mut margin_mode: Value = self.safe_string(params.clone(), Value::from("marginMode"), Value::Undefined);
-        let mut encoded_margin_mode: usize = 1;
+        let mut encoded_margin_mode: Value = Value::from(1);
         if margin_mode.clone().is_nonnullish() {
             params = self.omit(params.clone(), Value::from("marginMode"));
             if margin_mode.clone() == Value::from("isolated") {
@@ -2635,7 +2636,7 @@ pub trait Deepcoin : Exchange {
     async fn dispatch(&mut self, method: Value, params: Value, context: Value) -> Value {
         match method {
             Value::Json(serde_json::Value::String(ref m)) => {
-                match m.as_ref() {
+                match m.as_str() {
                     _ => panic!("Unknown API method: {}", m),
                 }
             },

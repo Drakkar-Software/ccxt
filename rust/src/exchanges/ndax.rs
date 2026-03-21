@@ -1,4 +1,5 @@
 #![allow(clippy::all)]
+#![allow(non_snake_case)]
 #![allow(dead_code)]
 #![allow(unreachable_code)]
 #![allow(unused_imports)]
@@ -1913,7 +1914,7 @@ pub trait Ndax : Exchange {
         //
         let mut deposit_info_string: Value = self.safe_string(deposit_address.clone(), Value::from("DepositInfo"), Value::Undefined);
         let mut deposit_info: Value = self.parse_json(deposit_info_string.clone());
-        let mut deposit_info_length: usize = deposit_info.len();
+        let mut deposit_info_length: Value = Value::from(deposit_info.len());
         let mut last_string: Value = self.safe_string(deposit_info.clone(), deposit_info_length.clone() - Value::from(1), Value::Undefined);
         let mut parts: Value = last_string.split(Value::from("?memo="));
         let mut address: Value = self.safe_string(parts.clone(), Value::from(0), Value::Undefined);

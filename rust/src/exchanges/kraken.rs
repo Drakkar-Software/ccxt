@@ -1,4 +1,5 @@
 #![allow(clippy::all)]
+#![allow(non_snake_case)]
 #![allow(dead_code)]
 #![allow(unreachable_code)]
 #![allow(unused_imports)]
@@ -1294,7 +1295,7 @@ pub trait Kraken : Exchange {
             r#type = if trade.get(Value::from(4)) == Value::from("l") { Value::from("limit") } else { Value::from("market") };
             price = self.safe_string(trade.clone(), Value::from(0), Value::Undefined);
             amount = self.safe_string(trade.clone(), Value::from(1), Value::Undefined);
-            let mut trade_length: usize = trade.len();
+            let mut trade_length: Value = Value::from(trade.len());
             if trade_length.clone() > Value::from(6) {
                 id = self.safe_string(trade.clone(), Value::from(6), Value::Undefined);
             };
@@ -1562,16 +1563,16 @@ pub trait Kraken : Exchange {
         let mut quote_id_start: usize = 3;
         let mut quote_id_end: usize = 6;
         if id.len() == 8 {
-            base_id_end = Value::from(4);
-            quote_id_start = Value::from(4);
-            quote_id_end = Value::from(8);
+            base_id_end = 4;
+            quote_id_start = 4;
+            quote_id_end = 8;
         } else if id.len() == 7 {
-            base_id_end = Value::from(4);
-            quote_id_start = Value::from(4);
-            quote_id_end = Value::from(7);
+            base_id_end = 4;
+            quote_id_start = 4;
+            quote_id_end = 7;
         };
-        let mut base_id: Value = id.slice(base_id_start.clone(), base_id_end.clone());
-        let mut quote_id: Value = id.slice(quote_id_start.clone(), quote_id_end.clone());
+        let mut base_id: Value = id.slice(Value::from(base_id_start), Value::from(base_id_end));
+        let mut quote_id: Value = id.slice(Value::from(quote_id_start), Value::from(quote_id_end));
         let mut base: Value = <Self as Kraken>::safe_currency_code(self, base_id.clone(), Value::Undefined);
         let mut quote: Value = <Self as Kraken>::safe_currency_code(self, quote_id.clone(), Value::Undefined);
         let mut symbol: Value = base.clone() + Value::from("/") + quote.clone();
@@ -1902,7 +1903,7 @@ pub trait Kraken : Exchange {
         let mut trailing_limit_percent: Value = self.safe_string(params.clone(), Value::from("trailingLimitPercent"), Value::Undefined);
         let mut is_trailing_amount_order: Value = (trailing_amount.clone().is_nonnullish()).into();
         let mut is_trailing_percent_order: Value = (trailing_percent.clone().is_nonnullish()).into();
-        let mut is_limit_order: Value = r#type.ends_with(Value::from("limit"));
+        let mut is_limit_order: Value = Value::from(r#type.ends_with(Value::from("limit")));
         // supporting limit, stop-loss-limit, take-profit-limit, etc
         let mut is_market_order: Value = (r#type.clone() == Value::from("market")).into();
         let mut cost: Value = self.safe_string(params.clone(), Value::from("cost"), Value::Undefined);
@@ -2152,15 +2153,15 @@ pub trait Kraken : Exchange {
         };
         let mut options: Value = self.safe_value(self.get("options".into()), Value::from("fetchOrderTrades"), Value::new_object());
         let mut batch_size: Value = self.safe_integer(options.clone(), Value::from("batchSize"), Value::from(20));
-        let mut num_trade_ids: usize = trade_ids.len();
+        let mut num_trade_ids: Value = Value::from(trade_ids.len());
         let mut num_batches: Value = self.parse_to_int(num_trade_ids.clone() / batch_size.clone());
         num_batches = self.sum(num_batches.clone(), Value::from(1));
         let mut result: Value = Value::new_array();
         let mut j: usize = 0;
-        while j < num_batches.clone().into() {
+        while Value::from(j) < num_batches.clone() {
             let mut request_ids: Value = Value::new_array();
             let mut k: usize = 0;
-            while k < batch_size.clone().into() {
+            while Value::from(k) < batch_size.clone() {
                 let mut index: Value = self.sum(Value::from(j) * batch_size.clone(), Value::from(k));
                 if index.clone() < num_trade_ids.clone() {
                     request_ids.push(trade_ids.get(index.clone()));
@@ -2311,7 +2312,6 @@ pub trait Kraken : Exchange {
         };
                 response = self.dispatch("privatePostCancelOrder".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         // catch block omitted (no exception support in Value runtime)
-;
         //
         //    {
         //        error: [],
@@ -2800,9 +2800,9 @@ pub trait Kraken : Exchange {
     fn add_pagination_cursor_to_result(&mut self, mut result: Value) -> Value {
         let mut cursor: Value = self.safe_string(result.clone(), Value::from("next_cursor"), Value::Undefined);
         let mut data: Value = self.safe_value(result.clone(), Value::from("withdrawals"), Value::Undefined);
-        let mut data_length: usize = data.len();
+        let mut data_length: Value = Value::from(data.len());
         if cursor.clone().is_nonnullish() && data_length.clone() > Value::from(0) {
-            let mut last: Value = data.get(data_length.clone() - Value::from(1).clone());
+            let mut last: Value = data.get(data_length.clone() - Value::from(1));
             last.set("next_cursor".into(), cursor.clone());
             data.set(data_length.clone() - Value::from(1), last.clone());
         };

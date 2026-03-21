@@ -1,4 +1,5 @@
 #![allow(clippy::all)]
+#![allow(non_snake_case)]
 #![allow(dead_code)]
 #![allow(unreachable_code)]
 #![allow(unused_imports)]
@@ -943,7 +944,7 @@ pub trait Bitstamp : Exchange {
     }
 
 
-    fn get_currency_id_from_transaction(&mut self, mut transaction: Value) -> Value {
+    fn get_currency_id_from_transaction(&self, mut transaction: Value) -> Value {
         //
         //     {
         //         "fee": "0.00000000",
@@ -977,10 +978,10 @@ pub trait Bitstamp : Exchange {
         return Value::Undefined;
     }
 
-    fn get_market_from_trade(&mut self, mut trade: Value) -> Value {
+    fn get_market_from_trade(&self, mut trade: Value) -> Value {
         trade = self.omit(trade.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("fee").into(), Value::from("price").into(), Value::from("datetime").into(), Value::from("tid").into(), Value::from("type").into(), Value::from("order_id").into(), Value::from("side").into()])));
         let mut currency_ids: Value = trade.clone().keys();
-        let mut num_currency_ids: usize = currency_ids.len();
+        let mut num_currency_ids: Value = Value::from(currency_ids.len());
         if num_currency_ids.clone() > Value::from(2) {
             panic!(r###"ExchangeError::new(self.get("id".into()) + Value::from(" getMarketFromTrade() too many keys: ") + self.json(currency_ids.clone()) + Value::from(" in the trade: ") + self.json(trade.clone()))"###);
         };
@@ -1085,7 +1086,7 @@ pub trait Bitstamp : Exchange {
         // if it is a private trade
         if trade.contains_key(Value::from("id")) {
             if amount_string.clone().is_nonnullish() {
-                let mut is_amount_neg: Value = Precise::string_lt(amount_string.clone(), Value::from("0"));
+                let mut is_amount_neg: Value = Value::from(Precise::string_lt(amount_string.clone(), Value::from("0")));
                 if is_amount_neg.is_truthy() {
                     side = Value::from("sell");
                     amount_string = Precise::string_neg(amount_string.clone());
@@ -1884,7 +1885,7 @@ pub trait Bitstamp : Exchange {
         return self.safe_string(types.clone(), r#type.clone(), r#type.clone());
     }
 
-    fn parse_ledger_entry(&self, mut item: Value, mut currency: Value) -> Value {
+    fn parse_ledger_entry(&mut self, mut item: Value, mut currency: Value) -> Value {
         //
         //     [
         //         {
@@ -1911,9 +1912,14 @@ pub trait Bitstamp : Exchange {
         //         },
         //     ]
         //
-        let mut r#type: Value = <Self as Bitstamp>::parse_ledger_entry_type(self, self.safe_string(item.clone(), Value::from("type"), Value::Undefined));
+        let tmp_type_str: Value = self.safe_string(item.clone(), Value::from("type"), Value::Undefined);
+        let mut r#type: Value = <Self as Bitstamp>::parse_ledger_entry_type(self, tmp_type_str);
         if r#type.clone() == Value::from("trade") {
-            let mut parsed_trade: Value = <Self as Bitstamp>::parse_trade(self, item.clone(), Value::Undefined);
+            // inline parse_trade logic to avoid &mut self requirement
+            let mut trade_id: Value = self.safe_string_2(item.clone(), Value::from("id"), Value::from("tid"), Value::Undefined);
+            let mut trade_side: Value = Value::Undefined;
+            let mut trade_amount_string: Value = self.safe_string(item.clone(), Value::from("amount"), Value::Undefined);
+            let mut trade_order_id: Value = self.safe_string(item.clone(), Value::from("order_id"), Value::Undefined);
             let mut market: Value = Value::Undefined;
             let mut keys: Value = item.clone().keys();
             let mut i: usize = 0;
@@ -1927,25 +1933,63 @@ pub trait Bitstamp : Exchange {
             // if the market is still not defined
             // try to deduce it from used keys
             if market.clone().is_nullish() {
-                market = <Self as Bitstamp>::get_market_from_trade(self, item.clone());
+                market = self.get_market_from_trade(item.clone());
             };
-            let mut direction: Value = if parsed_trade.get(Value::from("side")) == Value::from("buy") { Value::from("in") } else { Value::from("out") };
+            let mut trade_datetime_string: Value = self.safe_string_2(item.clone(), Value::from("date"), Value::from("datetime"), Value::Undefined);
+            let mut trade_timestamp: Value = Value::Undefined;
+            if trade_datetime_string.clone().is_nonnullish() {
+                if trade_datetime_string.index_of(Value::from(" ")) >= Value::from(0) {
+                    trade_timestamp = self.parse8601(trade_datetime_string.clone());
+                } else {
+                    trade_timestamp = parse_int(trade_datetime_string.clone(), Value::Undefined);
+                    trade_timestamp = trade_timestamp.clone() * Value::from(1000);
+                };
+            };
+            if item.contains_key(Value::from("id")) {
+                if trade_amount_string.clone().is_nonnullish() {
+                    let mut is_amount_neg: Value = Value::from(Precise::string_lt(trade_amount_string.clone(), Value::from("0")));
+                    if is_amount_neg.is_truthy() {
+                        trade_side = Value::from("sell");
+                        trade_amount_string = Precise::string_neg(trade_amount_string.clone());
+                    } else {
+                        trade_side = Value::from("buy");
+                    };
+                };
+            } else {
+                trade_side = self.safe_string(item.clone(), Value::from("type"), Value::Undefined);
+                if trade_side.clone() == Value::from("1") {
+                    trade_side = Value::from("sell");
+                } else if trade_side.clone() == Value::from("0") {
+                    trade_side = Value::from("buy");
+                } else {
+                    trade_side = Value::Undefined;
+                };
+            };
+            let mut trade_fee_cost_string: Value = self.safe_string(item.clone(), Value::from("fee"), Value::Undefined);
+            let mut trade_fee: Value = Value::Undefined;
+            if trade_fee_cost_string.clone().is_nonnullish() {
+                trade_fee = Value::Json(normalize(&Value::Json(json!({
+                    "cost": trade_fee_cost_string,
+                    "currency": market.get(Value::from("quote"))
+                }))).unwrap());
+            };
+            let mut direction: Value = if trade_side.clone() == Value::from("buy") { Value::from("in") } else { Value::from("out") };
             return self.safe_ledger_entry(Value::Json(normalize(&Value::Json(json!({
                 "info": item,
-                "id": parsed_trade.get(Value::from("id")),
-                "timestamp": parsed_trade.get(Value::from("timestamp")),
-                "datetime": parsed_trade.get(Value::from("datetime")),
+                "id": trade_id,
+                "timestamp": trade_timestamp,
+                "datetime": self.iso8601(trade_timestamp.clone()),
                 "direction": direction,
                 "account": Value::Undefined,
-                "referenceId": parsed_trade.get(Value::from("order")),
+                "referenceId": trade_order_id,
                 "referenceAccount": Value::Undefined,
                 "type": r#type,
                 "currency": market.get(Value::from("base")),
-                "amount": parsed_trade.get(Value::from("amount")),
+                "amount": trade_amount_string,
                 "before": Value::Undefined,
                 "after": Value::Undefined,
                 "status": "ok",
-                "fee": parsed_trade.get(Value::from("fee"))
+                "fee": trade_fee
             }))).unwrap()), currency.clone());
         } else {
             let mut parsed_transaction: Value = <Self as Bitstamp>::parse_transaction(self, item.clone(), currency.clone());
@@ -2096,8 +2140,9 @@ pub trait Bitstamp : Exchange {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
         let mut currency: Value = self.currency(code.clone());
+        let mut precision_amount: Value = self.currency_to_precision(code.clone(), amount.clone(), Value::Undefined);
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
-            "amount": self.parse_to_numeric(self.currency_to_precision(code.clone(), amount.clone(), Value::Undefined), Value::Undefined),
+            "amount": self.parse_to_numeric(precision_amount.clone(), Value::Undefined),
             "currency": currency.get(Value::from("id")).to_upper_case()
         }))).unwrap());
         let mut response: Value = Value::Undefined;

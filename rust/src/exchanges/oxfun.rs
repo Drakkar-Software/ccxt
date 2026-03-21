@@ -1,4 +1,5 @@
 #![allow(clippy::all)]
+#![allow(non_snake_case)]
 #![allow(dead_code)]
 #![allow(unreachable_code)]
 #![allow(unused_imports)]
@@ -1677,7 +1678,7 @@ pub trait Oxfun : Exchange {
         let mut result: Value = Value::new_array();
         let mut i: usize = 0;
         while i < transactions.len() {
-            transactions.set(i.clone(), extend_2(transactions.get(i.into()), params.clone()));
+            transactions.set(Value::from(i), extend_2(transactions.get(i.into()), params.clone()));
             let mut transaction: Value = <Self as Oxfun>::parse_transaction(self, transactions.get(i.into()), currency.clone());
             result.push(transaction.clone());
             i += 1;

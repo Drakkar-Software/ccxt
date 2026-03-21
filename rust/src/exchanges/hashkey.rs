@@ -1,4 +1,5 @@
 #![allow(clippy::all)]
+#![allow(non_snake_case)]
 #![allow(dead_code)]
 #![allow(unreachable_code)]
 #![allow(unused_imports)]
@@ -876,7 +877,7 @@ pub trait Hashkey : Exchange {
             let mut risk_limits: Value = self.safe_list(market.clone(), Value::from("riskLimits"), Value::Undefined);
             if risk_limits.clone().is_nonnullish() {
                 let mut first: Value = self.safe_dict(risk_limits.clone(), Value::from(0), Value::Undefined);
-                let mut array_length: usize = risk_limits.len();
+                let mut array_length: Value = Value::from(risk_limits.len());
                 let mut last: Value = self.safe_dict(risk_limits.clone(), array_length.clone() - Value::from(1), Value::Undefined);
                 let mut min_initial_margin: Value = self.safe_string(first.clone(), Value::from("initialMargin"), Value::Undefined);
                 let mut max_initial_margin: Value = self.safe_string(last.clone(), Value::from("initialMargin"), Value::Undefined);
@@ -3362,7 +3363,7 @@ pub trait Hashkey : Exchange {
         if symbols.clone().is_nullish() {
             panic!(r###"ArgumentsRequired::new(self.get("id".into()) + Value::from(" ") + method_name.clone() + Value::from("() requires a symbol argument with one single market symbol"))"###);
         } else {
-            let mut symbols_length: usize = symbols.len();
+            let mut symbols_length: Value = Value::from(symbols.len());
             if symbols_length.clone() != Value::from(1) {
                 panic!(r###"NotSupported::new(self.get("id".into()) + Value::from(" ") + method_name.clone() + Value::from("() is supported for a symbol argument with one single market symbol only"))"###);
             };

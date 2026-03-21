@@ -1,4 +1,5 @@
 #![allow(clippy::all)]
+#![allow(non_snake_case)]
 #![allow(dead_code)]
 #![allow(unreachable_code)]
 #![allow(unused_imports)]
@@ -381,7 +382,7 @@ pub trait Bydfi : Exchange {
                 "12h": "12h",
                 "1d": "1d"
             }))).unwrap()),
-            "precisionMode": TICK_SIZE.into(),
+            "precisionMode": Value::from(TICK_SIZE),
             "exceptions": Value::Json(normalize(&Value::Json(json!({
                 "exact": Value::Json(normalize(&Value::Json(json!({
                     "101001": "AuthenticationError",
@@ -577,7 +578,7 @@ pub trait Bydfi : Exchange {
 
     fn get_closest_limit(&mut self, mut limit: Value) -> Value {
         let mut limits: Value = Value::Json(serde_json::Value::Array(vec![Value::from(5).into(), Value::from(10).into(), Value::from(20).into(), Value::from(50).into(), Value::from(100).into(), Value::from(500).into(), Value::from(1000).into()]));
-        let mut result: usize = 1000;
+        let mut result: Value = Value::from(1000);
         let mut i: usize = 0;
         while i < limits.len() {
             if limit.clone() <= limits.get(i.into()) {
@@ -586,7 +587,7 @@ pub trait Bydfi : Exchange {
             };
             i += 1;
         };
-        return Value::from(result);
+        return result;
     }
 
     async fn fetch_trades(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
@@ -608,7 +609,7 @@ pub trait Bydfi : Exchange {
         self.load_markets(Value::Undefined, Value::Undefined).await;
         let mut paginate: Value = self.safe_bool(params.clone(), Value::from("paginate"), false.into());
         if paginate.is_truthy() {
-            let mut max_limit: usize = 500;
+            let mut max_limit: Value = Value::from(500);
             params = self.omit(params.clone(), Value::from("paginate"));
             params = extend_2(params.clone(), Value::Json(normalize(&Value::Json(json!({
                 "paginationDirection": "backward"
@@ -1176,7 +1177,7 @@ pub trait Bydfi : Exchange {
         };
         let mut orders_requests: Value = Value::new_array();
         let mut i: usize = 0;
-        while i < orders.length {
+        while i < length {
             let mut raw_order: Value = orders.get(i.into());
             let mut symbol: Value = self.safe_string(raw_order.clone(), Value::from("symbol"), Value::Undefined);
             let mut r#type: Value = self.safe_string(raw_order.clone(), Value::from("type"), Value::Undefined);
@@ -1220,7 +1221,7 @@ pub trait Bydfi : Exchange {
         };
         let mut orders_requests: Value = Value::new_array();
         let mut i: usize = 0;
-        while i < orders.length {
+        while i < length {
             let mut raw_order: Value = orders.get(i.into());
             let mut id: Value = self.safe_string(raw_order.clone(), Value::from("id"), Value::Undefined);
             let mut symbol: Value = self.safe_string(raw_order.clone(), Value::from("symbol"), Value::Undefined);
@@ -1410,7 +1411,7 @@ pub trait Bydfi : Exchange {
         self.load_markets(Value::Undefined, Value::Undefined).await;
         let mut paginate: Value = self.safe_bool(params.clone(), Value::from("paginate"), false.into());
         if paginate.is_truthy() {
-            let mut max_limit: usize = 500;
+            let mut max_limit: Value = Value::from(500);
             params = self.omit(params.clone(), Value::from("paginate"));
             params = extend_2(params.clone(), Value::Json(normalize(&Value::Json(json!({
                 "paginationDirection": "backward"
@@ -2219,7 +2220,7 @@ pub trait Bydfi : Exchange {
         let mut currency: Value = self.currency(code.clone());
         let mut paginate: Value = self.safe_bool(params.clone(), Value::from("paginate"), false.into());
         if paginate.is_truthy() {
-            let mut max_limit: usize = 50;
+            let mut max_limit: Value = Value::from(50);
             params = self.omit(params.clone(), Value::from("paginate"));
             params = extend_2(params.clone(), Value::Json(normalize(&Value::Json(json!({
                 "paginationDirection": "backward"
@@ -2269,7 +2270,7 @@ pub trait Bydfi : Exchange {
         return self.parse_transfers(data.clone(), currency.clone(), since.clone(), limit.clone(), Value::Undefined);
     }
 
-    fn parse_transfer(&self, mut transfer: Value, mut currency: Value) -> Value {
+    fn parse_transfer(&mut self, mut transfer: Value, mut currency: Value) -> Value {
         //
         // transfer
         //     {
@@ -2298,16 +2299,21 @@ pub trait Bydfi : Exchange {
         let mut to_account: Value = self.safe_string(accounts_by_id.clone(), to_id.clone(), to_id.clone());
         let mut timestamp: Value = self.safe_integer(transfer.clone(), Value::from("timestamp"), Value::Undefined);
         let mut currency_id: Value = self.safe_string(transfer.clone(), Value::from("asset"), Value::Undefined);
+        let mut transfer_id: Value = self.safe_string(transfer.clone(), Value::from("txId"), Value::Undefined);
+        let mut datetime: Value = self.iso8601(timestamp.clone());
+        let mut currency_code: Value = self.safe_currency_code(currency_id.clone(), currency.clone());
+        let mut amount_val: Value = self.safe_number(transfer.clone(), Value::from("amount"), Value::Undefined);
+        let mut parsed_status: Value = <Self as Bydfi>::parase_transfer_status(self, status.clone());
         return Value::Json(normalize(&Value::Json(json!({
             "info": transfer,
-            "id": self.safe_string(transfer.clone(), Value::from("txId"), Value::Undefined),
+            "id": transfer_id,
             "timestamp": timestamp,
-            "datetime": self.iso8601(timestamp.clone()),
-            "currency": self.safe_currency_code(currency_id.clone(), currency.clone()),
-            "amount": self.safe_number(transfer.clone(), Value::from("amount"), Value::Undefined),
+            "datetime": datetime,
+            "currency": currency_code,
+            "amount": amount_val,
             "fromAccount": from_account,
             "toAccount": to_account,
-            "status": <Self as Bydfi>::parase_transfer_status(self, status.clone())
+            "status": parsed_status
         }))).unwrap());
     }
 
@@ -2339,7 +2345,7 @@ pub trait Bydfi : Exchange {
         let mut currency: Value = self.currency(code.clone());
         let mut paginate: Value = self.safe_bool(params.clone(), Value::from("paginate"), false.into());
         if paginate.is_truthy() {
-            let mut max_limit: usize = 50;
+            let mut max_limit: Value = Value::from(50);
             params = self.omit(params.clone(), Value::from("paginate"));
             params = extend_2(params.clone(), Value::Json(normalize(&Value::Json(json!({
                 "paginationDirection": "backward"
@@ -2486,7 +2492,7 @@ pub trait Bydfi : Exchange {
     async fn dispatch(&mut self, method: Value, params: Value, context: Value) -> Value {
         match method {
             Value::Json(serde_json::Value::String(ref m)) => {
-                match m.as_ref() {
+                match m.as_str() {
                     _ => panic!("Unknown API method: {}", m),
                 }
             },

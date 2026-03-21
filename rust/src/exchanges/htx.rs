@@ -1,4 +1,5 @@
 #![allow(clippy::all)]
+#![allow(non_snake_case)]
 #![allow(dead_code)]
 #![allow(unreachable_code)]
 #![allow(unused_imports)]
@@ -1408,7 +1409,8 @@ pub trait Htx : Exchange {
         let mut i: usize = 0;
         while i < symbols.len() {
             let mut symbol: Value = symbols.get(i.into());
-            result.set(symbol.clone(), <Self as Htx>::fetch_trading_limits_by_id(self, self.market_id(symbol.clone()), params.clone()).await);
+            let mut mid: Value = self.market_id(symbol.clone());
+            result.set(symbol.clone(), <Self as Htx>::fetch_trading_limits_by_id(self, mid, params.clone()).await);
             i += 1;
         };
         return result.clone();
@@ -1765,7 +1767,7 @@ pub trait Htx : Exchange {
         return result.clone();
     }
 
-    fn try_get_symbol_from_future_markets(&mut self, mut symbol_or_market_id: Value) -> Value {
+    fn try_get_symbol_from_future_markets(&self, mut symbol_or_market_id: Value) -> Value {
         if self.get("markets".into()).contains_key(symbol_or_market_id.clone()) {
             return symbol_or_market_id.clone();
         };
@@ -1855,7 +1857,7 @@ pub trait Htx : Exchange {
         //
         let mut market_id: Value = self.safe_string_2(ticker.clone(), Value::from("symbol"), Value::from("contract_code"), Value::Undefined);
         let mut symbol: Value = self.safe_symbol(market_id.clone(), market.clone(), Value::Undefined, Value::Undefined);
-        symbol = <Self as Htx>::try_get_symbol_from_future_markets(self, symbol.clone());
+        symbol = <Self as Htx>::try_get_symbol_from_future_markets(&*self, symbol.clone());
         let mut timestamp: Value = self.safe_integer_2(ticker.clone(), Value::from("ts"), Value::from("quoteTime"), Value::Undefined);
         let mut bid: Value = Value::Undefined;
         let mut bid_volume: Value = Value::Undefined;
@@ -5216,7 +5218,7 @@ pub trait Htx : Exchange {
         return <Self as Htx>::parse_cancel_orders(self, data.clone());
     }
 
-    fn parse_cancel_orders(&self, mut orders: Value) -> Value {
+    fn parse_cancel_orders(&mut self, mut orders: Value) -> Value {
         //
         //    {
         //        "success": [
@@ -6193,7 +6195,7 @@ pub trait Htx : Exchange {
         margin_mode = if margin_mode.clone().is_nullish() { Value::from("cross") } else { margin_mode.clone() };
         let mut request: Value = Value::new_object();
         if since.clone().is_nonnullish() {
-            request.set("start-date".into(), self.yyyymmdd(since.clone()));
+            request.set("start-date".into(), self.yyyymmdd(since.clone(), Value::from("-")));
         };
         if limit.clone().is_nonnullish() {
             request.set("size".into(), limit.clone());

@@ -1,4 +1,5 @@
 #![allow(clippy::all)]
+#![allow(non_snake_case)]
 #![allow(dead_code)]
 #![allow(unreachable_code)]
 #![allow(unused_imports)]
@@ -781,7 +782,7 @@ pub trait Hibachi : Exchange {
     }
 
     fn order_message(&mut self, mut market: Value, mut nonce: Value, mut fee_rate: Value, mut r#type: Value, mut side: Value, mut amount: Value, mut price: Value) -> Value {
-        let mut side_internal: usize = 0;
+        let mut side_internal: Value = Value::from(0);
         if side.clone() == Value::from("sell") {
             side_internal = Value::from(0);
         } else if side.clone() == Value::from("buy") {

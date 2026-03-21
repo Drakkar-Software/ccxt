@@ -1,4 +1,5 @@
 #![allow(clippy::all)]
+#![allow(non_snake_case)]
 #![allow(dead_code)]
 #![allow(unreachable_code)]
 #![allow(unused_imports)]
@@ -940,11 +941,11 @@ pub trait Bitopro : Exchange {
         } else {
             timestamp = since.clone();
         };
-        let mut i: usize = 0;
-        let mut candle_length: usize = candles.length;
-        let mut result_length: usize = 0;
-        while result_length.clone() < limit.clone() && i < candle_length.clone().into(){
-            let mut candle: Value = candles.get(i.into());
+        let mut i: Value = Value::from(0);
+        let mut candle_length: Value = Value::from(candles.len());
+        let mut result_length: Value = Value::from(0);
+        while result_length.clone() < limit.clone() && i < candle_length.clone(){
+            let mut candle: Value = candles.get(i.clone());
             if candle.get(Value::from(0)) == timestamp.clone() {
                 result.push(candle.clone());
                 i = self.sum(Value::from(i), Value::from(1));
@@ -959,8 +960,8 @@ pub trait Bitopro : Exchange {
                 result.push(copy.clone());
             };
             timestamp = self.sum(timestamp.clone(), distance.clone() * Value::from(1000));
-            result_length = result.length.into();
-            copy_from = result.get(result_length.clone() - Value::from(1).clone());
+            result_length = Value::from(result.len());
+            copy_from = result.get(result_length.clone() - Value::from(1));
         };
         return result.clone();
     }
@@ -1191,7 +1192,7 @@ pub trait Bitopro : Exchange {
         return <Self as Bitopro>::parse_order(self, response.clone(), market.clone());
     }
 
-    fn parse_cancel_orders(&self, mut data: Value) -> Value {
+    fn parse_cancel_orders(&mut self, mut data: Value) -> Value {
         let mut data_keys: Value = data.clone().keys();
         let mut orders: Value = Value::new_array();
         let mut i: usize = 0;
@@ -1375,7 +1376,7 @@ pub trait Bitopro : Exchange {
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
             "statusKind": "DONE"
         }))).unwrap());
-        return <Self as Bitopro>::fetch_orders(self, symbol.clone(), since.clone(), limit.clone(), extend_2(request.clone(), params.clone()));
+        return <Self as Bitopro>::fetch_orders(self, symbol.clone(), since.clone(), limit.clone(), extend_2(request.clone(), params.clone())).await;
     }
 
     async fn fetch_my_trades(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {

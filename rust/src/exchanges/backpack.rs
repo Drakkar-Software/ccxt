@@ -1,4 +1,5 @@
 #![allow(clippy::all)]
+#![allow(non_snake_case)]
 #![allow(dead_code)]
 #![allow(unreachable_code)]
 #![allow(unused_imports)]
@@ -2085,7 +2086,7 @@ pub trait Backpack : Exchange {
             let mut sorted_order: Value = self.keysort(order.clone());
             let mut order_query: Value = self.urlencode(sorted_order.clone());
             payload = payload +  Value::from("instruction=") + instruction.clone() + Value::from("&") + order_query.clone() + Value::from("&");
-            if i == params.len().into() - Value::from(1) {
+            if i == Value::from(params.len()) - Value::from(1) {
                 payload = payload +  Value::from("timestamp=") + ts.clone() + Value::from("&window=") + recv_window.clone();
             };
             i += 1;

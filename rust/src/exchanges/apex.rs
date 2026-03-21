@@ -1,4 +1,5 @@
 #![allow(clippy::all)]
+#![allow(non_snake_case)]
 #![allow(dead_code)]
 #![allow(unreachable_code)]
 #![allow(unused_imports)]
@@ -1180,7 +1181,7 @@ pub trait Apex : Exchange {
                 if self.get("markets_by_id".into()).contains_key(new_market_id.clone()) {
                     let mut markets: Value = self.get("markets_by_id".into()).get(new_market_id.clone());
                     let mut num_markets: usize = markets.len();
-                    if num_markets.clone() > Value::from(0) {
+                    if num_markets > 0 {
                         if self.get("markets_by_id".into()).get(new_market_id.clone()).get(Value::from(0)).get(Value::from("id2")) == market_id.clone() {
                             market = self.get("markets_by_id".into()).get(new_market_id.clone()).get(Value::from(0));
                         };
@@ -1196,7 +1197,7 @@ pub trait Apex : Exchange {
         return Value::from("apexomni-") + account_id.clone() + Value::from("-") + self.milliseconds().to_string() + Value::from("-") + self.rand_number(Value::from(6)).to_string();
     }
 
-    fn add_hyphen_before_usdt(&mut self, mut symbol: Value) -> Value {
+    fn add_hyphen_before_usdt(&self, mut symbol: Value) -> Value {
         let mut uppercase_symbol: Value = symbol.to_upper_case();
         let mut index: Value = uppercase_symbol.index_of(Value::from("USDT"));
         let mut symbol_char: Value = self.safe_string(symbol.clone(), index.clone() - Value::from(1), Value::Undefined);
@@ -1287,7 +1288,9 @@ pub trait Apex : Exchange {
         if trigger_price.clone().is_nonnullish() {
             order_to_sign.set("triggerPrice".into(), self.price_to_precision(symbol.clone(), trigger_price.clone()));
         };
-        let mut signature: Value = self.get_zk_contract_signature_obj(self.remove0x_prefix(<Self as Apex>::get_seeds(self)), order_to_sign.clone()).await;
+        let mut seeds: Value = <Self as Apex>::get_seeds(self);
+        let mut prefix: Value = self.remove0x_prefix(seeds);
+        let mut signature: Value = self.get_zk_contract_signature_obj(prefix, order_to_sign.clone());
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
             "symbol": market.get(Value::from("id")),
             "side": order_side,
@@ -1373,7 +1376,9 @@ pub trait Apex : Exchange {
                 "timestampSeconds": expire_time,
                 "isContract": true
             }))).unwrap());
-            let mut signature: Value = self.get_zk_transfer_signature_obj(self.remove0x_prefix(<Self as Apex>::get_seeds(self)), order_to_sign.clone()).await;
+            let mut transfer_seeds: Value = <Self as Apex>::get_seeds(self);
+            let mut transfer_prefix: Value = self.remove0x_prefix(transfer_seeds);
+            let mut signature: Value = self.get_zk_transfer_signature_obj(transfer_prefix, order_to_sign.clone());
             let mut request: Value = Value::Json(normalize(&Value::Json(json!({
                 "amount": amount,
                 "expireTime": expire_time,
@@ -1404,7 +1409,9 @@ pub trait Apex : Exchange {
                 "nonce": nonce,
                 "timestampSeconds": timestamp_seconds
             }))).unwrap());
-            let mut signature: Value = self.get_zk_transfer_signature_obj(self.remove0x_prefix(<Self as Apex>::get_seeds(self)), order_to_sign.clone()).await;
+            let mut transfer_seeds: Value = <Self as Apex>::get_seeds(self);
+            let mut transfer_prefix: Value = self.remove0x_prefix(transfer_seeds);
+            let mut signature: Value = self.get_zk_transfer_signature_obj(transfer_prefix, order_to_sign.clone());
             let mut request: Value = Value::Json(normalize(&Value::Json(json!({
                 "amount": amount.to_string(),
                 "timestamp": timestamp_seconds,
@@ -1685,7 +1692,7 @@ pub trait Apex : Exchange {
         let mut side: Value = self.safe_string_lower(position.clone(), Value::from("side"), Value::Undefined);
         let mut quantity: Value = self.safe_string(position.clone(), Value::from("size"), Value::Undefined);
         let mut timestamp: Value = self.safe_integer(position.clone(), Value::from("updatedTime"), Value::Undefined);
-        let mut leverage: usize = 20;
+        let mut leverage: Value = Value::from(20);
         let mut custom_initial_margin_rate: Value = self.safe_string_n(position.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("customInitialMarginRate").into(), Value::from("customImr").into()])), Value::from("0"));
         if self.precision_from_string(custom_initial_margin_rate.clone()) != Value::from(0) {
             leverage = self.parse_to_int(Precise::string_div(Value::from("1"), custom_initial_margin_rate.clone(), Value::from(4)));

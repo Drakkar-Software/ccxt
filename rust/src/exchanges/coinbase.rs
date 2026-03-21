@@ -1,4 +1,5 @@
 #![allow(clippy::all)]
+#![allow(non_snake_case)]
 #![allow(dead_code)]
 #![allow(unreachable_code)]
 #![allow(unused_imports)]
@@ -738,8 +739,8 @@ pub trait Coinbase : Exchange {
         let mut accounts: Value = self.safe_list(response.clone(), Value::from("accounts"), Value::new_array());
         let mut accounts_length: usize = accounts.len();
         let mut cursor: Value = self.safe_string(response.clone(), Value::from("cursor"), Value::Undefined);
-        if accounts_length.clone() > Value::from(0) && cursor.clone().is_nonnullish() && cursor.clone() != Value::from("") {
-            let mut last_index: Value = accounts_length.clone() - Value::from(1);
+        if accounts_length > 0 && cursor.clone().is_nonnullish() && cursor.clone() != Value::from("") {
+            let mut last_index: Value = Value::from(accounts_length - 1);
             let mut last: Value = self.safe_dict(accounts.clone(), last_index.clone(), Value::Undefined);
             last.set("cursor".into(), cursor.clone());
             accounts.set(last_index.clone(), last.clone());
@@ -1492,13 +1493,11 @@ pub trait Coinbase : Exchange {
             "contract_expiry_type": "PERPETUAL"
         }))).unwrap())), Value::Undefined).await.into()]));
         // catch block omitted (no exception support in Value runtime)
-;
         // the sync version of ccxt won't have the promise.all line so the request is made here. Some users can't access perpetual products
         let mut promises: Value = Promise::all(spot_unresolved_promises.clone()).await;
         let mut contract_promises: Value = Value::Undefined;
                 contract_promises = Promise::all(unresolved_contract_promises.clone()).await;
         // catch block omitted (no exception support in Value runtime)
-;
         // some users don't have access to contracts
         let mut spot: Value = self.safe_dict(promises.clone(), Value::from(0), Value::new_object());
         let mut fees: Value = self.safe_dict(promises.clone(), Value::from(1), Value::new_object());
@@ -2084,7 +2083,8 @@ pub trait Coinbase : Exchange {
             request.set("product_ids".into(), self.market_ids(symbols.clone()));
         };
         let mut market_type: Value = Value::Undefined;
-        (market_type, params) = shift_2(self.handle_market_type_and_params(Value::from("fetchTickers"), self.get_market_from_symbols(symbols.clone()), params.clone(), Value::from("default")));
+        let mut market_from_symbols: Value = self.get_market_from_symbols(symbols.clone());
+        (market_type, params) = shift_2(self.handle_market_type_and_params(Value::from("fetchTickers"), market_from_symbols, params.clone(), Value::from("default")));
         if market_type.clone().is_nonnullish() && market_type.clone() != Value::from("default") {
             request.set("product_type".into(), if market_type.clone() == Value::from("swap") { Value::from("FUTURE") } else { Value::from("SPOT") });
         };

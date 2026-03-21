@@ -1,4 +1,5 @@
 #![allow(clippy::all)]
+#![allow(non_snake_case)]
 #![allow(dead_code)]
 #![allow(unreachable_code)]
 #![allow(unused_imports)]
@@ -596,16 +597,16 @@ pub trait Hyperliquid : Exchange {
         let mut dexes_provided: Value = self.safe_list(hip3.clone(), Value::from("dexes"), Value::new_array());
         // let users provide their own list of dexes to load
         let mut max_limit: Value = self.safe_integer(hip3.clone(), Value::from("limit"), Value::from(10));
-        let mut user_provided_dexes_length: usize = dexes_provided.len();
+        let mut user_provided_dexes_length: Value = Value::from(dexes_provided.len());
         if user_provided_dexes_length.clone() > Value::from(0) {
             if user_provided_dexes_length.clone() > Value::from(0) {
                 fetch_dexes_list = dexes_provided.clone();
             };
         } else {
-            let mut fetch_dexes_length: usize = fetch_dexes.len();
+            let mut fetch_dexes_length: Value = Value::from(fetch_dexes.len());
             let mut i: usize = 1;
-            while i < max_limit.clone().into() {
-                if i >= fetch_dexes_length.clone().into() {
+            while Value::from(i) < max_limit.clone() {
+                if Value::from(i) >= fetch_dexes_length.clone() {
                     break;
                 };
                 let mut dex: Value = self.safe_dict(fetch_dexes.clone(), Value::from(i), Value::new_object());
@@ -753,8 +754,8 @@ pub trait Hyperliquid : Exchange {
         return self.parse_markets(result.clone());
     }
 
-    fn calculate_price_precision(&mut self, mut price: Value, mut amount_precision: Value, mut max_decimals: Value) -> Value {
-        let mut price_precision: usize = 0;
+    fn calculate_price_precision(&self, mut price: Value, mut amount_precision: Value, mut max_decimals: Value) -> Value {
+        let mut price_precision: Value = Value::from(0);
         let mut price_str: Value = self.number_to_string(price.clone());
         if price_str.clone().is_nullish() {
             return Value::from(0);
@@ -762,19 +763,19 @@ pub trait Hyperliquid : Exchange {
         let mut price_splitted: Value = price_str.split(Value::from("."));
         if Precise::string_eq(price_str.clone(), Value::from("0")) {
             // Significant digits is always 5 in this case
-            let mut significant_digits: usize = 5;
+            let mut significant_digits: Value = Value::from(5);
             // Integer digits is always 0 in this case (0 doesn't count)
-            let mut integer_digits: usize = 0;
+            let mut integer_digits: Value = Value::from(0);
             // Calculate the price precision
             price_precision = Math::min(max_decimals.clone() - amount_precision.clone(), significant_digits.clone() - integer_digits.clone());
         } else if Precise::string_gt(price_str.clone(), Value::from("0")) && Precise::string_lt(price_str.clone(), Value::from("1")) {
             // Significant digits, always 5 in this case
-            let mut significant_digits: usize = 5;
+            let mut significant_digits: Value = Value::from(5);
             // Get the part after the decimal separator
             let mut decimal_part: Value = self.safe_string(price_splitted.clone(), Value::from(1), Value::from(""));
             // Count the number of leading zeros in the decimal part
-            let mut leading_zeros: usize = 0;
-            while leading_zeros.clone() <= decimal_part.len().into() && decimal_part.get(leading_zeros.clone()) == Value::from("0"){
+            let mut leading_zeros: Value = Value::from(0);
+            while (leading_zeros.clone() <= Value::from(decimal_part.len())) && decimal_part.get(leading_zeros.clone()) == Value::from("0"){
                 leading_zeros = leading_zeros.clone() + Value::from(1);
             };
             // Calculate price precision based on leading zeros and significant digits
@@ -785,9 +786,9 @@ pub trait Hyperliquid : Exchange {
             // Count the numbers before the decimal separator
             let mut integer_part: Value = self.safe_string(price_splitted.clone(), Value::from(0), Value::from(""));
             // Get significant digits, take the max() of 5 and the integer digits count
-            let mut significant_digits: Value = Math::max(Value::from(5), integer_part.len().into());
+            let mut significant_digits: Value = Math::max(Value::from(5), Value::from(integer_part.len()));
             // Calculate price precision based on maxDecimals - szDecimals and significantDigits - integerPart.length
-            price_precision = Math::min(max_decimals.clone() - amount_precision.clone(), significant_digits.clone() - integer_part.len().into());
+            price_precision = Math::min(max_decimals.clone() - amount_precision.clone(), significant_digits.clone() - Value::from(integer_part.len()));
         };
         return self.parse_to_int(price_precision.clone());
     }
@@ -882,7 +883,7 @@ pub trait Hyperliquid : Exchange {
             let mut amount_precision_str: Value = self.safe_string(inner_base_token_info.clone(), Value::from("szDecimals"), Value::Undefined);
             let mut amount_precision: Value = parse_int(amount_precision_str.clone(), Value::Undefined);
             let mut price: Value = self.safe_number(extra_data.clone(), Value::from("midPx"), Value::Undefined);
-            let mut price_precision: usize = 0;
+            let mut price_precision: Value = Value::from(0);
             if price.clone().is_nonnullish() {
                 price_precision = <Self as Hyperliquid>::calculate_price_precision(self, price.clone(), amount_precision.clone(), Value::from(8));
             };
@@ -1006,7 +1007,7 @@ pub trait Hyperliquid : Exchange {
         let mut amount_precision_str: Value = self.safe_string(market.clone(), Value::from("szDecimals"), Value::Undefined);
         let mut amount_precision: Value = parse_int(amount_precision_str.clone(), Value::Undefined);
         let mut price: Value = self.safe_number(market.clone(), Value::from("markPx"), Value::from(0));
-        let mut price_precision: usize = 0;
+        let mut price_precision: Value = Value::from(0);
         if price.clone().is_nonnullish() {
             price_precision = <Self as Hyperliquid>::calculate_price_precision(self, price.clone(), amount_precision.clone(), Value::from(6));
         };
@@ -1458,7 +1459,8 @@ pub trait Hyperliquid : Exchange {
     }
 
     fn sign_message(&mut self, mut message: Value, mut private_key: Value) -> Value {
-        return <Self as Hyperliquid>::sign_hash(self, <Self as Hyperliquid>::hash_message(self, message.clone()), private_key.slice(Value::from(64).neg(), Value::Undefined));
+        let tmp_hash = <Self as Hyperliquid>::hash_message(self, message.clone());
+        return <Self as Hyperliquid>::sign_hash(self, tmp_hash, private_key.slice(Value::from(64).neg(), Value::Undefined));
     }
 
     fn construct_phantom_agent(&mut self, mut hash: Value, mut is_testnet: Value) -> Value {
@@ -1515,7 +1517,7 @@ pub trait Hyperliquid : Exchange {
         //     'message': phantomAgent,
         // };
         let mut zero_address: Value = self.safe_string(self.get("options".into()), Value::from("zeroAddress"), Value::Undefined);
-        let mut chain_id: usize = 1337;
+        let mut chain_id: Value = Value::from(1337);
         // check this out
         let mut domain: Value = Value::Json(normalize(&Value::Json(json!({
             "chainId": chain_id,
@@ -1539,7 +1541,7 @@ pub trait Hyperliquid : Exchange {
 
     fn sign_user_signed_action(&mut self, mut message_types: Value, mut message: Value) -> Value {
         let mut zero_address: Value = self.safe_string(self.get("options".into()), Value::from("zeroAddress"), Value::Undefined);
-        let mut chain_id: usize = 421614;
+        let mut chain_id: Value = Value::from(421614);
         // check this out
         let mut domain: Value = Value::Json(normalize(&Value::Json(json!({
             "chainId": chain_id,
@@ -1686,7 +1688,6 @@ pub trait Hyperliquid : Exchange {
                 response = self.dispatch("privatePostExchange".into(), request.clone(), Value::Undefined).await;
         return response.clone();
         // catch block omitted (no exception support in Value runtime)
-;
         // ignore this
         return response.clone();
     }
@@ -1727,9 +1728,10 @@ pub trait Hyperliquid : Exchange {
     }
 
     async fn initialize_client(&mut self) -> Value {
-                Promise::all(Value::Json(serde_json::Value::Array(vec![<Self as Hyperliquid>::handle_builder_fee_approval(self).into(), <Self as Hyperliquid>::set_ref(self).into()]))).await;
+                let tmp_1 = <Self as Hyperliquid>::handle_builder_fee_approval(self).await;
+                let tmp_2 = <Self as Hyperliquid>::set_ref(self).await;
+                Promise::all(Value::Json(serde_json::Value::Array(vec![tmp_1.into(), tmp_2.into()]))).await;
         // catch block omitted (no exception support in Value runtime)
-;
         return true.into();
     }
 
@@ -1749,7 +1751,6 @@ pub trait Hyperliquid : Exchange {
         <Self as Hyperliquid>::approve_builder_fee(self, builder.clone(), max_fee_rate.clone()).await;
         self.get("options".into()).set("approvedBuilderFee".into(), true.into());
         // catch block omitted (no exception support in Value runtime)
-;
         // disable builder fee if an error occurs
         return true.into();
     }
@@ -2704,7 +2705,7 @@ pub trait Hyperliquid : Exchange {
     fn get_dex_from_hip3_symbol(&mut self, mut market: Value) -> Value {
         let mut base_name: Value = self.safe_string(market.clone(), Value::from("baseName"), Value::from(""));
         let mut part: Value = base_name.split(Value::from(":"));
-        let mut parts_length: usize = part.len();
+        let mut parts_length: Value = Value::from(part.len());
         if parts_length.clone() > Value::from(1) {
             return self.safe_string(part.clone(), Value::from(0), Value::Undefined);
         };
@@ -3180,13 +3181,13 @@ pub trait Hyperliquid : Exchange {
         if symbols.clone().is_nullish() {
             return Value::Undefined;
         };
-        let mut symbols_length: usize = symbols.len();
+        let mut symbols_length: Value = Value::from(symbols.len());
         if symbols_length.clone() == Value::from(0) {
             return Value::Undefined;
         };
         let mut dex_name: Value = Value::Undefined;
         let mut i: usize = 0;
-        while i < symbols_length.clone().into() {
+        while Value::from(i) < symbols_length.clone() {
             if dex_name.clone().is_nullish() {
                 let mut market: Value = <Self as Hyperliquid>::market(self, symbols.get(i.into()));
                 dex_name = <Self as Hyperliquid>::get_dex_from_hip3_symbol(self, market.clone());
@@ -3412,7 +3413,8 @@ pub trait Hyperliquid : Exchange {
         self.load_markets(Value::Undefined, Value::Undefined).await;
         let mut market: Value = <Self as Hyperliquid>::market(self, symbol.clone());
         let mut asset: Value = self.parse_to_int(market.get(Value::from("baseId")));
-        let mut sz: Value = self.parse_to_int(Precise::string_mul(<Self as Hyperliquid>::amount_to_precision(self, symbol.clone(), amount.clone()), Value::from("1000000")));
+        let tmp_precision = <Self as Hyperliquid>::amount_to_precision(self, symbol.clone(), amount.clone());
+        let mut sz: Value = self.parse_to_int(Precise::string_mul(tmp_precision, Value::from("1000000")));
         if r#type.clone() == Value::from("reduce") {
             sz = sz.clone().neg();
         };
@@ -4165,7 +4167,7 @@ pub trait Hyperliquid : Exchange {
         return records.clone();
     }
 
-    fn format_vault_address(&mut self, mut address: Value) -> Value {
+    fn format_vault_address(&self, mut address: Value) -> Value {
         if address.clone().is_nullish() {
             return Value::Undefined;
         };
@@ -4190,7 +4192,7 @@ pub trait Hyperliquid : Exchange {
         Value::Undefined
     }
 
-    fn coin_to_market_id(&mut self, mut coin: Value) -> Value {
+    fn coin_to_market_id(&self, mut coin: Value) -> Value {
         // handle also hip3 tokens like flx:CRCL
         if coin.clone().is_nullish() {
             return Value::Undefined;
@@ -4229,7 +4231,7 @@ pub trait Hyperliquid : Exchange {
         return self.safe_value(config.clone(), Value::from("cost"), Value::from(1));
     }
 
-    fn parse_create_edit_order_args(&self, mut id: Value, mut symbol: Value, mut r#type: Value, mut side: Value, mut amount: Value, mut price: Value, mut params: Value) -> Value {
+    fn parse_create_edit_order_args(&mut self, mut id: Value, mut symbol: Value, mut r#type: Value, mut side: Value, mut amount: Value, mut price: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         let mut market: Value = <Self as Hyperliquid>::market(self, symbol.clone());
         let mut vault_address: Value = Value::Undefined;

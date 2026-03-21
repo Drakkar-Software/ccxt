@@ -1,4 +1,5 @@
 #![allow(clippy::all)]
+#![allow(non_snake_case)]
 #![allow(dead_code)]
 #![allow(unreachable_code)]
 #![allow(unused_imports)]
@@ -523,19 +524,19 @@ pub trait Gemini : Exchange {
 <tr>
 "));
         // eslint-disable-line quotes
-        let mut num_rows: usize = rows.len();
+        let mut num_rows: Value = Value::from(rows.len());
         if num_rows.clone() < Value::from(2) {
             panic!(r###"NotSupported::new(error)"###);
         };
         let mut result: Value = Value::new_array();
         // skip the first element (empty string)
-        let mut i: usize = 1;
-        while i < num_rows.clone().into() {
-            let mut row: Value = rows.get(i.into());
+        let mut i: Value = Value::from(1);
+        while i.clone() < num_rows.clone() {
+            let mut row: Value = rows.get(i.clone());
             let mut cells: Value = row.split(Value::from("</td>
 "));
             // eslint-disable-line quotes
-            let mut num_cells: usize = cells.len();
+            let mut num_cells: Value = Value::from(cells.len());
             if num_cells.clone() < Value::from(5) {
                 panic!(r###"NotSupported::new(error)"###);
             };
@@ -554,7 +555,7 @@ pub trait Gemini : Exchange {
             let mut min_amount: Value = self.safe_number(min_amount_parts.clone(), Value::from(0), Value::Undefined);
             let mut amount_precision_string: Value = cells.get(Value::from(2)).replace(Value::from("<td>"), Value::from(""));
             let mut amount_precision_parts: Value = amount_precision_string.split(Value::from(" "));
-            let mut id_length: Value = market_id.len().into() - Value::from(0);
+            let mut id_length: Value = Value::from(market_id.len()) - Value::from(0);
             let mut starting_index: Value = id_length.clone() - Value::from(3);
             let mut price_precision_string: Value = cells.get(Value::from(3)).replace(Value::from("<td>"), Value::from(""));
             let mut price_precision_parts: Value = price_precision_string.split(Value::from(" "));
@@ -611,7 +612,7 @@ pub trait Gemini : Exchange {
                 "created": Value::Undefined,
                 "info": row
             }))).unwrap()));
-            i += 1;
+            i = i + Value::from(1);
         };
         return result.clone();
     }
@@ -732,7 +733,7 @@ pub trait Gemini : Exchange {
         return result.clone();
     }
 
-    fn parse_market(&self, mut response: Value) -> Value {
+    fn parse_market(&mut self, mut response: Value) -> Value {
         //
         // response might be:
         //
@@ -980,8 +981,8 @@ pub trait Gemini : Exchange {
 
     async fn fetch_ticker_v1_and_v2(&mut self, mut symbol: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
-        let mut ticker_promise_a: Value = <Self as Gemini>::fetch_ticker_v1(self, symbol.clone(), params.clone());
-        let mut ticker_promise_b: Value = <Self as Gemini>::fetch_ticker_v2(self, symbol.clone(), params.clone());
+        let mut ticker_promise_a: Value = <Self as Gemini>::fetch_ticker_v1(self, symbol.clone(), params.clone()).await;
+        let mut ticker_promise_b: Value = <Self as Gemini>::fetch_ticker_v2(self, symbol.clone(), params.clone()).await;
         let (mut ticker_a, mut ticker_b) = shift_2(Promise::all(Value::Json(serde_json::Value::Array(vec![ticker_promise_a.clone().into(), ticker_promise_b.clone().into()]))).await);
         return self.deep_extend_2(ticker_a.clone(), Value::Json(normalize(&Value::Json(json!({
             "open": ticker_b.get(Value::from("open")),
@@ -1072,7 +1073,7 @@ pub trait Gemini : Exchange {
         let mut base: Value = Value::Undefined;
         let mut quote: Value = Value::Undefined;
         if market_id.clone().is_nonnullish() && market.clone().is_nullish() {
-            let mut id_length: Value = market_id.len().into() - Value::from(0);
+            let mut id_length: Value = Value::from(market_id.len()) - Value::from(0);
             if id_length.clone() == Value::from(7) {
                 base_id = market_id.slice(Value::from(0), Value::from(4));
                 quote_id = market_id.slice(Value::from(4), Value::from(7));

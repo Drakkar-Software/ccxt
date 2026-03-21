@@ -1,4 +1,5 @@
 #![allow(clippy::all)]
+#![allow(non_snake_case)]
 #![allow(dead_code)]
 #![allow(unreachable_code)]
 #![allow(unused_imports)]
@@ -2117,13 +2118,13 @@ pub trait Binanceusdm : Exchange {
     async fn transfer_in(&mut self, mut code: Value, mut amount: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         // transfer from spot wallet to usdm futures wallet
-        return self.futures_transfer(code.clone(), amount.clone(), Value::from(1), params.clone()).await;
+        return self.futures_transfer(code.clone(), amount.clone(), Value::from(1), params.clone());
     }
 
     async fn transfer_out(&mut self, mut code: Value, mut amount: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         // transfer from usdm futures wallet to spot wallet
-        return self.futures_transfer(code.clone(), amount.clone(), Value::from(2), params.clone()).await;
+        return self.futures_transfer(code.clone(), amount.clone(), Value::from(2), params.clone());
     }
 
     

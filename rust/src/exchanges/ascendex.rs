@@ -1,4 +1,5 @@
 #![allow(clippy::all)]
+#![allow(non_snake_case)]
 #![allow(dead_code)]
 #![allow(unreachable_code)]
 #![allow(unused_imports)]
@@ -2404,7 +2405,7 @@ pub trait Ascendex : Exchange {
         //
         let mut data: Value = self.safe_dict(response.clone(), Value::from("data"), Value::new_object());
         let mut addresses: Value = self.safe_list(data.clone(), Value::from("address"), Value::new_array());
-        let mut num_addresses: usize = addresses.len();
+        let mut num_addresses: Value = Value::from(addresses.len());
         let mut address: Value = Value::Undefined;
         if num_addresses.clone() > Value::from(1) {
             let mut addresses_by_chain_name: Value = self.index_by(addresses.clone(), Value::from("chainName"));
@@ -2959,7 +2960,7 @@ pub trait Ascendex : Exchange {
         // }
         //
         let mut block_chains: Value = self.safe_list(fee.clone(), Value::from("blockChain"), Value::new_array());
-        let mut block_chains_length: usize = block_chains.len();
+        let mut block_chains_length: Value = Value::from(block_chains.len());
         let mut result: Value = Value::Json(normalize(&Value::Json(json!({
             "info": fee,
             "withdraw": Value::Json(normalize(&Value::Json(json!({
@@ -2973,7 +2974,7 @@ pub trait Ascendex : Exchange {
             "networks": Value::new_object()
         }))).unwrap());
         let mut i: usize = 0;
-        while i < block_chains_length.clone().into() {
+        while i < block_chains_length.clone() {
             let mut block_chain: Value = block_chains.get(i.into());
             let mut network_id: Value = self.safe_string(block_chain.clone(), Value::from("chainName"), Value::Undefined);
             let mut currency_code: Value = self.safe_string(currency.clone(), Value::from("code"), Value::Undefined);

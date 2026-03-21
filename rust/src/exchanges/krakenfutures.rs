@@ -1,4 +1,5 @@
 #![allow(clippy::all)]
+#![allow(non_snake_case)]
 #![allow(dead_code)]
 #![allow(unreachable_code)]
 #![allow(unused_imports)]
@@ -1005,7 +1006,7 @@ pub trait Krakenfutures : Exchange {
         self.load_markets(Value::Undefined, Value::Undefined).await;
         let mut orders: Value = Value::new_array();
         let mut client_order_ids: Value = self.safe_value(params.clone(), Value::from("clientOrderIds"), Value::new_array());
-        let mut client_order_ids_length: usize = client_order_ids.len();
+        let mut client_order_ids_length: Value = Value::from(client_order_ids.len());
         if client_order_ids_length.clone() > Value::from(0) {
             let mut i: usize = 0;
             while i < client_order_ids.len() {
@@ -1582,7 +1583,7 @@ pub trait Krakenfutures : Exchange {
         //
         let mut order_events: Value = self.safe_value(order.clone(), Value::from("orderEvents"), Value::new_array());
         let mut error_status: Value = self.safe_string(order.clone(), Value::from("status"), Value::Undefined);
-        let mut order_events_length: usize = order_events.len();
+        let mut order_events_length: Value = Value::from(order_events.len());
         if order.contains_key(Value::from("orderEvents")) && error_status.clone().is_nonnullish() && order_events_length.clone() == Value::from(0) {
             // creteOrders error response
             return self.safe_order(Value::Json(normalize(&Value::Json(json!({
@@ -1647,7 +1648,7 @@ pub trait Krakenfutures : Exchange {
         let mut remaining: Value = self.safe_string(details.clone(), Value::from("unfilledSize"), Value::Undefined);
         let mut average: Value = Value::Undefined;
         let mut filled2: Value = Value::from("0.0");
-        let mut trades_length: usize = trades.len();
+        let mut trades_length: Value = Value::from(trades.len());
         if trades_length.clone() > Value::from(0) {
             let mut vwap_sum: Value = Value::from("0.0");
             let mut i: usize = 0;
@@ -1965,7 +1966,7 @@ pub trait Krakenfutures : Exchange {
             let mut balance: Value = balances.get(currency_id.clone());
             let mut code: Value = self.safe_currency_code(currency_id.clone(), Value::Undefined);
             let mut split_code: Value = code.split(Value::from("_"));
-            let mut code_length: usize = split_code.len();
+            let mut code_length: Value = Value::from(split_code.len());
             if code_length.clone() > Value::from(1) {
                 continue;
             };
@@ -2324,7 +2325,7 @@ pub trait Krakenfutures : Exchange {
             let mut initial_margin: Value = self.safe_string(tier.clone(), Value::from("initialMargin"), Value::Undefined);
             let mut min_notional: Value = self.safe_number_2(tier.clone(), Value::from("numNonContractUnits"), Value::from("contracts"), Value::Undefined);
             if i != 0 {
-                let mut tiers_length: usize = tiers.len();
+                let mut tiers_length: Value = Value::from(tiers.len());
                 let mut previous_tier: Value = tiers.get(tiers_length.clone() - Value::from(1).clone());
                 previous_tier.set("maxNotional".into(), min_notional.clone());
             };

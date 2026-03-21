@@ -1,4 +1,5 @@
 #![allow(clippy::all)]
+#![allow(non_snake_case)]
 #![allow(dead_code)]
 #![allow(unreachable_code)]
 #![allow(unused_imports)]
@@ -822,7 +823,7 @@ pub trait Coinone : Exchange {
         // https://github.com/ccxt/ccxt/pull/7067
         if status.clone() == Value::from("live") {
             if remaining_string.clone().is_nonnullish() && amount_string.clone().is_nonnullish() {
-                let mut is_less_than: Value = Precise::string_lt(remaining_string.clone(), amount_string.clone());
+                let mut is_less_than: Value = Value::from(Precise::string_lt(remaining_string.clone(), amount_string.clone()));
                 if is_less_than.is_truthy() {
                     status = Value::from("canceled");
                 };
@@ -937,14 +938,14 @@ pub trait Coinone : Exchange {
         params = params.or_default(Value::new_object());
         if symbol.clone().is_nullish() {
             // eslint-disable-next-line quotes
-            panic!(r###"ArgumentsRequired::new(self.get("id".into()) + Value::from(" cancelOrder() requires a symbol argument. To cancel the order, pass a symbol argument and {'price': 12345, 'qty': 1.2345, 'is_ask': 0} in the params argument of cancelOrder."))"###);
+            panic!("{}", r###"ArgumentsRequired::new(self.get("id".into()) + Value::from(" cancelOrder() requires a symbol argument. To cancel the order, pass a symbol argument and {'price': 12345, 'qty': 1.2345, 'is_ask': 0} in the params argument of cancelOrder."))"###);
         };
         let mut price: Value = self.safe_number(params.clone(), Value::from("price"), Value::Undefined);
         let mut qty: Value = self.safe_number(params.clone(), Value::from("qty"), Value::Undefined);
         let mut is_ask: Value = self.safe_integer(params.clone(), Value::from("is_ask"), Value::Undefined);
         if price.clone().is_nullish() || qty.clone().is_nullish() || is_ask.clone().is_nullish() {
             // eslint-disable-next-line quotes
-            panic!(r###"ArgumentsRequired::new(self.get("id".into()) + Value::from(" cancelOrder() requires {'price': 12345, 'qty': 1.2345, 'is_ask': 0} in the params argument."))"###);
+            panic!("{}", r###"ArgumentsRequired::new(self.get("id".into()) + Value::from(" cancelOrder() requires {'price': 12345, 'qty': 1.2345, 'is_ask': 0} in the params argument."))"###);
         };
         self.load_markets(Value::Undefined, Value::Undefined).await;
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({

@@ -1,4 +1,5 @@
 #![allow(clippy::all)]
+#![allow(non_snake_case)]
 #![allow(dead_code)]
 #![allow(unreachable_code)]
 #![allow(unused_imports)]
@@ -1193,7 +1194,7 @@ pub trait Kucoin : Exchange {
             let mut quote: Value = self.safe_currency_code(quote_id.clone(), Value::Undefined);
             let mut settle: Value = self.safe_currency_code(settle_id.clone(), Value::Undefined);
             let mut has_margin: Value = self.safe_string(market.clone(), Value::from("marginMode"), Value::Undefined);
-            let mut is_marginable: Value = if has_margin.clone() == Value::from("1") { true.into() } else { false.into() };
+            let mut is_marginable: Value = if has_margin.clone() == Value::from("1") { Value::from(true) } else { Value::from(false) };
             let mut symbol: Value = base.clone() + Value::from("/") + quote.clone();
             if settle.clone().is_nonnullish() {
                 symbol = symbol +  Value::from(":") + settle.clone();
@@ -1202,29 +1203,29 @@ pub trait Kucoin : Exchange {
             let mut expiry: Value = self.safe_integer(market.clone(), Value::from("expiryTime"), Value::Undefined);
             let mut active: Value = self.safe_string(market.clone(), Value::from("tradingStatus"), Value::Undefined);
             let mut r#type: Value = Value::Undefined;
-            let mut spot: Value = false.into();
-            let mut swap: Value = false.into();
-            let mut future: Value = false.into();
-            let mut contract: Value = false.into();
-            let mut linear: Value = false.into();
-            let mut inverse: Value = false.into();
+            let mut spot: Value = Value::from(false);
+            let mut swap: Value = Value::from(false);
+            let mut future: Value = Value::from(false);
+            let mut contract: Value = Value::from(false);
+            let mut linear: Value = Value::from(false);
+            let mut inverse: Value = Value::from(false);
             if contract_type.clone().is_nonnullish() {
-                contract = true.into();
+                contract = Value::from(true);
                 if quote.clone() == settle.clone() {
-                    linear = true.into();
+                    linear = Value::from(true);
                 } else {
-                    inverse = true.into();
+                    inverse = Value::from(true);
                 };
                 if contract_type.clone() == Value::from("0") {
                     r#type = Value::from("swap");
-                    swap = true.into();
+                    swap = Value::from(true);
                 } else {
                     r#type = Value::from("future");
-                    future = true.into();
+                    future = Value::from(true);
                 };
             } else {
                 r#type = Value::from("spot");
-                spot = true.into();
+                spot = Value::from(true);
             };
             result.push(Value::Json(normalize(&Value::Json(json!({
                 "id": id,
@@ -1241,7 +1242,7 @@ pub trait Kucoin : Exchange {
                 "swap": swap,
                 "future": future,
                 "option": false,
-                "active": active.clone() == Value::from("1"),
+                "active": Value::from(active.clone() == Value::from("1")),
                 "contract": contract,
                 "linear": linear,
                 "inverse": inverse,
@@ -1286,23 +1287,23 @@ pub trait Kucoin : Exchange {
     }
 
     async fn load_migration_status(&mut self, mut force: Value) -> Value {
-        force = force.or_default(false.into());
+        force = force.or_default(Value::from(false));
         if !self.get("options".into()).contains_key(Value::from("hf")) || self.get("options".into()).get(Value::from("hf")).is_nullish() || force.is_truthy() {
             let mut result: Value = self.dispatch("privateGetHfAccountsOpened".into(), Value::Undefined, Value::Undefined).await;
             self.get("options".into()).set("hf".into(), self.safe_bool(result.clone(), Value::from("data"), Value::Undefined));
         };
-        return true.into();
+        return Value::from(true);
     }
 
     fn handle_hf_and_params(&mut self, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
-        let mut migrated: Value = self.safe_bool(self.get("options".into()), Value::from("hf"), false.into());
+        let mut migrated: Value = self.safe_bool(self.get("options".into()), Value::from("hf"), Value::from(false));
         let mut loaded_hf: Value = Value::Undefined;
         if migrated.clone().is_nonnullish() {
             if migrated.is_truthy() {
-                loaded_hf = true.into();
+                loaded_hf = Value::from(true);
             } else {
-                loaded_hf = false.into();
+                loaded_hf = Value::from(false);
             };
         };
         let mut hf: Value = self.safe_bool(params.clone(), Value::from("hf"), loaded_hf.clone());
@@ -1364,9 +1365,9 @@ pub trait Kucoin : Exchange {
             let mut code: Value = self.safe_currency_code(id.clone(), Value::Undefined);
             let mut networks: Value = Value::new_object();
             let mut chains: Value = self.safe_list(entry.clone(), Value::from("chains"), Value::new_array());
-            let mut chains_length: usize = chains.len();
+            let mut chains_length: Value = Value::from(chains.len());
             let mut j: usize = 0;
-            while j < chains_length.clone().into() {
+            while j < Value::from(chains_length.clone()) {
                 let mut chain: Value = chains.get(j.into());
                 let mut chain_id: Value = self.safe_string(chain.clone(), Value::from("chainId"), Value::Undefined);
                 let mut network_code: Value = self.network_id_to_code(chain_id.clone(), code.clone());
@@ -1396,7 +1397,7 @@ pub trait Kucoin : Exchange {
             // kucoin has determined 'fiat' currencies with below logic
             let mut raw_precision: Value = self.safe_string(entry.clone(), Value::from("precision"), Value::Undefined);
             let mut precision: Value = self.parse_number(self.parse_precision(raw_precision.clone()), Value::Undefined);
-            let mut is_fiat: Value = (chains_length.clone() == Value::from(0)).into();
+            let mut is_fiat: Value = Value::from(chains_length.clone() == Value::from(0));
             result.set(code.clone(), self.safe_currency_structure(Value::Json(normalize(&Value::Json(json!({
                 "id": id,
                 "name": self.safe_string(entry.clone(), Value::from("fullName"), Value::Undefined),
@@ -1612,7 +1613,7 @@ pub trait Kucoin : Exchange {
             panic!(r###"ExchangeError::new(self.get("id".into()) + Value::from(" isFuturesMethod() type must be one of ") + keys.join(Value::from(", ")))"###);
         };
         params = self.omit(params.clone(), Value::from("type"));
-        return (r#type.clone() == Value::from("contract") || r#type.clone() == Value::from("future") || r#type.clone() == Value::from("futures")).into();
+        return Value::from(r#type.clone() == Value::from("contract") || r#type.clone() == Value::from("future") || r#type.clone() == Value::from("futures"));
     }
 
     fn parse_ticker(&self, mut ticker: Value, mut market: Value) -> Value {
@@ -2011,8 +2012,8 @@ pub trait Kucoin : Exchange {
         let mut trigger_price: Value = self.safe_value_2(params.clone(), Value::from("triggerPrice"), Value::from("stopPrice"), Value::Undefined);
         let mut stop_loss_price: Value = self.safe_value(params.clone(), Value::from("stopLossPrice"), Value::Undefined);
         let mut take_profit_price: Value = self.safe_value(params.clone(), Value::from("takeProfitPrice"), Value::Undefined);
-        let mut is_stop_loss: Value = (stop_loss_price.clone().is_nonnullish()).into();
-        let mut is_take_profit: Value = (take_profit_price.clone().is_nonnullish()).into();
+        let mut is_stop_loss: Value = Value::from(stop_loss_price.clone().is_nonnullish());
+        let mut is_take_profit: Value = Value::from(take_profit_price.clone().is_nonnullish());
         if is_stop_loss.is_truthy() && is_take_profit.is_truthy() || trigger_price.is_truthy() && stop_loss_price.is_truthy() || trigger_price.is_truthy() && is_take_profit.is_truthy() {
             panic!(r###"ExchangeError::new(self.get("id".into()) + Value::from(" createOrder() - you should use either triggerPrice or stopLossPrice or takeProfitPrice"))"###);
         };
@@ -2023,19 +2024,19 @@ pub trait Kucoin : Exchange {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
         let mut market: Value = self.market(symbol.clone());
-        let mut test_order: Value = self.safe_bool(params.clone(), Value::from("test"), false.into());
+        let mut test_order: Value = self.safe_bool(params.clone(), Value::from("test"), Value::from(false));
         params = self.omit(params.clone(), Value::from("test"));
         let mut hf: Value = Value::Undefined;
         (hf, params) = shift_2(<Self as Kucoin>::handle_hf_and_params(self, params.clone()));
-        let mut use_sync: Value = false.into();
-        (use_sync, params) = shift_2(self.handle_option_and_params(params.clone(), Value::from("createOrder"), Value::from("sync"), false.into()));
+        let mut use_sync: Value = Value::from(false);
+        (use_sync, params) = shift_2(self.handle_option_and_params(params.clone(), Value::from("createOrder"), Value::from("sync"), Value::from(false)));
         let (mut trigger_price, mut stop_loss_price, mut take_profit_price) = shift_3(<Self as Kucoin>::handle_trigger_prices(self, params.clone()));
         let mut trade_type: Value = self.safe_string(params.clone(), Value::from("tradeType"), Value::Undefined);
         // keep it for backward compatibility
-        let mut is_trigger_order: Value = (trigger_price.is_truthy() || stop_loss_price.is_truthy() || take_profit_price.is_truthy()).into();
+        let mut is_trigger_order: Value = Value::from(trigger_price.is_truthy() || stop_loss_price.is_truthy() || take_profit_price.is_truthy());
         let mut margin_result: Value = self.handle_margin_mode_and_params(Value::from("createOrder"), params.clone(), Value::Undefined);
         let mut margin_mode: Value = self.safe_string(margin_result.clone(), Value::from(0), Value::Undefined);
-        let mut is_margin_order: Value = (trade_type.clone() == Value::from("MARGIN_TRADE") || margin_mode.clone().is_nonnullish()).into();
+        let mut is_margin_order: Value = Value::from(trade_type.clone() == Value::from("MARGIN_TRADE") || margin_mode.clone().is_nonnullish());
         // don't omit anything before calling createOrderRequest
         let mut order_request: Value = <Self as Kucoin>::create_order_request(self, symbol.clone(), r#type.clone(), side.clone(), amount.clone(), price.clone(), params.clone());
         let mut response: Value = Value::Undefined;
@@ -2126,8 +2127,8 @@ pub trait Kucoin : Exchange {
         }))).unwrap());
         let mut hf: Value = Value::Undefined;
         (hf, params) = shift_2(<Self as Kucoin>::handle_hf_and_params(self, params.clone()));
-        let mut use_sync: Value = false.into();
-        (use_sync, params) = shift_2(self.handle_option_and_params(params.clone(), Value::from("createOrders"), Value::from("sync"), false.into()));
+        let mut use_sync: Value = Value::from(false);
+        (use_sync, params) = shift_2(self.handle_option_and_params(params.clone(), Value::from("createOrders"), Value::from("sync"), Value::from(false)));
         let mut response: Value = Value::Undefined;
         if use_sync.is_truthy() {
             response = self.dispatch("privatePostHfOrdersMultiSync".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
@@ -2216,8 +2217,8 @@ pub trait Kucoin : Exchange {
         let mut trade_type: Value = self.safe_string(params.clone(), Value::from("tradeType"), Value::Undefined);
         // keep it for backward compatibility
         let (mut trigger_price, mut stop_loss_price, mut take_profit_price) = shift_3(<Self as Kucoin>::handle_trigger_prices(self, params.clone()));
-        let mut is_trigger_order: Value = (trigger_price.is_truthy() || stop_loss_price.is_truthy() || take_profit_price.is_truthy()).into();
-        let mut is_margin_order: Value = (trade_type.clone() == Value::from("MARGIN_TRADE") || margin_mode.clone().is_nonnullish()).into();
+        let mut is_trigger_order: Value = Value::from(trigger_price.is_truthy() || stop_loss_price.is_truthy() || take_profit_price.is_truthy());
+        let mut is_margin_order: Value = Value::from(trade_type.clone() == Value::from("MARGIN_TRADE") || margin_mode.clone().is_nonnullish());
         params = self.omit(params.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("stopLossPrice").into(), Value::from("takeProfitPrice").into(), Value::from("triggerPrice").into(), Value::from("stopPrice").into()])));
         if is_trigger_order.is_truthy() {
             if trigger_price.is_truthy() {
@@ -2242,9 +2243,9 @@ pub trait Kucoin : Exchange {
             };
         };
         let mut post_only: Value = Value::Undefined;
-        (post_only, params) = shift_2(self.handle_post_only((r#type.clone() == Value::from("market")).into(), false.into(), params.clone()));
+        (post_only, params) = shift_2(self.handle_post_only(Value::from(r#type.clone() == Value::from("market")), Value::from(false), params.clone()));
         if post_only.is_truthy() {
-            request.set("postOnly".into(), true.into());
+            request.set("postOnly".into(), Value::from(true));
         };
         return extend_2(request.clone(), params.clone());
     }
@@ -2286,11 +2287,11 @@ pub trait Kucoin : Exchange {
         self.load_markets(Value::Undefined, Value::Undefined).await;
         let mut request: Value = Value::new_object();
         let mut client_order_id: Value = self.safe_string_2(params.clone(), Value::from("clientOid"), Value::from("clientOrderId"), Value::Undefined);
-        let mut trigger: Value = self.safe_bool_2(params.clone(), Value::from("stop"), Value::from("trigger"), false.into());
+        let mut trigger: Value = self.safe_bool_2(params.clone(), Value::from("stop"), Value::from("trigger"), Value::from(false));
         let mut hf: Value = Value::Undefined;
         (hf, params) = shift_2(<Self as Kucoin>::handle_hf_and_params(self, params.clone()));
-        let mut use_sync: Value = false.into();
-        (use_sync, params) = shift_2(self.handle_option_and_params(params.clone(), Value::from("cancelOrder"), Value::from("sync"), false.into()));
+        let mut use_sync: Value = Value::from(false);
+        (use_sync, params) = shift_2(self.handle_option_and_params(params.clone(), Value::from("cancelOrder"), Value::from("sync"), Value::from(false)));
         if hf.is_truthy() || use_sync.is_truthy() {
             if symbol.clone().is_nullish() {
                 panic!(r###"ArgumentsRequired::new(self.get("id".into()) + Value::from(" cancelOrder() requires a symbol parameter for hf orders"))"###);
@@ -2388,7 +2389,7 @@ pub trait Kucoin : Exchange {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
         let mut request: Value = Value::new_object();
-        let mut trigger: Value = self.safe_bool_2(params.clone(), Value::from("trigger"), Value::from("stop"), false.into());
+        let mut trigger: Value = self.safe_bool_2(params.clone(), Value::from("trigger"), Value::from("stop"), Value::from(false));
         let mut hf: Value = Value::Undefined;
         (hf, params) = shift_2(<Self as Kucoin>::handle_hf_and_params(self, params.clone()));
         params = self.omit(params.clone(), Value::from("stop"));
@@ -2424,7 +2425,7 @@ pub trait Kucoin : Exchange {
         self.load_markets(Value::Undefined, Value::Undefined).await;
         let mut lowercase_status: Value = status.to_lower_case();
         let mut until: Value = self.safe_integer(params.clone(), Value::from("until"), Value::Undefined);
-        let mut trigger: Value = self.safe_bool_2(params.clone(), Value::from("stop"), Value::from("trigger"), false.into());
+        let mut trigger: Value = self.safe_bool_2(params.clone(), Value::from("stop"), Value::from("trigger"), Value::from(false));
         let mut hf: Value = Value::Undefined;
         (hf, params) = shift_2(<Self as Kucoin>::handle_hf_and_params(self, params.clone()));
         if hf.is_truthy() && symbol.clone().is_nullish() {
@@ -2522,7 +2523,7 @@ pub trait Kucoin : Exchange {
     async fn fetch_closed_orders(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        let mut paginate: Value = false.into();
+        let mut paginate: Value = Value::from(false);
         (paginate, params) = shift_2(self.handle_option_and_params(params.clone(), Value::from("fetchClosedOrders"), Value::from("paginate"), Value::Undefined));
         if paginate.is_truthy() {
             return self.fetch_paginated_call_dynamic(Value::from("fetchClosedOrders"), symbol.clone(), since.clone(), limit.clone(), params.clone(), Value::Undefined, Value::Undefined).await;
@@ -2533,7 +2534,7 @@ pub trait Kucoin : Exchange {
     async fn fetch_open_orders(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        let mut paginate: Value = false.into();
+        let mut paginate: Value = Value::from(false);
         (paginate, params) = shift_2(self.handle_option_and_params(params.clone(), Value::from("fetchOpenOrders"), Value::from("paginate"), Value::Undefined));
         if paginate.is_truthy() {
             return self.fetch_paginated_call_dynamic(Value::from("fetchOpenOrders"), symbol.clone(), since.clone(), limit.clone(), params.clone(), Value::Undefined, Value::Undefined).await;
@@ -2546,7 +2547,7 @@ pub trait Kucoin : Exchange {
         self.load_markets(Value::Undefined, Value::Undefined).await;
         let mut request: Value = Value::new_object();
         let mut client_order_id: Value = self.safe_string_2(params.clone(), Value::from("clientOid"), Value::from("clientOrderId"), Value::Undefined);
-        let mut trigger: Value = self.safe_bool_2(params.clone(), Value::from("stop"), Value::from("trigger"), false.into());
+        let mut trigger: Value = self.safe_bool_2(params.clone(), Value::from("stop"), Value::from("trigger"), Value::from(false));
         let mut hf: Value = Value::Undefined;
         (hf, params) = shift_2(<Self as Kucoin>::handle_hf_and_params(self, params.clone()));
         let mut market: Value = Value::Undefined;
@@ -2721,15 +2722,15 @@ pub trait Kucoin : Exchange {
         let mut market_id: Value = self.safe_string(order.clone(), Value::from("symbol"), Value::Undefined);
         let mut timestamp: Value = self.safe_integer(order.clone(), Value::from("createdAt"), Value::Undefined);
         let mut fee_currency_id: Value = self.safe_string(order.clone(), Value::from("feeCurrency"), Value::Undefined);
-        let mut cancel_exist: Value = self.safe_bool(order.clone(), Value::from("cancelExist"), false.into());
+        let mut cancel_exist: Value = self.safe_bool(order.clone(), Value::from("cancelExist"), Value::from(false));
         let mut response_stop: Value = self.safe_string(order.clone(), Value::from("stop"), Value::Undefined);
-        let mut trigger: Value = (response_stop.clone().is_nonnullish()).into();
-        let mut stop_triggered: Value = self.safe_bool(order.clone(), Value::from("stopTriggered"), false.into());
+        let mut trigger: Value = Value::from(response_stop.clone().is_nonnullish());
+        let mut stop_triggered: Value = self.safe_bool(order.clone(), Value::from("stopTriggered"), Value::from(false));
         let mut is_active: Value = self.safe_bool_2(order.clone(), Value::from("isActive"), Value::from("active"), Value::Undefined);
         let mut response_status: Value = self.safe_string(order.clone(), Value::from("status"), Value::Undefined);
         let mut status: Value = Value::Undefined;
         if is_active.clone().is_nonnullish() {
-            if is_active.clone() == true.into() {
+            if is_active.clone() == Value::from(true) {
                 status = Value::from("open");
             } else {
                 status = Value::from("closed");
@@ -2787,7 +2788,7 @@ pub trait Kucoin : Exchange {
     async fn fetch_my_trades(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        let mut paginate: Value = false.into();
+        let mut paginate: Value = Value::from(false);
         (paginate, params) = shift_2(self.handle_option_and_params(params.clone(), Value::from("fetchMyTrades"), Value::from("paginate"), Value::Undefined));
         if paginate.is_truthy() {
             return self.fetch_paginated_call_dynamic(Value::from("fetchMyTrades"), symbol.clone(), since.clone(), limit.clone(), params.clone(), Value::Undefined, Value::Undefined).await;
@@ -2804,7 +2805,7 @@ pub trait Kucoin : Exchange {
             request.set("symbol".into(), market.get(Value::from("id")));
         };
         let mut method: Value = self.get("options".into()).get(Value::from("fetchMyTradesMethod"));
-        let mut parse_response_data: Value = false.into();
+        let mut parse_response_data: Value = Value::from(false);
         let mut response: Value = Value::Undefined;
         (request, params) = shift_2(self.handle_until_option(Value::from("endAt"), request.clone(), params.clone(), Value::Undefined));
         if hf.is_truthy() {
@@ -2828,7 +2829,7 @@ pub trait Kucoin : Exchange {
             // does not return trades earlier than 2019-02-18T00:00:00Z
             // takes no params
             // only returns first 1000 trades (not only "in the last 24 hours" as stated in the docs)
-            parse_response_data = true.into();
+            parse_response_data = Value::from(true);
             response = self.dispatch("privateGetLimitFills".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         } else {
             panic!(r###"ExchangeError::new(self.get("id".into()) + Value::from(" fetchMyTradesMethod() invalid method"))"###);
@@ -3097,7 +3098,7 @@ pub trait Kucoin : Exchange {
         };
         request.set("amount".into(), parse_float(self.currency_to_precision(code.clone(), amount.clone(), network_code.clone())));
         let mut include_fee: Value = Value::Undefined;
-        (include_fee, params) = shift_2(self.handle_option_and_params(params.clone(), Value::from("withdraw"), Value::from("includeFee"), false.into()));
+        (include_fee, params) = shift_2(self.handle_option_and_params(params.clone(), Value::from("withdraw"), Value::from("includeFee"), Value::from(false)));
         if include_fee.is_truthy() {
             request.set("feeDeductType".into(), Value::from("INTERNAL"));
         };
@@ -3176,7 +3177,7 @@ pub trait Kucoin : Exchange {
         let mut txid: Value = self.safe_string(transaction.clone(), Value::from("walletTxId"), Value::Undefined);
         if txid.clone().is_nonnullish() {
             let mut txid_parts: Value = txid.split(Value::from("@"));
-            let mut num_txid_parts: usize = txid_parts.len();
+            let mut num_txid_parts: Value = Value::from(txid_parts.len());
             if num_txid_parts.clone() > Value::from(1) {
                 if address.clone().is_nullish() {
                     if txid_parts.get(Value::from(1)).len() > 1 {
@@ -3203,7 +3204,7 @@ pub trait Kucoin : Exchange {
         };
         let mut timestamp: Value = self.safe_integer_2(transaction.clone(), Value::from("createdAt"), Value::from("createAt"), Value::Undefined);
         let mut updated: Value = self.safe_integer(transaction.clone(), Value::from("updatedAt"), Value::Undefined);
-        let mut is_v1: Value = (!transaction.contains_key(Value::from("createdAt"))).into();
+        let mut is_v1: Value = Value::from(!transaction.contains_key(Value::from("createdAt")));
         // if it's a v1 structure
         if is_v1.is_truthy() {
             r#type = if transaction.contains_key(Value::from("address")) { Value::from("withdrawal") } else { Value::from("deposit") };
@@ -3243,7 +3244,7 @@ pub trait Kucoin : Exchange {
     async fn fetch_deposits(&mut self, mut code: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        let mut paginate: Value = false.into();
+        let mut paginate: Value = Value::from(false);
         (paginate, params) = shift_2(self.handle_option_and_params(params.clone(), Value::from("fetchDeposits"), Value::from("paginate"), Value::Undefined));
         if paginate.is_truthy() {
             return self.fetch_paginated_call_dynamic(Value::from("fetchDeposits"), code.clone(), since.clone(), limit.clone(), params.clone(), Value::Undefined, Value::Undefined).await;
@@ -3317,7 +3318,7 @@ pub trait Kucoin : Exchange {
     async fn fetch_withdrawals(&mut self, mut code: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        let mut paginate: Value = false.into();
+        let mut paginate: Value = Value::from(false);
         (paginate, params) = shift_2(self.handle_option_and_params(params.clone(), Value::from("fetchWithdrawals"), Value::from("paginate"), Value::Undefined));
         if paginate.is_truthy() {
             return self.fetch_paginated_call_dynamic(Value::from("fetchWithdrawals"), code.clone(), since.clone(), limit.clone(), params.clone(), Value::Undefined, Value::Undefined).await;
@@ -3421,8 +3422,8 @@ pub trait Kucoin : Exchange {
         let (mut margin_mode, mut query) = shift_2(self.handle_margin_mode_and_params(Value::from("fetchBalance"), params.clone(), Value::Undefined));
         let mut response: Value = Value::Undefined;
         let mut request: Value = Value::new_object();
-        let mut isolated: Value = (margin_mode.clone() == Value::from("isolated") || r#type.clone() == Value::from("isolated")).into();
-        let mut cross: Value = (margin_mode.clone() == Value::from("cross") || r#type.clone() == Value::from("margin")).into();
+        let mut isolated: Value = Value::from(margin_mode.clone() == Value::from("isolated") || r#type.clone() == Value::from("isolated"));
+        let mut cross: Value = Value::from(margin_mode.clone() == Value::from("cross") || r#type.clone() == Value::from("margin"));
         if isolated.is_truthy() {
             if currency.clone().is_nonnullish() {
                 request.set("balanceCurrency".into(), currency.get(Value::from("id")));
@@ -3634,7 +3635,7 @@ pub trait Kucoin : Exchange {
         let mut data: Value = self.safe_dict(response.clone(), Value::from("data"), Value::Undefined);
         let mut transfer: Value = <Self as Kucoin>::parse_transfer(self, data.clone(), currency.clone());
         let mut transfer_options: Value = self.safe_dict(self.get("options".into()), Value::from("transfer"), Value::new_object());
-        let mut fill_response_from_request: Value = self.safe_bool(transfer_options.clone(), Value::from("fillResponseFromRequest"), true.into());
+        let mut fill_response_from_request: Value = self.safe_bool(transfer_options.clone(), Value::from("fillResponseFromRequest"), Value::from(true));
         if fill_response_from_request.is_truthy() {
             transfer.set("amount".into(), amount.clone());
             transfer.set("fromAccount".into(), from_account.clone());
@@ -3645,7 +3646,7 @@ pub trait Kucoin : Exchange {
     }
 
     fn is_hf_or_mining(&mut self, mut from_id: Value, mut to_id: Value) -> Value {
-        return (from_id.clone() == Value::from("trade_hf") || to_id.clone() == Value::from("trade_hf") || from_id.clone() == Value::from("pool") || to_id.clone() == Value::from("pool")).into();
+        return Value::from(from_id.clone() == Value::from("trade_hf") || to_id.clone() == Value::from("trade_hf") || from_id.clone() == Value::from("pool") || to_id.clone() == Value::from("pool"));
     }
 
     fn parse_transfer(&self, mut transfer: Value, mut currency: Value) -> Value {
@@ -3702,7 +3703,7 @@ pub trait Kucoin : Exchange {
         let mut currency_id: Value = self.safe_string(transfer.clone(), Value::from("currency"), Value::Undefined);
         let mut raw_status: Value = self.safe_string(transfer.clone(), Value::from("status"), Value::Undefined);
         let mut biz_type: Value = self.safe_string(transfer.clone(), Value::from("bizType"), Value::Undefined);
-        let mut is_ledger_entry: Value = (biz_type.clone().is_nonnullish()).into();
+        let mut is_ledger_entry: Value = Value::from(biz_type.clone().is_nonnullish());
         let mut account_from_raw: Value = Value::Undefined;
         let mut account_to_raw: Value = Value::Undefined;
         if is_ledger_entry.is_truthy() {
@@ -3844,7 +3845,6 @@ pub trait Kucoin : Exchange {
                 reference_id = order_id.clone();
             };
             // catch block omitted (no exception support in Value runtime)
-;
         };
         let mut fee: Value = Value::Undefined;
         let mut fee_cost: Value = self.safe_string(item.clone(), Value::from("fee"), Value::Undefined);
@@ -3879,7 +3879,7 @@ pub trait Kucoin : Exchange {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
         self.load_accounts(Value::Undefined, Value::Undefined).await;
-        let mut paginate: Value = false.into();
+        let mut paginate: Value = Value::from(false);
         (paginate, params) = shift_2(self.handle_option_and_params(params.clone(), Value::from("fetchLedger"), Value::from("paginate"), Value::Undefined));
         let mut hf: Value = Value::Undefined;
         (hf, params) = shift_2(<Self as Kucoin>::handle_hf_and_params(self, params.clone()));
@@ -4185,7 +4185,7 @@ pub trait Kucoin : Exchange {
         self.load_markets(Value::Undefined, Value::Undefined).await;
         let mut margin_result: Value = self.handle_margin_mode_and_params(Value::from("fetchBorrowRateHistories"), params.clone(), Value::Undefined);
         let mut margin_mode: Value = self.safe_string(margin_result.clone(), Value::from(0), Value::from("cross"));
-        let mut is_isolated: Value = (margin_mode.clone() == Value::from("isolated")).into();
+        let mut is_isolated: Value = Value::from(margin_mode.clone() == Value::from("isolated"));
         // true-isolated, false-cross
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
             "isIsolated": is_isolated
@@ -4229,7 +4229,7 @@ pub trait Kucoin : Exchange {
         self.load_markets(Value::Undefined, Value::Undefined).await;
         let mut margin_result: Value = self.handle_margin_mode_and_params(Value::from("fetchBorrowRateHistories"), params.clone(), Value::Undefined);
         let mut margin_mode: Value = self.safe_string(margin_result.clone(), Value::from(0), Value::from("cross"));
-        let mut is_isolated: Value = (margin_mode.clone() == Value::from("isolated")).into();
+        let mut is_isolated: Value = Value::from(margin_mode.clone() == Value::from("isolated"));
         // true-isolated, false-cross
         let mut currency: Value = self.currency(code.clone());
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
@@ -4485,7 +4485,7 @@ pub trait Kucoin : Exchange {
             request.set("symbol".into(), market.get(Value::from("id")));
         };
         request.set("leverage".into(), leverage.to_string());
-        request.set("isIsolated".into(), margin_mode.clone() == Value::from("isolated"));
+        request.set("isIsolated".into(), Value::from(margin_mode.clone() == Value::from("isolated")));
         return self.dispatch("privatePostPositionUpdateUserLeverage".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
     }
 
@@ -4615,7 +4615,7 @@ pub trait Kucoin : Exchange {
     async fn fetch_transfers(&mut self, mut code: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        let mut paginate: Value = false.into();
+        let mut paginate: Value = Value::from(false);
         (paginate, params) = shift_2(self.handle_option_and_params(params.clone(), Value::from("fetchTransfers"), Value::from("paginate"), Value::Undefined));
         if paginate.is_truthy() {
             return self.fetch_paginated_call_dynamic(Value::from("fetchTransfers"), code.clone(), since.clone(), limit.clone(), params.clone(), Value::Undefined, Value::Undefined).await;
