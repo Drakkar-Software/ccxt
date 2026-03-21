@@ -13,14 +13,38 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, BoolExt, JSON, Array, Object, Math, Promise, parse_int, shift_2, extend_2, normalize};
 // Crypto hash identifiers
-fn sha256() -> Value { Value::from("sha256") }
-fn sha384() -> Value { Value::from("sha384") }
-fn sha512() -> Value { Value::from("sha512") }
-fn md5() -> Value { Value::from("md5") }
-fn ed25519() -> Value { Value::from("ed25519") }
+fn sha256() -> Value { Value::from("sha256()") }
+fn sha384() -> Value { Value::from("sha384()") }
+fn sha512() -> Value { Value::from("sha512()") }
+fn md5() -> Value { Value::from("md5()") }
+fn ed25519() -> Value { Value::from("ed25519()") }
 fn rsa(msg: Value, secret: Value, _hash: Value) -> Value { msg }
 fn eddsa(msg: Value, secret: Value, _curve: Value) -> Value { msg }
-fn secp256k1() -> Value { Value::from("secp256k1") }
+fn secp256k1() -> Value { Value::from("secp256k1()") }
+fn keccak() -> Value { Value::from("keccak()") }
+fn ecdsa(msg: Value, secret: Value, algo: Value, hash_fn: Value) -> Value { msg }
+fn totp(secret: Value) -> Value { Value::Undefined }
+fn jwt(data: Value, secret: Value, hash: Value, is_rsa: Value) -> Value { Value::Undefined }
+fn parse_float(value: Value) -> Value { value }
+fn decimals(value: Value) -> Value { Value::from(0) }
+fn shift_1(value: Value) -> Value { value }
+fn shift_3(value: Value) -> (Value, Value, Value) { (value.clone(), Value::Undefined, Value::Undefined) }
+fn shift_4(value: Value) -> (Value, Value, Value, Value) { (value.clone(), Value::Undefined, Value::Undefined, Value::Undefined) }
+// Error type constructors
+fn BadRequest(msg: Value) -> Value { msg }
+fn InvalidOrder(msg: Value) -> Value { msg }
+fn ExchangeError(msg: Value) -> Value { msg }
+fn InsufficientFunds(msg: Value) -> Value { msg }
+fn OrderNotFound(msg: Value) -> Value { msg }
+fn AuthenticationError(msg: Value) -> Value { msg }
+fn PermissionDenied(msg: Value) -> Value { msg }
+fn ExchangeNotAvailable(msg: Value) -> Value { msg }
+fn ArgumentsRequired(msg: Value) -> Value { msg }
+fn RateLimitExceeded(msg: Value) -> Value { msg }
+fn OrderNotFillable(msg: Value) -> Value { msg }
+fn OrderImmediatelyFillable(msg: Value) -> Value { msg }
+fn NotSupported(msg: Value) -> Value { msg }
+fn DuplicateOrderId(msg: Value) -> Value { msg }
 
 use crate::exchange::{PRECISE_BASE, TRUNCATE, ROUND, ROUND_UP, ROUND_DOWN};
 use crate::exchange::{DECIMAL_PLACES, SIGNIFICANT_DIGITS, TICK_SIZE, NO_PADDING, PAD_WITH_ZERO};
@@ -426,14 +450,14 @@ pub trait Hyperliquid : Exchange {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = <Self as Hyperliquid>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() { return rv; }
                 }
             }
         }
         let candidates = vec![("public", "GET", "status"), ("public", "GET", "ping"), ("public", "GET", "time"), ("sapi", "GET", "system/status")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Hyperliquid>::request(self,path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -443,7 +467,7 @@ pub trait Hyperliquid : Exchange {
     async fn fetch_time(&mut self, mut params: Value) -> Value {
         let candidates = vec![("public", "GET", "time"), ("public", "GET", "server/time"), ("public", "GET", "timestamp")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Hyperliquid>::request(self,path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -765,7 +789,7 @@ pub trait Hyperliquid : Exchange {
             // Calculate price precision based on maxDecimals - szDecimals and significantDigits - integerPart.length
             price_precision = Math::min(max_decimals.clone() - amount_precision.clone(), significant_digits.clone() - integer_part.len().into());
         };
-        return self.parse_to_int(price_precision.clone(), Value::Undefined);
+        return self.parse_to_int(price_precision.clone());
     }
 
     async fn fetch_spot_markets(&mut self, mut params: Value) -> Value {
@@ -1160,14 +1184,14 @@ pub trait Hyperliquid : Exchange {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = <Self as Hyperliquid>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() { return rv; }
                 }
             }
         }
         let candidates = vec![("public", "GET", "depth"), ("public", "GET", "orderbook"), ("public", "GET", "order_book")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Hyperliquid>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -1189,14 +1213,14 @@ pub trait Hyperliquid : Exchange {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = <Self as Hyperliquid>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() { return rv; }
                 }
             }
         }
         let candidates = vec![("public", "GET", "ticker/24hr"), ("public", "GET", "tickers"), ("public", "GET", "ticker")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Hyperliquid>::request(self,path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -1358,14 +1382,14 @@ pub trait Hyperliquid : Exchange {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = <Self as Hyperliquid>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() { return rv; }
                 }
             }
         }
         let candidates = vec![("public", "GET", "klines"), ("public", "GET", "candles"), ("public", "GET", "ohlcv")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Hyperliquid>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -1397,7 +1421,7 @@ pub trait Hyperliquid : Exchange {
         if limit.is_nonnullish() { request.set("limit".into(), limit.clone()); }
         let candidates = vec![("public", "GET", "trades"), ("public", "GET", "recent_trades"), ("public", "GET", "aggTrades")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Hyperliquid>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -1421,11 +1445,11 @@ pub trait Hyperliquid : Exchange {
     }
 
     fn hash_message(&mut self, mut message: Value) -> Value {
-        return Value::from("0x") + self.hash(message.clone(), keccak.clone(), Value::from("hex"));
+        return Value::from("0x") + self.hash(message.clone(), keccak().clone(), Value::from("hex"));
     }
 
     fn sign_hash(&mut self, mut hash: Value, mut private_key: Value) -> Value {
-        let mut signature: Value = ecdsa(hash.slice(Value::from(64).neg()), private_key.slice(Value::from(64).neg()), secp256k1.clone(), Value::Undefined);
+        let mut signature: Value = ecdsa(hash.slice(Value::from(64).neg(), Value::Undefined), private_key.slice(Value::from(64).neg(), Value::Undefined), secp256k1().clone(), Value::Undefined);
         return Value::Json(normalize(&Value::Json(json!({
             "r": Value::from("0x") + signature.get(Value::from("r")),
             "s": Value::from("0x") + signature.get(Value::from("s")),
@@ -1434,7 +1458,7 @@ pub trait Hyperliquid : Exchange {
     }
 
     fn sign_message(&mut self, mut message: Value, mut private_key: Value) -> Value {
-        return <Self as Hyperliquid>::sign_hash(self, <Self as Hyperliquid>::hash_message(self, message.clone()), private_key.slice(Value::from(64).neg()));
+        return <Self as Hyperliquid>::sign_hash(self, <Self as Hyperliquid>::hash_message(self, message.clone()), private_key.slice(Value::from(64).neg(), Value::Undefined));
     }
 
     fn construct_phantom_agent(&mut self, mut hash: Value, mut is_testnet: Value) -> Value {
@@ -1461,7 +1485,7 @@ pub trait Hyperliquid : Exchange {
             data = data +  Value::from("00");
             data = data +  Value::from("00000") + self.int_to_base16(expires_after.clone());
         };
-        return self.hash(self.base16_to_binary(data.clone()), keccak.clone(), Value::from("binary"));
+        return self.hash(self.base16_to_binary(data.clone()), keccak().clone(), Value::from("binary"));
     }
 
     fn sign_l1_action(&mut self, mut action: Value, mut nonce: Value, mut vault_adress: Value, mut expires_after: Value) -> Value {
@@ -1850,7 +1874,7 @@ pub trait Hyperliquid : Exchange {
         let mut duration_mins: Value = Math::floor(duration.clone() / Value::from(1000) / Value::from(60));
         // convert from ms to minutes
         let mut order_obj: Value = Value::Json(normalize(&Value::Json(json!({
-            "a": self.parse_to_int(market.get(Value::from("baseId")), Value::Undefined),
+            "a": self.parse_to_int(market.get(Value::from("baseId"))),
             "b": is_buy,
             "s": <Self as Hyperliquid>::amount_to_precision(self, symbol.clone(), amount.clone()),
             "r": self.safe_bool(params.clone(), Value::from("reduceOnly"), false.into()),
@@ -1999,7 +2023,7 @@ pub trait Hyperliquid : Exchange {
         };
         params = self.omit(params.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("clientOrderId").into(), Value::from("slippage").into(), Value::from("triggerPrice").into(), Value::from("stopPrice").into(), Value::from("stopLossPrice").into(), Value::from("takeProfitPrice").into(), Value::from("timeInForce").into(), Value::from("client_id").into(), Value::from("reduceOnly").into(), Value::from("postOnly").into()])));
         let mut order_obj: Value = Value::Json(normalize(&Value::Json(json!({
-            "a": self.parse_to_int(market.get(Value::from("baseId")), Value::Undefined),
+            "a": self.parse_to_int(market.get(Value::from("baseId"))),
             "b": is_buy,
             "p": px,
             "s": sz,
@@ -2196,7 +2220,7 @@ pub trait Hyperliquid : Exchange {
         vault_address = <Self as Hyperliquid>::format_vault_address(self, vault_address.clone());
         let mut action: Value = Value::Json(normalize(&Value::Json(json!({
             "type": "twapCancel",
-            "a": self.parse_to_int(market.get(Value::from("baseId")), Value::Undefined),
+            "a": self.parse_to_int(market.get(Value::from("baseId"))),
             "t": self.parse_to_numeric(id.clone(), Value::Undefined)
         }))).unwrap());
         let mut nonce: Value = self.milliseconds();
@@ -2497,7 +2521,7 @@ pub trait Hyperliquid : Exchange {
                 trigger_price = Value::from("0");
             };
             let mut order_req: Value = Value::Json(normalize(&Value::Json(json!({
-                "a": self.parse_to_int(market.get(Value::from("baseId")), Value::Undefined),
+                "a": self.parse_to_int(market.get(Value::from("baseId"))),
                 "b": is_buy,
                 "p": px,
                 "s": sz,
@@ -2509,7 +2533,7 @@ pub trait Hyperliquid : Exchange {
                 order_req.set("c".into(), client_order_id.clone());
             };
             let mut modify_req: Value = Value::Json(normalize(&Value::Json(json!({
-                "oid": self.parse_to_int(id.clone(), Value::Undefined),
+                "oid": self.parse_to_int(id.clone()),
                 "order": order_req
             }))).unwrap());
             modifies.push(modify_req.clone());
@@ -2602,7 +2626,7 @@ pub trait Hyperliquid : Exchange {
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
             "nonce": nonce
         }))).unwrap());
-        let mut usd: Value = self.parse_to_int(Precise::string_mul(self.number_to_string(initial_usd.clone()), Value::from("1000000")), Value::Undefined);
+        let mut usd: Value = self.parse_to_int(Precise::string_mul(self.number_to_string(initial_usd.clone()), Value::from("1000000")));
         let mut action: Value = Value::Json(normalize(&Value::Json(json!({
             "type": "createVault",
             "name": name,
@@ -3338,7 +3362,7 @@ pub trait Hyperliquid : Exchange {
         let mut market: Value = <Self as Hyperliquid>::market(self, symbol.clone());
         let mut margin_mode: Value = self.safe_string(params.clone(), Value::from("marginMode"), Value::from("cross"));
         let mut is_cross: Value = (margin_mode.clone() == Value::from("cross")).into();
-        let mut asset: Value = self.parse_to_int(market.get(Value::from("baseId")), Value::Undefined);
+        let mut asset: Value = self.parse_to_int(market.get(Value::from("baseId")));
         let mut nonce: Value = self.milliseconds();
         params = self.omit(params.clone(), Value::from("marginMode"));
         let mut update_action: Value = Value::Json(normalize(&Value::Json(json!({
@@ -3387,8 +3411,8 @@ pub trait Hyperliquid : Exchange {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
         let mut market: Value = <Self as Hyperliquid>::market(self, symbol.clone());
-        let mut asset: Value = self.parse_to_int(market.get(Value::from("baseId")), Value::Undefined);
-        let mut sz: Value = self.parse_to_int(Precise::string_mul(<Self as Hyperliquid>::amount_to_precision(self, symbol.clone(), amount.clone()), Value::from("1000000")), Value::Undefined);
+        let mut asset: Value = self.parse_to_int(market.get(Value::from("baseId")));
+        let mut sz: Value = self.parse_to_int(Precise::string_mul(<Self as Hyperliquid>::amount_to_precision(self, symbol.clone(), amount.clone()), Value::from("1000000")));
         if r#type.clone() == Value::from("reduce") {
             sz = sz.clone().neg();
         };
@@ -3500,7 +3524,7 @@ pub trait Hyperliquid : Exchange {
         self.check_address(sub_account_address.clone());
         if code.clone().is_nullish() || code.to_upper_case() == Value::from("USDC") {
             // Transfer USDC with subAccountTransfer
-            let mut usd: Value = self.parse_to_int(Precise::string_mul(self.number_to_string(amount.clone()), Value::from("1000000")), Value::Undefined);
+            let mut usd: Value = self.parse_to_int(Precise::string_mul(self.number_to_string(amount.clone()), Value::from("1000000")));
             let mut action: Value = Value::Json(normalize(&Value::Json(json!({
                 "type": "subAccountTransfer",
                 "subAccountUser": sub_account_address,
@@ -4235,8 +4259,8 @@ pub trait Hyperliquid : Exchange {
         match method {
             Value::Json(serde_json::Value::String(ref m)) => {
                 match m.as_ref() {
-                    "publicPostInfo" => Hyperliquid::request(self, "info".into(), "public".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostExchange" => Hyperliquid::request(self, "exchange".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicPostInfo" => self.request("info".into(), "public".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostExchange" => self.request("exchange".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     _ => unimplemented!(),
                 }
             },
@@ -4280,7 +4304,7 @@ impl ValueTrait for HyperliquidImpl {
     fn join(&self, glue: Value) -> Value { self.0.join(glue) }
     fn to_string(&self) -> Value { self.0.to_string() }
     fn typeof_(&self) -> Value { self.0.typeof_() }
-    fn slice(&self, start: Value) -> Value { self.0.slice(start) }
+    fn slice(&self, start: Value, end: Value) -> Value { self.0.slice(start, end) }
 }
 
 impl HyperliquidImpl {

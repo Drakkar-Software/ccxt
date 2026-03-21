@@ -13,14 +13,38 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, BoolExt, JSON, Array, Object, Math, Promise, parse_int, shift_2, extend_2, normalize};
 // Crypto hash identifiers
-fn sha256() -> Value { Value::from("sha256") }
-fn sha384() -> Value { Value::from("sha384") }
-fn sha512() -> Value { Value::from("sha512") }
-fn md5() -> Value { Value::from("md5") }
-fn ed25519() -> Value { Value::from("ed25519") }
+fn sha256() -> Value { Value::from("sha256()") }
+fn sha384() -> Value { Value::from("sha384()") }
+fn sha512() -> Value { Value::from("sha512()") }
+fn md5() -> Value { Value::from("md5()") }
+fn ed25519() -> Value { Value::from("ed25519()") }
 fn rsa(msg: Value, secret: Value, _hash: Value) -> Value { msg }
 fn eddsa(msg: Value, secret: Value, _curve: Value) -> Value { msg }
-fn secp256k1() -> Value { Value::from("secp256k1") }
+fn secp256k1() -> Value { Value::from("secp256k1()") }
+fn keccak() -> Value { Value::from("keccak()") }
+fn ecdsa(msg: Value, secret: Value, algo: Value, hash_fn: Value) -> Value { msg }
+fn totp(secret: Value) -> Value { Value::Undefined }
+fn jwt(data: Value, secret: Value, hash: Value, is_rsa: Value) -> Value { Value::Undefined }
+fn parse_float(value: Value) -> Value { value }
+fn decimals(value: Value) -> Value { Value::from(0) }
+fn shift_1(value: Value) -> Value { value }
+fn shift_3(value: Value) -> (Value, Value, Value) { (value.clone(), Value::Undefined, Value::Undefined) }
+fn shift_4(value: Value) -> (Value, Value, Value, Value) { (value.clone(), Value::Undefined, Value::Undefined, Value::Undefined) }
+// Error type constructors
+fn BadRequest(msg: Value) -> Value { msg }
+fn InvalidOrder(msg: Value) -> Value { msg }
+fn ExchangeError(msg: Value) -> Value { msg }
+fn InsufficientFunds(msg: Value) -> Value { msg }
+fn OrderNotFound(msg: Value) -> Value { msg }
+fn AuthenticationError(msg: Value) -> Value { msg }
+fn PermissionDenied(msg: Value) -> Value { msg }
+fn ExchangeNotAvailable(msg: Value) -> Value { msg }
+fn ArgumentsRequired(msg: Value) -> Value { msg }
+fn RateLimitExceeded(msg: Value) -> Value { msg }
+fn OrderNotFillable(msg: Value) -> Value { msg }
+fn OrderImmediatelyFillable(msg: Value) -> Value { msg }
+fn NotSupported(msg: Value) -> Value { msg }
+fn DuplicateOrderId(msg: Value) -> Value { msg }
 
 use crate::exchange::{PRECISE_BASE, TRUNCATE, ROUND, ROUND_UP, ROUND_DOWN};
 use crate::exchange::{DECIMAL_PLACES, SIGNIFICANT_DIGITS, TICK_SIZE, NO_PADDING, PAD_WITH_ZERO};
@@ -393,7 +417,7 @@ pub trait Dydx : Exchange {
     async fn fetch_time(&mut self, mut params: Value) -> Value {
         let candidates = vec![("public", "GET", "time"), ("public", "GET", "server/time"), ("public", "GET", "timestamp")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Dydx>::request(self,path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -545,7 +569,7 @@ pub trait Dydx : Exchange {
         if limit.is_nonnullish() { request.set("limit".into(), limit.clone()); }
         let candidates = vec![("public", "GET", "trades"), ("public", "GET", "recent_trades"), ("public", "GET", "aggTrades")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Dydx>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -594,14 +618,14 @@ pub trait Dydx : Exchange {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = <Self as Dydx>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() { return rv; }
                 }
             }
         }
         let candidates = vec![("public", "GET", "klines"), ("public", "GET", "candles"), ("public", "GET", "ohlcv")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Dydx>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -945,11 +969,11 @@ pub trait Dydx : Exchange {
     }
 
     fn hash_message(&mut self, mut message: Value) -> Value {
-        return self.hash(message.clone(), keccak.clone(), Value::from("hex"));
+        return self.hash(message.clone(), keccak().clone(), Value::from("hex"));
     }
 
     fn sign_hash(&mut self, mut hash: Value, mut private_key: Value) -> Value {
-        let mut signature: Value = ecdsa(hash.slice(Value::from(64).neg()), private_key.slice(Value::from(64).neg()), secp256k1.clone(), Value::Undefined);
+        let mut signature: Value = ecdsa(hash.slice(Value::from(64).neg(), Value::Undefined), private_key.slice(Value::from(64).neg(), Value::Undefined), secp256k1().clone(), Value::Undefined);
         let mut r: Value = signature.get(Value::from("r"));
         let mut s: Value = signature.get(Value::from("s"));
         return Value::Json(normalize(&Value::Json(json!({
@@ -960,7 +984,7 @@ pub trait Dydx : Exchange {
     }
 
     fn sign_message(&mut self, mut message: Value, mut private_key: Value) -> Value {
-        return <Self as Dydx>::sign_hash(self, <Self as Dydx>::hash_message(self, message.clone()), private_key.slice(Value::from(64).neg()));
+        return <Self as Dydx>::sign_hash(self, <Self as Dydx>::hash_message(self, message.clone()), private_key.slice(Value::from(64).neg(), Value::Undefined));
     }
 
     fn sign_onboarding_action(&mut self) -> Value {
@@ -1050,7 +1074,7 @@ pub trait Dydx : Exchange {
 
     fn pow(&mut self, mut n: Value, mut m: Value) -> Value {
         let mut r: Value = Precise::string_mul(n.clone(), Value::from("1"));
-        let mut c: Value = self.parse_to_int(m.clone(), Value::Undefined);
+        let mut c: Value = self.parse_to_int(m.clone());
         // TODO: cap
         let mut i: usize = 1;
         while i < c.clone().into() {
@@ -1423,14 +1447,14 @@ pub trait Dydx : Exchange {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = <Self as Dydx>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() { return rv; }
                 }
             }
         }
         let candidates = vec![("public", "GET", "depth"), ("public", "GET", "orderbook"), ("public", "GET", "order_book")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Dydx>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -1584,7 +1608,7 @@ pub trait Dydx : Exchange {
         params = self.omit(params.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("fromSubaccountId").into(), Value::from("toSubaccountId").into()])));
         let mut credentials: Value = <Self as Dydx>::retrieve_credentials(self);
         let mut account: Value = <Self as Dydx>::fetch_dydx_account(self).await;
-        let mut usd: Value = self.parse_to_int(Precise::string_mul(self.number_to_string(amount.clone()), Value::from("1000000")), Value::Undefined);
+        let mut usd: Value = self.parse_to_int(Precise::string_mul(self.number_to_string(amount.clone()), Value::from("1000000")));
         let mut payload: Value = Value::Undefined;
         let mut signing_payload: Value = Value::Undefined;
         if from_account.clone() == Value::from("main") {
@@ -1776,7 +1800,7 @@ pub trait Dydx : Exchange {
         let mut currency: Value = self.currency(code.clone());
         let mut credentials: Value = <Self as Dydx>::retrieve_credentials(self);
         let mut account: Value = <Self as Dydx>::fetch_dydx_account(self).await;
-        let mut usd: Value = self.parse_to_int(Precise::string_mul(self.number_to_string(amount.clone()), Value::from("1000000")), Value::Undefined);
+        let mut usd: Value = self.parse_to_int(Precise::string_mul(self.number_to_string(amount.clone()), Value::from("1000000")));
         let mut payload: Value = Value::Json(normalize(&Value::Json(json!({
             "sender": Value::Json(normalize(&Value::Json(json!({
                 "owner": <Self as Dydx>::get_wallet_address(self),
@@ -2092,60 +2116,60 @@ pub trait Dydx : Exchange {
         match method {
             Value::Json(serde_json::Value::String(ref m)) => {
                 match m.as_ref() {
-                    "indexerGetAddressesaddress" => Dydx::request(self, "addresses/{address}".into(), "indexer".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "indexerGetAddressesaddressparentsubaccountnumbernumber" => Dydx::request(self, "addresses/{address}/parentSubaccountNumber/{number}".into(), "indexer".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "indexerGetAddressesaddresssubaccountnumbersubaccountnumber" => Dydx::request(self, "addresses/{address}/subaccountNumber/{subaccountNumber}".into(), "indexer".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "indexerGetAssetpositions" => Dydx::request(self, "assetPositions".into(), "indexer".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "indexerGetAssetpositionsparentsubaccountnumber" => Dydx::request(self, "assetPositions/parentSubaccountNumber".into(), "indexer".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "indexerGetCandlesperpetualmarketsmarket" => Dydx::request(self, "candles/perpetualMarkets/{market}".into(), "indexer".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "indexerGetCompliancescreenaddress" => Dydx::request(self, "compliance/screen/{address}".into(), "indexer".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "indexerGetFills" => Dydx::request(self, "fills".into(), "indexer".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "indexerGetFillsparentsubaccountnumber" => Dydx::request(self, "fills/parentSubaccountNumber".into(), "indexer".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "indexerGetFundingpayments" => Dydx::request(self, "fundingPayments".into(), "indexer".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "indexerGetFundingpaymentsparentsubaccount" => Dydx::request(self, "fundingPayments/parentSubaccount".into(), "indexer".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "indexerGetHeight" => Dydx::request(self, "height".into(), "indexer".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "indexerGetHistoricalpnl" => Dydx::request(self, "historical-pnl".into(), "indexer".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "indexerGetHistoricalpnlparentsubaccountnumber" => Dydx::request(self, "historical-pnl/parentSubaccountNumber".into(), "indexer".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "indexerGetHistoricalblocktradingrewardsaddress" => Dydx::request(self, "historicalBlockTradingRewards/{address}".into(), "indexer".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "indexerGetHistoricalfundingmarket" => Dydx::request(self, "historicalFunding/{market}".into(), "indexer".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "indexerGetHistoricaltradingrewardaggregationsaddress" => Dydx::request(self, "historicalTradingRewardAggregations/{address}".into(), "indexer".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "indexerGetOrderbooksperpetualmarketmarket" => Dydx::request(self, "orderbooks/perpetualMarket/{market}".into(), "indexer".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "indexerGetOrders" => Dydx::request(self, "orders".into(), "indexer".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "indexerGetOrdersparentsubaccountnumber" => Dydx::request(self, "orders/parentSubaccountNumber".into(), "indexer".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "indexerGetOrdersorderid" => Dydx::request(self, "orders/{orderId}".into(), "indexer".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "indexerGetPerpetualmarkets" => Dydx::request(self, "perpetualMarkets".into(), "indexer".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "indexerGetPerpetualpositions" => Dydx::request(self, "perpetualPositions".into(), "indexer".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "indexerGetPerpetualpositionsparentsubaccountnumber" => Dydx::request(self, "perpetualPositions/parentSubaccountNumber".into(), "indexer".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "indexerGetScreen" => Dydx::request(self, "screen".into(), "indexer".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "indexerGetSparklines" => Dydx::request(self, "sparklines".into(), "indexer".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "indexerGetTime" => Dydx::request(self, "time".into(), "indexer".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "indexerGetTradesperpetualmarketmarket" => Dydx::request(self, "trades/perpetualMarket/{market}".into(), "indexer".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "indexerGetTransfers" => Dydx::request(self, "transfers".into(), "indexer".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "indexerGetTransfersbetween" => Dydx::request(self, "transfers/between".into(), "indexer".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "indexerGetTransfersparentsubaccountnumber" => Dydx::request(self, "transfers/parentSubaccountNumber".into(), "indexer".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "indexerGetVaultv1megavaulthistoricalpnl" => Dydx::request(self, "vault/v1/megavault/historicalPnl".into(), "indexer".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "indexerGetVaultv1megavaultpositions" => Dydx::request(self, "vault/v1/megavault/positions".into(), "indexer".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "indexerGetVaultv1vaultshistoricalpnl" => Dydx::request(self, "vault/v1/vaults/historicalPnl".into(), "indexer".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "indexerGetPerpetualmarketsparklines" => Dydx::request(self, "perpetualMarketSparklines".into(), "indexer".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "indexerGetPerpetualmarketsticker" => Dydx::request(self, "perpetualMarkets/{ticker}".into(), "indexer".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "indexerGetPerpetualmarketstickerorderbook" => Dydx::request(self, "perpetualMarkets/{ticker}/orderbook".into(), "indexer".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "indexerGetTradesperpetualmarketticker" => Dydx::request(self, "trades/perpetualMarket/{ticker}".into(), "indexer".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "indexerGetHistoricalfundingticker" => Dydx::request(self, "historicalFunding/{ticker}".into(), "indexer".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "indexerGetCandlestickerresolution" => Dydx::request(self, "candles/{ticker}/{resolution}".into(), "indexer".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "indexerGetAddressesaddresssubaccounts" => Dydx::request(self, "addresses/{address}/subaccounts".into(), "indexer".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "indexerGetAddressesaddresssubaccountnumbersubaccountnumberassetpositions" => Dydx::request(self, "addresses/{address}/subaccountNumber/{subaccountNumber}/assetPositions".into(), "indexer".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "indexerGetAddressesaddresssubaccountnumbersubaccountnumberperpetualpositions" => Dydx::request(self, "addresses/{address}/subaccountNumber/{subaccountNumber}/perpetualPositions".into(), "indexer".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "indexerGetAddressesaddresssubaccountnumbersubaccountnumberorders" => Dydx::request(self, "addresses/{address}/subaccountNumber/{subaccountNumber}/orders".into(), "indexer".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "indexerGetFillsparentsubaccount" => Dydx::request(self, "fills/parentSubaccount".into(), "indexer".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "indexerGetHistoricalpnlparentsubaccount" => Dydx::request(self, "historical-pnl/parentSubaccount".into(), "indexer".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "noderpcGetAbciinfo" => Dydx::request(self, "abci_info".into(), "nodeRpc".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "noderpcGetBlock" => Dydx::request(self, "block".into(), "nodeRpc".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "noderpcGetBroadcasttxasync" => Dydx::request(self, "broadcast_tx_async".into(), "nodeRpc".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "noderpcGetBroadcasttxsync" => Dydx::request(self, "broadcast_tx_sync".into(), "nodeRpc".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "noderpcGetTx" => Dydx::request(self, "tx".into(), "nodeRpc".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "noderestGetCosmosauthv1beta1accountinfodydxaddress" => Dydx::request(self, "cosmos/auth/v1beta1/account_info/{dydxAddress}".into(), "nodeRest".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "noderestPostCosmostxv1beta1encode" => Dydx::request(self, "cosmos/tx/v1beta1/encode".into(), "nodeRest".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "noderestPostCosmostxv1beta1simulate" => Dydx::request(self, "cosmos/tx/v1beta1/simulate".into(), "nodeRest".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "indexerGetAddressesaddress" => self.request("addresses/{address}".into(), "indexer".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "indexerGetAddressesaddressparentsubaccountnumbernumber" => self.request("addresses/{address}/parentSubaccountNumber/{number}".into(), "indexer".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "indexerGetAddressesaddresssubaccountnumbersubaccountnumber" => self.request("addresses/{address}/subaccountNumber/{subaccountNumber}".into(), "indexer".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "indexerGetAssetpositions" => self.request("assetPositions".into(), "indexer".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "indexerGetAssetpositionsparentsubaccountnumber" => self.request("assetPositions/parentSubaccountNumber".into(), "indexer".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "indexerGetCandlesperpetualmarketsmarket" => self.request("candles/perpetualMarkets/{market}".into(), "indexer".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "indexerGetCompliancescreenaddress" => self.request("compliance/screen/{address}".into(), "indexer".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "indexerGetFills" => self.request("fills".into(), "indexer".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "indexerGetFillsparentsubaccountnumber" => self.request("fills/parentSubaccountNumber".into(), "indexer".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "indexerGetFundingpayments" => self.request("fundingPayments".into(), "indexer".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "indexerGetFundingpaymentsparentsubaccount" => self.request("fundingPayments/parentSubaccount".into(), "indexer".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "indexerGetHeight" => self.request("height".into(), "indexer".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "indexerGetHistoricalpnl" => self.request("historical-pnl".into(), "indexer".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "indexerGetHistoricalpnlparentsubaccountnumber" => self.request("historical-pnl/parentSubaccountNumber".into(), "indexer".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "indexerGetHistoricalblocktradingrewardsaddress" => self.request("historicalBlockTradingRewards/{address}".into(), "indexer".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "indexerGetHistoricalfundingmarket" => self.request("historicalFunding/{market}".into(), "indexer".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "indexerGetHistoricaltradingrewardaggregationsaddress" => self.request("historicalTradingRewardAggregations/{address}".into(), "indexer".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "indexerGetOrderbooksperpetualmarketmarket" => self.request("orderbooks/perpetualMarket/{market}".into(), "indexer".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "indexerGetOrders" => self.request("orders".into(), "indexer".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "indexerGetOrdersparentsubaccountnumber" => self.request("orders/parentSubaccountNumber".into(), "indexer".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "indexerGetOrdersorderid" => self.request("orders/{orderId}".into(), "indexer".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "indexerGetPerpetualmarkets" => self.request("perpetualMarkets".into(), "indexer".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "indexerGetPerpetualpositions" => self.request("perpetualPositions".into(), "indexer".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "indexerGetPerpetualpositionsparentsubaccountnumber" => self.request("perpetualPositions/parentSubaccountNumber".into(), "indexer".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "indexerGetScreen" => self.request("screen".into(), "indexer".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "indexerGetSparklines" => self.request("sparklines".into(), "indexer".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "indexerGetTime" => self.request("time".into(), "indexer".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "indexerGetTradesperpetualmarketmarket" => self.request("trades/perpetualMarket/{market}".into(), "indexer".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "indexerGetTransfers" => self.request("transfers".into(), "indexer".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "indexerGetTransfersbetween" => self.request("transfers/between".into(), "indexer".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "indexerGetTransfersparentsubaccountnumber" => self.request("transfers/parentSubaccountNumber".into(), "indexer".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "indexerGetVaultv1megavaulthistoricalpnl" => self.request("vault/v1/megavault/historicalPnl".into(), "indexer".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "indexerGetVaultv1megavaultpositions" => self.request("vault/v1/megavault/positions".into(), "indexer".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "indexerGetVaultv1vaultshistoricalpnl" => self.request("vault/v1/vaults/historicalPnl".into(), "indexer".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "indexerGetPerpetualmarketsparklines" => self.request("perpetualMarketSparklines".into(), "indexer".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "indexerGetPerpetualmarketsticker" => self.request("perpetualMarkets/{ticker}".into(), "indexer".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "indexerGetPerpetualmarketstickerorderbook" => self.request("perpetualMarkets/{ticker}/orderbook".into(), "indexer".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "indexerGetTradesperpetualmarketticker" => self.request("trades/perpetualMarket/{ticker}".into(), "indexer".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "indexerGetHistoricalfundingticker" => self.request("historicalFunding/{ticker}".into(), "indexer".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "indexerGetCandlestickerresolution" => self.request("candles/{ticker}/{resolution}".into(), "indexer".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "indexerGetAddressesaddresssubaccounts" => self.request("addresses/{address}/subaccounts".into(), "indexer".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "indexerGetAddressesaddresssubaccountnumbersubaccountnumberassetpositions" => self.request("addresses/{address}/subaccountNumber/{subaccountNumber}/assetPositions".into(), "indexer".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "indexerGetAddressesaddresssubaccountnumbersubaccountnumberperpetualpositions" => self.request("addresses/{address}/subaccountNumber/{subaccountNumber}/perpetualPositions".into(), "indexer".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "indexerGetAddressesaddresssubaccountnumbersubaccountnumberorders" => self.request("addresses/{address}/subaccountNumber/{subaccountNumber}/orders".into(), "indexer".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "indexerGetFillsparentsubaccount" => self.request("fills/parentSubaccount".into(), "indexer".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "indexerGetHistoricalpnlparentsubaccount" => self.request("historical-pnl/parentSubaccount".into(), "indexer".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "noderpcGetAbciinfo" => self.request("abci_info".into(), "nodeRpc".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "noderpcGetBlock" => self.request("block".into(), "nodeRpc".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "noderpcGetBroadcasttxasync" => self.request("broadcast_tx_async".into(), "nodeRpc".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "noderpcGetBroadcasttxsync" => self.request("broadcast_tx_sync".into(), "nodeRpc".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "noderpcGetTx" => self.request("tx".into(), "nodeRpc".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "noderestGetCosmosauthv1beta1accountinfodydxaddress" => self.request("cosmos/auth/v1beta1/account_info/{dydxAddress}".into(), "nodeRest".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "noderestPostCosmostxv1beta1encode" => self.request("cosmos/tx/v1beta1/encode".into(), "nodeRest".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "noderestPostCosmostxv1beta1simulate" => self.request("cosmos/tx/v1beta1/simulate".into(), "nodeRest".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     _ => unimplemented!(),
                 }
             },
@@ -2189,7 +2213,7 @@ impl ValueTrait for DydxImpl {
     fn join(&self, glue: Value) -> Value { self.0.join(glue) }
     fn to_string(&self) -> Value { self.0.to_string() }
     fn typeof_(&self) -> Value { self.0.typeof_() }
-    fn slice(&self, start: Value) -> Value { self.0.slice(start) }
+    fn slice(&self, start: Value, end: Value) -> Value { self.0.slice(start, end) }
 }
 
 impl DydxImpl {

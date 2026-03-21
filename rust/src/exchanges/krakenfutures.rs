@@ -13,14 +13,38 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, BoolExt, JSON, Array, Object, Math, Promise, parse_int, shift_2, extend_2, normalize};
 // Crypto hash identifiers
-fn sha256() -> Value { Value::from("sha256") }
-fn sha384() -> Value { Value::from("sha384") }
-fn sha512() -> Value { Value::from("sha512") }
-fn md5() -> Value { Value::from("md5") }
-fn ed25519() -> Value { Value::from("ed25519") }
+fn sha256() -> Value { Value::from("sha256()") }
+fn sha384() -> Value { Value::from("sha384()") }
+fn sha512() -> Value { Value::from("sha512()") }
+fn md5() -> Value { Value::from("md5()") }
+fn ed25519() -> Value { Value::from("ed25519()") }
 fn rsa(msg: Value, secret: Value, _hash: Value) -> Value { msg }
 fn eddsa(msg: Value, secret: Value, _curve: Value) -> Value { msg }
-fn secp256k1() -> Value { Value::from("secp256k1") }
+fn secp256k1() -> Value { Value::from("secp256k1()") }
+fn keccak() -> Value { Value::from("keccak()") }
+fn ecdsa(msg: Value, secret: Value, algo: Value, hash_fn: Value) -> Value { msg }
+fn totp(secret: Value) -> Value { Value::Undefined }
+fn jwt(data: Value, secret: Value, hash: Value, is_rsa: Value) -> Value { Value::Undefined }
+fn parse_float(value: Value) -> Value { value }
+fn decimals(value: Value) -> Value { Value::from(0) }
+fn shift_1(value: Value) -> Value { value }
+fn shift_3(value: Value) -> (Value, Value, Value) { (value.clone(), Value::Undefined, Value::Undefined) }
+fn shift_4(value: Value) -> (Value, Value, Value, Value) { (value.clone(), Value::Undefined, Value::Undefined, Value::Undefined) }
+// Error type constructors
+fn BadRequest(msg: Value) -> Value { msg }
+fn InvalidOrder(msg: Value) -> Value { msg }
+fn ExchangeError(msg: Value) -> Value { msg }
+fn InsufficientFunds(msg: Value) -> Value { msg }
+fn OrderNotFound(msg: Value) -> Value { msg }
+fn AuthenticationError(msg: Value) -> Value { msg }
+fn PermissionDenied(msg: Value) -> Value { msg }
+fn ExchangeNotAvailable(msg: Value) -> Value { msg }
+fn ArgumentsRequired(msg: Value) -> Value { msg }
+fn RateLimitExceeded(msg: Value) -> Value { msg }
+fn OrderNotFillable(msg: Value) -> Value { msg }
+fn OrderImmediatelyFillable(msg: Value) -> Value { msg }
+fn NotSupported(msg: Value) -> Value { msg }
+fn DuplicateOrderId(msg: Value) -> Value { msg }
 
 use crate::exchange::{PRECISE_BASE, TRUNCATE, ROUND, ROUND_UP, ROUND_DOWN};
 use crate::exchange::{DECIMAL_PLACES, SIGNIFICANT_DIGITS, TICK_SIZE, NO_PADDING, PAD_WITH_ZERO};
@@ -465,14 +489,14 @@ pub trait Krakenfutures : Exchange {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = <Self as Krakenfutures>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() { return rv; }
                 }
             }
         }
         let candidates = vec![("public", "GET", "depth"), ("public", "GET", "orderbook"), ("public", "GET", "order_book")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Krakenfutures>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -494,14 +518,14 @@ pub trait Krakenfutures : Exchange {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = <Self as Krakenfutures>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() { return rv; }
                 }
             }
         }
         let candidates = vec![("public", "GET", "ticker/24hr"), ("public", "GET", "tickers"), ("public", "GET", "ticker")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Krakenfutures>::request(self,path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -602,14 +626,14 @@ pub trait Krakenfutures : Exchange {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = <Self as Krakenfutures>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() { return rv; }
                 }
             }
         }
         let candidates = vec![("public", "GET", "klines"), ("public", "GET", "candles"), ("public", "GET", "ohlcv")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Krakenfutures>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -637,7 +661,7 @@ pub trait Krakenfutures : Exchange {
         if limit.is_nonnullish() { request.set("limit".into(), limit.clone()); }
         let candidates = vec![("public", "GET", "trades"), ("public", "GET", "recent_trades"), ("public", "GET", "aggTrades")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Krakenfutures>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -1093,7 +1117,7 @@ pub trait Krakenfutures : Exchange {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
-            "timeout": if timeout.clone() > Value::from(0) { self.parse_to_int(timeout.clone() / Value::from(1000), Value::Undefined) } else { Value::from(0) }
+            "timeout": if timeout.clone() > Value::from(0) { self.parse_to_int(timeout.clone() / Value::from(1000)) } else { Value::from(0) }
         }))).unwrap());
         let mut response: Value = self.dispatch("privatePostCancelallordersafter".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         //
@@ -1261,26 +1285,26 @@ pub trait Krakenfutures : Exchange {
     fn verify_order_action_success(&mut self, mut status: Value, mut method: Value, mut omit: Value) -> Value {
         omit = omit.or_default(Value::new_array());
         let mut errors: Value = Value::Json(normalize(&Value::Json(json!({
-            "invalidOrderType": InvalidOrder,
-            "invalidSide": InvalidOrder,
-            "invalidSize": InvalidOrder,
-            "invalidPrice": InvalidOrder,
-            "insufficientAvailableFunds": InsufficientFunds,
-            "selfFill": ExchangeError,
-            "tooManySmallOrders": ExchangeError,
-            "maxPositionViolation": BadRequest,
-            "marketSuspended": ExchangeNotAvailable,
-            "marketInactive": ExchangeNotAvailable,
-            "clientOrderIdAlreadyExist": DuplicateOrderId,
-            "clientOrderIdTooLong": BadRequest,
-            "outsidePriceCollar": InvalidOrder,
-            "postWouldExecute": OrderImmediatelyFillable,
-            "iocWouldNotExecute": OrderNotFillable,
-            "wouldNotReducePosition": ExchangeError,
-            "orderForEditNotFound": OrderNotFound,
-            "orderForEditNotAStop": InvalidOrder,
-            "filled": OrderNotFound,
-            "notFound": OrderNotFound
+            "invalidOrderType": "InvalidOrder",
+            "invalidSide": "InvalidOrder",
+            "invalidSize": "InvalidOrder",
+            "invalidPrice": "InvalidOrder",
+            "insufficientAvailableFunds": "InsufficientFunds",
+            "selfFill": "ExchangeError",
+            "tooManySmallOrders": "ExchangeError",
+            "maxPositionViolation": "BadRequest",
+            "marketSuspended": "ExchangeNotAvailable",
+            "marketInactive": "ExchangeNotAvailable",
+            "clientOrderIdAlreadyExist": "DuplicateOrderId",
+            "clientOrderIdTooLong": "BadRequest",
+            "outsidePriceCollar": "InvalidOrder",
+            "postWouldExecute": "OrderImmediatelyFillable",
+            "iocWouldNotExecute": "OrderNotFillable",
+            "wouldNotReducePosition": "ExchangeError",
+            "orderForEditNotFound": "OrderNotFound",
+            "orderForEditNotAStop": "InvalidOrder",
+            "filled": "OrderNotFound",
+            "notFound": "OrderNotFound"
         }))).unwrap());
         if errors.contains_key(status.clone()) && !self.in_array(status.clone(), omit.clone()).is_truthy() {
             panic!(r###"errors.get(status.clone())::new(self.get("id".into()) + Value::from(": ") + method.clone() + Value::from(" failed due to ") + status.clone())"###);
@@ -2492,45 +2516,45 @@ pub trait Krakenfutures : Exchange {
         match method {
             Value::Json(serde_json::Value::String(ref m)) => {
                 match m.as_ref() {
-                    "publicGetFeeschedules" => Krakenfutures::request(self, "feeschedules".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetInstruments" => Krakenfutures::request(self, "instruments".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetOrderbook" => Krakenfutures::request(self, "orderbook".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetTickers" => Krakenfutures::request(self, "tickers".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetHistory" => Krakenfutures::request(self, "history".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetHistoricalfundingrates" => Krakenfutures::request(self, "historicalfundingrates".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetFeeschedulesvolumes" => Krakenfutures::request(self, "feeschedules/volumes".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetOpenpositions" => Krakenfutures::request(self, "openpositions".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetNotifications" => Krakenfutures::request(self, "notifications".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetAccounts" => Krakenfutures::request(self, "accounts".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetOpenorders" => Krakenfutures::request(self, "openorders".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetRecentorders" => Krakenfutures::request(self, "recentorders".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetFills" => Krakenfutures::request(self, "fills".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetTransfers" => Krakenfutures::request(self, "transfers".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetLeveragepreferences" => Krakenfutures::request(self, "leveragepreferences".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetPnlpreferences" => Krakenfutures::request(self, "pnlpreferences".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetAssignmentprogramcurrent" => Krakenfutures::request(self, "assignmentprogram/current".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetAssignmentprogramhistory" => Krakenfutures::request(self, "assignmentprogram/history".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetOrdersstatus" => Krakenfutures::request(self, "orders/status".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostSendorder" => Krakenfutures::request(self, "sendorder".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostEditorder" => Krakenfutures::request(self, "editorder".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostCancelorder" => Krakenfutures::request(self, "cancelorder".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostTransfer" => Krakenfutures::request(self, "transfer".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostBatchorder" => Krakenfutures::request(self, "batchorder".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostCancelallorders" => Krakenfutures::request(self, "cancelallorders".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostCancelallordersafter" => Krakenfutures::request(self, "cancelallordersafter".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostWithdrawal" => Krakenfutures::request(self, "withdrawal".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostAssignmentprogramadd" => Krakenfutures::request(self, "assignmentprogram/add".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostAssignmentprogramdelete" => Krakenfutures::request(self, "assignmentprogram/delete".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePutLeveragepreferences" => Krakenfutures::request(self, "leveragepreferences".into(), "private".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePutPnlpreferences" => Krakenfutures::request(self, "pnlpreferences".into(), "private".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "chartsGetPricetypesymbolinterval" => Krakenfutures::request(self, "{price_type}/{symbol}/{interval}".into(), "charts".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "historyGetOrders" => Krakenfutures::request(self, "orders".into(), "history".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "historyGetExecutions" => Krakenfutures::request(self, "executions".into(), "history".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "historyGetTriggers" => Krakenfutures::request(self, "triggers".into(), "history".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "historyGetAccountlogcsv" => Krakenfutures::request(self, "accountlogcsv".into(), "history".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "historyGetAccountlog" => Krakenfutures::request(self, "account-log".into(), "history".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "historyGetMarketsymbolorders" => Krakenfutures::request(self, "market/{symbol}/orders".into(), "history".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "historyGetMarketsymbolexecutions" => Krakenfutures::request(self, "market/{symbol}/executions".into(), "history".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetFeeschedules" => self.request("feeschedules".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetInstruments" => self.request("instruments".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetOrderbook" => self.request("orderbook".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetTickers" => self.request("tickers".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetHistory" => self.request("history".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetHistoricalfundingrates" => self.request("historicalfundingrates".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetFeeschedulesvolumes" => self.request("feeschedules/volumes".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetOpenpositions" => self.request("openpositions".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetNotifications" => self.request("notifications".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetAccounts" => self.request("accounts".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetOpenorders" => self.request("openorders".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetRecentorders" => self.request("recentorders".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetFills" => self.request("fills".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetTransfers" => self.request("transfers".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetLeveragepreferences" => self.request("leveragepreferences".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetPnlpreferences" => self.request("pnlpreferences".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetAssignmentprogramcurrent" => self.request("assignmentprogram/current".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetAssignmentprogramhistory" => self.request("assignmentprogram/history".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetOrdersstatus" => self.request("orders/status".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostSendorder" => self.request("sendorder".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostEditorder" => self.request("editorder".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostCancelorder" => self.request("cancelorder".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostTransfer" => self.request("transfer".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostBatchorder" => self.request("batchorder".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostCancelallorders" => self.request("cancelallorders".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostCancelallordersafter" => self.request("cancelallordersafter".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostWithdrawal" => self.request("withdrawal".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAssignmentprogramadd" => self.request("assignmentprogram/add".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAssignmentprogramdelete" => self.request("assignmentprogram/delete".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePutLeveragepreferences" => self.request("leveragepreferences".into(), "private".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePutPnlpreferences" => self.request("pnlpreferences".into(), "private".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "chartsGetPricetypesymbolinterval" => self.request("{price_type}/{symbol}/{interval}".into(), "charts".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "historyGetOrders" => self.request("orders".into(), "history".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "historyGetExecutions" => self.request("executions".into(), "history".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "historyGetTriggers" => self.request("triggers".into(), "history".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "historyGetAccountlogcsv" => self.request("accountlogcsv".into(), "history".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "historyGetAccountlog" => self.request("account-log".into(), "history".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "historyGetMarketsymbolorders" => self.request("market/{symbol}/orders".into(), "history".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "historyGetMarketsymbolexecutions" => self.request("market/{symbol}/executions".into(), "history".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     _ => unimplemented!(),
                 }
             },
@@ -2574,7 +2598,7 @@ impl ValueTrait for KrakenfuturesImpl {
     fn join(&self, glue: Value) -> Value { self.0.join(glue) }
     fn to_string(&self) -> Value { self.0.to_string() }
     fn typeof_(&self) -> Value { self.0.typeof_() }
-    fn slice(&self, start: Value) -> Value { self.0.slice(start) }
+    fn slice(&self, start: Value, end: Value) -> Value { self.0.slice(start, end) }
 }
 
 impl KrakenfuturesImpl {

@@ -13,14 +13,38 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, BoolExt, JSON, Array, Object, Math, Promise, parse_int, shift_2, extend_2, normalize};
 // Crypto hash identifiers
-fn sha256() -> Value { Value::from("sha256") }
-fn sha384() -> Value { Value::from("sha384") }
-fn sha512() -> Value { Value::from("sha512") }
-fn md5() -> Value { Value::from("md5") }
-fn ed25519() -> Value { Value::from("ed25519") }
+fn sha256() -> Value { Value::from("sha256()") }
+fn sha384() -> Value { Value::from("sha384()") }
+fn sha512() -> Value { Value::from("sha512()") }
+fn md5() -> Value { Value::from("md5()") }
+fn ed25519() -> Value { Value::from("ed25519()") }
 fn rsa(msg: Value, secret: Value, _hash: Value) -> Value { msg }
 fn eddsa(msg: Value, secret: Value, _curve: Value) -> Value { msg }
-fn secp256k1() -> Value { Value::from("secp256k1") }
+fn secp256k1() -> Value { Value::from("secp256k1()") }
+fn keccak() -> Value { Value::from("keccak()") }
+fn ecdsa(msg: Value, secret: Value, algo: Value, hash_fn: Value) -> Value { msg }
+fn totp(secret: Value) -> Value { Value::Undefined }
+fn jwt(data: Value, secret: Value, hash: Value, is_rsa: Value) -> Value { Value::Undefined }
+fn parse_float(value: Value) -> Value { value }
+fn decimals(value: Value) -> Value { Value::from(0) }
+fn shift_1(value: Value) -> Value { value }
+fn shift_3(value: Value) -> (Value, Value, Value) { (value.clone(), Value::Undefined, Value::Undefined) }
+fn shift_4(value: Value) -> (Value, Value, Value, Value) { (value.clone(), Value::Undefined, Value::Undefined, Value::Undefined) }
+// Error type constructors
+fn BadRequest(msg: Value) -> Value { msg }
+fn InvalidOrder(msg: Value) -> Value { msg }
+fn ExchangeError(msg: Value) -> Value { msg }
+fn InsufficientFunds(msg: Value) -> Value { msg }
+fn OrderNotFound(msg: Value) -> Value { msg }
+fn AuthenticationError(msg: Value) -> Value { msg }
+fn PermissionDenied(msg: Value) -> Value { msg }
+fn ExchangeNotAvailable(msg: Value) -> Value { msg }
+fn ArgumentsRequired(msg: Value) -> Value { msg }
+fn RateLimitExceeded(msg: Value) -> Value { msg }
+fn OrderNotFillable(msg: Value) -> Value { msg }
+fn OrderImmediatelyFillable(msg: Value) -> Value { msg }
+fn NotSupported(msg: Value) -> Value { msg }
+fn DuplicateOrderId(msg: Value) -> Value { msg }
 
 use crate::exchange::{PRECISE_BASE, TRUNCATE, ROUND, ROUND_UP, ROUND_DOWN};
 use crate::exchange::{DECIMAL_PLACES, SIGNIFICANT_DIGITS, TICK_SIZE, NO_PADDING, PAD_WITH_ZERO};
@@ -403,14 +427,14 @@ pub trait Independentreserve : Exchange {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = <Self as Independentreserve>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() { return rv; }
                 }
             }
         }
         let candidates = vec![("public", "GET", "depth"), ("public", "GET", "orderbook"), ("public", "GET", "order_book")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Independentreserve>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -482,14 +506,14 @@ pub trait Independentreserve : Exchange {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = <Self as Independentreserve>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() { return rv; }
                 }
             }
         }
         let candidates = vec![("public", "GET", "ticker/24hr"), ("public", "GET", "ticker"), ("public", "GET", "ticker/price")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Independentreserve>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -744,7 +768,7 @@ pub trait Independentreserve : Exchange {
         if limit.is_nonnullish() { request.set("limit".into(), limit.clone()); }
         let candidates = vec![("public", "GET", "trades"), ("public", "GET", "recent_trades"), ("public", "GET", "aggTrades")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Independentreserve>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -984,45 +1008,45 @@ pub trait Independentreserve : Exchange {
         match method {
             Value::Json(serde_json::Value::String(ref m)) => {
                 match m.as_ref() {
-                    "publicGetGetvalidprimarycurrencycodes" => Independentreserve::request(self, "GetValidPrimaryCurrencyCodes".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetGetvalidsecondarycurrencycodes" => Independentreserve::request(self, "GetValidSecondaryCurrencyCodes".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetGetvalidlimitordertypes" => Independentreserve::request(self, "GetValidLimitOrderTypes".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetGetvalidmarketordertypes" => Independentreserve::request(self, "GetValidMarketOrderTypes".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetGetvalidordertypes" => Independentreserve::request(self, "GetValidOrderTypes".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetGetvalidtransactiontypes" => Independentreserve::request(self, "GetValidTransactionTypes".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetGetmarketsummary" => Independentreserve::request(self, "GetMarketSummary".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetGetorderbook" => Independentreserve::request(self, "GetOrderBook".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetGetallorders" => Independentreserve::request(self, "GetAllOrders".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetGettradehistorysummary" => Independentreserve::request(self, "GetTradeHistorySummary".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetGetrecenttrades" => Independentreserve::request(self, "GetRecentTrades".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetGetfxrates" => Independentreserve::request(self, "GetFxRates".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetGetorderminimumvolumes" => Independentreserve::request(self, "GetOrderMinimumVolumes".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetGetcryptowithdrawalfees" => Independentreserve::request(self, "GetCryptoWithdrawalFees".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetGetcryptowithdrawalfees2" => Independentreserve::request(self, "GetCryptoWithdrawalFees2".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetGetnetworks" => Independentreserve::request(self, "GetNetworks".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetGetprimarycurrencyconfig2" => Independentreserve::request(self, "GetPrimaryCurrencyConfig2".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostGetopenorders" => Independentreserve::request(self, "GetOpenOrders".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostGetclosedorders" => Independentreserve::request(self, "GetClosedOrders".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostGetclosedfilledorders" => Independentreserve::request(self, "GetClosedFilledOrders".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostGetorderdetails" => Independentreserve::request(self, "GetOrderDetails".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostGetaccounts" => Independentreserve::request(self, "GetAccounts".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostGettransactions" => Independentreserve::request(self, "GetTransactions".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostGetfiatbankaccounts" => Independentreserve::request(self, "GetFiatBankAccounts".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostGetdigitalcurrencydepositaddress" => Independentreserve::request(self, "GetDigitalCurrencyDepositAddress".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostGetdigitalcurrencydepositaddress2" => Independentreserve::request(self, "GetDigitalCurrencyDepositAddress2".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostGetdigitalcurrencydepositaddresses" => Independentreserve::request(self, "GetDigitalCurrencyDepositAddresses".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostGetdigitalcurrencydepositaddresses2" => Independentreserve::request(self, "GetDigitalCurrencyDepositAddresses2".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostGettrades" => Independentreserve::request(self, "GetTrades".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostGetbrokeragefees" => Independentreserve::request(self, "GetBrokerageFees".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostGetdigitalcurrencywithdrawal" => Independentreserve::request(self, "GetDigitalCurrencyWithdrawal".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostPlacelimitorder" => Independentreserve::request(self, "PlaceLimitOrder".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostPlacemarketorder" => Independentreserve::request(self, "PlaceMarketOrder".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostCancelorder" => Independentreserve::request(self, "CancelOrder".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostSynchdigitalcurrencydepositaddresswithblockchain" => Independentreserve::request(self, "SynchDigitalCurrencyDepositAddressWithBlockchain".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostRequestfiatwithdrawal" => Independentreserve::request(self, "RequestFiatWithdrawal".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostWithdrawfiatcurrency" => Independentreserve::request(self, "WithdrawFiatCurrency".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostWithdrawdigitalcurrency" => Independentreserve::request(self, "WithdrawDigitalCurrency".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostWithdrawcrypto" => Independentreserve::request(self, "WithdrawCrypto".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetGetvalidprimarycurrencycodes" => self.request("GetValidPrimaryCurrencyCodes".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetGetvalidsecondarycurrencycodes" => self.request("GetValidSecondaryCurrencyCodes".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetGetvalidlimitordertypes" => self.request("GetValidLimitOrderTypes".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetGetvalidmarketordertypes" => self.request("GetValidMarketOrderTypes".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetGetvalidordertypes" => self.request("GetValidOrderTypes".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetGetvalidtransactiontypes" => self.request("GetValidTransactionTypes".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetGetmarketsummary" => self.request("GetMarketSummary".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetGetorderbook" => self.request("GetOrderBook".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetGetallorders" => self.request("GetAllOrders".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetGettradehistorysummary" => self.request("GetTradeHistorySummary".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetGetrecenttrades" => self.request("GetRecentTrades".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetGetfxrates" => self.request("GetFxRates".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetGetorderminimumvolumes" => self.request("GetOrderMinimumVolumes".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetGetcryptowithdrawalfees" => self.request("GetCryptoWithdrawalFees".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetGetcryptowithdrawalfees2" => self.request("GetCryptoWithdrawalFees2".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetGetnetworks" => self.request("GetNetworks".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetGetprimarycurrencyconfig2" => self.request("GetPrimaryCurrencyConfig2".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostGetopenorders" => self.request("GetOpenOrders".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostGetclosedorders" => self.request("GetClosedOrders".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostGetclosedfilledorders" => self.request("GetClosedFilledOrders".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostGetorderdetails" => self.request("GetOrderDetails".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostGetaccounts" => self.request("GetAccounts".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostGettransactions" => self.request("GetTransactions".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostGetfiatbankaccounts" => self.request("GetFiatBankAccounts".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostGetdigitalcurrencydepositaddress" => self.request("GetDigitalCurrencyDepositAddress".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostGetdigitalcurrencydepositaddress2" => self.request("GetDigitalCurrencyDepositAddress2".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostGetdigitalcurrencydepositaddresses" => self.request("GetDigitalCurrencyDepositAddresses".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostGetdigitalcurrencydepositaddresses2" => self.request("GetDigitalCurrencyDepositAddresses2".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostGettrades" => self.request("GetTrades".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostGetbrokeragefees" => self.request("GetBrokerageFees".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostGetdigitalcurrencywithdrawal" => self.request("GetDigitalCurrencyWithdrawal".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostPlacelimitorder" => self.request("PlaceLimitOrder".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostPlacemarketorder" => self.request("PlaceMarketOrder".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostCancelorder" => self.request("CancelOrder".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostSynchdigitalcurrencydepositaddresswithblockchain" => self.request("SynchDigitalCurrencyDepositAddressWithBlockchain".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostRequestfiatwithdrawal" => self.request("RequestFiatWithdrawal".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostWithdrawfiatcurrency" => self.request("WithdrawFiatCurrency".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostWithdrawdigitalcurrency" => self.request("WithdrawDigitalCurrency".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostWithdrawcrypto" => self.request("WithdrawCrypto".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     _ => unimplemented!(),
                 }
             },
@@ -1066,7 +1090,7 @@ impl ValueTrait for IndependentreserveImpl {
     fn join(&self, glue: Value) -> Value { self.0.join(glue) }
     fn to_string(&self) -> Value { self.0.to_string() }
     fn typeof_(&self) -> Value { self.0.typeof_() }
-    fn slice(&self, start: Value) -> Value { self.0.slice(start) }
+    fn slice(&self, start: Value, end: Value) -> Value { self.0.slice(start, end) }
 }
 
 impl IndependentreserveImpl {

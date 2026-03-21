@@ -13,14 +13,38 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, BoolExt, JSON, Array, Object, Math, Promise, parse_int, shift_2, extend_2, normalize};
 // Crypto hash identifiers
-fn sha256() -> Value { Value::from("sha256") }
-fn sha384() -> Value { Value::from("sha384") }
-fn sha512() -> Value { Value::from("sha512") }
-fn md5() -> Value { Value::from("md5") }
-fn ed25519() -> Value { Value::from("ed25519") }
+fn sha256() -> Value { Value::from("sha256()") }
+fn sha384() -> Value { Value::from("sha384()") }
+fn sha512() -> Value { Value::from("sha512()") }
+fn md5() -> Value { Value::from("md5()") }
+fn ed25519() -> Value { Value::from("ed25519()") }
 fn rsa(msg: Value, secret: Value, _hash: Value) -> Value { msg }
 fn eddsa(msg: Value, secret: Value, _curve: Value) -> Value { msg }
-fn secp256k1() -> Value { Value::from("secp256k1") }
+fn secp256k1() -> Value { Value::from("secp256k1()") }
+fn keccak() -> Value { Value::from("keccak()") }
+fn ecdsa(msg: Value, secret: Value, algo: Value, hash_fn: Value) -> Value { msg }
+fn totp(secret: Value) -> Value { Value::Undefined }
+fn jwt(data: Value, secret: Value, hash: Value, is_rsa: Value) -> Value { Value::Undefined }
+fn parse_float(value: Value) -> Value { value }
+fn decimals(value: Value) -> Value { Value::from(0) }
+fn shift_1(value: Value) -> Value { value }
+fn shift_3(value: Value) -> (Value, Value, Value) { (value.clone(), Value::Undefined, Value::Undefined) }
+fn shift_4(value: Value) -> (Value, Value, Value, Value) { (value.clone(), Value::Undefined, Value::Undefined, Value::Undefined) }
+// Error type constructors
+fn BadRequest(msg: Value) -> Value { msg }
+fn InvalidOrder(msg: Value) -> Value { msg }
+fn ExchangeError(msg: Value) -> Value { msg }
+fn InsufficientFunds(msg: Value) -> Value { msg }
+fn OrderNotFound(msg: Value) -> Value { msg }
+fn AuthenticationError(msg: Value) -> Value { msg }
+fn PermissionDenied(msg: Value) -> Value { msg }
+fn ExchangeNotAvailable(msg: Value) -> Value { msg }
+fn ArgumentsRequired(msg: Value) -> Value { msg }
+fn RateLimitExceeded(msg: Value) -> Value { msg }
+fn OrderNotFillable(msg: Value) -> Value { msg }
+fn OrderImmediatelyFillable(msg: Value) -> Value { msg }
+fn NotSupported(msg: Value) -> Value { msg }
+fn DuplicateOrderId(msg: Value) -> Value { msg }
 
 use crate::exchange::{PRECISE_BASE, TRUNCATE, ROUND, ROUND_UP, ROUND_DOWN};
 use crate::exchange::{DECIMAL_PLACES, SIGNIFICANT_DIGITS, TICK_SIZE, NO_PADDING, PAD_WITH_ZERO};
@@ -1816,7 +1840,7 @@ pub trait Cryptocom : Exchange {
             let mut method: Value = Value::from("public/auth");
             let mut nonce: Value = self.nonce().to_string();
             let mut auth: Value = method.clone() + nonce.clone() + self.get("apiKey".into()) + nonce.clone();
-            let mut signature: Value = self.hmac(self.encode(auth.clone()), self.encode(self.get("secret".into())), sha256.clone(), Value::Undefined);
+            let mut signature: Value = self.hmac(self.encode(auth.clone()), self.encode(self.get("secret".into())), sha256().clone(), Value::Undefined);
             let mut request: Value = Value::Json(normalize(&Value::Json(json!({
                 "id": nonce,
                 "nonce": nonce,
@@ -1881,135 +1905,135 @@ pub trait Cryptocom : Exchange {
         match method {
             Value::Json(serde_json::Value::String(ref m)) => {
                 match m.as_ref() {
-                    "basePublicGetV1publicgetannouncements" => Cryptocom::request(self, "v1/public/get-announcements".into(), "base".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetPublicauth" => Cryptocom::request(self, "public/auth".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetPublicgetinstruments" => Cryptocom::request(self, "public/get-instruments".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetPublicgetbook" => Cryptocom::request(self, "public/get-book".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetPublicgetcandlestick" => Cryptocom::request(self, "public/get-candlestick".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetPublicgettrades" => Cryptocom::request(self, "public/get-trades".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetPublicgettickers" => Cryptocom::request(self, "public/get-tickers".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetPublicgetvaluations" => Cryptocom::request(self, "public/get-valuations".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetPublicgetexpiredsettlementprice" => Cryptocom::request(self, "public/get-expired-settlement-price".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetPublicgetinsurance" => Cryptocom::request(self, "public/get-insurance".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetPublicgetannouncements" => Cryptocom::request(self, "public/get-announcements".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetPublicgetriskparameters" => Cryptocom::request(self, "public/get-risk-parameters".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicPostPublicstakinggetconversionrate" => Cryptocom::request(self, "public/staking/get-conversion-rate".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostPrivatesetcancelondisconnect" => Cryptocom::request(self, "private/set-cancel-on-disconnect".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostPrivategetcancelondisconnect" => Cryptocom::request(self, "private/get-cancel-on-disconnect".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostPrivateuserbalance" => Cryptocom::request(self, "private/user-balance".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostPrivateuserbalancehistory" => Cryptocom::request(self, "private/user-balance-history".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostPrivategetpositions" => Cryptocom::request(self, "private/get-positions".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostPrivatecreateorder" => Cryptocom::request(self, "private/create-order".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostPrivateamendorder" => Cryptocom::request(self, "private/amend-order".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostPrivatecreateorderlist" => Cryptocom::request(self, "private/create-order-list".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostPrivatecancelorder" => Cryptocom::request(self, "private/cancel-order".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostPrivatecancelorderlist" => Cryptocom::request(self, "private/cancel-order-list".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostPrivatecancelallorders" => Cryptocom::request(self, "private/cancel-all-orders".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostPrivatecloseposition" => Cryptocom::request(self, "private/close-position".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostPrivategetorderhistory" => Cryptocom::request(self, "private/get-order-history".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostPrivategetopenorders" => Cryptocom::request(self, "private/get-open-orders".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostPrivategetorderdetail" => Cryptocom::request(self, "private/get-order-detail".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostPrivategettrades" => Cryptocom::request(self, "private/get-trades".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostPrivatechangeaccountleverage" => Cryptocom::request(self, "private/change-account-leverage".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostPrivategettransactions" => Cryptocom::request(self, "private/get-transactions".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostPrivatecreatesubaccounttransfer" => Cryptocom::request(self, "private/create-subaccount-transfer".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostPrivategetsubaccountbalances" => Cryptocom::request(self, "private/get-subaccount-balances".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostPrivategetorderlist" => Cryptocom::request(self, "private/get-order-list".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostPrivatecreatewithdrawal" => Cryptocom::request(self, "private/create-withdrawal".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostPrivategetcurrencynetworks" => Cryptocom::request(self, "private/get-currency-networks".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostPrivategetdepositaddress" => Cryptocom::request(self, "private/get-deposit-address".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostPrivategetaccounts" => Cryptocom::request(self, "private/get-accounts".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostPrivategetwithdrawalhistory" => Cryptocom::request(self, "private/get-withdrawal-history".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostPrivategetdeposithistory" => Cryptocom::request(self, "private/get-deposit-history".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostPrivategetfeerate" => Cryptocom::request(self, "private/get-fee-rate".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostPrivategetinstrumentfeerate" => Cryptocom::request(self, "private/get-instrument-fee-rate".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostPrivatefiatfiatdepositinfo" => Cryptocom::request(self, "private/fiat/fiat-deposit-info".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostPrivatefiatfiatdeposithistory" => Cryptocom::request(self, "private/fiat/fiat-deposit-history".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostPrivatefiatfiatwithdrawhistory" => Cryptocom::request(self, "private/fiat/fiat-withdraw-history".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostPrivatefiatfiatcreatewithdraw" => Cryptocom::request(self, "private/fiat/fiat-create-withdraw".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostPrivatefiatfiattransactionquota" => Cryptocom::request(self, "private/fiat/fiat-transaction-quota".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostPrivatefiatfiattransactionlimit" => Cryptocom::request(self, "private/fiat/fiat-transaction-limit".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostPrivatefiatfiatgetbankaccounts" => Cryptocom::request(self, "private/fiat/fiat-get-bank-accounts".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostPrivatestakingstake" => Cryptocom::request(self, "private/staking/stake".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostPrivatestakingunstake" => Cryptocom::request(self, "private/staking/unstake".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostPrivatestakinggetstakingposition" => Cryptocom::request(self, "private/staking/get-staking-position".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostPrivatestakinggetstakinginstruments" => Cryptocom::request(self, "private/staking/get-staking-instruments".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostPrivatestakinggetopenstake" => Cryptocom::request(self, "private/staking/get-open-stake".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostPrivatestakinggetstakehistory" => Cryptocom::request(self, "private/staking/get-stake-history".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostPrivatestakinggetrewardhistory" => Cryptocom::request(self, "private/staking/get-reward-history".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostPrivatestakingconvert" => Cryptocom::request(self, "private/staking/convert".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostPrivatestakinggetopenconvert" => Cryptocom::request(self, "private/staking/get-open-convert".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostPrivatestakinggetconverthistory" => Cryptocom::request(self, "private/staking/get-convert-history".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostPrivatecreateisolatedmargintransfer" => Cryptocom::request(self, "private/create-isolated-margin-transfer".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostPrivatechangeisolatedmarginleverage" => Cryptocom::request(self, "private/change-isolated-margin-leverage".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PublicGetPublicauth" => Cryptocom::request(self, "public/auth".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PublicGetPublicgetinstruments" => Cryptocom::request(self, "public/get-instruments".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PublicGetPublicgetbook" => Cryptocom::request(self, "public/get-book".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PublicGetPublicgetcandlestick" => Cryptocom::request(self, "public/get-candlestick".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PublicGetPublicgetticker" => Cryptocom::request(self, "public/get-ticker".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PublicGetPublicgettrades" => Cryptocom::request(self, "public/get-trades".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PublicGetPublicmargingettransfercurrencies" => Cryptocom::request(self, "public/margin/get-transfer-currencies".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PublicGetPublicmargingetloadcurrenices" => Cryptocom::request(self, "public/margin/get-load-currenices".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PublicGetPublicrespondheartbeat" => Cryptocom::request(self, "public/respond-heartbeat".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivatePostPrivatesetcancelondisconnect" => Cryptocom::request(self, "private/set-cancel-on-disconnect".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivatePostPrivategetcancelondisconnect" => Cryptocom::request(self, "private/get-cancel-on-disconnect".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivatePostPrivatecreatewithdrawal" => Cryptocom::request(self, "private/create-withdrawal".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivatePostPrivategetwithdrawalhistory" => Cryptocom::request(self, "private/get-withdrawal-history".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivatePostPrivategetcurrencynetworks" => Cryptocom::request(self, "private/get-currency-networks".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivatePostPrivategetdeposithistory" => Cryptocom::request(self, "private/get-deposit-history".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivatePostPrivategetdepositaddress" => Cryptocom::request(self, "private/get-deposit-address".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivatePostPrivateexportcreateexportrequest" => Cryptocom::request(self, "private/export/create-export-request".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivatePostPrivateexportgetexportrequests" => Cryptocom::request(self, "private/export/get-export-requests".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivatePostPrivateexportdownloadexportoutput" => Cryptocom::request(self, "private/export/download-export-output".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivatePostPrivategetaccountsummary" => Cryptocom::request(self, "private/get-account-summary".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivatePostPrivatecreateorder" => Cryptocom::request(self, "private/create-order".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivatePostPrivatecancelorder" => Cryptocom::request(self, "private/cancel-order".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivatePostPrivatecancelallorders" => Cryptocom::request(self, "private/cancel-all-orders".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivatePostPrivatecreateorderlist" => Cryptocom::request(self, "private/create-order-list".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivatePostPrivategetorderhistory" => Cryptocom::request(self, "private/get-order-history".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivatePostPrivategetopenorders" => Cryptocom::request(self, "private/get-open-orders".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivatePostPrivategetorderdetail" => Cryptocom::request(self, "private/get-order-detail".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivatePostPrivategettrades" => Cryptocom::request(self, "private/get-trades".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivatePostPrivategetaccounts" => Cryptocom::request(self, "private/get-accounts".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivatePostPrivategetsubaccountbalances" => Cryptocom::request(self, "private/get-subaccount-balances".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivatePostPrivatecreatesubaccounttransfer" => Cryptocom::request(self, "private/create-subaccount-transfer".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivatePostPrivateotcgetotcuser" => Cryptocom::request(self, "private/otc/get-otc-user".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivatePostPrivateotcgetinstruments" => Cryptocom::request(self, "private/otc/get-instruments".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivatePostPrivateotcrequestquote" => Cryptocom::request(self, "private/otc/request-quote".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivatePostPrivateotcacceptquote" => Cryptocom::request(self, "private/otc/accept-quote".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivatePostPrivateotcgetquotehistory" => Cryptocom::request(self, "private/otc/get-quote-history".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivatePostPrivateotcgettradehistory" => Cryptocom::request(self, "private/otc/get-trade-history".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivatePostPrivateotccreateorder" => Cryptocom::request(self, "private/otc/create-order".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "derivativesPublicGetPublicauth" => Cryptocom::request(self, "public/auth".into(), "derivatives".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "derivativesPublicGetPublicgetinstruments" => Cryptocom::request(self, "public/get-instruments".into(), "derivatives".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "derivativesPublicGetPublicgetbook" => Cryptocom::request(self, "public/get-book".into(), "derivatives".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "derivativesPublicGetPublicgetcandlestick" => Cryptocom::request(self, "public/get-candlestick".into(), "derivatives".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "derivativesPublicGetPublicgettrades" => Cryptocom::request(self, "public/get-trades".into(), "derivatives".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "derivativesPublicGetPublicgettickers" => Cryptocom::request(self, "public/get-tickers".into(), "derivatives".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "derivativesPublicGetPublicgetvaluations" => Cryptocom::request(self, "public/get-valuations".into(), "derivatives".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "derivativesPublicGetPublicgetexpiredsettlementprice" => Cryptocom::request(self, "public/get-expired-settlement-price".into(), "derivatives".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "derivativesPublicGetPublicgetinsurance" => Cryptocom::request(self, "public/get-insurance".into(), "derivatives".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "derivativesPrivatePostPrivatesetcancelondisconnect" => Cryptocom::request(self, "private/set-cancel-on-disconnect".into(), "derivatives".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "derivativesPrivatePostPrivategetcancelondisconnect" => Cryptocom::request(self, "private/get-cancel-on-disconnect".into(), "derivatives".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "derivativesPrivatePostPrivateuserbalance" => Cryptocom::request(self, "private/user-balance".into(), "derivatives".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "derivativesPrivatePostPrivateuserbalancehistory" => Cryptocom::request(self, "private/user-balance-history".into(), "derivatives".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "derivativesPrivatePostPrivategetpositions" => Cryptocom::request(self, "private/get-positions".into(), "derivatives".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "derivativesPrivatePostPrivatecreateorder" => Cryptocom::request(self, "private/create-order".into(), "derivatives".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "derivativesPrivatePostPrivatecreateorderlist" => Cryptocom::request(self, "private/create-order-list".into(), "derivatives".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "derivativesPrivatePostPrivatecancelorder" => Cryptocom::request(self, "private/cancel-order".into(), "derivatives".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "derivativesPrivatePostPrivatecancelorderlist" => Cryptocom::request(self, "private/cancel-order-list".into(), "derivatives".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "derivativesPrivatePostPrivatecancelallorders" => Cryptocom::request(self, "private/cancel-all-orders".into(), "derivatives".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "derivativesPrivatePostPrivatecloseposition" => Cryptocom::request(self, "private/close-position".into(), "derivatives".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "derivativesPrivatePostPrivateconvertcollateral" => Cryptocom::request(self, "private/convert-collateral".into(), "derivatives".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "derivativesPrivatePostPrivategetorderhistory" => Cryptocom::request(self, "private/get-order-history".into(), "derivatives".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "derivativesPrivatePostPrivategetopenorders" => Cryptocom::request(self, "private/get-open-orders".into(), "derivatives".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "derivativesPrivatePostPrivategetorderdetail" => Cryptocom::request(self, "private/get-order-detail".into(), "derivatives".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "derivativesPrivatePostPrivategettrades" => Cryptocom::request(self, "private/get-trades".into(), "derivatives".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "derivativesPrivatePostPrivatechangeaccountleverage" => Cryptocom::request(self, "private/change-account-leverage".into(), "derivatives".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "derivativesPrivatePostPrivategettransactions" => Cryptocom::request(self, "private/get-transactions".into(), "derivatives".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "derivativesPrivatePostPrivatecreatesubaccounttransfer" => Cryptocom::request(self, "private/create-subaccount-transfer".into(), "derivatives".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "derivativesPrivatePostPrivategetsubaccountbalances" => Cryptocom::request(self, "private/get-subaccount-balances".into(), "derivatives".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "derivativesPrivatePostPrivategetorderlist" => Cryptocom::request(self, "private/get-order-list".into(), "derivatives".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "basePublicGetV1publicgetannouncements" => self.request("v1/public/get-announcements".into(), "base".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetPublicauth" => self.request("public/auth".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetPublicgetinstruments" => self.request("public/get-instruments".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetPublicgetbook" => self.request("public/get-book".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetPublicgetcandlestick" => self.request("public/get-candlestick".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetPublicgettrades" => self.request("public/get-trades".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetPublicgettickers" => self.request("public/get-tickers".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetPublicgetvaluations" => self.request("public/get-valuations".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetPublicgetexpiredsettlementprice" => self.request("public/get-expired-settlement-price".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetPublicgetinsurance" => self.request("public/get-insurance".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetPublicgetannouncements" => self.request("public/get-announcements".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetPublicgetriskparameters" => self.request("public/get-risk-parameters".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicPostPublicstakinggetconversionrate" => self.request("public/staking/get-conversion-rate".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostPrivatesetcancelondisconnect" => self.request("private/set-cancel-on-disconnect".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostPrivategetcancelondisconnect" => self.request("private/get-cancel-on-disconnect".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostPrivateuserbalance" => self.request("private/user-balance".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostPrivateuserbalancehistory" => self.request("private/user-balance-history".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostPrivategetpositions" => self.request("private/get-positions".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostPrivatecreateorder" => self.request("private/create-order".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostPrivateamendorder" => self.request("private/amend-order".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostPrivatecreateorderlist" => self.request("private/create-order-list".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostPrivatecancelorder" => self.request("private/cancel-order".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostPrivatecancelorderlist" => self.request("private/cancel-order-list".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostPrivatecancelallorders" => self.request("private/cancel-all-orders".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostPrivatecloseposition" => self.request("private/close-position".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostPrivategetorderhistory" => self.request("private/get-order-history".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostPrivategetopenorders" => self.request("private/get-open-orders".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostPrivategetorderdetail" => self.request("private/get-order-detail".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostPrivategettrades" => self.request("private/get-trades".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostPrivatechangeaccountleverage" => self.request("private/change-account-leverage".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostPrivategettransactions" => self.request("private/get-transactions".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostPrivatecreatesubaccounttransfer" => self.request("private/create-subaccount-transfer".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostPrivategetsubaccountbalances" => self.request("private/get-subaccount-balances".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostPrivategetorderlist" => self.request("private/get-order-list".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostPrivatecreatewithdrawal" => self.request("private/create-withdrawal".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostPrivategetcurrencynetworks" => self.request("private/get-currency-networks".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostPrivategetdepositaddress" => self.request("private/get-deposit-address".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostPrivategetaccounts" => self.request("private/get-accounts".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostPrivategetwithdrawalhistory" => self.request("private/get-withdrawal-history".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostPrivategetdeposithistory" => self.request("private/get-deposit-history".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostPrivategetfeerate" => self.request("private/get-fee-rate".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostPrivategetinstrumentfeerate" => self.request("private/get-instrument-fee-rate".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostPrivatefiatfiatdepositinfo" => self.request("private/fiat/fiat-deposit-info".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostPrivatefiatfiatdeposithistory" => self.request("private/fiat/fiat-deposit-history".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostPrivatefiatfiatwithdrawhistory" => self.request("private/fiat/fiat-withdraw-history".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostPrivatefiatfiatcreatewithdraw" => self.request("private/fiat/fiat-create-withdraw".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostPrivatefiatfiattransactionquota" => self.request("private/fiat/fiat-transaction-quota".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostPrivatefiatfiattransactionlimit" => self.request("private/fiat/fiat-transaction-limit".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostPrivatefiatfiatgetbankaccounts" => self.request("private/fiat/fiat-get-bank-accounts".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostPrivatestakingstake" => self.request("private/staking/stake".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostPrivatestakingunstake" => self.request("private/staking/unstake".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostPrivatestakinggetstakingposition" => self.request("private/staking/get-staking-position".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostPrivatestakinggetstakinginstruments" => self.request("private/staking/get-staking-instruments".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostPrivatestakinggetopenstake" => self.request("private/staking/get-open-stake".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostPrivatestakinggetstakehistory" => self.request("private/staking/get-stake-history".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostPrivatestakinggetrewardhistory" => self.request("private/staking/get-reward-history".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostPrivatestakingconvert" => self.request("private/staking/convert".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostPrivatestakinggetopenconvert" => self.request("private/staking/get-open-convert".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostPrivatestakinggetconverthistory" => self.request("private/staking/get-convert-history".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostPrivatecreateisolatedmargintransfer" => self.request("private/create-isolated-margin-transfer".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostPrivatechangeisolatedmarginleverage" => self.request("private/change-isolated-margin-leverage".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PublicGetPublicauth" => self.request("public/auth".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PublicGetPublicgetinstruments" => self.request("public/get-instruments".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PublicGetPublicgetbook" => self.request("public/get-book".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PublicGetPublicgetcandlestick" => self.request("public/get-candlestick".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PublicGetPublicgetticker" => self.request("public/get-ticker".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PublicGetPublicgettrades" => self.request("public/get-trades".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PublicGetPublicmargingettransfercurrencies" => self.request("public/margin/get-transfer-currencies".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PublicGetPublicmargingetloadcurrenices" => self.request("public/margin/get-load-currenices".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PublicGetPublicrespondheartbeat" => self.request("public/respond-heartbeat".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivatePostPrivatesetcancelondisconnect" => self.request("private/set-cancel-on-disconnect".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivatePostPrivategetcancelondisconnect" => self.request("private/get-cancel-on-disconnect".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivatePostPrivatecreatewithdrawal" => self.request("private/create-withdrawal".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivatePostPrivategetwithdrawalhistory" => self.request("private/get-withdrawal-history".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivatePostPrivategetcurrencynetworks" => self.request("private/get-currency-networks".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivatePostPrivategetdeposithistory" => self.request("private/get-deposit-history".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivatePostPrivategetdepositaddress" => self.request("private/get-deposit-address".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivatePostPrivateexportcreateexportrequest" => self.request("private/export/create-export-request".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivatePostPrivateexportgetexportrequests" => self.request("private/export/get-export-requests".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivatePostPrivateexportdownloadexportoutput" => self.request("private/export/download-export-output".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivatePostPrivategetaccountsummary" => self.request("private/get-account-summary".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivatePostPrivatecreateorder" => self.request("private/create-order".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivatePostPrivatecancelorder" => self.request("private/cancel-order".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivatePostPrivatecancelallorders" => self.request("private/cancel-all-orders".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivatePostPrivatecreateorderlist" => self.request("private/create-order-list".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivatePostPrivategetorderhistory" => self.request("private/get-order-history".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivatePostPrivategetopenorders" => self.request("private/get-open-orders".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivatePostPrivategetorderdetail" => self.request("private/get-order-detail".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivatePostPrivategettrades" => self.request("private/get-trades".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivatePostPrivategetaccounts" => self.request("private/get-accounts".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivatePostPrivategetsubaccountbalances" => self.request("private/get-subaccount-balances".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivatePostPrivatecreatesubaccounttransfer" => self.request("private/create-subaccount-transfer".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivatePostPrivateotcgetotcuser" => self.request("private/otc/get-otc-user".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivatePostPrivateotcgetinstruments" => self.request("private/otc/get-instruments".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivatePostPrivateotcrequestquote" => self.request("private/otc/request-quote".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivatePostPrivateotcacceptquote" => self.request("private/otc/accept-quote".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivatePostPrivateotcgetquotehistory" => self.request("private/otc/get-quote-history".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivatePostPrivateotcgettradehistory" => self.request("private/otc/get-trade-history".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivatePostPrivateotccreateorder" => self.request("private/otc/create-order".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "derivativesPublicGetPublicauth" => self.request("public/auth".into(), "derivatives".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "derivativesPublicGetPublicgetinstruments" => self.request("public/get-instruments".into(), "derivatives".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "derivativesPublicGetPublicgetbook" => self.request("public/get-book".into(), "derivatives".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "derivativesPublicGetPublicgetcandlestick" => self.request("public/get-candlestick".into(), "derivatives".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "derivativesPublicGetPublicgettrades" => self.request("public/get-trades".into(), "derivatives".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "derivativesPublicGetPublicgettickers" => self.request("public/get-tickers".into(), "derivatives".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "derivativesPublicGetPublicgetvaluations" => self.request("public/get-valuations".into(), "derivatives".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "derivativesPublicGetPublicgetexpiredsettlementprice" => self.request("public/get-expired-settlement-price".into(), "derivatives".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "derivativesPublicGetPublicgetinsurance" => self.request("public/get-insurance".into(), "derivatives".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "derivativesPrivatePostPrivatesetcancelondisconnect" => self.request("private/set-cancel-on-disconnect".into(), "derivatives".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "derivativesPrivatePostPrivategetcancelondisconnect" => self.request("private/get-cancel-on-disconnect".into(), "derivatives".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "derivativesPrivatePostPrivateuserbalance" => self.request("private/user-balance".into(), "derivatives".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "derivativesPrivatePostPrivateuserbalancehistory" => self.request("private/user-balance-history".into(), "derivatives".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "derivativesPrivatePostPrivategetpositions" => self.request("private/get-positions".into(), "derivatives".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "derivativesPrivatePostPrivatecreateorder" => self.request("private/create-order".into(), "derivatives".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "derivativesPrivatePostPrivatecreateorderlist" => self.request("private/create-order-list".into(), "derivatives".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "derivativesPrivatePostPrivatecancelorder" => self.request("private/cancel-order".into(), "derivatives".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "derivativesPrivatePostPrivatecancelorderlist" => self.request("private/cancel-order-list".into(), "derivatives".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "derivativesPrivatePostPrivatecancelallorders" => self.request("private/cancel-all-orders".into(), "derivatives".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "derivativesPrivatePostPrivatecloseposition" => self.request("private/close-position".into(), "derivatives".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "derivativesPrivatePostPrivateconvertcollateral" => self.request("private/convert-collateral".into(), "derivatives".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "derivativesPrivatePostPrivategetorderhistory" => self.request("private/get-order-history".into(), "derivatives".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "derivativesPrivatePostPrivategetopenorders" => self.request("private/get-open-orders".into(), "derivatives".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "derivativesPrivatePostPrivategetorderdetail" => self.request("private/get-order-detail".into(), "derivatives".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "derivativesPrivatePostPrivategettrades" => self.request("private/get-trades".into(), "derivatives".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "derivativesPrivatePostPrivatechangeaccountleverage" => self.request("private/change-account-leverage".into(), "derivatives".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "derivativesPrivatePostPrivategettransactions" => self.request("private/get-transactions".into(), "derivatives".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "derivativesPrivatePostPrivatecreatesubaccounttransfer" => self.request("private/create-subaccount-transfer".into(), "derivatives".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "derivativesPrivatePostPrivategetsubaccountbalances" => self.request("private/get-subaccount-balances".into(), "derivatives".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "derivativesPrivatePostPrivategetorderlist" => self.request("private/get-order-list".into(), "derivatives".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     _ => unimplemented!(),
                 }
             },
@@ -2053,7 +2077,7 @@ impl ValueTrait for CryptocomImpl {
     fn join(&self, glue: Value) -> Value { self.0.join(glue) }
     fn to_string(&self) -> Value { self.0.to_string() }
     fn typeof_(&self) -> Value { self.0.typeof_() }
-    fn slice(&self, start: Value) -> Value { self.0.slice(start) }
+    fn slice(&self, start: Value, end: Value) -> Value { self.0.slice(start, end) }
 }
 
 impl CryptocomImpl {

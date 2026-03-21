@@ -13,14 +13,38 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, BoolExt, JSON, Array, Object, Math, Promise, parse_int, shift_2, extend_2, normalize};
 // Crypto hash identifiers
-fn sha256() -> Value { Value::from("sha256") }
-fn sha384() -> Value { Value::from("sha384") }
-fn sha512() -> Value { Value::from("sha512") }
-fn md5() -> Value { Value::from("md5") }
-fn ed25519() -> Value { Value::from("ed25519") }
+fn sha256() -> Value { Value::from("sha256()") }
+fn sha384() -> Value { Value::from("sha384()") }
+fn sha512() -> Value { Value::from("sha512()") }
+fn md5() -> Value { Value::from("md5()") }
+fn ed25519() -> Value { Value::from("ed25519()") }
 fn rsa(msg: Value, secret: Value, _hash: Value) -> Value { msg }
 fn eddsa(msg: Value, secret: Value, _curve: Value) -> Value { msg }
-fn secp256k1() -> Value { Value::from("secp256k1") }
+fn secp256k1() -> Value { Value::from("secp256k1()") }
+fn keccak() -> Value { Value::from("keccak()") }
+fn ecdsa(msg: Value, secret: Value, algo: Value, hash_fn: Value) -> Value { msg }
+fn totp(secret: Value) -> Value { Value::Undefined }
+fn jwt(data: Value, secret: Value, hash: Value, is_rsa: Value) -> Value { Value::Undefined }
+fn parse_float(value: Value) -> Value { value }
+fn decimals(value: Value) -> Value { Value::from(0) }
+fn shift_1(value: Value) -> Value { value }
+fn shift_3(value: Value) -> (Value, Value, Value) { (value.clone(), Value::Undefined, Value::Undefined) }
+fn shift_4(value: Value) -> (Value, Value, Value, Value) { (value.clone(), Value::Undefined, Value::Undefined, Value::Undefined) }
+// Error type constructors
+fn BadRequest(msg: Value) -> Value { msg }
+fn InvalidOrder(msg: Value) -> Value { msg }
+fn ExchangeError(msg: Value) -> Value { msg }
+fn InsufficientFunds(msg: Value) -> Value { msg }
+fn OrderNotFound(msg: Value) -> Value { msg }
+fn AuthenticationError(msg: Value) -> Value { msg }
+fn PermissionDenied(msg: Value) -> Value { msg }
+fn ExchangeNotAvailable(msg: Value) -> Value { msg }
+fn ArgumentsRequired(msg: Value) -> Value { msg }
+fn RateLimitExceeded(msg: Value) -> Value { msg }
+fn OrderNotFillable(msg: Value) -> Value { msg }
+fn OrderImmediatelyFillable(msg: Value) -> Value { msg }
+fn NotSupported(msg: Value) -> Value { msg }
+fn DuplicateOrderId(msg: Value) -> Value { msg }
 
 use crate::exchange::{PRECISE_BASE, TRUNCATE, ROUND, ROUND_UP, ROUND_DOWN};
 use crate::exchange::{DECIMAL_PLACES, SIGNIFICANT_DIGITS, TICK_SIZE, NO_PADDING, PAD_WITH_ZERO};
@@ -1124,14 +1148,14 @@ pub trait Kucoinfutures : Exchange {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = <Self as Kucoinfutures>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() { return rv; }
                 }
             }
         }
         let candidates = vec![("public", "GET", "status"), ("public", "GET", "ping"), ("public", "GET", "time"), ("sapi", "GET", "system/status")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Kucoinfutures>::request(self,path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -1143,7 +1167,7 @@ pub trait Kucoinfutures : Exchange {
     async fn fetch_time(&mut self, mut params: Value) -> Value {
         let candidates = vec![("public", "GET", "time"), ("public", "GET", "server/time"), ("public", "GET", "timestamp")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Kucoinfutures>::request(self,path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -1171,14 +1195,14 @@ pub trait Kucoinfutures : Exchange {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = <Self as Kucoinfutures>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() { return rv; }
                 }
             }
         }
         let candidates = vec![("public", "GET", "klines"), ("public", "GET", "candles"), ("public", "GET", "ohlcv")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Kucoinfutures>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -1252,14 +1276,14 @@ pub trait Kucoinfutures : Exchange {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = <Self as Kucoinfutures>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() { return rv; }
                 }
             }
         }
         let candidates = vec![("public", "GET", "depth"), ("public", "GET", "orderbook"), ("public", "GET", "order_book")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Kucoinfutures>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -1283,14 +1307,14 @@ pub trait Kucoinfutures : Exchange {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = <Self as Kucoinfutures>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() { return rv; }
                 }
             }
         }
         let candidates = vec![("public", "GET", "ticker/24hr"), ("public", "GET", "ticker"), ("public", "GET", "ticker/price")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Kucoinfutures>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -1324,14 +1348,14 @@ pub trait Kucoinfutures : Exchange {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = <Self as Kucoinfutures>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() { return rv; }
                 }
             }
         }
         let candidates = vec![("public", "GET", "ticker/24hr"), ("public", "GET", "tickers"), ("public", "GET", "ticker")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Kucoinfutures>::request(self,path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -1428,7 +1452,7 @@ pub trait Kucoinfutures : Exchange {
         let mut market_id: Value = self.safe_string(ticker.clone(), Value::from("symbol"), Value::Undefined);
         market = self.safe_market(market_id.clone(), market.clone(), Value::from("-"), Value::Undefined);
         let mut last: Value = self.safe_string_2(ticker.clone(), Value::from("price"), Value::from("lastTradePrice"), Value::Undefined);
-        let mut timestamp: Value = self.safe_integer_product(ticker.clone(), Value::from("ts"), Value::from(0.000001));
+        let mut timestamp: Value = self.safe_integer_product(ticker.clone(), Value::from("ts"), Value::from(0.000001), Value::Undefined);
         return self.safe_ticker(Value::Json(normalize(&Value::Json(json!({
             "symbol": market.get(Value::from("symbol")),
             "timestamp": timestamp,
@@ -1460,7 +1484,7 @@ pub trait Kucoinfutures : Exchange {
         if symbols.is_nonnullish() { request.set("symbols".into(), symbols.clone()); }
         let candidates = vec![("public", "GET", "ticker/bookTicker"), ("public", "GET", "bookticker"), ("public", "GET", "bidsasks"), ("public", "GET", "tickers")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Kucoinfutures>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -2913,7 +2937,7 @@ pub trait Kucoinfutures : Exchange {
         if limit.is_nonnullish() { request.set("limit".into(), limit.clone()); }
         let candidates = vec![("public", "GET", "trades"), ("public", "GET", "recent_trades"), ("public", "GET", "aggTrades")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Kucoinfutures>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -3003,7 +3027,7 @@ pub trait Kucoinfutures : Exchange {
         let mut taker_or_maker: Value = self.safe_string(trade.clone(), Value::from("liquidity"), Value::Undefined);
         let mut timestamp: Value = self.safe_integer(trade.clone(), Value::from("ts"), Value::Undefined);
         if timestamp.clone().is_nonnullish() {
-            timestamp = self.parse_to_int(timestamp.clone() / Value::from(1000000), Value::Undefined);
+            timestamp = self.parse_to_int(timestamp.clone() / Value::from(1000000));
         } else {
             timestamp = self.safe_integer(trade.clone(), Value::from("createdAt"), Value::Undefined);
             // if it's a historical v1 trade, the exchange returns timestamp in seconds
@@ -3456,333 +3480,333 @@ pub trait Kucoinfutures : Exchange {
         match method {
             Value::Json(serde_json::Value::String(ref m)) => {
                 match m.as_ref() {
-                    "publicGetCurrencies" => Kucoinfutures::request(self, "currencies".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetCurrenciescurrency" => Kucoinfutures::request(self, "currencies/{currency}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetSymbols" => Kucoinfutures::request(self, "symbols".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetMarketorderbooklevel1" => Kucoinfutures::request(self, "market/orderbook/level1".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetMarketalltickers" => Kucoinfutures::request(self, "market/allTickers".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetMarketstats" => Kucoinfutures::request(self, "market/stats".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetMarkets" => Kucoinfutures::request(self, "markets".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetMarketorderbooklevellevellimit" => Kucoinfutures::request(self, "market/orderbook/level{level}_{limit}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetMarketorderbooklevel220" => Kucoinfutures::request(self, "market/orderbook/level2_20".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetMarketorderbooklevel2100" => Kucoinfutures::request(self, "market/orderbook/level2_100".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetMarkethistories" => Kucoinfutures::request(self, "market/histories".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetMarketcandles" => Kucoinfutures::request(self, "market/candles".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetPrices" => Kucoinfutures::request(self, "prices".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetTimestamp" => Kucoinfutures::request(self, "timestamp".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetStatus" => Kucoinfutures::request(self, "status".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetMarkpricesymbolcurrent" => Kucoinfutures::request(self, "mark-price/{symbol}/current".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetMarkpriceallsymbols" => Kucoinfutures::request(self, "mark-price/all-symbols".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetMarginconfig" => Kucoinfutures::request(self, "margin/config".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetAnnouncements" => Kucoinfutures::request(self, "announcements".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetMargincollateralratio" => Kucoinfutures::request(self, "margin/collateralRatio".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetConvertsymbol" => Kucoinfutures::request(self, "convert/symbol".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetConvertcurrencies" => Kucoinfutures::request(self, "convert/currencies".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicPostBulletpublic" => Kucoinfutures::request(self, "bullet-public".into(), "public".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetUserinfo" => Kucoinfutures::request(self, "user-info".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetUserapikey" => Kucoinfutures::request(self, "user/api-key".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetAccounts" => Kucoinfutures::request(self, "accounts".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetAccountsaccountid" => Kucoinfutures::request(self, "accounts/{accountId}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetAccountsledgers" => Kucoinfutures::request(self, "accounts/ledgers".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetHfaccountsledgers" => Kucoinfutures::request(self, "hf/accounts/ledgers".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetHfmarginaccountledgers" => Kucoinfutures::request(self, "hf/margin/account/ledgers".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetTransactionhistory" => Kucoinfutures::request(self, "transaction-history".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetSubuser" => Kucoinfutures::request(self, "sub/user".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetSubaccountssubuserid" => Kucoinfutures::request(self, "sub-accounts/{subUserId}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetSubaccounts" => Kucoinfutures::request(self, "sub-accounts".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetSubapikey" => Kucoinfutures::request(self, "sub/api-key".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetMarginaccount" => Kucoinfutures::request(self, "margin/account".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetMarginaccounts" => Kucoinfutures::request(self, "margin/accounts".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetIsolatedaccounts" => Kucoinfutures::request(self, "isolated/accounts".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetDepositaddresses" => Kucoinfutures::request(self, "deposit-addresses".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetDeposits" => Kucoinfutures::request(self, "deposits".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetHistdeposits" => Kucoinfutures::request(self, "hist-deposits".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetWithdrawals" => Kucoinfutures::request(self, "withdrawals".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetHistwithdrawals" => Kucoinfutures::request(self, "hist-withdrawals".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetWithdrawalsquotas" => Kucoinfutures::request(self, "withdrawals/quotas".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetAccountstransferable" => Kucoinfutures::request(self, "accounts/transferable".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetTransferlist" => Kucoinfutures::request(self, "transfer-list".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetBasefee" => Kucoinfutures::request(self, "base-fee".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetTradefees" => Kucoinfutures::request(self, "trade-fees".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetMarketorderbooklevellevel" => Kucoinfutures::request(self, "market/orderbook/level{level}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetMarketorderbooklevel2" => Kucoinfutures::request(self, "market/orderbook/level2".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetMarketorderbooklevel3" => Kucoinfutures::request(self, "market/orderbook/level3".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetHfaccountsopened" => Kucoinfutures::request(self, "hf/accounts/opened".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetHfordersactive" => Kucoinfutures::request(self, "hf/orders/active".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetHfordersactivesymbols" => Kucoinfutures::request(self, "hf/orders/active/symbols".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetHfmarginorderactivesymbols" => Kucoinfutures::request(self, "hf/margin/order/active/symbols".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetHfordersdone" => Kucoinfutures::request(self, "hf/orders/done".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetHfordersorderid" => Kucoinfutures::request(self, "hf/orders/{orderId}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetHfordersclientorderclientoid" => Kucoinfutures::request(self, "hf/orders/client-order/{clientOid}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetHfordersdeadcancelallquery" => Kucoinfutures::request(self, "hf/orders/dead-cancel-all/query".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetHffills" => Kucoinfutures::request(self, "hf/fills".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetOrders" => Kucoinfutures::request(self, "orders".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetLimitorders" => Kucoinfutures::request(self, "limit/orders".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetOrdersorderid" => Kucoinfutures::request(self, "orders/{orderId}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetOrderclientorderclientoid" => Kucoinfutures::request(self, "order/client-order/{clientOid}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetFills" => Kucoinfutures::request(self, "fills".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetLimitfills" => Kucoinfutures::request(self, "limit/fills".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetStoporder" => Kucoinfutures::request(self, "stop-order".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetStoporderorderid" => Kucoinfutures::request(self, "stop-order/{orderId}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetStoporderqueryorderbyclientoid" => Kucoinfutures::request(self, "stop-order/queryOrderByClientOid".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetOcoorderorderid" => Kucoinfutures::request(self, "oco/order/{orderId}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetOcoorderdetailsorderid" => Kucoinfutures::request(self, "oco/order/details/{orderId}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetOcoclientorderclientoid" => Kucoinfutures::request(self, "oco/client-order/{clientOid}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetOcoorders" => Kucoinfutures::request(self, "oco/orders".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetHfmarginordersactive" => Kucoinfutures::request(self, "hf/margin/orders/active".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetHfmarginordersdone" => Kucoinfutures::request(self, "hf/margin/orders/done".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetHfmarginordersorderid" => Kucoinfutures::request(self, "hf/margin/orders/{orderId}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetHfmarginordersclientorderclientoid" => Kucoinfutures::request(self, "hf/margin/orders/client-order/{clientOid}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetHfmarginfills" => Kucoinfutures::request(self, "hf/margin/fills".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetEtfinfo" => Kucoinfutures::request(self, "etf/info".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetMargincurrencies" => Kucoinfutures::request(self, "margin/currencies".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetRisklimitstrategy" => Kucoinfutures::request(self, "risk/limit/strategy".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetIsolatedsymbols" => Kucoinfutures::request(self, "isolated/symbols".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetMarginsymbols" => Kucoinfutures::request(self, "margin/symbols".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetIsolatedaccountsymbol" => Kucoinfutures::request(self, "isolated/account/{symbol}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetMarginborrow" => Kucoinfutures::request(self, "margin/borrow".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetMarginrepay" => Kucoinfutures::request(self, "margin/repay".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetMargininterest" => Kucoinfutures::request(self, "margin/interest".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetProjectlist" => Kucoinfutures::request(self, "project/list".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetProjectmarketinterestrate" => Kucoinfutures::request(self, "project/marketInterestRate".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetRedeemorders" => Kucoinfutures::request(self, "redeem/orders".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetPurchaseorders" => Kucoinfutures::request(self, "purchase/orders".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetBrokerapirebasedownload" => Kucoinfutures::request(self, "broker/api/rebase/download".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetBrokerquerymycommission" => Kucoinfutures::request(self, "broker/queryMyCommission".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetBrokerqueryuser" => Kucoinfutures::request(self, "broker/queryUser".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetBrokerquerydetailbyuid" => Kucoinfutures::request(self, "broker/queryDetailByUid".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetMigrateuseraccountstatus" => Kucoinfutures::request(self, "migrate/user/account/status".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetConvertquote" => Kucoinfutures::request(self, "convert/quote".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetConvertorderdetail" => Kucoinfutures::request(self, "convert/order/detail".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetConvertorderhistory" => Kucoinfutures::request(self, "convert/order/history".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetConvertlimitquote" => Kucoinfutures::request(self, "convert/limit/quote".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetConvertlimitorderdetail" => Kucoinfutures::request(self, "convert/limit/order/detail".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetConvertlimitorders" => Kucoinfutures::request(self, "convert/limit/orders".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetAffiliateinviterstatistics" => Kucoinfutures::request(self, "affiliate/inviter/statistics".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetEarnredeempreview" => Kucoinfutures::request(self, "earn/redeem-preview".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostSubusercreated" => Kucoinfutures::request(self, "sub/user/created".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostSubapikey" => Kucoinfutures::request(self, "sub/api-key".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostSubapikeyupdate" => Kucoinfutures::request(self, "sub/api-key/update".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostDepositaddresses" => Kucoinfutures::request(self, "deposit-addresses".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostWithdrawals" => Kucoinfutures::request(self, "withdrawals".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostAccountsuniversaltransfer" => Kucoinfutures::request(self, "accounts/universal-transfer".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostAccountssubtransfer" => Kucoinfutures::request(self, "accounts/sub-transfer".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostAccountsinnertransfer" => Kucoinfutures::request(self, "accounts/inner-transfer".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostTransferout" => Kucoinfutures::request(self, "transfer-out".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostTransferin" => Kucoinfutures::request(self, "transfer-in".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostHforders" => Kucoinfutures::request(self, "hf/orders".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostHforderstest" => Kucoinfutures::request(self, "hf/orders/test".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostHforderssync" => Kucoinfutures::request(self, "hf/orders/sync".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostHfordersmulti" => Kucoinfutures::request(self, "hf/orders/multi".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostHfordersmultisync" => Kucoinfutures::request(self, "hf/orders/multi/sync".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostHfordersalter" => Kucoinfutures::request(self, "hf/orders/alter".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostHfordersdeadcancelall" => Kucoinfutures::request(self, "hf/orders/dead-cancel-all".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostOrders" => Kucoinfutures::request(self, "orders".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostOrderstest" => Kucoinfutures::request(self, "orders/test".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostOrdersmulti" => Kucoinfutures::request(self, "orders/multi".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostStoporder" => Kucoinfutures::request(self, "stop-order".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostOcoorder" => Kucoinfutures::request(self, "oco/order".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostHfmarginorder" => Kucoinfutures::request(self, "hf/margin/order".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostHfmarginordertest" => Kucoinfutures::request(self, "hf/margin/order/test".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostMarginorder" => Kucoinfutures::request(self, "margin/order".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostMarginordertest" => Kucoinfutures::request(self, "margin/order/test".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostMarginborrow" => Kucoinfutures::request(self, "margin/borrow".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostMarginrepay" => Kucoinfutures::request(self, "margin/repay".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostPurchase" => Kucoinfutures::request(self, "purchase".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostRedeem" => Kucoinfutures::request(self, "redeem".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostLendpurchaseupdate" => Kucoinfutures::request(self, "lend/purchase/update".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostConvertorder" => Kucoinfutures::request(self, "convert/order".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostConvertlimitorder" => Kucoinfutures::request(self, "convert/limit/order".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostBulletprivate" => Kucoinfutures::request(self, "bullet-private".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostPositionupdateuserleverage" => Kucoinfutures::request(self, "position/update-user-leverage".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostDepositaddresscreate" => Kucoinfutures::request(self, "deposit-address/create".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateDeleteSubapikey" => Kucoinfutures::request(self, "sub/api-key".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateDeleteWithdrawalswithdrawalid" => Kucoinfutures::request(self, "withdrawals/{withdrawalId}".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateDeleteHfordersorderid" => Kucoinfutures::request(self, "hf/orders/{orderId}".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateDeleteHforderssyncorderid" => Kucoinfutures::request(self, "hf/orders/sync/{orderId}".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateDeleteHfordersclientorderclientoid" => Kucoinfutures::request(self, "hf/orders/client-order/{clientOid}".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateDeleteHforderssyncclientorderclientoid" => Kucoinfutures::request(self, "hf/orders/sync/client-order/{clientOid}".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateDeleteHforderscancelorderid" => Kucoinfutures::request(self, "hf/orders/cancel/{orderId}".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateDeleteHforders" => Kucoinfutures::request(self, "hf/orders".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateDeleteHforderscancelall" => Kucoinfutures::request(self, "hf/orders/cancelAll".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateDeleteOrdersorderid" => Kucoinfutures::request(self, "orders/{orderId}".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateDeleteOrderclientorderclientoid" => Kucoinfutures::request(self, "order/client-order/{clientOid}".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateDeleteOrders" => Kucoinfutures::request(self, "orders".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateDeleteStoporderorderid" => Kucoinfutures::request(self, "stop-order/{orderId}".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateDeleteStopordercancelorderbyclientoid" => Kucoinfutures::request(self, "stop-order/cancelOrderByClientOid".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateDeleteStopordercancel" => Kucoinfutures::request(self, "stop-order/cancel".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateDeleteOcoorderorderid" => Kucoinfutures::request(self, "oco/order/{orderId}".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateDeleteOcoclientorderclientoid" => Kucoinfutures::request(self, "oco/client-order/{clientOid}".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateDeleteOcoorders" => Kucoinfutures::request(self, "oco/orders".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateDeleteHfmarginordersorderid" => Kucoinfutures::request(self, "hf/margin/orders/{orderId}".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateDeleteHfmarginordersclientorderclientoid" => Kucoinfutures::request(self, "hf/margin/orders/client-order/{clientOid}".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateDeleteHfmarginorders" => Kucoinfutures::request(self, "hf/margin/orders".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateDeleteConvertlimitordercancel" => Kucoinfutures::request(self, "convert/limit/order/cancel".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "futurespublicGetContractsactive" => Kucoinfutures::request(self, "contracts/active".into(), "futuresPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "futurespublicGetContractssymbol" => Kucoinfutures::request(self, "contracts/{symbol}".into(), "futuresPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "futurespublicGetTicker" => Kucoinfutures::request(self, "ticker".into(), "futuresPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "futurespublicGetLevel2snapshot" => Kucoinfutures::request(self, "level2/snapshot".into(), "futuresPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "futurespublicGetLevel2depth20" => Kucoinfutures::request(self, "level2/depth20".into(), "futuresPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "futurespublicGetLevel2depth100" => Kucoinfutures::request(self, "level2/depth100".into(), "futuresPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "futurespublicGetTradehistory" => Kucoinfutures::request(self, "trade/history".into(), "futuresPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "futurespublicGetKlinequery" => Kucoinfutures::request(self, "kline/query".into(), "futuresPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "futurespublicGetInterestquery" => Kucoinfutures::request(self, "interest/query".into(), "futuresPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "futurespublicGetIndexquery" => Kucoinfutures::request(self, "index/query".into(), "futuresPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "futurespublicGetMarkpricesymbolcurrent" => Kucoinfutures::request(self, "mark-price/{symbol}/current".into(), "futuresPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "futurespublicGetPremiumquery" => Kucoinfutures::request(self, "premium/query".into(), "futuresPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "futurespublicGetTradestatistics" => Kucoinfutures::request(self, "trade-statistics".into(), "futuresPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "futurespublicGetFundingratesymbolcurrent" => Kucoinfutures::request(self, "funding-rate/{symbol}/current".into(), "futuresPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "futurespublicGetContractfundingrates" => Kucoinfutures::request(self, "contract/funding-rates".into(), "futuresPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "futurespublicGetTimestamp" => Kucoinfutures::request(self, "timestamp".into(), "futuresPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "futurespublicGetStatus" => Kucoinfutures::request(self, "status".into(), "futuresPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "futurespublicGetLevel2messagequery" => Kucoinfutures::request(self, "level2/message/query".into(), "futuresPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "futurespublicGetContractsrisklimitsymbol" => Kucoinfutures::request(self, "contracts/risk-limit/{symbol}".into(), "futuresPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "futurespublicGetAlltickers" => Kucoinfutures::request(self, "allTickers".into(), "futuresPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "futurespublicGetLevel2depthlimit" => Kucoinfutures::request(self, "level2/depth{limit}".into(), "futuresPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "futurespublicGetLevel3messagequery" => Kucoinfutures::request(self, "level3/message/query".into(), "futuresPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "futurespublicGetLevel3snapshot" => Kucoinfutures::request(self, "level3/snapshot".into(), "futuresPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "futurespublicPostBulletpublic" => Kucoinfutures::request(self, "bullet-public".into(), "futuresPublic".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "futuresprivateGetTransactionhistory" => Kucoinfutures::request(self, "transaction-history".into(), "futuresPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "futuresprivateGetAccountoverview" => Kucoinfutures::request(self, "account-overview".into(), "futuresPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "futuresprivateGetAccountoverviewall" => Kucoinfutures::request(self, "account-overview-all".into(), "futuresPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "futuresprivateGetTransferlist" => Kucoinfutures::request(self, "transfer-list".into(), "futuresPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "futuresprivateGetOrders" => Kucoinfutures::request(self, "orders".into(), "futuresPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "futuresprivateGetStoporders" => Kucoinfutures::request(self, "stopOrders".into(), "futuresPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "futuresprivateGetRecentdoneorders" => Kucoinfutures::request(self, "recentDoneOrders".into(), "futuresPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "futuresprivateGetOrdersorderid" => Kucoinfutures::request(self, "orders/{orderId}".into(), "futuresPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "futuresprivateGetOrdersbyclientoid" => Kucoinfutures::request(self, "orders/byClientOid".into(), "futuresPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "futuresprivateGetFills" => Kucoinfutures::request(self, "fills".into(), "futuresPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "futuresprivateGetRecentfills" => Kucoinfutures::request(self, "recentFills".into(), "futuresPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "futuresprivateGetOpenorderstatistics" => Kucoinfutures::request(self, "openOrderStatistics".into(), "futuresPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "futuresprivateGetPosition" => Kucoinfutures::request(self, "position".into(), "futuresPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "futuresprivateGetPositions" => Kucoinfutures::request(self, "positions".into(), "futuresPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "futuresprivateGetMarginmaxwithdrawmargin" => Kucoinfutures::request(self, "margin/maxWithdrawMargin".into(), "futuresPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "futuresprivateGetContractsrisklimitsymbol" => Kucoinfutures::request(self, "contracts/risk-limit/{symbol}".into(), "futuresPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "futuresprivateGetFundinghistory" => Kucoinfutures::request(self, "funding-history".into(), "futuresPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "futuresprivateGetCopytradefuturesgetmaxopensize" => Kucoinfutures::request(self, "copy-trade/futures/get-max-open-size".into(), "futuresPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "futuresprivateGetCopytradefuturespositionmarginmaxwithdrawmargin" => Kucoinfutures::request(self, "copy-trade/futures/position/margin/max-withdraw-margin".into(), "futuresPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "futuresprivateGetDepositaddress" => Kucoinfutures::request(self, "deposit-address".into(), "futuresPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "futuresprivateGetDepositlist" => Kucoinfutures::request(self, "deposit-list".into(), "futuresPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "futuresprivateGetWithdrawalsquotas" => Kucoinfutures::request(self, "withdrawals/quotas".into(), "futuresPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "futuresprivateGetWithdrawallist" => Kucoinfutures::request(self, "withdrawal-list".into(), "futuresPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "futuresprivateGetSubapikey" => Kucoinfutures::request(self, "sub/api-key".into(), "futuresPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "futuresprivateGetTradestatistics" => Kucoinfutures::request(self, "trade-statistics".into(), "futuresPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "futuresprivateGetTradefees" => Kucoinfutures::request(self, "trade-fees".into(), "futuresPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "futuresprivateGetHistorypositions" => Kucoinfutures::request(self, "history-positions".into(), "futuresPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "futuresprivateGetGetmaxopensize" => Kucoinfutures::request(self, "getMaxOpenSize".into(), "futuresPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "futuresprivateGetGetcrossuserleverage" => Kucoinfutures::request(self, "getCrossUserLeverage".into(), "futuresPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "futuresprivateGetPositiongetmarginmode" => Kucoinfutures::request(self, "position/getMarginMode".into(), "futuresPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "futuresprivatePostTransferout" => Kucoinfutures::request(self, "transfer-out".into(), "futuresPrivate".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "futuresprivatePostTransferin" => Kucoinfutures::request(self, "transfer-in".into(), "futuresPrivate".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "futuresprivatePostOrders" => Kucoinfutures::request(self, "orders".into(), "futuresPrivate".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "futuresprivatePostOrderstest" => Kucoinfutures::request(self, "orders/test".into(), "futuresPrivate".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "futuresprivatePostOrdersmulti" => Kucoinfutures::request(self, "orders/multi".into(), "futuresPrivate".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "futuresprivatePostPositionmarginautodepositstatus" => Kucoinfutures::request(self, "position/margin/auto-deposit-status".into(), "futuresPrivate".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "futuresprivatePostMarginwithdrawmargin" => Kucoinfutures::request(self, "margin/withdrawMargin".into(), "futuresPrivate".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "futuresprivatePostPositionmargindepositmargin" => Kucoinfutures::request(self, "position/margin/deposit-margin".into(), "futuresPrivate".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "futuresprivatePostPositionrisklimitlevelchange" => Kucoinfutures::request(self, "position/risk-limit-level/change".into(), "futuresPrivate".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "futuresprivatePostCopytradefuturesorders" => Kucoinfutures::request(self, "copy-trade/futures/orders".into(), "futuresPrivate".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "futuresprivatePostCopytradefuturesorderstest" => Kucoinfutures::request(self, "copy-trade/futures/orders/test".into(), "futuresPrivate".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "futuresprivatePostCopytradefuturesstorders" => Kucoinfutures::request(self, "copy-trade/futures/st-orders".into(), "futuresPrivate".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "futuresprivatePostCopytradefuturespositionmargindepositmargin" => Kucoinfutures::request(self, "copy-trade/futures/position/margin/deposit-margin".into(), "futuresPrivate".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "futuresprivatePostCopytradefuturespositionmarginwithdrawmargin" => Kucoinfutures::request(self, "copy-trade/futures/position/margin/withdraw-margin".into(), "futuresPrivate".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "futuresprivatePostCopytradefuturespositionrisklimitlevelchange" => Kucoinfutures::request(self, "copy-trade/futures/position/risk-limit-level/change".into(), "futuresPrivate".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "futuresprivatePostCopytradefuturespositionmarginautodepositstatus" => Kucoinfutures::request(self, "copy-trade/futures/position/margin/auto-deposit-status".into(), "futuresPrivate".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "futuresprivatePostCopytradefuturespositionchangemarginmode" => Kucoinfutures::request(self, "copy-trade/futures/position/changeMarginMode".into(), "futuresPrivate".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "futuresprivatePostCopytradefuturespositionchangecrossuserleverage" => Kucoinfutures::request(self, "copy-trade/futures/position/changeCrossUserLeverage".into(), "futuresPrivate".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "futuresprivatePostCopytradegetcrossmodemarginrequirement" => Kucoinfutures::request(self, "copy-trade/getCrossModeMarginRequirement".into(), "futuresPrivate".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "futuresprivatePostCopytradepositionswitchpositionmode" => Kucoinfutures::request(self, "copy-trade/position/switchPositionMode".into(), "futuresPrivate".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "futuresprivatePostBulletprivate" => Kucoinfutures::request(self, "bullet-private".into(), "futuresPrivate".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "futuresprivatePostWithdrawals" => Kucoinfutures::request(self, "withdrawals".into(), "futuresPrivate".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "futuresprivatePostStorders" => Kucoinfutures::request(self, "st-orders".into(), "futuresPrivate".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "futuresprivatePostSubapikey" => Kucoinfutures::request(self, "sub/api-key".into(), "futuresPrivate".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "futuresprivatePostSubapikeyupdate" => Kucoinfutures::request(self, "sub/api-key/update".into(), "futuresPrivate".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "futuresprivatePostChangecrossuserleverage" => Kucoinfutures::request(self, "changeCrossUserLeverage".into(), "futuresPrivate".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "futuresprivatePostPositionchangemarginmode" => Kucoinfutures::request(self, "position/changeMarginMode".into(), "futuresPrivate".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "futuresprivatePostPositionswitchpositionmode" => Kucoinfutures::request(self, "position/switchPositionMode".into(), "futuresPrivate".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "futuresprivateDeleteOrdersorderid" => Kucoinfutures::request(self, "orders/{orderId}".into(), "futuresPrivate".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "futuresprivateDeleteOrdersclientorderclientoid" => Kucoinfutures::request(self, "orders/client-order/{clientOid}".into(), "futuresPrivate".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "futuresprivateDeleteOrders" => Kucoinfutures::request(self, "orders".into(), "futuresPrivate".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "futuresprivateDeleteStoporders" => Kucoinfutures::request(self, "stopOrders".into(), "futuresPrivate".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "futuresprivateDeleteCopytradefuturesorders" => Kucoinfutures::request(self, "copy-trade/futures/orders".into(), "futuresPrivate".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "futuresprivateDeleteCopytradefuturesordersclientorder" => Kucoinfutures::request(self, "copy-trade/futures/orders/client-order".into(), "futuresPrivate".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "futuresprivateDeleteWithdrawalswithdrawalid" => Kucoinfutures::request(self, "withdrawals/{withdrawalId}".into(), "futuresPrivate".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "futuresprivateDeleteCanceltransferout" => Kucoinfutures::request(self, "cancel/transfer-out".into(), "futuresPrivate".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "futuresprivateDeleteSubapikey" => Kucoinfutures::request(self, "sub/api-key".into(), "futuresPrivate".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "futuresprivateDeleteOrdersmulticancel" => Kucoinfutures::request(self, "orders/multi-cancel".into(), "futuresPrivate".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "webexchangeGetCurrencycurrencychaininfo" => Kucoinfutures::request(self, "currency/currency/chain-info".into(), "webExchange".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "webexchangeGetContractsymbolfundingrates" => Kucoinfutures::request(self, "contract/{symbol}/funding-rates".into(), "webExchange".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "brokerGetBrokerndinfo" => Kucoinfutures::request(self, "broker/nd/info".into(), "broker".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "brokerGetBrokerndaccount" => Kucoinfutures::request(self, "broker/nd/account".into(), "broker".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "brokerGetBrokerndaccountapikey" => Kucoinfutures::request(self, "broker/nd/account/apikey".into(), "broker".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "brokerGetBrokerndrebasedownload" => Kucoinfutures::request(self, "broker/nd/rebase/download".into(), "broker".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "brokerGetAssetndbrokerdepositlist" => Kucoinfutures::request(self, "asset/ndbroker/deposit/list".into(), "broker".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "brokerGetBrokerndtransferdetail" => Kucoinfutures::request(self, "broker/nd/transfer/detail".into(), "broker".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "brokerGetBrokernddepositdetail" => Kucoinfutures::request(self, "broker/nd/deposit/detail".into(), "broker".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "brokerGetBrokerndwithdrawdetail" => Kucoinfutures::request(self, "broker/nd/withdraw/detail".into(), "broker".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "brokerPostBrokerndtransfer" => Kucoinfutures::request(self, "broker/nd/transfer".into(), "broker".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "brokerPostBrokerndaccount" => Kucoinfutures::request(self, "broker/nd/account".into(), "broker".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "brokerPostBrokerndaccountapikey" => Kucoinfutures::request(self, "broker/nd/account/apikey".into(), "broker".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "brokerPostBrokerndaccountupdateapikey" => Kucoinfutures::request(self, "broker/nd/account/update-apikey".into(), "broker".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "brokerDeleteBrokerndaccountapikey" => Kucoinfutures::request(self, "broker/nd/account/apikey".into(), "broker".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "earnGetOtcloandiscountrateconfigs" => Kucoinfutures::request(self, "otc-loan/discount-rate-configs".into(), "earn".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "earnGetOtcloanloan" => Kucoinfutures::request(self, "otc-loan/loan".into(), "earn".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "earnGetOtcloanaccounts" => Kucoinfutures::request(self, "otc-loan/accounts".into(), "earn".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "earnGetEarnredeempreview" => Kucoinfutures::request(self, "earn/redeem-preview".into(), "earn".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "earnGetEarnsavingproducts" => Kucoinfutures::request(self, "earn/saving/products".into(), "earn".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "earnGetEarnholdassets" => Kucoinfutures::request(self, "earn/hold-assets".into(), "earn".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "earnGetEarnpromotionproducts" => Kucoinfutures::request(self, "earn/promotion/products".into(), "earn".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "earnGetEarnkcsstakingproducts" => Kucoinfutures::request(self, "earn/kcs-staking/products".into(), "earn".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "earnGetEarnstakingproducts" => Kucoinfutures::request(self, "earn/staking/products".into(), "earn".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "earnGetEarnethstakingproducts" => Kucoinfutures::request(self, "earn/eth-staking/products".into(), "earn".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "earnGetStructearndualproducts" => Kucoinfutures::request(self, "struct-earn/dual/products".into(), "earn".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "earnGetStructearnorders" => Kucoinfutures::request(self, "struct-earn/orders".into(), "earn".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "earnPostEarnorders" => Kucoinfutures::request(self, "earn/orders".into(), "earn".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "earnPostStructearnorders" => Kucoinfutures::request(self, "struct-earn/orders".into(), "earn".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "earnDeleteEarnorders" => Kucoinfutures::request(self, "earn/orders".into(), "earn".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "utaGetMarketannouncement" => Kucoinfutures::request(self, "market/announcement".into(), "uta".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "utaGetMarketcurrency" => Kucoinfutures::request(self, "market/currency".into(), "uta".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "utaGetMarketcurrencies" => Kucoinfutures::request(self, "market/currencies".into(), "uta".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "utaGetMarketinstrument" => Kucoinfutures::request(self, "market/instrument".into(), "uta".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "utaGetMarketticker" => Kucoinfutures::request(self, "market/ticker".into(), "uta".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "utaGetMarkettrade" => Kucoinfutures::request(self, "market/trade".into(), "uta".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "utaGetMarketkline" => Kucoinfutures::request(self, "market/kline".into(), "uta".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "utaGetMarketfundingrate" => Kucoinfutures::request(self, "market/funding-rate".into(), "uta".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "utaGetMarketfundingratehistory" => Kucoinfutures::request(self, "market/funding-rate-history".into(), "uta".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "utaGetMarketcrossconfig" => Kucoinfutures::request(self, "market/cross-config".into(), "uta".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "utaGetMarketcollateraldiscountratio" => Kucoinfutures::request(self, "market/collateral-discount-ratio".into(), "uta".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "utaGetMarketindexprice" => Kucoinfutures::request(self, "market/index-price".into(), "uta".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "utaGetMarketpositiontiers" => Kucoinfutures::request(self, "market/position-tiers".into(), "uta".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "utaGetMarketopeninterest" => Kucoinfutures::request(self, "market/open-interest".into(), "uta".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "utaGetServerstatus" => Kucoinfutures::request(self, "server/status".into(), "uta".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "utaprivateGetMarketorderbook" => Kucoinfutures::request(self, "market/orderbook".into(), "utaPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "utaprivateGetAccountbalance" => Kucoinfutures::request(self, "account/balance".into(), "utaPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "utaprivateGetAccounttransferquota" => Kucoinfutures::request(self, "account/transfer-quota".into(), "utaPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "utaprivateGetAccountmode" => Kucoinfutures::request(self, "account/mode".into(), "utaPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "utaprivateGetAccountledger" => Kucoinfutures::request(self, "account/ledger".into(), "utaPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "utaprivateGetAccountinteresthistory" => Kucoinfutures::request(self, "account/interest-history".into(), "utaPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "utaprivateGetAccountdepositaddress" => Kucoinfutures::request(self, "account/deposit/address".into(), "utaPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "utaprivateGetAccountmodeaccountbalance" => Kucoinfutures::request(self, "{accountMode}/account/balance".into(), "utaPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "utaprivateGetAccountmodeaccountoverview" => Kucoinfutures::request(self, "{accountMode}/account/overview".into(), "utaPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "utaprivateGetAccountmodeorderdetail" => Kucoinfutures::request(self, "{accountMode}/order/detail".into(), "utaPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "utaprivateGetAccountmodeorderopenlist" => Kucoinfutures::request(self, "{accountMode}/order/open-list".into(), "utaPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "utaprivateGetAccountmodeorderhistory" => Kucoinfutures::request(self, "{accountMode}/order/history".into(), "utaPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "utaprivateGetAccountmodeorderexecution" => Kucoinfutures::request(self, "{accountMode}/order/execution".into(), "utaPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "utaprivateGetAccountmodepositionopenlist" => Kucoinfutures::request(self, "{accountMode}/position/open-list".into(), "utaPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "utaprivateGetAccountmodepositionhistory" => Kucoinfutures::request(self, "{accountMode}/position/history".into(), "utaPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "utaprivateGetAccountmodepositiontiers" => Kucoinfutures::request(self, "{accountMode}/position/tiers".into(), "utaPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "utaprivateGetSubaccountbalance" => Kucoinfutures::request(self, "sub-account/balance".into(), "utaPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "utaprivateGetUserfeerate" => Kucoinfutures::request(self, "user/fee-rate".into(), "utaPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "utaprivateGetDcpquery" => Kucoinfutures::request(self, "dcp/query".into(), "utaPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "utaprivatePostAccounttransfer" => Kucoinfutures::request(self, "account/transfer".into(), "utaPrivate".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "utaprivatePostAccountmode" => Kucoinfutures::request(self, "account/mode".into(), "utaPrivate".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "utaprivatePostAccountmodeaccountmodifyleverage" => Kucoinfutures::request(self, "{accountMode}/account/modify-leverage".into(), "utaPrivate".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "utaprivatePostAccountmodeorderplace" => Kucoinfutures::request(self, "{accountMode}/order/place".into(), "utaPrivate".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "utaprivatePostAccountmodeorderplacebatch" => Kucoinfutures::request(self, "{accountMode}/order/place-batch".into(), "utaPrivate".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "utaprivatePostAccountmodeordercancel" => Kucoinfutures::request(self, "{accountMode}/order/cancel".into(), "utaPrivate".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "utaprivatePostAccountmodeordercancelbatch" => Kucoinfutures::request(self, "{accountMode}/order/cancel-batch".into(), "utaPrivate".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "utaprivatePostSubaccountcantransferout" => Kucoinfutures::request(self, "sub-account/canTransferOut".into(), "utaPrivate".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "utaprivatePostDcpset" => Kucoinfutures::request(self, "dcp/set".into(), "utaPrivate".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetCurrencies" => self.request("currencies".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetCurrenciescurrency" => self.request("currencies/{currency}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetSymbols" => self.request("symbols".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetMarketorderbooklevel1" => self.request("market/orderbook/level1".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetMarketalltickers" => self.request("market/allTickers".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetMarketstats" => self.request("market/stats".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetMarkets" => self.request("markets".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetMarketorderbooklevellevellimit" => self.request("market/orderbook/level{level}_{limit}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetMarketorderbooklevel220" => self.request("market/orderbook/level2_20".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetMarketorderbooklevel2100" => self.request("market/orderbook/level2_100".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetMarkethistories" => self.request("market/histories".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetMarketcandles" => self.request("market/candles".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetPrices" => self.request("prices".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetTimestamp" => self.request("timestamp".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetStatus" => self.request("status".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetMarkpricesymbolcurrent" => self.request("mark-price/{symbol}/current".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetMarkpriceallsymbols" => self.request("mark-price/all-symbols".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetMarginconfig" => self.request("margin/config".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetAnnouncements" => self.request("announcements".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetMargincollateralratio" => self.request("margin/collateralRatio".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetConvertsymbol" => self.request("convert/symbol".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetConvertcurrencies" => self.request("convert/currencies".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicPostBulletpublic" => self.request("bullet-public".into(), "public".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetUserinfo" => self.request("user-info".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetUserapikey" => self.request("user/api-key".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetAccounts" => self.request("accounts".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetAccountsaccountid" => self.request("accounts/{accountId}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetAccountsledgers" => self.request("accounts/ledgers".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetHfaccountsledgers" => self.request("hf/accounts/ledgers".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetHfmarginaccountledgers" => self.request("hf/margin/account/ledgers".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetTransactionhistory" => self.request("transaction-history".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetSubuser" => self.request("sub/user".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetSubaccountssubuserid" => self.request("sub-accounts/{subUserId}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetSubaccounts" => self.request("sub-accounts".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetSubapikey" => self.request("sub/api-key".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetMarginaccount" => self.request("margin/account".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetMarginaccounts" => self.request("margin/accounts".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetIsolatedaccounts" => self.request("isolated/accounts".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetDepositaddresses" => self.request("deposit-addresses".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetDeposits" => self.request("deposits".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetHistdeposits" => self.request("hist-deposits".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetWithdrawals" => self.request("withdrawals".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetHistwithdrawals" => self.request("hist-withdrawals".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetWithdrawalsquotas" => self.request("withdrawals/quotas".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetAccountstransferable" => self.request("accounts/transferable".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetTransferlist" => self.request("transfer-list".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetBasefee" => self.request("base-fee".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetTradefees" => self.request("trade-fees".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetMarketorderbooklevellevel" => self.request("market/orderbook/level{level}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetMarketorderbooklevel2" => self.request("market/orderbook/level2".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetMarketorderbooklevel3" => self.request("market/orderbook/level3".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetHfaccountsopened" => self.request("hf/accounts/opened".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetHfordersactive" => self.request("hf/orders/active".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetHfordersactivesymbols" => self.request("hf/orders/active/symbols".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetHfmarginorderactivesymbols" => self.request("hf/margin/order/active/symbols".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetHfordersdone" => self.request("hf/orders/done".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetHfordersorderid" => self.request("hf/orders/{orderId}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetHfordersclientorderclientoid" => self.request("hf/orders/client-order/{clientOid}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetHfordersdeadcancelallquery" => self.request("hf/orders/dead-cancel-all/query".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetHffills" => self.request("hf/fills".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetOrders" => self.request("orders".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetLimitorders" => self.request("limit/orders".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetOrdersorderid" => self.request("orders/{orderId}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetOrderclientorderclientoid" => self.request("order/client-order/{clientOid}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetFills" => self.request("fills".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetLimitfills" => self.request("limit/fills".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetStoporder" => self.request("stop-order".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetStoporderorderid" => self.request("stop-order/{orderId}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetStoporderqueryorderbyclientoid" => self.request("stop-order/queryOrderByClientOid".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetOcoorderorderid" => self.request("oco/order/{orderId}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetOcoorderdetailsorderid" => self.request("oco/order/details/{orderId}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetOcoclientorderclientoid" => self.request("oco/client-order/{clientOid}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetOcoorders" => self.request("oco/orders".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetHfmarginordersactive" => self.request("hf/margin/orders/active".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetHfmarginordersdone" => self.request("hf/margin/orders/done".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetHfmarginordersorderid" => self.request("hf/margin/orders/{orderId}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetHfmarginordersclientorderclientoid" => self.request("hf/margin/orders/client-order/{clientOid}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetHfmarginfills" => self.request("hf/margin/fills".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetEtfinfo" => self.request("etf/info".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetMargincurrencies" => self.request("margin/currencies".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetRisklimitstrategy" => self.request("risk/limit/strategy".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetIsolatedsymbols" => self.request("isolated/symbols".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetMarginsymbols" => self.request("margin/symbols".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetIsolatedaccountsymbol" => self.request("isolated/account/{symbol}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetMarginborrow" => self.request("margin/borrow".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetMarginrepay" => self.request("margin/repay".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetMargininterest" => self.request("margin/interest".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetProjectlist" => self.request("project/list".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetProjectmarketinterestrate" => self.request("project/marketInterestRate".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetRedeemorders" => self.request("redeem/orders".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetPurchaseorders" => self.request("purchase/orders".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetBrokerapirebasedownload" => self.request("broker/api/rebase/download".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetBrokerquerymycommission" => self.request("broker/queryMyCommission".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetBrokerqueryuser" => self.request("broker/queryUser".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetBrokerquerydetailbyuid" => self.request("broker/queryDetailByUid".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetMigrateuseraccountstatus" => self.request("migrate/user/account/status".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetConvertquote" => self.request("convert/quote".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetConvertorderdetail" => self.request("convert/order/detail".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetConvertorderhistory" => self.request("convert/order/history".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetConvertlimitquote" => self.request("convert/limit/quote".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetConvertlimitorderdetail" => self.request("convert/limit/order/detail".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetConvertlimitorders" => self.request("convert/limit/orders".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetAffiliateinviterstatistics" => self.request("affiliate/inviter/statistics".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetEarnredeempreview" => self.request("earn/redeem-preview".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostSubusercreated" => self.request("sub/user/created".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostSubapikey" => self.request("sub/api-key".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostSubapikeyupdate" => self.request("sub/api-key/update".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostDepositaddresses" => self.request("deposit-addresses".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostWithdrawals" => self.request("withdrawals".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAccountsuniversaltransfer" => self.request("accounts/universal-transfer".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAccountssubtransfer" => self.request("accounts/sub-transfer".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAccountsinnertransfer" => self.request("accounts/inner-transfer".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostTransferout" => self.request("transfer-out".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostTransferin" => self.request("transfer-in".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostHforders" => self.request("hf/orders".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostHforderstest" => self.request("hf/orders/test".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostHforderssync" => self.request("hf/orders/sync".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostHfordersmulti" => self.request("hf/orders/multi".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostHfordersmultisync" => self.request("hf/orders/multi/sync".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostHfordersalter" => self.request("hf/orders/alter".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostHfordersdeadcancelall" => self.request("hf/orders/dead-cancel-all".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostOrders" => self.request("orders".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostOrderstest" => self.request("orders/test".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostOrdersmulti" => self.request("orders/multi".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostStoporder" => self.request("stop-order".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostOcoorder" => self.request("oco/order".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostHfmarginorder" => self.request("hf/margin/order".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostHfmarginordertest" => self.request("hf/margin/order/test".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostMarginorder" => self.request("margin/order".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostMarginordertest" => self.request("margin/order/test".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostMarginborrow" => self.request("margin/borrow".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostMarginrepay" => self.request("margin/repay".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostPurchase" => self.request("purchase".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostRedeem" => self.request("redeem".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostLendpurchaseupdate" => self.request("lend/purchase/update".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostConvertorder" => self.request("convert/order".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostConvertlimitorder" => self.request("convert/limit/order".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostBulletprivate" => self.request("bullet-private".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostPositionupdateuserleverage" => self.request("position/update-user-leverage".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostDepositaddresscreate" => self.request("deposit-address/create".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateDeleteSubapikey" => self.request("sub/api-key".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateDeleteWithdrawalswithdrawalid" => self.request("withdrawals/{withdrawalId}".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateDeleteHfordersorderid" => self.request("hf/orders/{orderId}".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateDeleteHforderssyncorderid" => self.request("hf/orders/sync/{orderId}".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateDeleteHfordersclientorderclientoid" => self.request("hf/orders/client-order/{clientOid}".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateDeleteHforderssyncclientorderclientoid" => self.request("hf/orders/sync/client-order/{clientOid}".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateDeleteHforderscancelorderid" => self.request("hf/orders/cancel/{orderId}".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateDeleteHforders" => self.request("hf/orders".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateDeleteHforderscancelall" => self.request("hf/orders/cancelAll".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateDeleteOrdersorderid" => self.request("orders/{orderId}".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateDeleteOrderclientorderclientoid" => self.request("order/client-order/{clientOid}".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateDeleteOrders" => self.request("orders".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateDeleteStoporderorderid" => self.request("stop-order/{orderId}".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateDeleteStopordercancelorderbyclientoid" => self.request("stop-order/cancelOrderByClientOid".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateDeleteStopordercancel" => self.request("stop-order/cancel".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateDeleteOcoorderorderid" => self.request("oco/order/{orderId}".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateDeleteOcoclientorderclientoid" => self.request("oco/client-order/{clientOid}".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateDeleteOcoorders" => self.request("oco/orders".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateDeleteHfmarginordersorderid" => self.request("hf/margin/orders/{orderId}".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateDeleteHfmarginordersclientorderclientoid" => self.request("hf/margin/orders/client-order/{clientOid}".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateDeleteHfmarginorders" => self.request("hf/margin/orders".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateDeleteConvertlimitordercancel" => self.request("convert/limit/order/cancel".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "futurespublicGetContractsactive" => self.request("contracts/active".into(), "futuresPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "futurespublicGetContractssymbol" => self.request("contracts/{symbol}".into(), "futuresPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "futurespublicGetTicker" => self.request("ticker".into(), "futuresPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "futurespublicGetLevel2snapshot" => self.request("level2/snapshot".into(), "futuresPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "futurespublicGetLevel2depth20" => self.request("level2/depth20".into(), "futuresPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "futurespublicGetLevel2depth100" => self.request("level2/depth100".into(), "futuresPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "futurespublicGetTradehistory" => self.request("trade/history".into(), "futuresPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "futurespublicGetKlinequery" => self.request("kline/query".into(), "futuresPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "futurespublicGetInterestquery" => self.request("interest/query".into(), "futuresPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "futurespublicGetIndexquery" => self.request("index/query".into(), "futuresPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "futurespublicGetMarkpricesymbolcurrent" => self.request("mark-price/{symbol}/current".into(), "futuresPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "futurespublicGetPremiumquery" => self.request("premium/query".into(), "futuresPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "futurespublicGetTradestatistics" => self.request("trade-statistics".into(), "futuresPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "futurespublicGetFundingratesymbolcurrent" => self.request("funding-rate/{symbol}/current".into(), "futuresPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "futurespublicGetContractfundingrates" => self.request("contract/funding-rates".into(), "futuresPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "futurespublicGetTimestamp" => self.request("timestamp".into(), "futuresPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "futurespublicGetStatus" => self.request("status".into(), "futuresPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "futurespublicGetLevel2messagequery" => self.request("level2/message/query".into(), "futuresPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "futurespublicGetContractsrisklimitsymbol" => self.request("contracts/risk-limit/{symbol}".into(), "futuresPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "futurespublicGetAlltickers" => self.request("allTickers".into(), "futuresPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "futurespublicGetLevel2depthlimit" => self.request("level2/depth{limit}".into(), "futuresPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "futurespublicGetLevel3messagequery" => self.request("level3/message/query".into(), "futuresPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "futurespublicGetLevel3snapshot" => self.request("level3/snapshot".into(), "futuresPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "futurespublicPostBulletpublic" => self.request("bullet-public".into(), "futuresPublic".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "futuresprivateGetTransactionhistory" => self.request("transaction-history".into(), "futuresPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "futuresprivateGetAccountoverview" => self.request("account-overview".into(), "futuresPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "futuresprivateGetAccountoverviewall" => self.request("account-overview-all".into(), "futuresPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "futuresprivateGetTransferlist" => self.request("transfer-list".into(), "futuresPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "futuresprivateGetOrders" => self.request("orders".into(), "futuresPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "futuresprivateGetStoporders" => self.request("stopOrders".into(), "futuresPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "futuresprivateGetRecentdoneorders" => self.request("recentDoneOrders".into(), "futuresPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "futuresprivateGetOrdersorderid" => self.request("orders/{orderId}".into(), "futuresPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "futuresprivateGetOrdersbyclientoid" => self.request("orders/byClientOid".into(), "futuresPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "futuresprivateGetFills" => self.request("fills".into(), "futuresPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "futuresprivateGetRecentfills" => self.request("recentFills".into(), "futuresPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "futuresprivateGetOpenorderstatistics" => self.request("openOrderStatistics".into(), "futuresPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "futuresprivateGetPosition" => self.request("position".into(), "futuresPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "futuresprivateGetPositions" => self.request("positions".into(), "futuresPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "futuresprivateGetMarginmaxwithdrawmargin" => self.request("margin/maxWithdrawMargin".into(), "futuresPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "futuresprivateGetContractsrisklimitsymbol" => self.request("contracts/risk-limit/{symbol}".into(), "futuresPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "futuresprivateGetFundinghistory" => self.request("funding-history".into(), "futuresPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "futuresprivateGetCopytradefuturesgetmaxopensize" => self.request("copy-trade/futures/get-max-open-size".into(), "futuresPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "futuresprivateGetCopytradefuturespositionmarginmaxwithdrawmargin" => self.request("copy-trade/futures/position/margin/max-withdraw-margin".into(), "futuresPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "futuresprivateGetDepositaddress" => self.request("deposit-address".into(), "futuresPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "futuresprivateGetDepositlist" => self.request("deposit-list".into(), "futuresPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "futuresprivateGetWithdrawalsquotas" => self.request("withdrawals/quotas".into(), "futuresPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "futuresprivateGetWithdrawallist" => self.request("withdrawal-list".into(), "futuresPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "futuresprivateGetSubapikey" => self.request("sub/api-key".into(), "futuresPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "futuresprivateGetTradestatistics" => self.request("trade-statistics".into(), "futuresPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "futuresprivateGetTradefees" => self.request("trade-fees".into(), "futuresPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "futuresprivateGetHistorypositions" => self.request("history-positions".into(), "futuresPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "futuresprivateGetGetmaxopensize" => self.request("getMaxOpenSize".into(), "futuresPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "futuresprivateGetGetcrossuserleverage" => self.request("getCrossUserLeverage".into(), "futuresPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "futuresprivateGetPositiongetmarginmode" => self.request("position/getMarginMode".into(), "futuresPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "futuresprivatePostTransferout" => self.request("transfer-out".into(), "futuresPrivate".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "futuresprivatePostTransferin" => self.request("transfer-in".into(), "futuresPrivate".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "futuresprivatePostOrders" => self.request("orders".into(), "futuresPrivate".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "futuresprivatePostOrderstest" => self.request("orders/test".into(), "futuresPrivate".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "futuresprivatePostOrdersmulti" => self.request("orders/multi".into(), "futuresPrivate".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "futuresprivatePostPositionmarginautodepositstatus" => self.request("position/margin/auto-deposit-status".into(), "futuresPrivate".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "futuresprivatePostMarginwithdrawmargin" => self.request("margin/withdrawMargin".into(), "futuresPrivate".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "futuresprivatePostPositionmargindepositmargin" => self.request("position/margin/deposit-margin".into(), "futuresPrivate".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "futuresprivatePostPositionrisklimitlevelchange" => self.request("position/risk-limit-level/change".into(), "futuresPrivate".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "futuresprivatePostCopytradefuturesorders" => self.request("copy-trade/futures/orders".into(), "futuresPrivate".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "futuresprivatePostCopytradefuturesorderstest" => self.request("copy-trade/futures/orders/test".into(), "futuresPrivate".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "futuresprivatePostCopytradefuturesstorders" => self.request("copy-trade/futures/st-orders".into(), "futuresPrivate".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "futuresprivatePostCopytradefuturespositionmargindepositmargin" => self.request("copy-trade/futures/position/margin/deposit-margin".into(), "futuresPrivate".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "futuresprivatePostCopytradefuturespositionmarginwithdrawmargin" => self.request("copy-trade/futures/position/margin/withdraw-margin".into(), "futuresPrivate".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "futuresprivatePostCopytradefuturespositionrisklimitlevelchange" => self.request("copy-trade/futures/position/risk-limit-level/change".into(), "futuresPrivate".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "futuresprivatePostCopytradefuturespositionmarginautodepositstatus" => self.request("copy-trade/futures/position/margin/auto-deposit-status".into(), "futuresPrivate".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "futuresprivatePostCopytradefuturespositionchangemarginmode" => self.request("copy-trade/futures/position/changeMarginMode".into(), "futuresPrivate".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "futuresprivatePostCopytradefuturespositionchangecrossuserleverage" => self.request("copy-trade/futures/position/changeCrossUserLeverage".into(), "futuresPrivate".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "futuresprivatePostCopytradegetcrossmodemarginrequirement" => self.request("copy-trade/getCrossModeMarginRequirement".into(), "futuresPrivate".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "futuresprivatePostCopytradepositionswitchpositionmode" => self.request("copy-trade/position/switchPositionMode".into(), "futuresPrivate".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "futuresprivatePostBulletprivate" => self.request("bullet-private".into(), "futuresPrivate".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "futuresprivatePostWithdrawals" => self.request("withdrawals".into(), "futuresPrivate".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "futuresprivatePostStorders" => self.request("st-orders".into(), "futuresPrivate".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "futuresprivatePostSubapikey" => self.request("sub/api-key".into(), "futuresPrivate".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "futuresprivatePostSubapikeyupdate" => self.request("sub/api-key/update".into(), "futuresPrivate".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "futuresprivatePostChangecrossuserleverage" => self.request("changeCrossUserLeverage".into(), "futuresPrivate".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "futuresprivatePostPositionchangemarginmode" => self.request("position/changeMarginMode".into(), "futuresPrivate".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "futuresprivatePostPositionswitchpositionmode" => self.request("position/switchPositionMode".into(), "futuresPrivate".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "futuresprivateDeleteOrdersorderid" => self.request("orders/{orderId}".into(), "futuresPrivate".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "futuresprivateDeleteOrdersclientorderclientoid" => self.request("orders/client-order/{clientOid}".into(), "futuresPrivate".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "futuresprivateDeleteOrders" => self.request("orders".into(), "futuresPrivate".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "futuresprivateDeleteStoporders" => self.request("stopOrders".into(), "futuresPrivate".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "futuresprivateDeleteCopytradefuturesorders" => self.request("copy-trade/futures/orders".into(), "futuresPrivate".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "futuresprivateDeleteCopytradefuturesordersclientorder" => self.request("copy-trade/futures/orders/client-order".into(), "futuresPrivate".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "futuresprivateDeleteWithdrawalswithdrawalid" => self.request("withdrawals/{withdrawalId}".into(), "futuresPrivate".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "futuresprivateDeleteCanceltransferout" => self.request("cancel/transfer-out".into(), "futuresPrivate".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "futuresprivateDeleteSubapikey" => self.request("sub/api-key".into(), "futuresPrivate".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "futuresprivateDeleteOrdersmulticancel" => self.request("orders/multi-cancel".into(), "futuresPrivate".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "webexchangeGetCurrencycurrencychaininfo" => self.request("currency/currency/chain-info".into(), "webExchange".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "webexchangeGetContractsymbolfundingrates" => self.request("contract/{symbol}/funding-rates".into(), "webExchange".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "brokerGetBrokerndinfo" => self.request("broker/nd/info".into(), "broker".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "brokerGetBrokerndaccount" => self.request("broker/nd/account".into(), "broker".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "brokerGetBrokerndaccountapikey" => self.request("broker/nd/account/apikey".into(), "broker".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "brokerGetBrokerndrebasedownload" => self.request("broker/nd/rebase/download".into(), "broker".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "brokerGetAssetndbrokerdepositlist" => self.request("asset/ndbroker/deposit/list".into(), "broker".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "brokerGetBrokerndtransferdetail" => self.request("broker/nd/transfer/detail".into(), "broker".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "brokerGetBrokernddepositdetail" => self.request("broker/nd/deposit/detail".into(), "broker".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "brokerGetBrokerndwithdrawdetail" => self.request("broker/nd/withdraw/detail".into(), "broker".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "brokerPostBrokerndtransfer" => self.request("broker/nd/transfer".into(), "broker".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "brokerPostBrokerndaccount" => self.request("broker/nd/account".into(), "broker".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "brokerPostBrokerndaccountapikey" => self.request("broker/nd/account/apikey".into(), "broker".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "brokerPostBrokerndaccountupdateapikey" => self.request("broker/nd/account/update-apikey".into(), "broker".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "brokerDeleteBrokerndaccountapikey" => self.request("broker/nd/account/apikey".into(), "broker".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "earnGetOtcloandiscountrateconfigs" => self.request("otc-loan/discount-rate-configs".into(), "earn".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "earnGetOtcloanloan" => self.request("otc-loan/loan".into(), "earn".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "earnGetOtcloanaccounts" => self.request("otc-loan/accounts".into(), "earn".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "earnGetEarnredeempreview" => self.request("earn/redeem-preview".into(), "earn".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "earnGetEarnsavingproducts" => self.request("earn/saving/products".into(), "earn".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "earnGetEarnholdassets" => self.request("earn/hold-assets".into(), "earn".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "earnGetEarnpromotionproducts" => self.request("earn/promotion/products".into(), "earn".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "earnGetEarnkcsstakingproducts" => self.request("earn/kcs-staking/products".into(), "earn".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "earnGetEarnstakingproducts" => self.request("earn/staking/products".into(), "earn".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "earnGetEarnethstakingproducts" => self.request("earn/eth-staking/products".into(), "earn".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "earnGetStructearndualproducts" => self.request("struct-earn/dual/products".into(), "earn".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "earnGetStructearnorders" => self.request("struct-earn/orders".into(), "earn".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "earnPostEarnorders" => self.request("earn/orders".into(), "earn".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "earnPostStructearnorders" => self.request("struct-earn/orders".into(), "earn".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "earnDeleteEarnorders" => self.request("earn/orders".into(), "earn".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "utaGetMarketannouncement" => self.request("market/announcement".into(), "uta".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "utaGetMarketcurrency" => self.request("market/currency".into(), "uta".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "utaGetMarketcurrencies" => self.request("market/currencies".into(), "uta".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "utaGetMarketinstrument" => self.request("market/instrument".into(), "uta".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "utaGetMarketticker" => self.request("market/ticker".into(), "uta".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "utaGetMarkettrade" => self.request("market/trade".into(), "uta".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "utaGetMarketkline" => self.request("market/kline".into(), "uta".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "utaGetMarketfundingrate" => self.request("market/funding-rate".into(), "uta".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "utaGetMarketfundingratehistory" => self.request("market/funding-rate-history".into(), "uta".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "utaGetMarketcrossconfig" => self.request("market/cross-config".into(), "uta".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "utaGetMarketcollateraldiscountratio" => self.request("market/collateral-discount-ratio".into(), "uta".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "utaGetMarketindexprice" => self.request("market/index-price".into(), "uta".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "utaGetMarketpositiontiers" => self.request("market/position-tiers".into(), "uta".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "utaGetMarketopeninterest" => self.request("market/open-interest".into(), "uta".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "utaGetServerstatus" => self.request("server/status".into(), "uta".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "utaprivateGetMarketorderbook" => self.request("market/orderbook".into(), "utaPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "utaprivateGetAccountbalance" => self.request("account/balance".into(), "utaPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "utaprivateGetAccounttransferquota" => self.request("account/transfer-quota".into(), "utaPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "utaprivateGetAccountmode" => self.request("account/mode".into(), "utaPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "utaprivateGetAccountledger" => self.request("account/ledger".into(), "utaPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "utaprivateGetAccountinteresthistory" => self.request("account/interest-history".into(), "utaPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "utaprivateGetAccountdepositaddress" => self.request("account/deposit/address".into(), "utaPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "utaprivateGetAccountmodeaccountbalance" => self.request("{accountMode}/account/balance".into(), "utaPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "utaprivateGetAccountmodeaccountoverview" => self.request("{accountMode}/account/overview".into(), "utaPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "utaprivateGetAccountmodeorderdetail" => self.request("{accountMode}/order/detail".into(), "utaPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "utaprivateGetAccountmodeorderopenlist" => self.request("{accountMode}/order/open-list".into(), "utaPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "utaprivateGetAccountmodeorderhistory" => self.request("{accountMode}/order/history".into(), "utaPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "utaprivateGetAccountmodeorderexecution" => self.request("{accountMode}/order/execution".into(), "utaPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "utaprivateGetAccountmodepositionopenlist" => self.request("{accountMode}/position/open-list".into(), "utaPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "utaprivateGetAccountmodepositionhistory" => self.request("{accountMode}/position/history".into(), "utaPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "utaprivateGetAccountmodepositiontiers" => self.request("{accountMode}/position/tiers".into(), "utaPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "utaprivateGetSubaccountbalance" => self.request("sub-account/balance".into(), "utaPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "utaprivateGetUserfeerate" => self.request("user/fee-rate".into(), "utaPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "utaprivateGetDcpquery" => self.request("dcp/query".into(), "utaPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "utaprivatePostAccounttransfer" => self.request("account/transfer".into(), "utaPrivate".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "utaprivatePostAccountmode" => self.request("account/mode".into(), "utaPrivate".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "utaprivatePostAccountmodeaccountmodifyleverage" => self.request("{accountMode}/account/modify-leverage".into(), "utaPrivate".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "utaprivatePostAccountmodeorderplace" => self.request("{accountMode}/order/place".into(), "utaPrivate".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "utaprivatePostAccountmodeorderplacebatch" => self.request("{accountMode}/order/place-batch".into(), "utaPrivate".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "utaprivatePostAccountmodeordercancel" => self.request("{accountMode}/order/cancel".into(), "utaPrivate".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "utaprivatePostAccountmodeordercancelbatch" => self.request("{accountMode}/order/cancel-batch".into(), "utaPrivate".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "utaprivatePostSubaccountcantransferout" => self.request("sub-account/canTransferOut".into(), "utaPrivate".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "utaprivatePostDcpset" => self.request("dcp/set".into(), "utaPrivate".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     _ => unimplemented!(),
                 }
             },
@@ -3826,7 +3850,7 @@ impl ValueTrait for KucoinfuturesImpl {
     fn join(&self, glue: Value) -> Value { self.0.join(glue) }
     fn to_string(&self) -> Value { self.0.to_string() }
     fn typeof_(&self) -> Value { self.0.typeof_() }
-    fn slice(&self, start: Value) -> Value { self.0.slice(start) }
+    fn slice(&self, start: Value, end: Value) -> Value { self.0.slice(start, end) }
 }
 
 impl KucoinfuturesImpl {

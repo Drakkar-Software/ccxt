@@ -13,14 +13,38 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, BoolExt, JSON, Array, Object, Math, Promise, parse_int, shift_2, extend_2, normalize};
 // Crypto hash identifiers
-fn sha256() -> Value { Value::from("sha256") }
-fn sha384() -> Value { Value::from("sha384") }
-fn sha512() -> Value { Value::from("sha512") }
-fn md5() -> Value { Value::from("md5") }
-fn ed25519() -> Value { Value::from("ed25519") }
+fn sha256() -> Value { Value::from("sha256()") }
+fn sha384() -> Value { Value::from("sha384()") }
+fn sha512() -> Value { Value::from("sha512()") }
+fn md5() -> Value { Value::from("md5()") }
+fn ed25519() -> Value { Value::from("ed25519()") }
 fn rsa(msg: Value, secret: Value, _hash: Value) -> Value { msg }
 fn eddsa(msg: Value, secret: Value, _curve: Value) -> Value { msg }
-fn secp256k1() -> Value { Value::from("secp256k1") }
+fn secp256k1() -> Value { Value::from("secp256k1()") }
+fn keccak() -> Value { Value::from("keccak()") }
+fn ecdsa(msg: Value, secret: Value, algo: Value, hash_fn: Value) -> Value { msg }
+fn totp(secret: Value) -> Value { Value::Undefined }
+fn jwt(data: Value, secret: Value, hash: Value, is_rsa: Value) -> Value { Value::Undefined }
+fn parse_float(value: Value) -> Value { value }
+fn decimals(value: Value) -> Value { Value::from(0) }
+fn shift_1(value: Value) -> Value { value }
+fn shift_3(value: Value) -> (Value, Value, Value) { (value.clone(), Value::Undefined, Value::Undefined) }
+fn shift_4(value: Value) -> (Value, Value, Value, Value) { (value.clone(), Value::Undefined, Value::Undefined, Value::Undefined) }
+// Error type constructors
+fn BadRequest(msg: Value) -> Value { msg }
+fn InvalidOrder(msg: Value) -> Value { msg }
+fn ExchangeError(msg: Value) -> Value { msg }
+fn InsufficientFunds(msg: Value) -> Value { msg }
+fn OrderNotFound(msg: Value) -> Value { msg }
+fn AuthenticationError(msg: Value) -> Value { msg }
+fn PermissionDenied(msg: Value) -> Value { msg }
+fn ExchangeNotAvailable(msg: Value) -> Value { msg }
+fn ArgumentsRequired(msg: Value) -> Value { msg }
+fn RateLimitExceeded(msg: Value) -> Value { msg }
+fn OrderNotFillable(msg: Value) -> Value { msg }
+fn OrderImmediatelyFillable(msg: Value) -> Value { msg }
+fn NotSupported(msg: Value) -> Value { msg }
+fn DuplicateOrderId(msg: Value) -> Value { msg }
 
 use crate::exchange::{PRECISE_BASE, TRUNCATE, ROUND, ROUND_UP, ROUND_DOWN};
 use crate::exchange::{DECIMAL_PLACES, SIGNIFICANT_DIGITS, TICK_SIZE, NO_PADDING, PAD_WITH_ZERO};
@@ -341,7 +365,7 @@ pub trait Apex : Exchange {
     async fn fetch_time(&mut self, mut params: Value) -> Value {
         let candidates = vec![("public", "GET", "time"), ("public", "GET", "server/time"), ("public", "GET", "timestamp")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Apex>::request(self,path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -722,14 +746,14 @@ pub trait Apex : Exchange {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = <Self as Apex>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() { return rv; }
                 }
             }
         }
         let candidates = vec![("public", "GET", "ticker/24hr"), ("public", "GET", "ticker"), ("public", "GET", "ticker/price")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Apex>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -751,14 +775,14 @@ pub trait Apex : Exchange {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = <Self as Apex>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() { return rv; }
                 }
             }
         }
         let candidates = vec![("public", "GET", "ticker/24hr"), ("public", "GET", "tickers"), ("public", "GET", "ticker")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Apex>::request(self,path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -786,14 +810,14 @@ pub trait Apex : Exchange {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = <Self as Apex>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() { return rv; }
                 }
             }
         }
         let candidates = vec![("public", "GET", "klines"), ("public", "GET", "candles"), ("public", "GET", "ohlcv")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Apex>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -835,14 +859,14 @@ pub trait Apex : Exchange {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = <Self as Apex>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() { return rv; }
                 }
             }
         }
         let candidates = vec![("public", "GET", "depth"), ("public", "GET", "orderbook"), ("public", "GET", "order_book")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Apex>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -856,7 +880,7 @@ pub trait Apex : Exchange {
         if limit.is_nonnullish() { request.set("limit".into(), limit.clone()); }
         let candidates = vec![("public", "GET", "trades"), ("public", "GET", "recent_trades"), ("public", "GET", "aggTrades")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Apex>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -1177,7 +1201,7 @@ pub trait Apex : Exchange {
         let mut index: Value = uppercase_symbol.index_of(Value::from("USDT"));
         let mut symbol_char: Value = self.safe_string(symbol.clone(), index.clone() - Value::from(1), Value::Undefined);
         if index.clone() > Value::from(0) && symbol_char.clone() != Value::from("-") {
-            return symbol.slice(Value::from(0), index.clone()) + Value::from("-") + symbol.slice(index.clone());
+            return symbol.slice(Value::from(0), index.clone()) + Value::from("-") + symbol.slice(index.clone(), Value::Undefined);
         };
         return symbol.clone();
     }
@@ -1326,8 +1350,8 @@ pub trait Apex : Exchange {
             i += 1;
         };
         let mut token_id: Value = self.safe_string(currency.clone(), Value::from("tokenId"), Value::from(""));
-        let mut amount_number: Value = self.parse_to_int(amount.clone() * Math::pow(Value::from(10), self.safe_number(currency.clone(), Value::from("decimals"), Value::from(0))), Value::Undefined);
-        let mut timestamp_seconds: Value = self.parse_to_int(self.milliseconds() / Value::from(1000), Value::Undefined);
+        let mut amount_number: Value = self.parse_to_int(amount.clone() * Math::pow(Value::from(10), self.safe_number(currency.clone(), Value::from("decimals"), Value::from(0))));
+        let mut timestamp_seconds: Value = self.parse_to_int(self.milliseconds() / Value::from(1000));
         let mut client_order_id: Value = self.safe_string_n(params.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("clientId").into(), Value::from("clientOrderId").into(), Value::from("client_order_id").into()])), Value::Undefined);
         if client_order_id.clone().is_nullish() {
             client_order_id = <Self as Apex>::generate_random_client_id_omni(self, self.safe_string(self.get("options".into()), Value::from("accountId"), Value::Undefined));
@@ -1664,7 +1688,7 @@ pub trait Apex : Exchange {
         let mut leverage: usize = 20;
         let mut custom_initial_margin_rate: Value = self.safe_string_n(position.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("customInitialMarginRate").into(), Value::from("customImr").into()])), Value::from("0"));
         if self.precision_from_string(custom_initial_margin_rate.clone()) != Value::from(0) {
-            leverage = self.parse_to_int(Precise::string_div(Value::from("1"), custom_initial_margin_rate.clone(), Value::from(4)), Value::Undefined);
+            leverage = self.parse_to_int(Precise::string_div(Value::from("1"), custom_initial_margin_rate.clone(), Value::from(4)));
         };
         return self.safe_position(Value::Json(normalize(&Value::Json(json!({
             "info": position,
@@ -1702,33 +1726,33 @@ pub trait Apex : Exchange {
         match method {
             Value::Json(serde_json::Value::String(ref m)) => {
                 match m.as_ref() {
-                    "publicGetV3symbols" => Apex::request(self, "v3/symbols".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetV3historyfunding" => Apex::request(self, "v3/history-funding".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetV3ticker" => Apex::request(self, "v3/ticker".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetV3klines" => Apex::request(self, "v3/klines".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetV3trades" => Apex::request(self, "v3/trades".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetV3depth" => Apex::request(self, "v3/depth".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetV3time" => Apex::request(self, "v3/time".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetV3dataalltickerinfo" => Apex::request(self, "v3/data/all-ticker-info".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetV3account" => Apex::request(self, "v3/account".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetV3accountbalance" => Apex::request(self, "v3/account-balance".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetV3fills" => Apex::request(self, "v3/fills".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetV3orderfills" => Apex::request(self, "v3/order-fills".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetV3order" => Apex::request(self, "v3/order".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetV3historyorders" => Apex::request(self, "v3/history-orders".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetV3orderbyclientorderid" => Apex::request(self, "v3/order-by-client-order-id".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetV3funding" => Apex::request(self, "v3/funding".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetV3historicalpnl" => Apex::request(self, "v3/historical-pnl".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetV3openorders" => Apex::request(self, "v3/open-orders".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetV3transfers" => Apex::request(self, "v3/transfers".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetV3transfer" => Apex::request(self, "v3/transfer".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostV3deleteopenorders" => Apex::request(self, "v3/delete-open-orders".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostV3deleteclientorderid" => Apex::request(self, "v3/delete-client-order-id".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostV3deleteorder" => Apex::request(self, "v3/delete-order".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostV3order" => Apex::request(self, "v3/order".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostV3setinitialmarginrate" => Apex::request(self, "v3/set-initial-margin-rate".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostV3transferout" => Apex::request(self, "v3/transfer-out".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostV3contracttransferout" => Apex::request(self, "v3/contract-transfer-out".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetV3symbols" => self.request("v3/symbols".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetV3historyfunding" => self.request("v3/history-funding".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetV3ticker" => self.request("v3/ticker".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetV3klines" => self.request("v3/klines".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetV3trades" => self.request("v3/trades".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetV3depth" => self.request("v3/depth".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetV3time" => self.request("v3/time".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetV3dataalltickerinfo" => self.request("v3/data/all-ticker-info".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetV3account" => self.request("v3/account".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetV3accountbalance" => self.request("v3/account-balance".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetV3fills" => self.request("v3/fills".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetV3orderfills" => self.request("v3/order-fills".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetV3order" => self.request("v3/order".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetV3historyorders" => self.request("v3/history-orders".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetV3orderbyclientorderid" => self.request("v3/order-by-client-order-id".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetV3funding" => self.request("v3/funding".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetV3historicalpnl" => self.request("v3/historical-pnl".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetV3openorders" => self.request("v3/open-orders".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetV3transfers" => self.request("v3/transfers".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetV3transfer" => self.request("v3/transfer".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostV3deleteopenorders" => self.request("v3/delete-open-orders".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostV3deleteclientorderid" => self.request("v3/delete-client-order-id".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostV3deleteorder" => self.request("v3/delete-order".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostV3order" => self.request("v3/order".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostV3setinitialmarginrate" => self.request("v3/set-initial-margin-rate".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostV3transferout" => self.request("v3/transfer-out".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostV3contracttransferout" => self.request("v3/contract-transfer-out".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     _ => unimplemented!(),
                 }
             },
@@ -1772,7 +1796,7 @@ impl ValueTrait for ApexImpl {
     fn join(&self, glue: Value) -> Value { self.0.join(glue) }
     fn to_string(&self) -> Value { self.0.to_string() }
     fn typeof_(&self) -> Value { self.0.typeof_() }
-    fn slice(&self, start: Value) -> Value { self.0.slice(start) }
+    fn slice(&self, start: Value, end: Value) -> Value { self.0.slice(start, end) }
 }
 
 impl ApexImpl {

@@ -13,14 +13,38 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, BoolExt, JSON, Array, Object, Math, Promise, parse_int, shift_2, extend_2, normalize};
 // Crypto hash identifiers
-fn sha256() -> Value { Value::from("sha256") }
-fn sha384() -> Value { Value::from("sha384") }
-fn sha512() -> Value { Value::from("sha512") }
-fn md5() -> Value { Value::from("md5") }
-fn ed25519() -> Value { Value::from("ed25519") }
+fn sha256() -> Value { Value::from("sha256()") }
+fn sha384() -> Value { Value::from("sha384()") }
+fn sha512() -> Value { Value::from("sha512()") }
+fn md5() -> Value { Value::from("md5()") }
+fn ed25519() -> Value { Value::from("ed25519()") }
 fn rsa(msg: Value, secret: Value, _hash: Value) -> Value { msg }
 fn eddsa(msg: Value, secret: Value, _curve: Value) -> Value { msg }
-fn secp256k1() -> Value { Value::from("secp256k1") }
+fn secp256k1() -> Value { Value::from("secp256k1()") }
+fn keccak() -> Value { Value::from("keccak()") }
+fn ecdsa(msg: Value, secret: Value, algo: Value, hash_fn: Value) -> Value { msg }
+fn totp(secret: Value) -> Value { Value::Undefined }
+fn jwt(data: Value, secret: Value, hash: Value, is_rsa: Value) -> Value { Value::Undefined }
+fn parse_float(value: Value) -> Value { value }
+fn decimals(value: Value) -> Value { Value::from(0) }
+fn shift_1(value: Value) -> Value { value }
+fn shift_3(value: Value) -> (Value, Value, Value) { (value.clone(), Value::Undefined, Value::Undefined) }
+fn shift_4(value: Value) -> (Value, Value, Value, Value) { (value.clone(), Value::Undefined, Value::Undefined, Value::Undefined) }
+// Error type constructors
+fn BadRequest(msg: Value) -> Value { msg }
+fn InvalidOrder(msg: Value) -> Value { msg }
+fn ExchangeError(msg: Value) -> Value { msg }
+fn InsufficientFunds(msg: Value) -> Value { msg }
+fn OrderNotFound(msg: Value) -> Value { msg }
+fn AuthenticationError(msg: Value) -> Value { msg }
+fn PermissionDenied(msg: Value) -> Value { msg }
+fn ExchangeNotAvailable(msg: Value) -> Value { msg }
+fn ArgumentsRequired(msg: Value) -> Value { msg }
+fn RateLimitExceeded(msg: Value) -> Value { msg }
+fn OrderNotFillable(msg: Value) -> Value { msg }
+fn OrderImmediatelyFillable(msg: Value) -> Value { msg }
+fn NotSupported(msg: Value) -> Value { msg }
+fn DuplicateOrderId(msg: Value) -> Value { msg }
 
 use crate::exchange::{PRECISE_BASE, TRUNCATE, ROUND, ROUND_UP, ROUND_DOWN};
 use crate::exchange::{DECIMAL_PLACES, SIGNIFICANT_DIGITS, TICK_SIZE, NO_PADDING, PAD_WITH_ZERO};
@@ -669,14 +693,14 @@ pub trait Bitfinex : Exchange {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = <Self as Bitfinex>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() { return rv; }
                 }
             }
         }
         let candidates = vec![("public", "GET", "status"), ("public", "GET", "ping"), ("public", "GET", "time"), ("sapi", "GET", "system/status")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Bitfinex>::request(self,path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -911,7 +935,7 @@ pub trait Bitfinex : Exchange {
             let mut r#type: Value = self.safe_string(balance.clone(), Value::from(0), Value::Undefined);
             let mut currency_id: Value = self.safe_string_lower(balance.clone(), Value::from(1), Value::from(""));
             let mut start: Value = currency_id.len().into() - Value::from(2);
-            let mut is_derivative_code: Value = (currency_id.slice(start.clone()) == Value::from("f0")).into();
+            let mut is_derivative_code: Value = (currency_id.slice(start.clone(), Value::Undefined) == Value::from("f0")).into();
             // this will only filter the derivative codes if the requestedType is 'derivatives'
             let mut derivative_condition: Value = (!is_derivative.is_truthy() || is_derivative_code.is_truthy()).into();
             if account_type.clone() == r#type.clone() && derivative_condition.is_truthy() {
@@ -1053,7 +1077,7 @@ pub trait Bitfinex : Exchange {
         if r#type.clone() == Value::from("derivatives") {
             currency_id = self.safe_string(underlying.clone(), Value::from(0), transfer_id.clone());
             let mut start: Value = currency_id.len().into() - Value::from(2);
-            let mut is_derivative_code: Value = (currency_id.slice(start.clone()) == Value::from("F0")).into();
+            let mut is_derivative_code: Value = (currency_id.slice(start.clone(), Value::Undefined) == Value::from("F0")).into();
             if !is_derivative_code.is_truthy() {
                 currency_id = currency_id.clone() + Value::from("F0");
             };
@@ -1083,14 +1107,14 @@ pub trait Bitfinex : Exchange {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = <Self as Bitfinex>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() { return rv; }
                 }
             }
         }
         let candidates = vec![("public", "GET", "depth"), ("public", "GET", "orderbook"), ("public", "GET", "order_book")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Bitfinex>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -1221,14 +1245,14 @@ pub trait Bitfinex : Exchange {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = <Self as Bitfinex>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() { return rv; }
                 }
             }
         }
         let candidates = vec![("public", "GET", "ticker/24hr"), ("public", "GET", "tickers"), ("public", "GET", "ticker")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Bitfinex>::request(self,path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -1252,14 +1276,14 @@ pub trait Bitfinex : Exchange {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = <Self as Bitfinex>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() { return rv; }
                 }
             }
         }
         let candidates = vec![("public", "GET", "ticker/24hr"), ("public", "GET", "ticker"), ("public", "GET", "ticker/price")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Bitfinex>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -1357,7 +1381,7 @@ pub trait Bitfinex : Exchange {
         if limit.is_nonnullish() { request.set("limit".into(), limit.clone()); }
         let candidates = vec![("public", "GET", "trades"), ("public", "GET", "recent_trades"), ("public", "GET", "aggTrades")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Bitfinex>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -1385,14 +1409,14 @@ pub trait Bitfinex : Exchange {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = <Self as Bitfinex>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() { return rv; }
                 }
             }
         }
         let candidates = vec![("public", "GET", "klines"), ("public", "GET", "candles"), ("public", "GET", "ohlcv")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Bitfinex>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -3558,142 +3582,142 @@ pub trait Bitfinex : Exchange {
         match method {
             Value::Json(serde_json::Value::String(ref m)) => {
                 match m.as_ref() {
-                    "publicGetConfconfig" => Bitfinex::request(self, "conf/{config}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetConfpubactionobject" => Bitfinex::request(self, "conf/pub:{action}:{object}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetConfpubactionobjectdetail" => Bitfinex::request(self, "conf/pub:{action}:{object}:{detail}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetConfpubmapobject" => Bitfinex::request(self, "conf/pub:map:{object}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetConfpubmapobjectdetail" => Bitfinex::request(self, "conf/pub:map:{object}:{detail}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetConfpubmapcurrencydetail" => Bitfinex::request(self, "conf/pub:map:currency:{detail}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetConfpubmapcurrencysym" => Bitfinex::request(self, "conf/pub:map:currency:sym".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetConfpubmapcurrencylabel" => Bitfinex::request(self, "conf/pub:map:currency:label".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetConfpubmapcurrencyunit" => Bitfinex::request(self, "conf/pub:map:currency:unit".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetConfpubmapcurrencyundl" => Bitfinex::request(self, "conf/pub:map:currency:undl".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetConfpubmapcurrencypool" => Bitfinex::request(self, "conf/pub:map:currency:pool".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetConfpubmapcurrencyexplorer" => Bitfinex::request(self, "conf/pub:map:currency:explorer".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetConfpubmapcurrencytxfee" => Bitfinex::request(self, "conf/pub:map:currency:tx:fee".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetConfpubmaptxmethod" => Bitfinex::request(self, "conf/pub:map:tx:method".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetConfpublistobject" => Bitfinex::request(self, "conf/pub:list:{object}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetConfpublistobjectdetail" => Bitfinex::request(self, "conf/pub:list:{object}:{detail}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetConfpublistcurrency" => Bitfinex::request(self, "conf/pub:list:currency".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetConfpublistpairexchange" => Bitfinex::request(self, "conf/pub:list:pair:exchange".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetConfpublistpairmargin" => Bitfinex::request(self, "conf/pub:list:pair:margin".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetConfpublistpairfutures" => Bitfinex::request(self, "conf/pub:list:pair:futures".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetConfpublistcompetitions" => Bitfinex::request(self, "conf/pub:list:competitions".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetConfpubinfoobject" => Bitfinex::request(self, "conf/pub:info:{object}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetConfpubinfoobjectdetail" => Bitfinex::request(self, "conf/pub:info:{object}:{detail}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetConfpubinfopair" => Bitfinex::request(self, "conf/pub:info:pair".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetConfpubinfopairfutures" => Bitfinex::request(self, "conf/pub:info:pair:futures".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetConfpubinfotxstatus" => Bitfinex::request(self, "conf/pub:info:tx:status".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetConfpubfees" => Bitfinex::request(self, "conf/pub:fees".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetPlatformstatus" => Bitfinex::request(self, "platform/status".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetTickers" => Bitfinex::request(self, "tickers".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetTickersymbol" => Bitfinex::request(self, "ticker/{symbol}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetTickershist" => Bitfinex::request(self, "tickers/hist".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetTradessymbolhist" => Bitfinex::request(self, "trades/{symbol}/hist".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetBooksymbolprecision" => Bitfinex::request(self, "book/{symbol}/{precision}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetBooksymbolp0" => Bitfinex::request(self, "book/{symbol}/P0".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetBooksymbolp1" => Bitfinex::request(self, "book/{symbol}/P1".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetBooksymbolp2" => Bitfinex::request(self, "book/{symbol}/P2".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetBooksymbolp3" => Bitfinex::request(self, "book/{symbol}/P3".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetBooksymbolr0" => Bitfinex::request(self, "book/{symbol}/R0".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetStats1keysizesymbolsidesection" => Bitfinex::request(self, "stats1/{key}:{size}:{symbol}:{side}/{section}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetStats1keysizesymbolsidelast" => Bitfinex::request(self, "stats1/{key}:{size}:{symbol}:{side}/last".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetStats1keysizesymbolsidehist" => Bitfinex::request(self, "stats1/{key}:{size}:{symbol}:{side}/hist".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetStats1keysizesymbolsection" => Bitfinex::request(self, "stats1/{key}:{size}:{symbol}/{section}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetStats1keysizesymbollast" => Bitfinex::request(self, "stats1/{key}:{size}:{symbol}/last".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetStats1keysizesymbolhist" => Bitfinex::request(self, "stats1/{key}:{size}:{symbol}/hist".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetStats1keysizesymbollonglast" => Bitfinex::request(self, "stats1/{key}:{size}:{symbol}:long/last".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetStats1keysizesymbollonghist" => Bitfinex::request(self, "stats1/{key}:{size}:{symbol}:long/hist".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetStats1keysizesymbolshortlast" => Bitfinex::request(self, "stats1/{key}:{size}:{symbol}:short/last".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetStats1keysizesymbolshorthist" => Bitfinex::request(self, "stats1/{key}:{size}:{symbol}:short/hist".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetCandlestradetimeframesymbolperiodsection" => Bitfinex::request(self, "candles/trade:{timeframe}:{symbol}:{period}/{section}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetCandlestradetimeframesymbolsection" => Bitfinex::request(self, "candles/trade:{timeframe}:{symbol}/{section}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetCandlestradetimeframesymbollast" => Bitfinex::request(self, "candles/trade:{timeframe}:{symbol}/last".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetCandlestradetimeframesymbolhist" => Bitfinex::request(self, "candles/trade:{timeframe}:{symbol}/hist".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetStatustype" => Bitfinex::request(self, "status/{type}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetStatusderiv" => Bitfinex::request(self, "status/deriv".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetStatusderivsymbolhist" => Bitfinex::request(self, "status/deriv/{symbol}/hist".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetLiquidationshist" => Bitfinex::request(self, "liquidations/hist".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetRankingskeytimeframesymbolsection" => Bitfinex::request(self, "rankings/{key}:{timeframe}:{symbol}/{section}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetRankingskeytimeframesymbolhist" => Bitfinex::request(self, "rankings/{key}:{timeframe}:{symbol}/hist".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetPulsehist" => Bitfinex::request(self, "pulse/hist".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetPulseprofilenickname" => Bitfinex::request(self, "pulse/profile/{nickname}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetFundingstatssymbolhist" => Bitfinex::request(self, "funding/stats/{symbol}/hist".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetExtvasps" => Bitfinex::request(self, "ext/vasps".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicPostCalctradeavg" => Bitfinex::request(self, "calc/trade/avg".into(), "public".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicPostCalcfx" => Bitfinex::request(self, "calc/fx".into(), "public".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostAuthrwallets" => Bitfinex::request(self, "auth/r/wallets".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostAuthrwalletshist" => Bitfinex::request(self, "auth/r/wallets/hist".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostAuthrorders" => Bitfinex::request(self, "auth/r/orders".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostAuthrorderssymbol" => Bitfinex::request(self, "auth/r/orders/{symbol}".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostAuthwordersubmit" => Bitfinex::request(self, "auth/w/order/submit".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostAuthworderupdate" => Bitfinex::request(self, "auth/w/order/update".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostAuthwordercancel" => Bitfinex::request(self, "auth/w/order/cancel".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostAuthwordermulti" => Bitfinex::request(self, "auth/w/order/multi".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostAuthwordercancelmulti" => Bitfinex::request(self, "auth/w/order/cancel/multi".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostAuthrorderssymbolhist" => Bitfinex::request(self, "auth/r/orders/{symbol}/hist".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostAuthrordershist" => Bitfinex::request(self, "auth/r/orders/hist".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostAuthrordersymbolidtrades" => Bitfinex::request(self, "auth/r/order/{symbol}:{id}/trades".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostAuthrtradessymbolhist" => Bitfinex::request(self, "auth/r/trades/{symbol}/hist".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostAuthrtradeshist" => Bitfinex::request(self, "auth/r/trades/hist".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostAuthrledgerscurrencyhist" => Bitfinex::request(self, "auth/r/ledgers/{currency}/hist".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostAuthrledgershist" => Bitfinex::request(self, "auth/r/ledgers/hist".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostAuthrinfomarginkey" => Bitfinex::request(self, "auth/r/info/margin/{key}".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostAuthrinfomarginbase" => Bitfinex::request(self, "auth/r/info/margin/base".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostAuthrinfomarginsymall" => Bitfinex::request(self, "auth/r/info/margin/sym_all".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostAuthrpositions" => Bitfinex::request(self, "auth/r/positions".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostAuthwpositionclaim" => Bitfinex::request(self, "auth/w/position/claim".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostAuthwpositionincrease" => Bitfinex::request(self, "auth/w/position/increase:".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostAuthrpositionincreaseinfo" => Bitfinex::request(self, "auth/r/position/increase/info".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostAuthrpositionshist" => Bitfinex::request(self, "auth/r/positions/hist".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostAuthrpositionsaudit" => Bitfinex::request(self, "auth/r/positions/audit".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostAuthrpositionssnap" => Bitfinex::request(self, "auth/r/positions/snap".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostAuthwderivcollateralset" => Bitfinex::request(self, "auth/w/deriv/collateral/set".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostAuthwderivcollaterallimits" => Bitfinex::request(self, "auth/w/deriv/collateral/limits".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostAuthrfundingoffers" => Bitfinex::request(self, "auth/r/funding/offers".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostAuthrfundingofferssymbol" => Bitfinex::request(self, "auth/r/funding/offers/{symbol}".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostAuthwfundingoffersubmit" => Bitfinex::request(self, "auth/w/funding/offer/submit".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostAuthwfundingoffercancel" => Bitfinex::request(self, "auth/w/funding/offer/cancel".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostAuthwfundingoffercancelall" => Bitfinex::request(self, "auth/w/funding/offer/cancel/all".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostAuthwfundingclose" => Bitfinex::request(self, "auth/w/funding/close".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostAuthwfundingauto" => Bitfinex::request(self, "auth/w/funding/auto".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostAuthwfundingkeep" => Bitfinex::request(self, "auth/w/funding/keep".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostAuthrfundingofferssymbolhist" => Bitfinex::request(self, "auth/r/funding/offers/{symbol}/hist".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostAuthrfundingoffershist" => Bitfinex::request(self, "auth/r/funding/offers/hist".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostAuthrfundingloans" => Bitfinex::request(self, "auth/r/funding/loans".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostAuthrfundingloanshist" => Bitfinex::request(self, "auth/r/funding/loans/hist".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostAuthrfundingloanssymbol" => Bitfinex::request(self, "auth/r/funding/loans/{symbol}".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostAuthrfundingloanssymbolhist" => Bitfinex::request(self, "auth/r/funding/loans/{symbol}/hist".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostAuthrfundingcredits" => Bitfinex::request(self, "auth/r/funding/credits".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostAuthrfundingcreditshist" => Bitfinex::request(self, "auth/r/funding/credits/hist".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostAuthrfundingcreditssymbol" => Bitfinex::request(self, "auth/r/funding/credits/{symbol}".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostAuthrfundingcreditssymbolhist" => Bitfinex::request(self, "auth/r/funding/credits/{symbol}/hist".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostAuthrfundingtradessymbolhist" => Bitfinex::request(self, "auth/r/funding/trades/{symbol}/hist".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostAuthrfundingtradeshist" => Bitfinex::request(self, "auth/r/funding/trades/hist".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostAuthrinfofundingkey" => Bitfinex::request(self, "auth/r/info/funding/{key}".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostAuthrinfouser" => Bitfinex::request(self, "auth/r/info/user".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostAuthrsummary" => Bitfinex::request(self, "auth/r/summary".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostAuthrloginshist" => Bitfinex::request(self, "auth/r/logins/hist".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostAuthrpermissions" => Bitfinex::request(self, "auth/r/permissions".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostAuthwtoken" => Bitfinex::request(self, "auth/w/token".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostAuthraudithist" => Bitfinex::request(self, "auth/r/audit/hist".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostAuthwtransfer" => Bitfinex::request(self, "auth/w/transfer".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostAuthwdepositaddress" => Bitfinex::request(self, "auth/w/deposit/address".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostAuthwdepositinvoice" => Bitfinex::request(self, "auth/w/deposit/invoice".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostAuthwwithdraw" => Bitfinex::request(self, "auth/w/withdraw".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostAuthrmovementscurrencyhist" => Bitfinex::request(self, "auth/r/movements/{currency}/hist".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostAuthrmovementshist" => Bitfinex::request(self, "auth/r/movements/hist".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostAuthralerts" => Bitfinex::request(self, "auth/r/alerts".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostAuthwalertset" => Bitfinex::request(self, "auth/w/alert/set".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostAuthwalertpricesymbolpricedel" => Bitfinex::request(self, "auth/w/alert/price:{symbol}:{price}/del".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostAuthwalerttypesymbolpricedel" => Bitfinex::request(self, "auth/w/alert/{type}:{symbol}:{price}/del".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostAuthcalcorderavail" => Bitfinex::request(self, "auth/calc/order/avail".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostAuthwsettingsset" => Bitfinex::request(self, "auth/w/settings/set".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostAuthrsettings" => Bitfinex::request(self, "auth/r/settings".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostAuthwsettingsdel" => Bitfinex::request(self, "auth/w/settings/del".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostAuthrpulsehist" => Bitfinex::request(self, "auth/r/pulse/hist".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostAuthwpulseadd" => Bitfinex::request(self, "auth/w/pulse/add".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostAuthwpulsedel" => Bitfinex::request(self, "auth/w/pulse/del".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetConfconfig" => self.request("conf/{config}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetConfpubactionobject" => self.request("conf/pub:{action}:{object}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetConfpubactionobjectdetail" => self.request("conf/pub:{action}:{object}:{detail}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetConfpubmapobject" => self.request("conf/pub:map:{object}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetConfpubmapobjectdetail" => self.request("conf/pub:map:{object}:{detail}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetConfpubmapcurrencydetail" => self.request("conf/pub:map:currency:{detail}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetConfpubmapcurrencysym" => self.request("conf/pub:map:currency:sym".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetConfpubmapcurrencylabel" => self.request("conf/pub:map:currency:label".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetConfpubmapcurrencyunit" => self.request("conf/pub:map:currency:unit".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetConfpubmapcurrencyundl" => self.request("conf/pub:map:currency:undl".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetConfpubmapcurrencypool" => self.request("conf/pub:map:currency:pool".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetConfpubmapcurrencyexplorer" => self.request("conf/pub:map:currency:explorer".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetConfpubmapcurrencytxfee" => self.request("conf/pub:map:currency:tx:fee".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetConfpubmaptxmethod" => self.request("conf/pub:map:tx:method".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetConfpublistobject" => self.request("conf/pub:list:{object}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetConfpublistobjectdetail" => self.request("conf/pub:list:{object}:{detail}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetConfpublistcurrency" => self.request("conf/pub:list:currency".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetConfpublistpairexchange" => self.request("conf/pub:list:pair:exchange".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetConfpublistpairmargin" => self.request("conf/pub:list:pair:margin".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetConfpublistpairfutures" => self.request("conf/pub:list:pair:futures".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetConfpublistcompetitions" => self.request("conf/pub:list:competitions".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetConfpubinfoobject" => self.request("conf/pub:info:{object}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetConfpubinfoobjectdetail" => self.request("conf/pub:info:{object}:{detail}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetConfpubinfopair" => self.request("conf/pub:info:pair".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetConfpubinfopairfutures" => self.request("conf/pub:info:pair:futures".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetConfpubinfotxstatus" => self.request("conf/pub:info:tx:status".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetConfpubfees" => self.request("conf/pub:fees".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetPlatformstatus" => self.request("platform/status".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetTickers" => self.request("tickers".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetTickersymbol" => self.request("ticker/{symbol}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetTickershist" => self.request("tickers/hist".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetTradessymbolhist" => self.request("trades/{symbol}/hist".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetBooksymbolprecision" => self.request("book/{symbol}/{precision}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetBooksymbolp0" => self.request("book/{symbol}/P0".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetBooksymbolp1" => self.request("book/{symbol}/P1".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetBooksymbolp2" => self.request("book/{symbol}/P2".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetBooksymbolp3" => self.request("book/{symbol}/P3".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetBooksymbolr0" => self.request("book/{symbol}/R0".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetStats1keysizesymbolsidesection" => self.request("stats1/{key}:{size}:{symbol}:{side}/{section}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetStats1keysizesymbolsidelast" => self.request("stats1/{key}:{size}:{symbol}:{side}/last".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetStats1keysizesymbolsidehist" => self.request("stats1/{key}:{size}:{symbol}:{side}/hist".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetStats1keysizesymbolsection" => self.request("stats1/{key}:{size}:{symbol}/{section}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetStats1keysizesymbollast" => self.request("stats1/{key}:{size}:{symbol}/last".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetStats1keysizesymbolhist" => self.request("stats1/{key}:{size}:{symbol}/hist".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetStats1keysizesymbollonglast" => self.request("stats1/{key}:{size}:{symbol}:long/last".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetStats1keysizesymbollonghist" => self.request("stats1/{key}:{size}:{symbol}:long/hist".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetStats1keysizesymbolshortlast" => self.request("stats1/{key}:{size}:{symbol}:short/last".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetStats1keysizesymbolshorthist" => self.request("stats1/{key}:{size}:{symbol}:short/hist".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetCandlestradetimeframesymbolperiodsection" => self.request("candles/trade:{timeframe}:{symbol}:{period}/{section}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetCandlestradetimeframesymbolsection" => self.request("candles/trade:{timeframe}:{symbol}/{section}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetCandlestradetimeframesymbollast" => self.request("candles/trade:{timeframe}:{symbol}/last".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetCandlestradetimeframesymbolhist" => self.request("candles/trade:{timeframe}:{symbol}/hist".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetStatustype" => self.request("status/{type}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetStatusderiv" => self.request("status/deriv".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetStatusderivsymbolhist" => self.request("status/deriv/{symbol}/hist".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetLiquidationshist" => self.request("liquidations/hist".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetRankingskeytimeframesymbolsection" => self.request("rankings/{key}:{timeframe}:{symbol}/{section}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetRankingskeytimeframesymbolhist" => self.request("rankings/{key}:{timeframe}:{symbol}/hist".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetPulsehist" => self.request("pulse/hist".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetPulseprofilenickname" => self.request("pulse/profile/{nickname}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetFundingstatssymbolhist" => self.request("funding/stats/{symbol}/hist".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetExtvasps" => self.request("ext/vasps".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicPostCalctradeavg" => self.request("calc/trade/avg".into(), "public".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicPostCalcfx" => self.request("calc/fx".into(), "public".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthrwallets" => self.request("auth/r/wallets".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthrwalletshist" => self.request("auth/r/wallets/hist".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthrorders" => self.request("auth/r/orders".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthrorderssymbol" => self.request("auth/r/orders/{symbol}".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthwordersubmit" => self.request("auth/w/order/submit".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthworderupdate" => self.request("auth/w/order/update".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthwordercancel" => self.request("auth/w/order/cancel".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthwordermulti" => self.request("auth/w/order/multi".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthwordercancelmulti" => self.request("auth/w/order/cancel/multi".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthrorderssymbolhist" => self.request("auth/r/orders/{symbol}/hist".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthrordershist" => self.request("auth/r/orders/hist".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthrordersymbolidtrades" => self.request("auth/r/order/{symbol}:{id}/trades".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthrtradessymbolhist" => self.request("auth/r/trades/{symbol}/hist".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthrtradeshist" => self.request("auth/r/trades/hist".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthrledgerscurrencyhist" => self.request("auth/r/ledgers/{currency}/hist".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthrledgershist" => self.request("auth/r/ledgers/hist".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthrinfomarginkey" => self.request("auth/r/info/margin/{key}".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthrinfomarginbase" => self.request("auth/r/info/margin/base".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthrinfomarginsymall" => self.request("auth/r/info/margin/sym_all".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthrpositions" => self.request("auth/r/positions".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthwpositionclaim" => self.request("auth/w/position/claim".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthwpositionincrease" => self.request("auth/w/position/increase:".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthrpositionincreaseinfo" => self.request("auth/r/position/increase/info".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthrpositionshist" => self.request("auth/r/positions/hist".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthrpositionsaudit" => self.request("auth/r/positions/audit".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthrpositionssnap" => self.request("auth/r/positions/snap".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthwderivcollateralset" => self.request("auth/w/deriv/collateral/set".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthwderivcollaterallimits" => self.request("auth/w/deriv/collateral/limits".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthrfundingoffers" => self.request("auth/r/funding/offers".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthrfundingofferssymbol" => self.request("auth/r/funding/offers/{symbol}".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthwfundingoffersubmit" => self.request("auth/w/funding/offer/submit".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthwfundingoffercancel" => self.request("auth/w/funding/offer/cancel".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthwfundingoffercancelall" => self.request("auth/w/funding/offer/cancel/all".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthwfundingclose" => self.request("auth/w/funding/close".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthwfundingauto" => self.request("auth/w/funding/auto".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthwfundingkeep" => self.request("auth/w/funding/keep".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthrfundingofferssymbolhist" => self.request("auth/r/funding/offers/{symbol}/hist".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthrfundingoffershist" => self.request("auth/r/funding/offers/hist".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthrfundingloans" => self.request("auth/r/funding/loans".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthrfundingloanshist" => self.request("auth/r/funding/loans/hist".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthrfundingloanssymbol" => self.request("auth/r/funding/loans/{symbol}".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthrfundingloanssymbolhist" => self.request("auth/r/funding/loans/{symbol}/hist".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthrfundingcredits" => self.request("auth/r/funding/credits".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthrfundingcreditshist" => self.request("auth/r/funding/credits/hist".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthrfundingcreditssymbol" => self.request("auth/r/funding/credits/{symbol}".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthrfundingcreditssymbolhist" => self.request("auth/r/funding/credits/{symbol}/hist".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthrfundingtradessymbolhist" => self.request("auth/r/funding/trades/{symbol}/hist".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthrfundingtradeshist" => self.request("auth/r/funding/trades/hist".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthrinfofundingkey" => self.request("auth/r/info/funding/{key}".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthrinfouser" => self.request("auth/r/info/user".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthrsummary" => self.request("auth/r/summary".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthrloginshist" => self.request("auth/r/logins/hist".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthrpermissions" => self.request("auth/r/permissions".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthwtoken" => self.request("auth/w/token".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthraudithist" => self.request("auth/r/audit/hist".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthwtransfer" => self.request("auth/w/transfer".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthwdepositaddress" => self.request("auth/w/deposit/address".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthwdepositinvoice" => self.request("auth/w/deposit/invoice".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthwwithdraw" => self.request("auth/w/withdraw".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthrmovementscurrencyhist" => self.request("auth/r/movements/{currency}/hist".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthrmovementshist" => self.request("auth/r/movements/hist".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthralerts" => self.request("auth/r/alerts".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthwalertset" => self.request("auth/w/alert/set".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthwalertpricesymbolpricedel" => self.request("auth/w/alert/price:{symbol}:{price}/del".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthwalerttypesymbolpricedel" => self.request("auth/w/alert/{type}:{symbol}:{price}/del".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthcalcorderavail" => self.request("auth/calc/order/avail".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthwsettingsset" => self.request("auth/w/settings/set".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthrsettings" => self.request("auth/r/settings".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthwsettingsdel" => self.request("auth/w/settings/del".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthrpulsehist" => self.request("auth/r/pulse/hist".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthwpulseadd" => self.request("auth/w/pulse/add".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAuthwpulsedel" => self.request("auth/w/pulse/del".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     _ => unimplemented!(),
                 }
             },
@@ -3737,7 +3761,7 @@ impl ValueTrait for BitfinexImpl {
     fn join(&self, glue: Value) -> Value { self.0.join(glue) }
     fn to_string(&self) -> Value { self.0.to_string() }
     fn typeof_(&self) -> Value { self.0.typeof_() }
-    fn slice(&self, start: Value) -> Value { self.0.slice(start) }
+    fn slice(&self, start: Value, end: Value) -> Value { self.0.slice(start, end) }
 }
 
 impl BitfinexImpl {

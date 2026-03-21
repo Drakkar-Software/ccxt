@@ -311,14 +311,37 @@ impl Value {
         Value::from(t)
     }
 
-    pub fn slice(&self, _start: Value) -> Value {
-        let start = _start.unwrap_usize();
+    pub fn slice(&self, _start: Value, _end: Value) -> Value {
+        let start_raw = match &_start {
+            Value::Json(JSON::Number(n)) => n.as_i64().unwrap_or(0),
+            _ => 0,
+        };
         match self {
             Value::Json(JSON::Array(a)) => {
-                let slice = if start < a.len() { a[start..].to_vec() } else { vec![] };
+                let len = a.len() as i64;
+                let start = if start_raw < 0 { (len + start_raw).max(0) as usize } else { start_raw as usize };
+                let end = match &_end {
+                    Value::Json(JSON::Number(n)) => {
+                        let e = n.as_i64().unwrap_or(len);
+                        if e < 0 { (len + e).max(0) as usize } else { (e as usize).min(a.len()) }
+                    }
+                    _ => a.len(),
+                };
+                let slice = if start < end && start < a.len() { a[start..end.min(a.len())].to_vec() } else { vec![] };
                 Value::Json(JSON::Array(slice))
             }
-            Value::Json(JSON::String(s)) => Value::from(s.get(start..).unwrap_or("").to_string()),
+            Value::Json(JSON::String(s)) => {
+                let len = s.len() as i64;
+                let start = if start_raw < 0 { (len + start_raw).max(0) as usize } else { start_raw as usize };
+                let end = match &_end {
+                    Value::Json(JSON::Number(n)) => {
+                        let e = n.as_i64().unwrap_or(len);
+                        if e < 0 { (len + e).max(0) as usize } else { (e as usize).min(s.len()) }
+                    }
+                    _ => s.len(),
+                };
+                Value::from(s.get(start..end.min(s.len())).unwrap_or("").to_string())
+            }
             _ => Value::Undefined,
         }
     }
@@ -474,6 +497,32 @@ impl Value {
 
     pub fn array_concat(a: Value, b: Value) -> Value { a.concat(b) }
 
+    pub fn pad_start(&self, target_len: Value, pad_str: Value) -> Value {
+        let s = match self {
+            Value::Json(JSON::String(s)) => s.clone(),
+            _ => return Value::Undefined,
+        };
+        let len = match target_len {
+            Value::Json(JSON::Number(n)) => n.as_u64().unwrap_or(0) as usize,
+            _ => return Value::from(s),
+        };
+        let pad = match pad_str {
+            Value::Json(JSON::String(p)) => p,
+            _ => " ".to_string(),
+        };
+        if s.len() >= len {
+            Value::from(s)
+        } else {
+            let needed = len - s.len();
+            let padding: String = pad.chars().cycle().take(needed).collect();
+            Value::from(format!("{}{}", padding, s))
+        }
+    }
+
+    pub fn reduce(&self) -> Value { self.clone() }
+
+    pub fn to_fixed(&self, decimals: Value) -> Value { self.clone() }
+
 }
 
 impl From<i64> for Value {
@@ -529,6 +578,45 @@ impl From<f64> for Value {
         }
     }
 }
+
+// ---------------------------------------------------------------------------
+// usize <-> Value interop — needed because transpiler infers usize for .len()
+// ---------------------------------------------------------------------------
+
+impl PartialEq<Value> for usize {
+    fn eq(&self, other: &Value) -> bool {
+        match other {
+            Value::Json(JSON::Number(n)) => n.as_u64().map_or(false, |v| v == *self as u64),
+            _ => false,
+        }
+    }
+}
+
+impl PartialOrd<Value> for usize {
+    fn partial_cmp(&self, other: &Value) -> Option<std::cmp::Ordering> {
+        match other {
+            Value::Json(JSON::Number(n)) => {
+                n.as_u64().map(|v| (*self as u64).cmp(&v))
+            }
+            _ => None,
+        }
+    }
+}
+
+impl std::ops::Div<Value> for usize {
+    type Output = Value;
+    fn div(self, rhs: Value) -> Value {
+        match &rhs {
+            Value::Json(JSON::Number(n)) => {
+                if let Some(d) = n.as_u64() {
+                    if d != 0 { Value::from((self as u64 / d) as i64) } else { Value::Undefined }
+                } else { Value::Undefined }
+            }
+            _ => Value::Undefined,
+        }
+    }
+}
+
 
 // ---------------------------------------------------------------------------
 // Arithmetic operators for Value — JS-like coercion semantics
@@ -805,7 +893,7 @@ pub trait ValueTrait {
     fn join(&self, glue: Value) -> Value;
     fn to_string(&self) -> Value;
     fn typeof_(&self) -> Value;
-    fn slice(&self, start: Value) -> Value;
+    fn slice(&self, start: Value, end: Value) -> Value;
 }
 
 pub struct ExchangeImpl;
@@ -1446,6 +1534,69 @@ pub trait Exchange: ValueTrait {
     fn network_id_to_code(&self, _network_id: Value, _currency_code: Value) -> Value { Value::Undefined }
     fn deposit_withdraw_fee(&self, fee: Value) -> Value { fee }
 
+    // --- Utility stubs (pre-delimiter methods from Exchange.js) ---
+    fn capitalize(&self, mut s: Value) -> Value { Value::Undefined }
+    fn uuid(&self) -> Value { Value::Undefined }
+    fn uuid16(&self) -> Value { Value::Undefined }
+    fn uuid5(&self, mut name: Value, mut namespace: Value) -> Value { Value::Undefined }
+    fn base16_to_binary(&self, mut hex_str: Value) -> Value { Value::Undefined }
+    fn int_to_base16(&self, mut num: Value) -> Value { Value::Undefined }
+    fn binary_to_base16(&self, mut buff: Value) -> Value { Value::Undefined }
+    fn base58_to_binary(&self, mut s: Value) -> Value { Value::Undefined }
+    fn binary_to_base58(&self, mut buff: Value) -> Value { Value::Undefined }
+    fn base64_to_binary(&self, mut s: Value) -> Value { Value::Undefined }
+    fn string_to_base64(&self, mut s: Value) -> Value { Value::Undefined }
+    fn deep_extend_2(&self, mut a: Value, mut b: Value) -> Value { Value::Undefined }
+    fn extend_1(&self, mut a: Value) -> Value { Value::Undefined }
+    fn number_to_be(&self, mut num: Value, mut size: Value) -> Value { Value::Undefined }
+    fn binary_concat(&self, mut a: Value, mut b: Value, mut c: Value, mut d: Value) -> Value { Value::Undefined }
+    fn binary_concat_array(&self, mut arr: Value) -> Value { Value::Undefined }
+    fn binary_length(&self, mut buff: Value) -> Value { Value::Undefined }
+    fn seconds(&self) -> Value { Value::Undefined }
+    fn microseconds(&self) -> Value { Value::Undefined }
+    fn parse_date(&self, mut date_str: Value) -> Value { Value::Undefined }
+    fn check_required_dependencies(&self) -> Value { Value::Undefined }
+    fn ordered(&self, mut obj: Value) -> Value { Value::Undefined }
+    fn remove0x_prefix(&self, mut hex_str: Value) -> Value { Value::Undefined }
+    fn yyyymmdd(&self, mut timestamp: Value, mut infix: Value) -> Value { Value::Undefined }
+    fn ymd(&self, mut timestamp: Value, mut infix: Value, mut pad: Value) -> Value { Value::Undefined }
+    fn reduce(&self, mut arr: Value, mut callback: Value, mut initial: Value) -> Value { Value::Undefined }
+    fn convert_to_big_int(&self, mut value: Value) -> Value { Value::Undefined }
+    fn axolotl(&self, mut payload: Value, mut key: Value, mut algo: Value) -> Value { Value::Undefined }
+    fn eth_encode_structured_data(&self, mut domain: Value, mut message_types: Value, mut message_data: Value) -> Value { Value::Undefined }
+    fn eth_abi_encode(&self, mut types: Value, mut args: Value) -> Value { Value::Undefined }
+    fn starknet_sign(&self, mut msg: Value, mut private_key: Value) -> Value { Value::Undefined }
+    fn starknet_encode_structured_data(&self, mut domain: Value, mut types: Value, mut data: Value, mut private_key: Value) -> Value { Value::Undefined }
+    fn rand_number(&self, mut n: Value) -> Value { Value::Undefined }
+    fn random_bytes(&self, mut size: Value) -> Value { Value::Undefined }
+    fn to_dydx_long(&self, mut value: Value) -> Value { Value::Undefined }
+    fn encode_dydx_tx_for_signing(&self, mut msg: Value) -> Value { Value::Undefined }
+    fn encode_dydx_tx_for_simulation(&self, mut msg: Value) -> Value { Value::Undefined }
+    fn encode_dydx_tx_raw(&self, mut sign_doc: Value, mut signature: Value) -> Value { Value::Undefined }
+    fn load_dydx_protos(&self) -> Value { Value::Undefined }
+    fn retrieve_dydx_credentials(&self) -> Value { Value::Undefined }
+    fn retrieve_stark_account(&self, mut params: Value) -> Value { Value::Undefined }
+    fn get_zk_contract_signature_obj(&self, mut seeds: Value, mut contract: Value) -> Value { Value::Undefined }
+    fn get_zk_transfer_signature_obj(&self, mut seeds: Value, mut transfer: Value) -> Value { Value::Undefined }
+    fn sort(&self, mut arr: Value) -> Value { Value::Undefined }
+    fn sort_by_2(&self, mut arr: Value, mut key1: Value, mut key2: Value) -> Value { Value::Undefined }
+    fn unique(&self, mut arr: Value) -> Value { Value::Undefined }
+    fn keysort(&self, mut obj: Value) -> Value { Value::Undefined }
+    fn implode_params(&self, mut url: Value, mut params: Value) -> Value { Value::Undefined }
+    fn set_property(&mut self, mut obj: Value, mut key: Value, mut value: Value) -> Value { Value::Undefined }
+    fn to_fixed(&self, mut value: Value, mut decimals: Value) -> Value { Value::Undefined }
+    fn decode(&self, mut data: Value) -> Value { Value::Undefined }
+    fn fix_stringified_json_members(&self, mut content: Value) -> Value { Value::Undefined }
+    fn map_to_safe_map(&self, mut obj: Value) -> Value { Value::Undefined }
+    fn string_to_chars_array(&self, mut s: Value) -> Value { Value::Undefined }
+    fn packb(&self, mut data: Value) -> Value { Value::Undefined }
+    fn array_slice(&self, mut arr: Value, mut start: Value, mut end: Value) -> Value { Value::Undefined }
+    fn futures_transfer(&mut self, mut code: Value, mut amount: Value, mut type_: Value, mut params: Value) -> Value { Value::Undefined }
+    fn handle_trigger_prices(&mut self, mut params: Value) -> Value { Value::Undefined }
+    fn class_method(&self) -> Value { Value::Undefined }
+    fn pad_start(&self, mut s: Value, mut target_len: Value, mut pad_str: Value) -> Value { Value::Undefined }
+    fn is_empty(&self, mut value: Value) -> Value { Value::Undefined }
+
     // ---------------------------------------------------------------------------
     // METHODS BELOW THIS LINE ARE TRANSPILED FROM JAVASCRIPT
     fn describe(&self) -> Value { Value::Undefined }
@@ -1568,7 +1719,7 @@ pub trait Exchange: ValueTrait {
         if limit.is_nonnullish() { request.set("limit".into(), limit.clone()); }
         let candidates = vec![("public", "GET", "trades"), ("public", "GET", "recent_trades"), ("public", "GET", "aggTrades")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Exchange>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -1656,14 +1807,14 @@ pub trait Exchange: ValueTrait {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = <Self as Exchange>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() { return rv; }
                 }
             }
         }
         let candidates = vec![("public", "GET", "depth"), ("public", "GET", "orderbook"), ("public", "GET", "order_book")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Exchange>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -1691,7 +1842,7 @@ pub trait Exchange: ValueTrait {
     async fn fetch_time(&mut self, mut params: Value) -> Value {
         let candidates = vec![("public", "GET", "time"), ("public", "GET", "server/time"), ("public", "GET", "timestamp")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Exchange>::request(self,path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -2032,14 +2183,14 @@ pub trait Exchange: ValueTrait {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = <Self as Exchange>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() { return rv; }
                 }
             }
         }
         let candidates = vec![("public", "GET", "klines"), ("public", "GET", "candles"), ("public", "GET", "ohlcv")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Exchange>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -2084,7 +2235,7 @@ pub trait Exchange: ValueTrait {
         if limit.is_nonnullish() { request.set("limit".into(), limit.clone()); }
         let candidates = vec![("public", "GET", "depth"), ("public", "GET", "orderbook"), ("public", "GET", "order_book")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Exchange>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -2434,7 +2585,7 @@ pub trait Exchange: ValueTrait {
         if symbols.is_nonnullish() { request.set("symbols".into(), symbols.clone()); }
         let candidates = vec![("public", "GET", "ticker/bookTicker"), ("public", "GET", "bookticker"), ("public", "GET", "bidsasks"), ("public", "GET", "tickers")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Exchange>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -2513,14 +2664,14 @@ pub trait Exchange: ValueTrait {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = <Self as Exchange>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() { return rv; }
                 }
             }
         }
         let candidates = vec![("public", "GET", "status"), ("public", "GET", "ping"), ("public", "GET", "time"), ("sapi", "GET", "system/status")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Exchange>::request(self,path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -2616,14 +2767,14 @@ pub trait Exchange: ValueTrait {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = <Self as Exchange>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() { return rv; }
                 }
             }
         }
         let candidates = vec![("public", "GET", "ticker/24hr"), ("public", "GET", "ticker"), ("public", "GET", "ticker/price")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Exchange>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -2654,14 +2805,14 @@ pub trait Exchange: ValueTrait {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = <Self as Exchange>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() { return rv; }
                 }
             }
         }
         let candidates = vec![("public", "GET", "ticker/24hr"), ("public", "GET", "tickers"), ("public", "GET", "ticker")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Exchange>::request(self,path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined

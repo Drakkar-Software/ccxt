@@ -13,14 +13,38 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, BoolExt, JSON, Array, Object, Math, Promise, parse_int, shift_2, extend_2, normalize};
 // Crypto hash identifiers
-fn sha256() -> Value { Value::from("sha256") }
-fn sha384() -> Value { Value::from("sha384") }
-fn sha512() -> Value { Value::from("sha512") }
-fn md5() -> Value { Value::from("md5") }
-fn ed25519() -> Value { Value::from("ed25519") }
+fn sha256() -> Value { Value::from("sha256()") }
+fn sha384() -> Value { Value::from("sha384()") }
+fn sha512() -> Value { Value::from("sha512()") }
+fn md5() -> Value { Value::from("md5()") }
+fn ed25519() -> Value { Value::from("ed25519()") }
 fn rsa(msg: Value, secret: Value, _hash: Value) -> Value { msg }
 fn eddsa(msg: Value, secret: Value, _curve: Value) -> Value { msg }
-fn secp256k1() -> Value { Value::from("secp256k1") }
+fn secp256k1() -> Value { Value::from("secp256k1()") }
+fn keccak() -> Value { Value::from("keccak()") }
+fn ecdsa(msg: Value, secret: Value, algo: Value, hash_fn: Value) -> Value { msg }
+fn totp(secret: Value) -> Value { Value::Undefined }
+fn jwt(data: Value, secret: Value, hash: Value, is_rsa: Value) -> Value { Value::Undefined }
+fn parse_float(value: Value) -> Value { value }
+fn decimals(value: Value) -> Value { Value::from(0) }
+fn shift_1(value: Value) -> Value { value }
+fn shift_3(value: Value) -> (Value, Value, Value) { (value.clone(), Value::Undefined, Value::Undefined) }
+fn shift_4(value: Value) -> (Value, Value, Value, Value) { (value.clone(), Value::Undefined, Value::Undefined, Value::Undefined) }
+// Error type constructors
+fn BadRequest(msg: Value) -> Value { msg }
+fn InvalidOrder(msg: Value) -> Value { msg }
+fn ExchangeError(msg: Value) -> Value { msg }
+fn InsufficientFunds(msg: Value) -> Value { msg }
+fn OrderNotFound(msg: Value) -> Value { msg }
+fn AuthenticationError(msg: Value) -> Value { msg }
+fn PermissionDenied(msg: Value) -> Value { msg }
+fn ExchangeNotAvailable(msg: Value) -> Value { msg }
+fn ArgumentsRequired(msg: Value) -> Value { msg }
+fn RateLimitExceeded(msg: Value) -> Value { msg }
+fn OrderNotFillable(msg: Value) -> Value { msg }
+fn OrderImmediatelyFillable(msg: Value) -> Value { msg }
+fn NotSupported(msg: Value) -> Value { msg }
+fn DuplicateOrderId(msg: Value) -> Value { msg }
 
 use crate::exchange::{PRECISE_BASE, TRUNCATE, ROUND, ROUND_UP, ROUND_DOWN};
 use crate::exchange::{DECIMAL_PLACES, SIGNIFICANT_DIGITS, TICK_SIZE, NO_PADDING, PAD_WITH_ZERO};
@@ -549,7 +573,7 @@ pub trait Poloniex : Exchange {
             let mut request_string: Value = Value::from("GET
 ") + access_path.clone() + Value::from("
 signTimestamp=") + timestamp.clone();
-            let mut signature: Value = self.hmac(self.encode(request_string.clone()), self.encode(self.get("secret".into())), sha256.clone(), Value::from("base64"));
+            let mut signature: Value = self.hmac(self.encode(request_string.clone()), self.encode(self.get("secret".into())), sha256().clone(), Value::from("base64"));
             let mut request: Value = Value::Json(normalize(&Value::Json(json!({
                 "event": "subscribe",
                 "channel": Value::Json(serde_json::Value::Array(vec![Value::from("auth").into()])),
@@ -666,7 +690,7 @@ signTimestamp=") + timestamp.clone();
                 request.set("price".into(), self.price_to_precision(symbol.clone(), price.clone()));
             };
         };
-        let mut orders: Value = <Self as Poloniex>::trade_request(self, Value::from("createOrder"), extend_2(request.clone(), params.clone())).await;
+        let mut orders: Value = self.dispatch("tradeRequest".into(), Value::from("createOrder"), extend_2(request.clone(), params.clone())).await;
         let mut order: Value = self.safe_dict(orders.clone(), Value::from(0), Value::Undefined);
         return order.clone();
     }
@@ -690,14 +714,14 @@ signTimestamp=") + timestamp.clone();
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
             "orderIds": ids
         }))).unwrap());
-        return <Self as Poloniex>::trade_request(self, Value::from("cancelOrders"), extend_2(request.clone(), params.clone())).await;
+        return self.dispatch("tradeRequest".into(), Value::from("cancelOrders"), extend_2(request.clone(), params.clone())).await;
     }
 
     async fn cancel_all_orders_ws(&mut self, mut symbol: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         <Self as Poloniex>::load_markets(self, Value::Undefined, Value::Undefined).await;
         <Self as Poloniex>::authenticate(self).await;
-        return <Self as Poloniex>::trade_request(self, Value::from("cancelAllOrders"), params.clone()).await;
+        return self.dispatch("tradeRequest".into(), Value::from("cancelAllOrders"), params.clone()).await;
     }
 
     fn handle_order_request(&mut self, mut client: Value, mut message: Value) -> Value {
@@ -1660,107 +1684,107 @@ signTimestamp=") + timestamp.clone();
         match method {
             Value::Json(serde_json::Value::String(ref m)) => {
                 match m.as_ref() {
-                    "publicGetMarkets" => Poloniex::request(self, "markets".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetMarketssymbol" => Poloniex::request(self, "markets/{symbol}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetCurrencies" => Poloniex::request(self, "currencies".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetCurrenciescurrency" => Poloniex::request(self, "currencies/{currency}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetV2currencies" => Poloniex::request(self, "v2/currencies".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetV2currenciescurrency" => Poloniex::request(self, "v2/currencies/{currency}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetTimestamp" => Poloniex::request(self, "timestamp".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetMarketsprice" => Poloniex::request(self, "markets/price".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetMarketssymbolprice" => Poloniex::request(self, "markets/{symbol}/price".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetMarketsmarkprice" => Poloniex::request(self, "markets/markPrice".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetMarketssymbolmarkprice" => Poloniex::request(self, "markets/{symbol}/markPrice".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetMarketssymbolmarkpricecomponents" => Poloniex::request(self, "markets/{symbol}/markPriceComponents".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetMarketssymbolorderbook" => Poloniex::request(self, "markets/{symbol}/orderBook".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetMarketssymbolcandles" => Poloniex::request(self, "markets/{symbol}/candles".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetMarketssymboltrades" => Poloniex::request(self, "markets/{symbol}/trades".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetMarketsticker24h" => Poloniex::request(self, "markets/ticker24h".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetMarketssymbolticker24h" => Poloniex::request(self, "markets/{symbol}/ticker24h".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetMarketscollateralinfo" => Poloniex::request(self, "markets/collateralInfo".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetMarketscurrencycollateralinfo" => Poloniex::request(self, "markets/{currency}/collateralInfo".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetMarketsborrowratesinfo" => Poloniex::request(self, "markets/borrowRatesInfo".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetAccounts" => Poloniex::request(self, "accounts".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetAccountsbalances" => Poloniex::request(self, "accounts/balances".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetAccountsidbalances" => Poloniex::request(self, "accounts/{id}/balances".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetAccountsactivity" => Poloniex::request(self, "accounts/activity".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetAccountstransfer" => Poloniex::request(self, "accounts/transfer".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetAccountstransferid" => Poloniex::request(self, "accounts/transfer/{id}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetFeeinfo" => Poloniex::request(self, "feeinfo".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetAccountsinteresthistory" => Poloniex::request(self, "accounts/interest/history".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetSubaccounts" => Poloniex::request(self, "subaccounts".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetSubaccountsbalances" => Poloniex::request(self, "subaccounts/balances".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetSubaccountsidbalances" => Poloniex::request(self, "subaccounts/{id}/balances".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetSubaccountstransfer" => Poloniex::request(self, "subaccounts/transfer".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetSubaccountstransferid" => Poloniex::request(self, "subaccounts/transfer/{id}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetWalletsaddresses" => Poloniex::request(self, "wallets/addresses".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetWalletsaddressescurrency" => Poloniex::request(self, "wallets/addresses/{currency}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetWalletsactivity" => Poloniex::request(self, "wallets/activity".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetMarginaccountmargin" => Poloniex::request(self, "margin/accountMargin".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetMarginborrowstatus" => Poloniex::request(self, "margin/borrowStatus".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetMarginmaxsize" => Poloniex::request(self, "margin/maxSize".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetOrders" => Poloniex::request(self, "orders".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetOrdersid" => Poloniex::request(self, "orders/{id}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetOrderskillswitchstatus" => Poloniex::request(self, "orders/killSwitchStatus".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetSmartorders" => Poloniex::request(self, "smartorders".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetSmartordersid" => Poloniex::request(self, "smartorders/{id}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetOrdershistory" => Poloniex::request(self, "orders/history".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetSmartordershistory" => Poloniex::request(self, "smartorders/history".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetTrades" => Poloniex::request(self, "trades".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetOrdersidtrades" => Poloniex::request(self, "orders/{id}/trades".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostAccountstransfer" => Poloniex::request(self, "accounts/transfer".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostSubaccountstransfer" => Poloniex::request(self, "subaccounts/transfer".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostWalletsaddress" => Poloniex::request(self, "wallets/address".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostWalletswithdraw" => Poloniex::request(self, "wallets/withdraw".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostV2walletswithdraw" => Poloniex::request(self, "v2/wallets/withdraw".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostOrders" => Poloniex::request(self, "orders".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostOrdersbatch" => Poloniex::request(self, "orders/batch".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostOrderskillswitch" => Poloniex::request(self, "orders/killSwitch".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostSmartorders" => Poloniex::request(self, "smartorders".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateDeleteOrdersid" => Poloniex::request(self, "orders/{id}".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateDeleteOrderscancelbyids" => Poloniex::request(self, "orders/cancelByIds".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateDeleteOrders" => Poloniex::request(self, "orders".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateDeleteSmartordersid" => Poloniex::request(self, "smartorders/{id}".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateDeleteSmartorderscancelbyids" => Poloniex::request(self, "smartorders/cancelByIds".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateDeleteSmartorders" => Poloniex::request(self, "smartorders".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePutOrdersid" => Poloniex::request(self, "orders/{id}".into(), "private".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePutSmartordersid" => Poloniex::request(self, "smartorders/{id}".into(), "private".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "swappublicGetV3marketallinstruments" => Poloniex::request(self, "v3/market/allInstruments".into(), "swapPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "swappublicGetV3marketinstruments" => Poloniex::request(self, "v3/market/instruments".into(), "swapPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "swappublicGetV3marketorderbook" => Poloniex::request(self, "v3/market/orderBook".into(), "swapPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "swappublicGetV3marketcandles" => Poloniex::request(self, "v3/market/candles".into(), "swapPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "swappublicGetV3marketindexpricecandlesticks" => Poloniex::request(self, "v3/market/indexPriceCandlesticks".into(), "swapPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "swappublicGetV3marketpremiumindexcandlesticks" => Poloniex::request(self, "v3/market/premiumIndexCandlesticks".into(), "swapPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "swappublicGetV3marketmarkpricecandlesticks" => Poloniex::request(self, "v3/market/markPriceCandlesticks".into(), "swapPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "swappublicGetV3markettrades" => Poloniex::request(self, "v3/market/trades".into(), "swapPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "swappublicGetV3marketliquidationorder" => Poloniex::request(self, "v3/market/liquidationOrder".into(), "swapPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "swappublicGetV3markettickers" => Poloniex::request(self, "v3/market/tickers".into(), "swapPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "swappublicGetV3marketmarkprice" => Poloniex::request(self, "v3/market/markPrice".into(), "swapPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "swappublicGetV3marketindexprice" => Poloniex::request(self, "v3/market/indexPrice".into(), "swapPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "swappublicGetV3marketindexpricecomponents" => Poloniex::request(self, "v3/market/indexPriceComponents".into(), "swapPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "swappublicGetV3marketfundingrate" => Poloniex::request(self, "v3/market/fundingRate".into(), "swapPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "swappublicGetV3marketopeninterest" => Poloniex::request(self, "v3/market/openInterest".into(), "swapPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "swappublicGetV3marketinsurance" => Poloniex::request(self, "v3/market/insurance".into(), "swapPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "swappublicGetV3marketrisklimit" => Poloniex::request(self, "v3/market/riskLimit".into(), "swapPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "swapprivateGetV3accountbalance" => Poloniex::request(self, "v3/account/balance".into(), "swapPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "swapprivateGetV3accountbills" => Poloniex::request(self, "v3/account/bills".into(), "swapPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "swapprivateGetV3tradeorderopens" => Poloniex::request(self, "v3/trade/order/opens".into(), "swapPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "swapprivateGetV3tradeordertrades" => Poloniex::request(self, "v3/trade/order/trades".into(), "swapPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "swapprivateGetV3tradeorderhistory" => Poloniex::request(self, "v3/trade/order/history".into(), "swapPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "swapprivateGetV3tradepositionopens" => Poloniex::request(self, "v3/trade/position/opens".into(), "swapPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "swapprivateGetV3tradepositionhistory" => Poloniex::request(self, "v3/trade/position/history".into(), "swapPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "swapprivateGetV3positionleverages" => Poloniex::request(self, "v3/position/leverages".into(), "swapPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "swapprivateGetV3positionmode" => Poloniex::request(self, "v3/position/mode".into(), "swapPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "swapprivatePostV3tradeorder" => Poloniex::request(self, "v3/trade/order".into(), "swapPrivate".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "swapprivatePostV3tradeorders" => Poloniex::request(self, "v3/trade/orders".into(), "swapPrivate".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "swapprivatePostV3tradeposition" => Poloniex::request(self, "v3/trade/position".into(), "swapPrivate".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "swapprivatePostV3tradepositionall" => Poloniex::request(self, "v3/trade/positionAll".into(), "swapPrivate".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "swapprivatePostV3positionleverage" => Poloniex::request(self, "v3/position/leverage".into(), "swapPrivate".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "swapprivatePostV3positionmode" => Poloniex::request(self, "v3/position/mode".into(), "swapPrivate".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "swapprivatePostV3tradepositionmargin" => Poloniex::request(self, "v3/trade/position/margin".into(), "swapPrivate".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "swapprivateDeleteV3tradeorder" => Poloniex::request(self, "v3/trade/order".into(), "swapPrivate".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "swapprivateDeleteV3tradebatchorders" => Poloniex::request(self, "v3/trade/batchOrders".into(), "swapPrivate".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "swapprivateDeleteV3tradeallorders" => Poloniex::request(self, "v3/trade/allOrders".into(), "swapPrivate".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetMarkets" => self.request("markets".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetMarketssymbol" => self.request("markets/{symbol}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetCurrencies" => self.request("currencies".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetCurrenciescurrency" => self.request("currencies/{currency}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetV2currencies" => self.request("v2/currencies".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetV2currenciescurrency" => self.request("v2/currencies/{currency}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetTimestamp" => self.request("timestamp".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetMarketsprice" => self.request("markets/price".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetMarketssymbolprice" => self.request("markets/{symbol}/price".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetMarketsmarkprice" => self.request("markets/markPrice".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetMarketssymbolmarkprice" => self.request("markets/{symbol}/markPrice".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetMarketssymbolmarkpricecomponents" => self.request("markets/{symbol}/markPriceComponents".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetMarketssymbolorderbook" => self.request("markets/{symbol}/orderBook".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetMarketssymbolcandles" => self.request("markets/{symbol}/candles".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetMarketssymboltrades" => self.request("markets/{symbol}/trades".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetMarketsticker24h" => self.request("markets/ticker24h".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetMarketssymbolticker24h" => self.request("markets/{symbol}/ticker24h".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetMarketscollateralinfo" => self.request("markets/collateralInfo".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetMarketscurrencycollateralinfo" => self.request("markets/{currency}/collateralInfo".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetMarketsborrowratesinfo" => self.request("markets/borrowRatesInfo".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetAccounts" => self.request("accounts".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetAccountsbalances" => self.request("accounts/balances".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetAccountsidbalances" => self.request("accounts/{id}/balances".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetAccountsactivity" => self.request("accounts/activity".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetAccountstransfer" => self.request("accounts/transfer".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetAccountstransferid" => self.request("accounts/transfer/{id}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetFeeinfo" => self.request("feeinfo".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetAccountsinteresthistory" => self.request("accounts/interest/history".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetSubaccounts" => self.request("subaccounts".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetSubaccountsbalances" => self.request("subaccounts/balances".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetSubaccountsidbalances" => self.request("subaccounts/{id}/balances".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetSubaccountstransfer" => self.request("subaccounts/transfer".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetSubaccountstransferid" => self.request("subaccounts/transfer/{id}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetWalletsaddresses" => self.request("wallets/addresses".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetWalletsaddressescurrency" => self.request("wallets/addresses/{currency}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetWalletsactivity" => self.request("wallets/activity".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetMarginaccountmargin" => self.request("margin/accountMargin".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetMarginborrowstatus" => self.request("margin/borrowStatus".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetMarginmaxsize" => self.request("margin/maxSize".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetOrders" => self.request("orders".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetOrdersid" => self.request("orders/{id}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetOrderskillswitchstatus" => self.request("orders/killSwitchStatus".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetSmartorders" => self.request("smartorders".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetSmartordersid" => self.request("smartorders/{id}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetOrdershistory" => self.request("orders/history".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetSmartordershistory" => self.request("smartorders/history".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetTrades" => self.request("trades".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetOrdersidtrades" => self.request("orders/{id}/trades".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAccountstransfer" => self.request("accounts/transfer".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostSubaccountstransfer" => self.request("subaccounts/transfer".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostWalletsaddress" => self.request("wallets/address".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostWalletswithdraw" => self.request("wallets/withdraw".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostV2walletswithdraw" => self.request("v2/wallets/withdraw".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostOrders" => self.request("orders".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostOrdersbatch" => self.request("orders/batch".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostOrderskillswitch" => self.request("orders/killSwitch".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostSmartorders" => self.request("smartorders".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateDeleteOrdersid" => self.request("orders/{id}".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateDeleteOrderscancelbyids" => self.request("orders/cancelByIds".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateDeleteOrders" => self.request("orders".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateDeleteSmartordersid" => self.request("smartorders/{id}".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateDeleteSmartorderscancelbyids" => self.request("smartorders/cancelByIds".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateDeleteSmartorders" => self.request("smartorders".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePutOrdersid" => self.request("orders/{id}".into(), "private".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePutSmartordersid" => self.request("smartorders/{id}".into(), "private".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "swappublicGetV3marketallinstruments" => self.request("v3/market/allInstruments".into(), "swapPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "swappublicGetV3marketinstruments" => self.request("v3/market/instruments".into(), "swapPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "swappublicGetV3marketorderbook" => self.request("v3/market/orderBook".into(), "swapPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "swappublicGetV3marketcandles" => self.request("v3/market/candles".into(), "swapPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "swappublicGetV3marketindexpricecandlesticks" => self.request("v3/market/indexPriceCandlesticks".into(), "swapPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "swappublicGetV3marketpremiumindexcandlesticks" => self.request("v3/market/premiumIndexCandlesticks".into(), "swapPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "swappublicGetV3marketmarkpricecandlesticks" => self.request("v3/market/markPriceCandlesticks".into(), "swapPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "swappublicGetV3markettrades" => self.request("v3/market/trades".into(), "swapPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "swappublicGetV3marketliquidationorder" => self.request("v3/market/liquidationOrder".into(), "swapPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "swappublicGetV3markettickers" => self.request("v3/market/tickers".into(), "swapPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "swappublicGetV3marketmarkprice" => self.request("v3/market/markPrice".into(), "swapPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "swappublicGetV3marketindexprice" => self.request("v3/market/indexPrice".into(), "swapPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "swappublicGetV3marketindexpricecomponents" => self.request("v3/market/indexPriceComponents".into(), "swapPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "swappublicGetV3marketfundingrate" => self.request("v3/market/fundingRate".into(), "swapPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "swappublicGetV3marketopeninterest" => self.request("v3/market/openInterest".into(), "swapPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "swappublicGetV3marketinsurance" => self.request("v3/market/insurance".into(), "swapPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "swappublicGetV3marketrisklimit" => self.request("v3/market/riskLimit".into(), "swapPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "swapprivateGetV3accountbalance" => self.request("v3/account/balance".into(), "swapPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "swapprivateGetV3accountbills" => self.request("v3/account/bills".into(), "swapPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "swapprivateGetV3tradeorderopens" => self.request("v3/trade/order/opens".into(), "swapPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "swapprivateGetV3tradeordertrades" => self.request("v3/trade/order/trades".into(), "swapPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "swapprivateGetV3tradeorderhistory" => self.request("v3/trade/order/history".into(), "swapPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "swapprivateGetV3tradepositionopens" => self.request("v3/trade/position/opens".into(), "swapPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "swapprivateGetV3tradepositionhistory" => self.request("v3/trade/position/history".into(), "swapPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "swapprivateGetV3positionleverages" => self.request("v3/position/leverages".into(), "swapPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "swapprivateGetV3positionmode" => self.request("v3/position/mode".into(), "swapPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "swapprivatePostV3tradeorder" => self.request("v3/trade/order".into(), "swapPrivate".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "swapprivatePostV3tradeorders" => self.request("v3/trade/orders".into(), "swapPrivate".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "swapprivatePostV3tradeposition" => self.request("v3/trade/position".into(), "swapPrivate".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "swapprivatePostV3tradepositionall" => self.request("v3/trade/positionAll".into(), "swapPrivate".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "swapprivatePostV3positionleverage" => self.request("v3/position/leverage".into(), "swapPrivate".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "swapprivatePostV3positionmode" => self.request("v3/position/mode".into(), "swapPrivate".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "swapprivatePostV3tradepositionmargin" => self.request("v3/trade/position/margin".into(), "swapPrivate".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "swapprivateDeleteV3tradeorder" => self.request("v3/trade/order".into(), "swapPrivate".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "swapprivateDeleteV3tradebatchorders" => self.request("v3/trade/batchOrders".into(), "swapPrivate".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "swapprivateDeleteV3tradeallorders" => self.request("v3/trade/allOrders".into(), "swapPrivate".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     _ => unimplemented!(),
                 }
             },
@@ -1804,7 +1828,7 @@ impl ValueTrait for PoloniexImpl {
     fn join(&self, glue: Value) -> Value { self.0.join(glue) }
     fn to_string(&self) -> Value { self.0.to_string() }
     fn typeof_(&self) -> Value { self.0.typeof_() }
-    fn slice(&self, start: Value) -> Value { self.0.slice(start) }
+    fn slice(&self, start: Value, end: Value) -> Value { self.0.slice(start, end) }
 }
 
 impl PoloniexImpl {

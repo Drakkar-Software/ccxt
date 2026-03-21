@@ -13,14 +13,38 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, BoolExt, JSON, Array, Object, Math, Promise, parse_int, shift_2, extend_2, normalize};
 // Crypto hash identifiers
-fn sha256() -> Value { Value::from("sha256") }
-fn sha384() -> Value { Value::from("sha384") }
-fn sha512() -> Value { Value::from("sha512") }
-fn md5() -> Value { Value::from("md5") }
-fn ed25519() -> Value { Value::from("ed25519") }
+fn sha256() -> Value { Value::from("sha256()") }
+fn sha384() -> Value { Value::from("sha384()") }
+fn sha512() -> Value { Value::from("sha512()") }
+fn md5() -> Value { Value::from("md5()") }
+fn ed25519() -> Value { Value::from("ed25519()") }
 fn rsa(msg: Value, secret: Value, _hash: Value) -> Value { msg }
 fn eddsa(msg: Value, secret: Value, _curve: Value) -> Value { msg }
-fn secp256k1() -> Value { Value::from("secp256k1") }
+fn secp256k1() -> Value { Value::from("secp256k1()") }
+fn keccak() -> Value { Value::from("keccak()") }
+fn ecdsa(msg: Value, secret: Value, algo: Value, hash_fn: Value) -> Value { msg }
+fn totp(secret: Value) -> Value { Value::Undefined }
+fn jwt(data: Value, secret: Value, hash: Value, is_rsa: Value) -> Value { Value::Undefined }
+fn parse_float(value: Value) -> Value { value }
+fn decimals(value: Value) -> Value { Value::from(0) }
+fn shift_1(value: Value) -> Value { value }
+fn shift_3(value: Value) -> (Value, Value, Value) { (value.clone(), Value::Undefined, Value::Undefined) }
+fn shift_4(value: Value) -> (Value, Value, Value, Value) { (value.clone(), Value::Undefined, Value::Undefined, Value::Undefined) }
+// Error type constructors
+fn BadRequest(msg: Value) -> Value { msg }
+fn InvalidOrder(msg: Value) -> Value { msg }
+fn ExchangeError(msg: Value) -> Value { msg }
+fn InsufficientFunds(msg: Value) -> Value { msg }
+fn OrderNotFound(msg: Value) -> Value { msg }
+fn AuthenticationError(msg: Value) -> Value { msg }
+fn PermissionDenied(msg: Value) -> Value { msg }
+fn ExchangeNotAvailable(msg: Value) -> Value { msg }
+fn ArgumentsRequired(msg: Value) -> Value { msg }
+fn RateLimitExceeded(msg: Value) -> Value { msg }
+fn OrderNotFillable(msg: Value) -> Value { msg }
+fn OrderImmediatelyFillable(msg: Value) -> Value { msg }
+fn NotSupported(msg: Value) -> Value { msg }
+fn DuplicateOrderId(msg: Value) -> Value { msg }
 
 use crate::exchange::{PRECISE_BASE, TRUNCATE, ROUND, ROUND_UP, ROUND_DOWN};
 use crate::exchange::{DECIMAL_PLACES, SIGNIFICANT_DIGITS, TICK_SIZE, NO_PADDING, PAD_WITH_ZERO};
@@ -328,7 +352,7 @@ pub trait Hibachi : Exchange {
 
     fn get_account_id(&mut self) -> Value {
         self.check_required_credentials(Value::Undefined);
-        let mut id: Value = self.parse_to_int(self.get("accountId".into()), Value::Undefined);
+        let mut id: Value = self.parse_to_int(self.get("accountId".into()));
         return id.clone();
     }
 
@@ -343,7 +367,7 @@ pub trait Hibachi : Exchange {
         let mut settle_id: Value = self.safe_string(market.clone(), Value::from("settlementSymbol"), Value::Undefined);
         let mut settle: Value = self.safe_currency_code(settle_id.clone(), Value::Undefined);
         let mut symbol: Value = base.clone() + Value::from("/") + quote.clone() + Value::from(":") + settle.clone();
-        let mut created: Value = self.safe_integer_product(market.clone(), Value::from("marketCreationTimestamp"), Value::from(1000));
+        let mut created: Value = self.safe_integer_product(market.clone(), Value::from("marketCreationTimestamp"), Value::from(1000), Value::Undefined);
         return Value::Json(normalize(&Value::Json(json!({
             "id": market_id,
             "numericId": numeric_id,
@@ -551,7 +575,7 @@ pub trait Hibachi : Exchange {
         let mut id: Value = self.safe_string(trade.clone(), Value::from("id"), Value::Undefined);
         let mut price: Value = self.safe_string(trade.clone(), Value::from("price"), Value::Undefined);
         let mut amount: Value = self.safe_string(trade.clone(), Value::from("quantity"), Value::Undefined);
-        let mut timestamp: Value = self.safe_integer_product(trade.clone(), Value::from("timestamp"), Value::from(1000));
+        let mut timestamp: Value = self.safe_integer_product(trade.clone(), Value::from("timestamp"), Value::from(1000), Value::Undefined);
         let mut cost: Value = Precise::string_mul(price.clone(), amount.clone());
         let mut side: Value = Value::Undefined;
         let mut fee: Value = Value::Undefined;
@@ -600,7 +624,7 @@ pub trait Hibachi : Exchange {
         if limit.is_nonnullish() { request.set("limit".into(), limit.clone()); }
         let candidates = vec![("public", "GET", "trades"), ("public", "GET", "recent_trades"), ("public", "GET", "aggTrades")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Hibachi>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -624,14 +648,14 @@ pub trait Hibachi : Exchange {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = <Self as Hibachi>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() { return rv; }
                 }
             }
         }
         let candidates = vec![("public", "GET", "ticker/24hr"), ("public", "GET", "ticker"), ("public", "GET", "ticker/price")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Hibachi>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -786,24 +810,24 @@ pub trait Hibachi : Exchange {
         let mut numeric_id: Value = self.int_to_base16(self.safe_integer(market.clone(), Value::from("numericId"), Value::Undefined));
         let mut numeric_id_padded: Value = numeric_id.pad_start(Value::from(8), Value::from("0"));
         let mut encoded_market_id: Value = self.base16_to_binary(numeric_id_padded.clone());
-        let mut quantity16: Value = self.int_to_base16(self.parse_to_int(quantity_internal.clone(), Value::Undefined));
+        let mut quantity16: Value = self.int_to_base16(self.parse_to_int(quantity_internal.clone()));
         let mut quantity_padded: Value = quantity16.pad_start(Value::from(16), Value::from("0"));
         let mut encoded_quantity: Value = self.base16_to_binary(quantity_padded.clone());
         let mut side_internal16: Value = self.int_to_base16(side_internal.clone());
         let mut side_padded: Value = side_internal16.pad_start(Value::from(8), Value::from("0"));
         let mut encoded_side: Value = self.base16_to_binary(side_padded.clone());
-        let mut fee_rate_internal16: Value = self.int_to_base16(self.parse_to_int(fee_rate_internal.clone(), Value::Undefined));
+        let mut fee_rate_internal16: Value = self.int_to_base16(self.parse_to_int(fee_rate_internal.clone()));
         let mut fee_rate_padded: Value = fee_rate_internal16.pad_start(Value::from(16), Value::from("0"));
         let mut encoded_fee_rate: Value = self.base16_to_binary(fee_rate_padded.clone());
-        let mut encoded_price: Value = self.binary_concat();
+        let mut encoded_price: Value = self.binary_concat(Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined);
         if r#type.clone() == Value::from("limit") {
             let mut price_str: Value = self.price_to_precision(self.safe_string(market.clone(), Value::from("symbol"), Value::Undefined), price.clone());
             let mut price_internal: Value = Precise::string_div(Precise::string_div(Precise::string_mul(Precise::string_mul(price_str.clone(), price_factor.clone()), settlement.clone()), underlying.clone(), Value::Undefined), one.clone(), Value::from(0));
-            let mut price16: Value = self.int_to_base16(self.parse_to_int(price_internal.clone(), Value::Undefined));
+            let mut price16: Value = self.int_to_base16(self.parse_to_int(price_internal.clone()));
             let mut price_padded: Value = price16.pad_start(Value::from(16), Value::from("0"));
             encoded_price = self.base16_to_binary(price_padded.clone());
         };
-        let mut message: Value = self.binary_concat(encoded_nonce.clone(), encoded_market_id.clone(), encoded_quantity.clone(), encoded_side.clone(), encoded_price.clone(), encoded_fee_rate.clone());
+        let mut message: Value = self.binary_concat(encoded_nonce.clone(), encoded_market_id.clone(), encoded_quantity.clone(), encoded_side.clone());
         return message.clone();
     }
 
@@ -1092,10 +1116,10 @@ pub trait Hibachi : Exchange {
         let mut usdt_asset16: Value = self.int_to_base16(Value::from(USDTAssetId));
         let mut usdt_asset_padded: Value = usdt_asset16.pad_start(Value::from(8), Value::from("0"));
         let mut encoded_asset_id: Value = self.base16_to_binary(usdt_asset_padded.clone());
-        let mut quantity16: Value = self.int_to_base16(self.parse_to_int(quantity_internal.clone(), Value::Undefined));
+        let mut quantity16: Value = self.int_to_base16(self.parse_to_int(quantity_internal.clone()));
         let mut quantity_padded: Value = quantity16.pad_start(Value::from(16), Value::from("0"));
         let mut encoded_quantity: Value = self.base16_to_binary(quantity_padded.clone());
-        let mut max_fees16: Value = self.int_to_base16(self.parse_to_int(max_fees_internal.clone(), Value::Undefined));
+        let mut max_fees16: Value = self.int_to_base16(self.parse_to_int(max_fees_internal.clone()));
         let mut max_fees_padded: Value = max_fees16.pad_start(Value::from(16), Value::from("0"));
         let mut encoded_max_fees: Value = self.base16_to_binary(max_fees_padded.clone());
         let mut encoded_address: Value = self.base16_to_binary(address.clone());
@@ -1105,7 +1129,7 @@ pub trait Hibachi : Exchange {
 
     async fn withdraw(&mut self, mut code: Value, mut amount: Value, mut address: Value, mut tag: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
-        let mut withdraw_address: Value = address.slice(Value::from(40).neg());
+        let mut withdraw_address: Value = address.slice(Value::from(40).neg(), Value::Undefined);
         // Get the withdraw fees
         let mut exchange_info: Value = self.dispatch("publicGetMarketExchangeInfo".into(), params.clone(), Value::Undefined).await;
         // {
@@ -1171,11 +1195,11 @@ pub trait Hibachi : Exchange {
     fn sign_message(&mut self, mut message: Value, mut private_key: Value) -> Value {
         if private_key.len() == 44 {
             // For Exchange Managed account, the key length is 44 and we use HMAC to sign the message
-            return self.hmac(message.clone(), self.encode(private_key.clone()), sha256.clone(), Value::from("hex"));
+            return self.hmac(message.clone(), self.encode(private_key.clone()), sha256().clone(), Value::from("hex"));
         } else {
             // For Trustless account, the key length is 66 including '0x' and we use ECDSA to sign the message
-            let mut hash: Value = self.hash(message.clone(), sha256.clone(), Value::from("hex"));
-            let mut signature: Value = ecdsa(hash.slice(Value::from(64).neg()), private_key.slice(Value::from(64).neg()), secp256k1.clone(), Value::Undefined);
+            let mut hash: Value = self.hash(message.clone(), sha256().clone(), Value::from("hex"));
+            let mut signature: Value = ecdsa(hash.slice(Value::from(64).neg(), Value::Undefined), private_key.slice(Value::from(64).neg(), Value::Undefined), secp256k1().clone(), Value::Undefined);
             let mut r: Value = signature.get(Value::from("r"));
             let mut s: Value = signature.get(Value::from("s"));
             let mut v: Value = self.int_to_base16(signature.get(Value::from("v")));
@@ -1202,14 +1226,14 @@ pub trait Hibachi : Exchange {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = <Self as Hibachi>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() { return rv; }
                 }
             }
         }
         let candidates = vec![("public", "GET", "depth"), ("public", "GET", "orderbook"), ("public", "GET", "order_book")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Hibachi>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -1266,7 +1290,7 @@ pub trait Hibachi : Exchange {
         //     }
         //   ]
         //
-        return Value::Json(serde_json::Value::Array(vec![self.safe_integer_product(ohlcv.clone(), Value::from("timestamp"), Value::from(1000)).into(), self.safe_number(ohlcv.clone(), Value::from("open"), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from("high"), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from("low"), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from("close"), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from("volumeNotional"), Value::Undefined).into()]));
+        return Value::Json(serde_json::Value::Array(vec![self.safe_integer_product(ohlcv.clone(), Value::from("timestamp"), Value::from(1000), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from("open"), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from("high"), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from("low"), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from("close"), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from("volumeNotional"), Value::Undefined).into()]));
     }
 
     async fn fetch_open_orders(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
@@ -1332,14 +1356,14 @@ pub trait Hibachi : Exchange {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = <Self as Hibachi>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() { return rv; }
                 }
             }
         }
         let candidates = vec![("public", "GET", "klines"), ("public", "GET", "candles"), ("public", "GET", "ohlcv")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Hibachi>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -1483,7 +1507,7 @@ pub trait Hibachi : Exchange {
         let mut status: Value = Value::Undefined;
         if transaction_type.clone().is_nullish() {
             // response from TradeAccountTradingHistory
-            timestamp = self.safe_integer_product(item.clone(), Value::from("timestamp"), Value::from(1000));
+            timestamp = self.safe_integer_product(item.clone(), Value::from("timestamp"), Value::from(1000), Value::Undefined);
             r#type = Value::from("trade");
             let mut amount_str: Value = self.safe_string(item.clone(), Value::from("realizedPnl"), Value::Undefined);
             if Precise::string_lt(amount_str.clone(), Value::from("0")) {
@@ -1500,7 +1524,7 @@ pub trait Hibachi : Exchange {
             status = Value::from("ok");
         } else {
             // response from CapitalHistory
-            timestamp = self.safe_integer_product(item.clone(), Value::from("timestampSec"), Value::from(1000));
+            timestamp = self.safe_integer_product(item.clone(), Value::from("timestampSec"), Value::from(1000), Value::Undefined);
             amount = self.safe_number(item.clone(), Value::from("quantity"), Value::Undefined);
             direction = if transaction_type.clone() == Value::from("deposit") || transaction_type.clone() == Value::from("transfer-in") { Value::from("in") } else { Value::from("out") };
             r#type = <Self as Hibachi>::parse_transaction_type(self, transaction_type.clone());
@@ -1647,7 +1671,7 @@ pub trait Hibachi : Exchange {
     }
 
     fn parse_transaction(&self, mut transaction: Value, mut currency: Value) -> Value {
-        let mut timestamp: Value = self.safe_integer_product(transaction.clone(), Value::from("timestampSec"), Value::from(1000));
+        let mut timestamp: Value = self.safe_integer_product(transaction.clone(), Value::from("timestampSec"), Value::from(1000), Value::Undefined);
         let mut address: Value = self.safe_string(transaction.clone(), Value::from("withdrawalAddress"), Value::Undefined);
         let mut transaction_type: Value = self.safe_string(transaction.clone(), Value::from("transactionType"), Value::Undefined);
         if transaction_type.clone() != Value::from("deposit") && transaction_type.clone() != Value::from("withdrawal") {
@@ -1782,7 +1806,7 @@ pub trait Hibachi : Exchange {
     async fn fetch_time(&mut self, mut params: Value) -> Value {
         let candidates = vec![("public", "GET", "time"), ("public", "GET", "server/time"), ("public", "GET", "timestamp")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Hibachi>::request(self,path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -1835,7 +1859,7 @@ pub trait Hibachi : Exchange {
         //
         let mut funding: Value = self.safe_dict(response.clone(), Value::from("fundingRateEstimation"), Value::new_object());
         let mut timestamp: Value = self.milliseconds();
-        let mut next_funding_timestamp: Value = self.safe_integer_product(funding.clone(), Value::from("nextFundingTimestamp"), Value::from(1000));
+        let mut next_funding_timestamp: Value = self.safe_integer_product(funding.clone(), Value::from("nextFundingTimestamp"), Value::from(1000), Value::Undefined);
         return Value::Json(normalize(&Value::Json(json!({
             "info": funding,
             "symbol": market.get(Value::from("symbol")),
@@ -1883,7 +1907,7 @@ pub trait Hibachi : Exchange {
         let mut i: usize = 0;
         while i < data.len() {
             let mut entry: Value = data.get(i.into());
-            let mut timestamp: Value = self.safe_integer_product(entry.clone(), Value::from("fundingTimestamp"), Value::from(1000));
+            let mut timestamp: Value = self.safe_integer_product(entry.clone(), Value::from("fundingTimestamp"), Value::from(1000), Value::Undefined);
             rates.push(Value::Json(normalize(&Value::Json(json!({
                 "info": entry,
                 "symbol": symbol,
@@ -1902,28 +1926,28 @@ pub trait Hibachi : Exchange {
         match method {
             Value::Json(serde_json::Value::String(ref m)) => {
                 match m.as_ref() {
-                    "publicGetMarketexchangeinfo" => Hibachi::request(self, "market/exchange-info".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetMarketdatatrades" => Hibachi::request(self, "market/data/trades".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetMarketdataprices" => Hibachi::request(self, "market/data/prices".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetMarketdatastats" => Hibachi::request(self, "market/data/stats".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetMarketdataklines" => Hibachi::request(self, "market/data/klines".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetMarketdataorderbook" => Hibachi::request(self, "market/data/orderbook".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetMarketdataopeninterest" => Hibachi::request(self, "market/data/open-interest".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetMarketdatafundingrates" => Hibachi::request(self, "market/data/funding-rates".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetExchangeutctimestamp" => Hibachi::request(self, "exchange/utc-timestamp".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetCapitaldepositinfo" => Hibachi::request(self, "capital/deposit-info".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetCapitalhistory" => Hibachi::request(self, "capital/history".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetTradeaccounttradinghistory" => Hibachi::request(self, "trade/account/trading_history".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetTradeaccountinfo" => Hibachi::request(self, "trade/account/info".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetTradeorder" => Hibachi::request(self, "trade/order".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetTradeaccounttrades" => Hibachi::request(self, "trade/account/trades".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetTradeorders" => Hibachi::request(self, "trade/orders".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePutTradeorder" => Hibachi::request(self, "trade/order".into(), "private".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateDeleteTradeorder" => Hibachi::request(self, "trade/order".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateDeleteTradeorders" => Hibachi::request(self, "trade/orders".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostTradeorder" => Hibachi::request(self, "trade/order".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostTradeorders" => Hibachi::request(self, "trade/orders".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostCapitalwithdraw" => Hibachi::request(self, "capital/withdraw".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetMarketexchangeinfo" => self.request("market/exchange-info".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetMarketdatatrades" => self.request("market/data/trades".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetMarketdataprices" => self.request("market/data/prices".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetMarketdatastats" => self.request("market/data/stats".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetMarketdataklines" => self.request("market/data/klines".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetMarketdataorderbook" => self.request("market/data/orderbook".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetMarketdataopeninterest" => self.request("market/data/open-interest".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetMarketdatafundingrates" => self.request("market/data/funding-rates".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetExchangeutctimestamp" => self.request("exchange/utc-timestamp".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetCapitaldepositinfo" => self.request("capital/deposit-info".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetCapitalhistory" => self.request("capital/history".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetTradeaccounttradinghistory" => self.request("trade/account/trading_history".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetTradeaccountinfo" => self.request("trade/account/info".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetTradeorder" => self.request("trade/order".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetTradeaccounttrades" => self.request("trade/account/trades".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetTradeorders" => self.request("trade/orders".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePutTradeorder" => self.request("trade/order".into(), "private".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateDeleteTradeorder" => self.request("trade/order".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateDeleteTradeorders" => self.request("trade/orders".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostTradeorder" => self.request("trade/order".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostTradeorders" => self.request("trade/orders".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostCapitalwithdraw" => self.request("capital/withdraw".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     _ => unimplemented!(),
                 }
             },
@@ -1967,7 +1991,7 @@ impl ValueTrait for HibachiImpl {
     fn join(&self, glue: Value) -> Value { self.0.join(glue) }
     fn to_string(&self) -> Value { self.0.to_string() }
     fn typeof_(&self) -> Value { self.0.typeof_() }
-    fn slice(&self, start: Value) -> Value { self.0.slice(start) }
+    fn slice(&self, start: Value, end: Value) -> Value { self.0.slice(start, end) }
 }
 
 impl HibachiImpl {

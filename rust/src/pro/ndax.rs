@@ -13,14 +13,38 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, BoolExt, JSON, Array, Object, Math, Promise, parse_int, shift_2, extend_2, normalize};
 // Crypto hash identifiers
-fn sha256() -> Value { Value::from("sha256") }
-fn sha384() -> Value { Value::from("sha384") }
-fn sha512() -> Value { Value::from("sha512") }
-fn md5() -> Value { Value::from("md5") }
-fn ed25519() -> Value { Value::from("ed25519") }
+fn sha256() -> Value { Value::from("sha256()") }
+fn sha384() -> Value { Value::from("sha384()") }
+fn sha512() -> Value { Value::from("sha512()") }
+fn md5() -> Value { Value::from("md5()") }
+fn ed25519() -> Value { Value::from("ed25519()") }
 fn rsa(msg: Value, secret: Value, _hash: Value) -> Value { msg }
 fn eddsa(msg: Value, secret: Value, _curve: Value) -> Value { msg }
-fn secp256k1() -> Value { Value::from("secp256k1") }
+fn secp256k1() -> Value { Value::from("secp256k1()") }
+fn keccak() -> Value { Value::from("keccak()") }
+fn ecdsa(msg: Value, secret: Value, algo: Value, hash_fn: Value) -> Value { msg }
+fn totp(secret: Value) -> Value { Value::Undefined }
+fn jwt(data: Value, secret: Value, hash: Value, is_rsa: Value) -> Value { Value::Undefined }
+fn parse_float(value: Value) -> Value { value }
+fn decimals(value: Value) -> Value { Value::from(0) }
+fn shift_1(value: Value) -> Value { value }
+fn shift_3(value: Value) -> (Value, Value, Value) { (value.clone(), Value::Undefined, Value::Undefined) }
+fn shift_4(value: Value) -> (Value, Value, Value, Value) { (value.clone(), Value::Undefined, Value::Undefined, Value::Undefined) }
+// Error type constructors
+fn BadRequest(msg: Value) -> Value { msg }
+fn InvalidOrder(msg: Value) -> Value { msg }
+fn ExchangeError(msg: Value) -> Value { msg }
+fn InsufficientFunds(msg: Value) -> Value { msg }
+fn OrderNotFound(msg: Value) -> Value { msg }
+fn AuthenticationError(msg: Value) -> Value { msg }
+fn PermissionDenied(msg: Value) -> Value { msg }
+fn ExchangeNotAvailable(msg: Value) -> Value { msg }
+fn ArgumentsRequired(msg: Value) -> Value { msg }
+fn RateLimitExceeded(msg: Value) -> Value { msg }
+fn OrderNotFillable(msg: Value) -> Value { msg }
+fn OrderImmediatelyFillable(msg: Value) -> Value { msg }
+fn NotSupported(msg: Value) -> Value { msg }
+fn DuplicateOrderId(msg: Value) -> Value { msg }
 
 use crate::exchange::{PRECISE_BASE, TRUNCATE, ROUND, ROUND_UP, ROUND_DOWN};
 use crate::exchange::{DECIMAL_PLACES, SIGNIFICANT_DIGITS, TICK_SIZE, NO_PADDING, PAD_WITH_ZERO};
@@ -654,7 +678,7 @@ pub trait Ndax : Exchange {
                 let mut interval: Value = self.safe_string(self.get("timeframes".into()), timeframe.clone(), timeframe.clone());
                 let mut duration: Value = parse_int(interval.clone(), Value::Undefined) * Value::from(1000);
                 let mut timestamp: Value = self.safe_integer(ohlcv.clone(), Value::from(0), Value::Undefined);
-                let mut parsed: Value = Value::Json(serde_json::Value::Array(vec![self.parse_to_int(timestamp.clone() / duration.clone() * duration.clone(), Value::Undefined).into(), self.safe_float(ohlcv.clone(), Value::from(3), Value::Undefined).into(), self.safe_float(ohlcv.clone(), Value::from(1), Value::Undefined).into(), self.safe_float(ohlcv.clone(), Value::from(2), Value::Undefined).into(), self.safe_float(ohlcv.clone(), Value::from(4), Value::Undefined).into(), self.safe_float(ohlcv.clone(), Value::from(5), Value::Undefined).into()]));
+                let mut parsed: Value = Value::Json(serde_json::Value::Array(vec![self.parse_to_int(timestamp.clone() / duration.clone() * duration.clone()).into(), self.safe_float(ohlcv.clone(), Value::from(3), Value::Undefined).into(), self.safe_float(ohlcv.clone(), Value::from(1), Value::Undefined).into(), self.safe_float(ohlcv.clone(), Value::from(2), Value::Undefined).into(), self.safe_float(ohlcv.clone(), Value::from(4), Value::Undefined).into(), self.safe_float(ohlcv.clone(), Value::from(5), Value::Undefined).into()]));
                 let mut stored: Value = self.safe_value(self.get("ohlcvs".into()).get(symbol.clone()), timeframe.clone(), Value::new_array());
                 let mut length: usize = stored.len();
                 if length.is_truthy() && parsed.get(Value::from(0)) == stored.get(Value::from(length) - Value::from(1).clone()).get(Value::from(0)) {
@@ -845,7 +869,7 @@ pub trait Ndax : Exchange {
         //     ]
         //
         let mut symbol: Value = self.safe_string(subscription.clone(), Value::from("symbol"), Value::Undefined);
-        let mut snapshot: Value = self.parse_order_book(payload.clone(), symbol.clone(), Value::Undefined, Value::Undefined, Value::Undefined);
+        let mut snapshot: Value = self.parse_order_book(payload.clone(), symbol.clone(), Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined);
         let mut limit: Value = self.safe_integer(subscription.clone(), Value::from("limit"), Value::Undefined);
         let mut orderbook: Value = self.order_book(snapshot.clone(), limit.clone());
         self.get("orderbooks".into()).set(symbol.clone(), orderbook.clone());
@@ -926,99 +950,99 @@ pub trait Ndax : Exchange {
         match method {
             Value::Json(serde_json::Value::String(ref m)) => {
                 match m.as_ref() {
-                    "publicGetActivate2fa" => Ndax::request(self, "Activate2FA".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetAuthenticate2fa" => Ndax::request(self, "Authenticate2FA".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetAuthenticateuser" => Ndax::request(self, "AuthenticateUser".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetGetl2snapshot" => Ndax::request(self, "GetL2Snapshot".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetGetlevel1" => Ndax::request(self, "GetLevel1".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetGetvalidate2farequiredendpoints" => Ndax::request(self, "GetValidate2FARequiredEndpoints".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetLogout" => Ndax::request(self, "LogOut".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetGettickerhistory" => Ndax::request(self, "GetTickerHistory".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetGetproduct" => Ndax::request(self, "GetProduct".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetGetproducts" => Ndax::request(self, "GetProducts".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetGetinstrument" => Ndax::request(self, "GetInstrument".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetGetinstruments" => Ndax::request(self, "GetInstruments".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetPing" => Ndax::request(self, "Ping".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetTrades" => Ndax::request(self, "trades".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetGetlasttrades" => Ndax::request(self, "GetLastTrades".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetSubscribelevel1" => Ndax::request(self, "SubscribeLevel1".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetSubscribelevel2" => Ndax::request(self, "SubscribeLevel2".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetSubscribeticker" => Ndax::request(self, "SubscribeTicker".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetSubscribetrades" => Ndax::request(self, "SubscribeTrades".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetSubscribeblocktrades" => Ndax::request(self, "SubscribeBlockTrades".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetUnsubscribeblocktrades" => Ndax::request(self, "UnsubscribeBlockTrades".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetUnsubscribelevel1" => Ndax::request(self, "UnsubscribeLevel1".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetUnsubscribelevel2" => Ndax::request(self, "UnsubscribeLevel2".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetUnsubscribeticker" => Ndax::request(self, "UnsubscribeTicker".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetUnsubscribetrades" => Ndax::request(self, "UnsubscribeTrades".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetAuthenticate" => Ndax::request(self, "Authenticate".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetGetuseraccountinfos" => Ndax::request(self, "GetUserAccountInfos".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetGetuseraccounts" => Ndax::request(self, "GetUserAccounts".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetGetuseraffiliatecount" => Ndax::request(self, "GetUserAffiliateCount".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetGetuseraffiliatetag" => Ndax::request(self, "GetUserAffiliateTag".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetGetuserconfig" => Ndax::request(self, "GetUserConfig".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetGetallunredacteduserconfigsforuser" => Ndax::request(self, "GetAllUnredactedUserConfigsForUser".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetGetunredacteduserconfigbykey" => Ndax::request(self, "GetUnredactedUserConfigByKey".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetGetuserdevices" => Ndax::request(self, "GetUserDevices".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetGetuserreporttickets" => Ndax::request(self, "GetUserReportTickets".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetGetuserreportwriterresultrecords" => Ndax::request(self, "GetUserReportWriterResultRecords".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetGetaccountinfo" => Ndax::request(self, "GetAccountInfo".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetGetaccountpositions" => Ndax::request(self, "GetAccountPositions".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetGetallaccountconfigs" => Ndax::request(self, "GetAllAccountConfigs".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetGettreasuryproductsforaccount" => Ndax::request(self, "GetTreasuryProductsForAccount".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetGetaccounttrades" => Ndax::request(self, "GetAccountTrades".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetGetaccounttransactions" => Ndax::request(self, "GetAccountTransactions".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetGetopentradereports" => Ndax::request(self, "GetOpenTradeReports".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetGetallopentradereports" => Ndax::request(self, "GetAllOpenTradeReports".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetGettradeshistory" => Ndax::request(self, "GetTradesHistory".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetGetopenorders" => Ndax::request(self, "GetOpenOrders".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetGetopenquotes" => Ndax::request(self, "GetOpenQuotes".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetGetorderfee" => Ndax::request(self, "GetOrderFee".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetGetorderhistory" => Ndax::request(self, "GetOrderHistory".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetGetordershistory" => Ndax::request(self, "GetOrdersHistory".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetGetorderstatus" => Ndax::request(self, "GetOrderStatus".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetGetomsfeetiers" => Ndax::request(self, "GetOmsFeeTiers".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetGetaccountdeposittransactions" => Ndax::request(self, "GetAccountDepositTransactions".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetGetaccountwithdrawtransactions" => Ndax::request(self, "GetAccountWithdrawTransactions".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetGetalldepositrequestinfotemplates" => Ndax::request(self, "GetAllDepositRequestInfoTemplates".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetGetdepositinfo" => Ndax::request(self, "GetDepositInfo".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetGetdepositrequestinfotemplate" => Ndax::request(self, "GetDepositRequestInfoTemplate".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetGetdeposits" => Ndax::request(self, "GetDeposits".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetGetdepositticket" => Ndax::request(self, "GetDepositTicket".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetGetdeposittickets" => Ndax::request(self, "GetDepositTickets".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetGetomswithdrawfees" => Ndax::request(self, "GetOMSWithdrawFees".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetGetwithdrawfee" => Ndax::request(self, "GetWithdrawFee".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetGetwithdraws" => Ndax::request(self, "GetWithdraws".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetGetwithdrawtemplate" => Ndax::request(self, "GetWithdrawTemplate".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetGetwithdrawtemplatetypes" => Ndax::request(self, "GetWithdrawTemplateTypes".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetGetwithdrawticket" => Ndax::request(self, "GetWithdrawTicket".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetGetwithdrawtickets" => Ndax::request(self, "GetWithdrawTickets".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostAdduseraffiliatetag" => Ndax::request(self, "AddUserAffiliateTag".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostCanceluserreport" => Ndax::request(self, "CancelUserReport".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostRegisternewdevice" => Ndax::request(self, "RegisterNewDevice".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostSubscribeaccountevents" => Ndax::request(self, "SubscribeAccountEvents".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostUpdateuseraffiliatetag" => Ndax::request(self, "UpdateUserAffiliateTag".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostGeneratetradeactivityreport" => Ndax::request(self, "GenerateTradeActivityReport".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostGeneratetransactionactivityreport" => Ndax::request(self, "GenerateTransactionActivityReport".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostGeneratetreasuryactivityreport" => Ndax::request(self, "GenerateTreasuryActivityReport".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostScheduletradeactivityreport" => Ndax::request(self, "ScheduleTradeActivityReport".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostScheduletransactionactivityreport" => Ndax::request(self, "ScheduleTransactionActivityReport".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostScheduletreasuryactivityreport" => Ndax::request(self, "ScheduleTreasuryActivityReport".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostCancelallorders" => Ndax::request(self, "CancelAllOrders".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostCancelorder" => Ndax::request(self, "CancelOrder".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostCancelquote" => Ndax::request(self, "CancelQuote".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostCancelreplaceorder" => Ndax::request(self, "CancelReplaceOrder".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostCreatequote" => Ndax::request(self, "CreateQuote".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostModifyorder" => Ndax::request(self, "ModifyOrder".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostSendorder" => Ndax::request(self, "SendOrder".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostSubmitblocktrade" => Ndax::request(self, "SubmitBlockTrade".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostUpdatequote" => Ndax::request(self, "UpdateQuote".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostCancelwithdraw" => Ndax::request(self, "CancelWithdraw".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostCreatedepositticket" => Ndax::request(self, "CreateDepositTicket".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostCreatewithdrawticket" => Ndax::request(self, "CreateWithdrawTicket".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostSubmitdepositticketcomment" => Ndax::request(self, "SubmitDepositTicketComment".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostSubmitwithdrawticketcomment" => Ndax::request(self, "SubmitWithdrawTicketComment".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostGetorderhistorybyorderid" => Ndax::request(self, "GetOrderHistoryByOrderId".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetActivate2fa" => self.request("Activate2FA".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetAuthenticate2fa" => self.request("Authenticate2FA".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetAuthenticateuser" => self.request("AuthenticateUser".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetGetl2snapshot" => self.request("GetL2Snapshot".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetGetlevel1" => self.request("GetLevel1".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetGetvalidate2farequiredendpoints" => self.request("GetValidate2FARequiredEndpoints".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetLogout" => self.request("LogOut".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetGettickerhistory" => self.request("GetTickerHistory".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetGetproduct" => self.request("GetProduct".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetGetproducts" => self.request("GetProducts".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetGetinstrument" => self.request("GetInstrument".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetGetinstruments" => self.request("GetInstruments".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetPing" => self.request("Ping".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetTrades" => self.request("trades".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetGetlasttrades" => self.request("GetLastTrades".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetSubscribelevel1" => self.request("SubscribeLevel1".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetSubscribelevel2" => self.request("SubscribeLevel2".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetSubscribeticker" => self.request("SubscribeTicker".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetSubscribetrades" => self.request("SubscribeTrades".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetSubscribeblocktrades" => self.request("SubscribeBlockTrades".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetUnsubscribeblocktrades" => self.request("UnsubscribeBlockTrades".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetUnsubscribelevel1" => self.request("UnsubscribeLevel1".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetUnsubscribelevel2" => self.request("UnsubscribeLevel2".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetUnsubscribeticker" => self.request("UnsubscribeTicker".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetUnsubscribetrades" => self.request("UnsubscribeTrades".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetAuthenticate" => self.request("Authenticate".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetGetuseraccountinfos" => self.request("GetUserAccountInfos".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetGetuseraccounts" => self.request("GetUserAccounts".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetGetuseraffiliatecount" => self.request("GetUserAffiliateCount".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetGetuseraffiliatetag" => self.request("GetUserAffiliateTag".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetGetuserconfig" => self.request("GetUserConfig".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetGetallunredacteduserconfigsforuser" => self.request("GetAllUnredactedUserConfigsForUser".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetGetunredacteduserconfigbykey" => self.request("GetUnredactedUserConfigByKey".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetGetuserdevices" => self.request("GetUserDevices".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetGetuserreporttickets" => self.request("GetUserReportTickets".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetGetuserreportwriterresultrecords" => self.request("GetUserReportWriterResultRecords".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetGetaccountinfo" => self.request("GetAccountInfo".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetGetaccountpositions" => self.request("GetAccountPositions".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetGetallaccountconfigs" => self.request("GetAllAccountConfigs".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetGettreasuryproductsforaccount" => self.request("GetTreasuryProductsForAccount".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetGetaccounttrades" => self.request("GetAccountTrades".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetGetaccounttransactions" => self.request("GetAccountTransactions".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetGetopentradereports" => self.request("GetOpenTradeReports".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetGetallopentradereports" => self.request("GetAllOpenTradeReports".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetGettradeshistory" => self.request("GetTradesHistory".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetGetopenorders" => self.request("GetOpenOrders".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetGetopenquotes" => self.request("GetOpenQuotes".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetGetorderfee" => self.request("GetOrderFee".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetGetorderhistory" => self.request("GetOrderHistory".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetGetordershistory" => self.request("GetOrdersHistory".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetGetorderstatus" => self.request("GetOrderStatus".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetGetomsfeetiers" => self.request("GetOmsFeeTiers".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetGetaccountdeposittransactions" => self.request("GetAccountDepositTransactions".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetGetaccountwithdrawtransactions" => self.request("GetAccountWithdrawTransactions".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetGetalldepositrequestinfotemplates" => self.request("GetAllDepositRequestInfoTemplates".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetGetdepositinfo" => self.request("GetDepositInfo".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetGetdepositrequestinfotemplate" => self.request("GetDepositRequestInfoTemplate".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetGetdeposits" => self.request("GetDeposits".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetGetdepositticket" => self.request("GetDepositTicket".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetGetdeposittickets" => self.request("GetDepositTickets".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetGetomswithdrawfees" => self.request("GetOMSWithdrawFees".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetGetwithdrawfee" => self.request("GetWithdrawFee".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetGetwithdraws" => self.request("GetWithdraws".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetGetwithdrawtemplate" => self.request("GetWithdrawTemplate".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetGetwithdrawtemplatetypes" => self.request("GetWithdrawTemplateTypes".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetGetwithdrawticket" => self.request("GetWithdrawTicket".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetGetwithdrawtickets" => self.request("GetWithdrawTickets".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAdduseraffiliatetag" => self.request("AddUserAffiliateTag".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostCanceluserreport" => self.request("CancelUserReport".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostRegisternewdevice" => self.request("RegisterNewDevice".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostSubscribeaccountevents" => self.request("SubscribeAccountEvents".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostUpdateuseraffiliatetag" => self.request("UpdateUserAffiliateTag".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostGeneratetradeactivityreport" => self.request("GenerateTradeActivityReport".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostGeneratetransactionactivityreport" => self.request("GenerateTransactionActivityReport".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostGeneratetreasuryactivityreport" => self.request("GenerateTreasuryActivityReport".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostScheduletradeactivityreport" => self.request("ScheduleTradeActivityReport".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostScheduletransactionactivityreport" => self.request("ScheduleTransactionActivityReport".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostScheduletreasuryactivityreport" => self.request("ScheduleTreasuryActivityReport".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostCancelallorders" => self.request("CancelAllOrders".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostCancelorder" => self.request("CancelOrder".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostCancelquote" => self.request("CancelQuote".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostCancelreplaceorder" => self.request("CancelReplaceOrder".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostCreatequote" => self.request("CreateQuote".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostModifyorder" => self.request("ModifyOrder".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostSendorder" => self.request("SendOrder".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostSubmitblocktrade" => self.request("SubmitBlockTrade".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostUpdatequote" => self.request("UpdateQuote".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostCancelwithdraw" => self.request("CancelWithdraw".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostCreatedepositticket" => self.request("CreateDepositTicket".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostCreatewithdrawticket" => self.request("CreateWithdrawTicket".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostSubmitdepositticketcomment" => self.request("SubmitDepositTicketComment".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostSubmitwithdrawticketcomment" => self.request("SubmitWithdrawTicketComment".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostGetorderhistorybyorderid" => self.request("GetOrderHistoryByOrderId".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     _ => unimplemented!(),
                 }
             },
@@ -1062,7 +1086,7 @@ impl ValueTrait for NdaxImpl {
     fn join(&self, glue: Value) -> Value { self.0.join(glue) }
     fn to_string(&self) -> Value { self.0.to_string() }
     fn typeof_(&self) -> Value { self.0.typeof_() }
-    fn slice(&self, start: Value) -> Value { self.0.slice(start) }
+    fn slice(&self, start: Value, end: Value) -> Value { self.0.slice(start, end) }
 }
 
 impl NdaxImpl {

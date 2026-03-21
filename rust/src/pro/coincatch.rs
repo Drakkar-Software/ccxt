@@ -13,14 +13,38 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, BoolExt, JSON, Array, Object, Math, Promise, parse_int, shift_2, extend_2, normalize};
 // Crypto hash identifiers
-fn sha256() -> Value { Value::from("sha256") }
-fn sha384() -> Value { Value::from("sha384") }
-fn sha512() -> Value { Value::from("sha512") }
-fn md5() -> Value { Value::from("md5") }
-fn ed25519() -> Value { Value::from("ed25519") }
+fn sha256() -> Value { Value::from("sha256()") }
+fn sha384() -> Value { Value::from("sha384()") }
+fn sha512() -> Value { Value::from("sha512()") }
+fn md5() -> Value { Value::from("md5()") }
+fn ed25519() -> Value { Value::from("ed25519()") }
 fn rsa(msg: Value, secret: Value, _hash: Value) -> Value { msg }
 fn eddsa(msg: Value, secret: Value, _curve: Value) -> Value { msg }
-fn secp256k1() -> Value { Value::from("secp256k1") }
+fn secp256k1() -> Value { Value::from("secp256k1()") }
+fn keccak() -> Value { Value::from("keccak()") }
+fn ecdsa(msg: Value, secret: Value, algo: Value, hash_fn: Value) -> Value { msg }
+fn totp(secret: Value) -> Value { Value::Undefined }
+fn jwt(data: Value, secret: Value, hash: Value, is_rsa: Value) -> Value { Value::Undefined }
+fn parse_float(value: Value) -> Value { value }
+fn decimals(value: Value) -> Value { Value::from(0) }
+fn shift_1(value: Value) -> Value { value }
+fn shift_3(value: Value) -> (Value, Value, Value) { (value.clone(), Value::Undefined, Value::Undefined) }
+fn shift_4(value: Value) -> (Value, Value, Value, Value) { (value.clone(), Value::Undefined, Value::Undefined, Value::Undefined) }
+// Error type constructors
+fn BadRequest(msg: Value) -> Value { msg }
+fn InvalidOrder(msg: Value) -> Value { msg }
+fn ExchangeError(msg: Value) -> Value { msg }
+fn InsufficientFunds(msg: Value) -> Value { msg }
+fn OrderNotFound(msg: Value) -> Value { msg }
+fn AuthenticationError(msg: Value) -> Value { msg }
+fn PermissionDenied(msg: Value) -> Value { msg }
+fn ExchangeNotAvailable(msg: Value) -> Value { msg }
+fn ArgumentsRequired(msg: Value) -> Value { msg }
+fn RateLimitExceeded(msg: Value) -> Value { msg }
+fn OrderNotFillable(msg: Value) -> Value { msg }
+fn OrderImmediatelyFillable(msg: Value) -> Value { msg }
+fn NotSupported(msg: Value) -> Value { msg }
+fn DuplicateOrderId(msg: Value) -> Value { msg }
 
 use crate::exchange::{PRECISE_BASE, TRUNCATE, ROUND, ROUND_UP, ROUND_DOWN};
 use crate::exchange::{DECIMAL_PLACES, SIGNIFICANT_DIGITS, TICK_SIZE, NO_PADDING, PAD_WITH_ZERO};
@@ -592,7 +616,7 @@ pub trait Coincatch : Exchange {
         if authenticated.clone().is_nullish() {
             let mut timestamp: Value = self.seconds().to_string();
             let mut auth: Value = timestamp.clone() + Value::from("GET") + Value::from("/user/verify");
-            let mut signature: Value = self.hmac(self.encode(auth.clone()), self.encode(self.get("secret".into())), sha256.clone(), Value::from("base64"));
+            let mut signature: Value = self.hmac(self.encode(auth.clone()), self.encode(self.get("secret".into())), sha256().clone(), Value::from("base64"));
             let mut operation: Value = Value::from("login");
             let mut request: Value = Value::Json(normalize(&Value::Json(json!({
                 "op": operation,
@@ -950,7 +974,7 @@ pub trait Coincatch : Exchange {
         let mut hash: Value = Value::from("ohlcv:");
         let mut data: Value = self.safe_list(message.clone(), Value::from("data"), Value::new_array());
         let mut channel: Value = self.safe_string(arg.clone(), Value::from("channel"), Value::Undefined);
-        let mut kline_type: Value = channel.slice(Value::from(6));
+        let mut kline_type: Value = channel.slice(Value::from(6), Value::Undefined);
         let mut timeframe: Value = self.find_timeframe(kline_type.clone(), Value::Undefined);
         if market_id.index_of(Value::from("_DMCBL")) >= Value::from(0) {
             market = <Self as Coincatch>::handle_dmcbl_market_by_message_hashes(self, market.clone(), hash.clone(), client.clone(), timeframe.clone());
@@ -1105,7 +1129,7 @@ pub trait Coincatch : Exchange {
             };
         } else {
             let mut orderbook: Value = self.order_book(Value::new_object(), Value::Undefined);
-            let mut parsed_orderbook: Value = self.parse_order_book(raw_order_book.clone(), symbol.clone(), timestamp.clone(), Value::Undefined, Value::Undefined);
+            let mut parsed_orderbook: Value = self.parse_order_book(raw_order_book.clone(), symbol.clone(), timestamp.clone(), Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined);
             orderbook.reset(parsed_orderbook.clone());
             self.get("orderbooks".into()).set(symbol.clone(), orderbook.clone());
         };
@@ -1989,96 +2013,96 @@ pub trait Coincatch : Exchange {
         match method {
             Value::Json(serde_json::Value::String(ref m)) => {
                 match m.as_ref() {
-                    "publicGetApispotv1publictime" => Coincatch::request(self, "api/spot/v1/public/time".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetApispotv1publiccurrencies" => Coincatch::request(self, "api/spot/v1/public/currencies".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetApispotv1marketticker" => Coincatch::request(self, "api/spot/v1/market/ticker".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetApispotv1markettickers" => Coincatch::request(self, "api/spot/v1/market/tickers".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetApispotv1marketfills" => Coincatch::request(self, "api/spot/v1/market/fills".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetApispotv1marketfillshistory" => Coincatch::request(self, "api/spot/v1/market/fills-history".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetApispotv1marketcandles" => Coincatch::request(self, "api/spot/v1/market/candles".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetApispotv1markethistorycandles" => Coincatch::request(self, "api/spot/v1/market/history-candles".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetApispotv1marketdepth" => Coincatch::request(self, "api/spot/v1/market/depth".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetApispotv1marketmergedepth" => Coincatch::request(self, "api/spot/v1/market/merge-depth".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetApimixv1marketcontracts" => Coincatch::request(self, "api/mix/v1/market/contracts".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetApimixv1marketmergedepth" => Coincatch::request(self, "api/mix/v1/market/merge-depth".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetApimixv1marketdepth" => Coincatch::request(self, "api/mix/v1/market/depth".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetApimixv1marketticker" => Coincatch::request(self, "api/mix/v1/market/ticker".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetApimixv1markettickers" => Coincatch::request(self, "api/mix/v1/market/tickers".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetApimixv1marketfills" => Coincatch::request(self, "api/mix/v1/market/fills".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetApimixv1marketfillshistory" => Coincatch::request(self, "api/mix/v1/market/fills-history".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetApimixv1marketcandles" => Coincatch::request(self, "api/mix/v1/market/candles".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetPimixv1marketindex" => Coincatch::request(self, "pi/mix/v1/market/index".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetApimixv1marketfundingtime" => Coincatch::request(self, "api/mix/v1/market/funding-time".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetApimixv1markethistoryfundrate" => Coincatch::request(self, "api/mix/v1/market/history-fundRate".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetApimixv1marketcurrentfundrate" => Coincatch::request(self, "api/mix/v1/market/current-fundRate".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetApimixv1marketopeninterest" => Coincatch::request(self, "api/mix/v1/market/open-interest".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetApimixv1marketmarkprice" => Coincatch::request(self, "api/mix/v1/market/mark-price".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetApimixv1marketsymbolleverage" => Coincatch::request(self, "api/mix/v1/market/symbol-leverage".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetApimixv1marketquerypositionlever" => Coincatch::request(self, "api/mix/v1/market/queryPositionLever".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetApispotv1walletdepositaddress" => Coincatch::request(self, "api/spot/v1/wallet/deposit-address".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetPispotv1walletwithdrawallist" => Coincatch::request(self, "pi/spot/v1/wallet/withdrawal-list".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetApispotv1walletwithdrawallistv2" => Coincatch::request(self, "api/spot/v1/wallet/withdrawal-list-v2".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetApispotv1walletdepositlist" => Coincatch::request(self, "api/spot/v1/wallet/deposit-list".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetApispotv1accountgetinfo" => Coincatch::request(self, "api/spot/v1/account/getInfo".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetApispotv1accountassets" => Coincatch::request(self, "api/spot/v1/account/assets".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetApispotv1accounttransferrecords" => Coincatch::request(self, "api/spot/v1/account/transferRecords".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetApimixv1accountaccount" => Coincatch::request(self, "api/mix/v1/account/account".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetApimixv1accountaccounts" => Coincatch::request(self, "api/mix/v1/account/accounts".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetApimixv1positionsinglepositionv2" => Coincatch::request(self, "api/mix/v1/position/singlePosition-v2".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetApimixv1positionallpositionv2" => Coincatch::request(self, "api/mix/v1/position/allPosition-v2".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetApimixv1accountaccountbill" => Coincatch::request(self, "api/mix/v1/account/accountBill".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetApimixv1accountaccountbusinessbill" => Coincatch::request(self, "api/mix/v1/account/accountBusinessBill".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetApimixv1ordercurrent" => Coincatch::request(self, "api/mix/v1/order/current".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetApimixv1ordermargincoincurrent" => Coincatch::request(self, "api/mix/v1/order/marginCoinCurrent".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetApimixv1orderhistory" => Coincatch::request(self, "api/mix/v1/order/history".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetApimixv1orderhistoryproducttype" => Coincatch::request(self, "api/mix/v1/order/historyProductType".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetApimixv1orderdetail" => Coincatch::request(self, "api/mix/v1/order/detail".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetApimixv1orderfills" => Coincatch::request(self, "api/mix/v1/order/fills".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetApimixv1orderallfills" => Coincatch::request(self, "api/mix/v1/order/allFills".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetApimixv1plancurrentplan" => Coincatch::request(self, "api/mix/v1/plan/currentPlan".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetApimixv1planhistoryplan" => Coincatch::request(self, "api/mix/v1/plan/historyPlan".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostApispotv1wallettransferv2" => Coincatch::request(self, "api/spot/v1/wallet/transfer-v2".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostApispotv1walletwithdrawalv2" => Coincatch::request(self, "api/spot/v1/wallet/withdrawal-v2".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostApispotv1walletwithdrawalinnerv2" => Coincatch::request(self, "api/spot/v1/wallet/withdrawal-inner-v2".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostApispotv1accountbills" => Coincatch::request(self, "api/spot/v1/account/bills".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostApispotv1tradeorders" => Coincatch::request(self, "api/spot/v1/trade/orders".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostApispotv1tradebatchorders" => Coincatch::request(self, "api/spot/v1/trade/batch-orders".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostApispotv1tradecancelorder" => Coincatch::request(self, "api/spot/v1/trade/cancel-order".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostApispotv1tradecancelorderv2" => Coincatch::request(self, "api/spot/v1/trade/cancel-order-v2".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostApispotv1tradecancelsymbolorder" => Coincatch::request(self, "api/spot/v1/trade/cancel-symbol-order".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostApispotv1tradecancelbatchorders" => Coincatch::request(self, "api/spot/v1/trade/cancel-batch-orders".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostApispotv1tradecancelbatchordersv2" => Coincatch::request(self, "api/spot/v1/trade/cancel-batch-orders-v2".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostApispotv1tradeorderinfo" => Coincatch::request(self, "api/spot/v1/trade/orderInfo".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostApispotv1tradeopenorders" => Coincatch::request(self, "api/spot/v1/trade/open-orders".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostApispotv1tradehistory" => Coincatch::request(self, "api/spot/v1/trade/history".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostApispotv1tradefills" => Coincatch::request(self, "api/spot/v1/trade/fills".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostApispotv1planplaceplan" => Coincatch::request(self, "api/spot/v1/plan/placePlan".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostApispotv1planmodifyplan" => Coincatch::request(self, "api/spot/v1/plan/modifyPlan".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostApispotv1plancancelplan" => Coincatch::request(self, "api/spot/v1/plan/cancelPlan".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostApispotv1plancurrentplan" => Coincatch::request(self, "api/spot/v1/plan/currentPlan".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostApispotv1planhistoryplan" => Coincatch::request(self, "api/spot/v1/plan/historyPlan".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostApispotv1planbatchcancelplan" => Coincatch::request(self, "api/spot/v1/plan/batchCancelPlan".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostApimixv1accountopencount" => Coincatch::request(self, "api/mix/v1/account/open-count".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostApimixv1accountsetleverage" => Coincatch::request(self, "api/mix/v1/account/setLeverage".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostApimixv1accountsetmargin" => Coincatch::request(self, "api/mix/v1/account/setMargin".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostApimixv1accountsetmarginmode" => Coincatch::request(self, "api/mix/v1/account/setMarginMode".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostApimixv1accountsetpositionmode" => Coincatch::request(self, "api/mix/v1/account/setPositionMode".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostApimixv1orderplaceorder" => Coincatch::request(self, "api/mix/v1/order/placeOrder".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostApimixv1orderbatchorders" => Coincatch::request(self, "api/mix/v1/order/batch-orders".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostApimixv1ordercancelorder" => Coincatch::request(self, "api/mix/v1/order/cancel-order".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostApimixv1ordercancelbatchorders" => Coincatch::request(self, "api/mix/v1/order/cancel-batch-orders".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostApimixv1ordercancelsymbolorders" => Coincatch::request(self, "api/mix/v1/order/cancel-symbol-orders".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostApimixv1ordercancelallorders" => Coincatch::request(self, "api/mix/v1/order/cancel-all-orders".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostApimixv1planplaceplan" => Coincatch::request(self, "api/mix/v1/plan/placePlan".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostApimixv1planmodifyplan" => Coincatch::request(self, "api/mix/v1/plan/modifyPlan".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostApimixv1planmodifyplanpreset" => Coincatch::request(self, "api/mix/v1/plan/modifyPlanPreset".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostApimixv1planplacetpsl" => Coincatch::request(self, "api/mix/v1/plan/placeTPSL".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostApimixv1planplacetrailstop" => Coincatch::request(self, "api/mix/v1/plan/placeTrailStop".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostApimixv1planplacepositionstpsl" => Coincatch::request(self, "api/mix/v1/plan/placePositionsTPSL".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostApimixv1planmodifytpslplan" => Coincatch::request(self, "api/mix/v1/plan/modifyTPSLPlan".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostApimixv1plancancelplan" => Coincatch::request(self, "api/mix/v1/plan/cancelPlan".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostApimixv1plancancelsymbolplan" => Coincatch::request(self, "api/mix/v1/plan/cancelSymbolPlan".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostApimixv1plancancelallplan" => Coincatch::request(self, "api/mix/v1/plan/cancelAllPlan".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetApispotv1publictime" => self.request("api/spot/v1/public/time".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetApispotv1publiccurrencies" => self.request("api/spot/v1/public/currencies".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetApispotv1marketticker" => self.request("api/spot/v1/market/ticker".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetApispotv1markettickers" => self.request("api/spot/v1/market/tickers".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetApispotv1marketfills" => self.request("api/spot/v1/market/fills".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetApispotv1marketfillshistory" => self.request("api/spot/v1/market/fills-history".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetApispotv1marketcandles" => self.request("api/spot/v1/market/candles".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetApispotv1markethistorycandles" => self.request("api/spot/v1/market/history-candles".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetApispotv1marketdepth" => self.request("api/spot/v1/market/depth".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetApispotv1marketmergedepth" => self.request("api/spot/v1/market/merge-depth".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetApimixv1marketcontracts" => self.request("api/mix/v1/market/contracts".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetApimixv1marketmergedepth" => self.request("api/mix/v1/market/merge-depth".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetApimixv1marketdepth" => self.request("api/mix/v1/market/depth".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetApimixv1marketticker" => self.request("api/mix/v1/market/ticker".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetApimixv1markettickers" => self.request("api/mix/v1/market/tickers".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetApimixv1marketfills" => self.request("api/mix/v1/market/fills".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetApimixv1marketfillshistory" => self.request("api/mix/v1/market/fills-history".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetApimixv1marketcandles" => self.request("api/mix/v1/market/candles".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetPimixv1marketindex" => self.request("pi/mix/v1/market/index".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetApimixv1marketfundingtime" => self.request("api/mix/v1/market/funding-time".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetApimixv1markethistoryfundrate" => self.request("api/mix/v1/market/history-fundRate".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetApimixv1marketcurrentfundrate" => self.request("api/mix/v1/market/current-fundRate".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetApimixv1marketopeninterest" => self.request("api/mix/v1/market/open-interest".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetApimixv1marketmarkprice" => self.request("api/mix/v1/market/mark-price".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetApimixv1marketsymbolleverage" => self.request("api/mix/v1/market/symbol-leverage".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetApimixv1marketquerypositionlever" => self.request("api/mix/v1/market/queryPositionLever".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetApispotv1walletdepositaddress" => self.request("api/spot/v1/wallet/deposit-address".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetPispotv1walletwithdrawallist" => self.request("pi/spot/v1/wallet/withdrawal-list".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetApispotv1walletwithdrawallistv2" => self.request("api/spot/v1/wallet/withdrawal-list-v2".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetApispotv1walletdepositlist" => self.request("api/spot/v1/wallet/deposit-list".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetApispotv1accountgetinfo" => self.request("api/spot/v1/account/getInfo".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetApispotv1accountassets" => self.request("api/spot/v1/account/assets".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetApispotv1accounttransferrecords" => self.request("api/spot/v1/account/transferRecords".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetApimixv1accountaccount" => self.request("api/mix/v1/account/account".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetApimixv1accountaccounts" => self.request("api/mix/v1/account/accounts".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetApimixv1positionsinglepositionv2" => self.request("api/mix/v1/position/singlePosition-v2".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetApimixv1positionallpositionv2" => self.request("api/mix/v1/position/allPosition-v2".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetApimixv1accountaccountbill" => self.request("api/mix/v1/account/accountBill".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetApimixv1accountaccountbusinessbill" => self.request("api/mix/v1/account/accountBusinessBill".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetApimixv1ordercurrent" => self.request("api/mix/v1/order/current".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetApimixv1ordermargincoincurrent" => self.request("api/mix/v1/order/marginCoinCurrent".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetApimixv1orderhistory" => self.request("api/mix/v1/order/history".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetApimixv1orderhistoryproducttype" => self.request("api/mix/v1/order/historyProductType".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetApimixv1orderdetail" => self.request("api/mix/v1/order/detail".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetApimixv1orderfills" => self.request("api/mix/v1/order/fills".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetApimixv1orderallfills" => self.request("api/mix/v1/order/allFills".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetApimixv1plancurrentplan" => self.request("api/mix/v1/plan/currentPlan".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetApimixv1planhistoryplan" => self.request("api/mix/v1/plan/historyPlan".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostApispotv1wallettransferv2" => self.request("api/spot/v1/wallet/transfer-v2".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostApispotv1walletwithdrawalv2" => self.request("api/spot/v1/wallet/withdrawal-v2".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostApispotv1walletwithdrawalinnerv2" => self.request("api/spot/v1/wallet/withdrawal-inner-v2".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostApispotv1accountbills" => self.request("api/spot/v1/account/bills".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostApispotv1tradeorders" => self.request("api/spot/v1/trade/orders".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostApispotv1tradebatchorders" => self.request("api/spot/v1/trade/batch-orders".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostApispotv1tradecancelorder" => self.request("api/spot/v1/trade/cancel-order".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostApispotv1tradecancelorderv2" => self.request("api/spot/v1/trade/cancel-order-v2".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostApispotv1tradecancelsymbolorder" => self.request("api/spot/v1/trade/cancel-symbol-order".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostApispotv1tradecancelbatchorders" => self.request("api/spot/v1/trade/cancel-batch-orders".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostApispotv1tradecancelbatchordersv2" => self.request("api/spot/v1/trade/cancel-batch-orders-v2".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostApispotv1tradeorderinfo" => self.request("api/spot/v1/trade/orderInfo".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostApispotv1tradeopenorders" => self.request("api/spot/v1/trade/open-orders".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostApispotv1tradehistory" => self.request("api/spot/v1/trade/history".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostApispotv1tradefills" => self.request("api/spot/v1/trade/fills".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostApispotv1planplaceplan" => self.request("api/spot/v1/plan/placePlan".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostApispotv1planmodifyplan" => self.request("api/spot/v1/plan/modifyPlan".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostApispotv1plancancelplan" => self.request("api/spot/v1/plan/cancelPlan".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostApispotv1plancurrentplan" => self.request("api/spot/v1/plan/currentPlan".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostApispotv1planhistoryplan" => self.request("api/spot/v1/plan/historyPlan".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostApispotv1planbatchcancelplan" => self.request("api/spot/v1/plan/batchCancelPlan".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostApimixv1accountopencount" => self.request("api/mix/v1/account/open-count".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostApimixv1accountsetleverage" => self.request("api/mix/v1/account/setLeverage".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostApimixv1accountsetmargin" => self.request("api/mix/v1/account/setMargin".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostApimixv1accountsetmarginmode" => self.request("api/mix/v1/account/setMarginMode".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostApimixv1accountsetpositionmode" => self.request("api/mix/v1/account/setPositionMode".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostApimixv1orderplaceorder" => self.request("api/mix/v1/order/placeOrder".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostApimixv1orderbatchorders" => self.request("api/mix/v1/order/batch-orders".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostApimixv1ordercancelorder" => self.request("api/mix/v1/order/cancel-order".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostApimixv1ordercancelbatchorders" => self.request("api/mix/v1/order/cancel-batch-orders".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostApimixv1ordercancelsymbolorders" => self.request("api/mix/v1/order/cancel-symbol-orders".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostApimixv1ordercancelallorders" => self.request("api/mix/v1/order/cancel-all-orders".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostApimixv1planplaceplan" => self.request("api/mix/v1/plan/placePlan".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostApimixv1planmodifyplan" => self.request("api/mix/v1/plan/modifyPlan".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostApimixv1planmodifyplanpreset" => self.request("api/mix/v1/plan/modifyPlanPreset".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostApimixv1planplacetpsl" => self.request("api/mix/v1/plan/placeTPSL".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostApimixv1planplacetrailstop" => self.request("api/mix/v1/plan/placeTrailStop".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostApimixv1planplacepositionstpsl" => self.request("api/mix/v1/plan/placePositionsTPSL".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostApimixv1planmodifytpslplan" => self.request("api/mix/v1/plan/modifyTPSLPlan".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostApimixv1plancancelplan" => self.request("api/mix/v1/plan/cancelPlan".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostApimixv1plancancelsymbolplan" => self.request("api/mix/v1/plan/cancelSymbolPlan".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostApimixv1plancancelallplan" => self.request("api/mix/v1/plan/cancelAllPlan".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     _ => unimplemented!(),
                 }
             },
@@ -2122,7 +2146,7 @@ impl ValueTrait for CoincatchImpl {
     fn join(&self, glue: Value) -> Value { self.0.join(glue) }
     fn to_string(&self) -> Value { self.0.to_string() }
     fn typeof_(&self) -> Value { self.0.typeof_() }
-    fn slice(&self, start: Value) -> Value { self.0.slice(start) }
+    fn slice(&self, start: Value, end: Value) -> Value { self.0.slice(start, end) }
 }
 
 impl CoincatchImpl {

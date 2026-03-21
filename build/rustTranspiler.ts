@@ -316,7 +316,7 @@ function getArgumentCount(className: string, node: any) {
         safeStringLower: 3, safeStringLower2: 4, safeStringLowerN: 3,
         safeStringUpper: 3, safeStringUpper2: 4, safeStringUpperN: 3,
         safeInteger: 3, safeInteger2: 4, safeIntegerN: 3,
-        safeIntegerProduct: 3, safeIntegerProduct2: 4, safeIntegerProductN: 3,
+        safeIntegerProduct: 4, safeIntegerProduct2: 5, safeIntegerProductN: 4,
         safeTimestamp: 3, safeTimestamp2: 4, safeTimestampN: 3,
         safeFloat: 3, safeFloat2: 4, safeFloatN: 3,
         safeValue: 3, safeValue2: 4, safeValueN: 3,
@@ -330,17 +330,19 @@ function getArgumentCount(className: string, node: any) {
         numberToString: 1, inArray: 2, decimalToPrecision: 5,
         sortBy: 4, indexBy: 2, filterBy: 3, groupBy: 2,
         filterByLimit: 4, filterBySinceLimit: 5,
-        parseBidAsk: 3, parseBidsAsks: 3, parseOrderBook: 5,
-        parseNumber: 2, parseToInt: 2, parseToNumeric: 2, parseInt: 2,
+        parseBidAsk: 3, parseBidsAsks: 4, parseOrderBook: 8,
+        parseNumber: 2, parseToInt: 1, parseToNumeric: 2, parseInt: 2,
         json: 1, encode: 1, urlencode: 1, rawencode: 1,
         hash: 3, hmac: 4, jwt: 4,
         encodeURIComponent: 1, uuid22: 0, yymmdd: 2,
         precisionFromString: 1, createSafeDictionary: 0,
         sign: 6, handleErrors: 9,
         throwExactlyMatchedException: 3, throwBroadlyMatchedException: 3,
-        parseJson: 1, arrayConcat: 2,
+        parseJson: 1, arrayConcat: 2, binaryConcat: 4,
         urlencodeWithArrayRepeat: 1, parse8601: 1,
         safeMarket: 4, safeCurrency: 2, safeCurrencyCode: 2, safeSymbol: 4,
+        ethEncodeStructuredData: 3, getZkContractSignatureObj: 2, getZkTransferSignatureObj: 2,
+        encodeDydxTxRaw: 2, randNumber: 1,
     };
     const fname = getCalleeFunctionName(node);
     // argCounts overrides take priority (hand-tuned for Rust signatures)
@@ -409,8 +411,8 @@ function transpileMethodToRust(opts: {
     // (including signature).  When a method is listed here the transpiler emits
     // the hand-written version instead of walking the JS AST.
     // ---------------------------------------------------------------------------
-    const HANDWRITTEN_METHODS: Record<string, (header: string) => string> = {
-        request: (header) => header + `{
+    const HANDWRITTEN_METHODS: Record<string, (header: string, requestCall?: string) => string> = {
+        request: (header, requestCall) => header + `{
         fn first_string(v: &serde_json::Value) -> Option<String> {
             match v {
                 serde_json::Value::String(s) => Some(s.clone()),
@@ -538,7 +540,7 @@ function transpileMethodToRust(opts: {
             Err(_) => Value::from(text),
         }
     }\n`,
-        fetchStatus: (header) => header + `{
+        fetchStatus: (header, requestCall) => header + `{
         fn collect_routes(node: &serde_json::Value, api_name: &str, out: &mut Vec<(String, String, String)>) {
             if let serde_json::Value::Object(map) = node {
                 for (k, v) in map { let kl = k.to_lowercase(); if kl == "get" || kl == "post" || kl == "put" || kl == "delete" { if let serde_json::Value::Object(paths) = v { for (p, _cost) in paths { out.push((api_name.to_string(), kl.to_uppercase(), p.clone())); } } } else { collect_routes(v, api_name, out); } }
@@ -553,19 +555,19 @@ function transpileMethodToRust(opts: {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = <Self as ${capitalizeFirstLetter(className)}>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = ${requestCall || 'self.request('}path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() { return rv; }
                 }
             }
         }
         let candidates = vec![("public", "GET", "status"), ("public", "GET", "ping"), ("public", "GET", "time"), ("sapi", "GET", "system/status")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as ${capitalizeFirstLetter(className)}>::request(self,path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = ${requestCall || 'self.request('}path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
     }\n`,
-        fetchTicker: (header) => header + `{
+        fetchTicker: (header, requestCall) => header + `{
         fn collect_routes(node: &serde_json::Value, api_name: &str, out: &mut Vec<(String, String, String)>) {
             if let serde_json::Value::Object(map) = node {
                 for (k, v) in map { let kl = k.to_lowercase(); if kl == "get" || kl == "post" || kl == "put" || kl == "delete" { if let serde_json::Value::Object(paths) = v { for (p, _cost) in paths { out.push((api_name.to_string(), kl.to_uppercase(), p.clone())); } } } else { collect_routes(v, api_name, out); } }
@@ -582,19 +584,19 @@ function transpileMethodToRust(opts: {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = <Self as ${capitalizeFirstLetter(className)}>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = ${requestCall || 'self.request('}path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() { return rv; }
                 }
             }
         }
         let candidates = vec![("public", "GET", "ticker/24hr"), ("public", "GET", "ticker"), ("public", "GET", "ticker/price")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as ${capitalizeFirstLetter(className)}>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = ${requestCall || 'self.request('}path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
     }\n`,
-        fetchTickers: (header) => header + `{
+        fetchTickers: (header, requestCall) => header + `{
         fn collect_routes(node: &serde_json::Value, api_name: &str, out: &mut Vec<(String, String, String)>) {
             if let serde_json::Value::Object(map) = node {
                 for (k, v) in map { let kl = k.to_lowercase(); if kl == "get" || kl == "post" || kl == "put" || kl == "delete" { if let serde_json::Value::Object(paths) = v { for (p, _cost) in paths { out.push((api_name.to_string(), kl.to_uppercase(), p.clone())); } } } else { collect_routes(v, api_name, out); } }
@@ -609,19 +611,19 @@ function transpileMethodToRust(opts: {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = <Self as ${capitalizeFirstLetter(className)}>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = ${requestCall || 'self.request('}path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() { return rv; }
                 }
             }
         }
         let candidates = vec![("public", "GET", "ticker/24hr"), ("public", "GET", "tickers"), ("public", "GET", "ticker")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as ${capitalizeFirstLetter(className)}>::request(self,path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = ${requestCall || 'self.request('}path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
     }\n`,
-        fetchOrderBook: (header) => header + `{
+        fetchOrderBook: (header, requestCall) => header + `{
         fn collect_routes(node: &serde_json::Value, api_name: &str, out: &mut Vec<(String, String, String)>) {
             if let serde_json::Value::Object(map) = node {
                 for (k, v) in map { let kl = k.to_lowercase(); if kl == "get" || kl == "post" || kl == "put" || kl == "delete" { if let serde_json::Value::Object(paths) = v { for (p, _cost) in paths { out.push((api_name.to_string(), kl.to_uppercase(), p.clone())); } } } else { collect_routes(v, api_name, out); } }
@@ -639,19 +641,19 @@ function transpileMethodToRust(opts: {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = <Self as ${capitalizeFirstLetter(className)}>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = ${requestCall || 'self.request('}path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() { return rv; }
                 }
             }
         }
         let candidates = vec![("public", "GET", "depth"), ("public", "GET", "orderbook"), ("public", "GET", "order_book")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as ${capitalizeFirstLetter(className)}>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = ${requestCall || 'self.request('}path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
     }\n`,
-        fetchOHLCV: (header) => header + `{
+        fetchOHLCV: (header, requestCall) => header + `{
         fn collect_routes(node: &serde_json::Value, api_name: &str, out: &mut Vec<(String, String, String)>) {
             if let serde_json::Value::Object(map) = node {
                 for (k, v) in map { let kl = k.to_lowercase(); if kl == "get" || kl == "post" || kl == "put" || kl == "delete" { if let serde_json::Value::Object(paths) = v { for (p, _cost) in paths { out.push((api_name.to_string(), kl.to_uppercase(), p.clone())); } } } else { collect_routes(v, api_name, out); } }
@@ -672,55 +674,55 @@ function transpileMethodToRust(opts: {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = <Self as ${capitalizeFirstLetter(className)}>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = ${requestCall || 'self.request('}path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() { return rv; }
                 }
             }
         }
         let candidates = vec![("public", "GET", "klines"), ("public", "GET", "candles"), ("public", "GET", "ohlcv")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as ${capitalizeFirstLetter(className)}>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = ${requestCall || 'self.request('}path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
     }\n`,
-        fetchTime: (header) => header + `{
+        fetchTime: (header, requestCall) => header + `{
         let candidates = vec![("public", "GET", "time"), ("public", "GET", "server/time"), ("public", "GET", "timestamp")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as ${capitalizeFirstLetter(className)}>::request(self,path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = ${requestCall || 'self.request('}path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
     }\n`,
-        fetchTrades: (header) => header + `{
+        fetchTrades: (header, requestCall) => header + `{
         let mut request = if params.is_object() { params.clone() } else { Value::new_object() };
         request.set("symbol".into(), symbol.clone());
         if since.is_nonnullish() { request.set("since".into(), since.clone()); request.set("startTime".into(), since.clone()); }
         if limit.is_nonnullish() { request.set("limit".into(), limit.clone()); }
         let candidates = vec![("public", "GET", "trades"), ("public", "GET", "recent_trades"), ("public", "GET", "aggTrades")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as ${capitalizeFirstLetter(className)}>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = ${requestCall || 'self.request('}path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
     }\n`,
-        fetchL2OrderBook: (header) => header + `{
+        fetchL2OrderBook: (header, requestCall) => header + `{
         let mut request = if params.is_object() { params.clone() } else { Value::new_object() };
         request.set("symbol".into(), symbol.clone());
         if limit.is_nonnullish() { request.set("limit".into(), limit.clone()); }
         let candidates = vec![("public", "GET", "depth"), ("public", "GET", "orderbook"), ("public", "GET", "order_book")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as ${capitalizeFirstLetter(className)}>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = ${requestCall || 'self.request('}path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
     }\n`,
-        fetchBidsAsks: (header) => header + `{
+        fetchBidsAsks: (header, requestCall) => header + `{
         let mut request = if params.is_object() { params.clone() } else { Value::new_object() };
         if symbols.is_nonnullish() { request.set("symbols".into(), symbols.clone()); }
         let candidates = vec![("public", "GET", "ticker/bookTicker"), ("public", "GET", "bookticker"), ("public", "GET", "bidsasks"), ("public", "GET", "tickers")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as ${capitalizeFirstLetter(className)}>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = ${requestCall || 'self.request('}path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -756,17 +758,29 @@ function transpileMethodToRust(opts: {
     // (enumerateApiMethodMapping generates slightly different casing than JS source)
     const apiMethodsLower = new Set([...apiMethods].map(m => m.toLowerCase()));
 
+    // Regex to detect API dispatch method names by convention
+    // Matches patterns like privateGetFoo, publicPostBar, sapiGetBaz, v1_01PrivateGetFoo, traderPrivatePatchFoo, etc.
+    const dispatchMethodPattern = /^(?:public|private|sapi|dapi|fapi|papi|eapi|v\d|trader)/i;
+
     const isDispatchCall = (node: any) => {
         if (node.type !== 'CallExpression') {
             throw new Error('Unexpected node type');
         }
-        return (
+        if (
             node.callee.type === 'MemberExpression' &&
             node.callee.object.type === 'ThisExpression' &&
-            node.callee.property.type === 'Identifier' &&
-            ((apiMethodsLower.has(node.callee.property.name.toLowerCase()) && !node.callee.computed) ||
-                (node.callee.property.name === 'method' && node.callee.computed))
-        );
+            node.callee.property.type === 'Identifier'
+        ) {
+            if (node.callee.property.name === 'method' && node.callee.computed) return true;
+            if (node.callee.computed) return false;
+            const name = node.callee.property.name;
+            // Explicit match against known API methods
+            if (apiMethodsLower.has(name.toLowerCase())) return true;
+            // Pattern-based fallback: detect dispatch calls by naming convention
+            if (dispatchMethodPattern.test(name)) return true;
+            return false;
+        }
+        return false;
     };
 
     const isOverridenMethodCall = (node: any) => {
@@ -1008,7 +1022,11 @@ function transpileMethodToRust(opts: {
 
                 // Use hand-written Rust body for methods whose JS depends on unimplemented runtime
                 if (HANDWRITTEN_METHODS[fname]) {
-                    emit(HANDWRITTEN_METHODS[fname](headerStr));
+                    const hasOwnRequest = opts.ownMethodNames?.has('request');
+                    const reqCall = hasOwnRequest
+                        ? `<Self as ${capitalizeFirstLetter(className)}>::request(self,`
+                        : 'self.request(';
+                    emit(HANDWRITTEN_METHODS[fname](headerStr, reqCall));
                     return;
                 }
 
@@ -1630,6 +1648,12 @@ function transpileMethodToRust(opts: {
                 }
 
                 let argCounts = getArgumentCount(className, node);
+                // Ensure minimum arg counts for Value methods that need padding
+                const valueMethodMinArgs: Dict<number> = { slice: 2 };
+                const calledName = getFunctionNameFromCallee(node.callee);
+                if (calledName && valueMethodMinArgs[calledName] && argCounts < valueMethodMinArgs[calledName]) {
+                    argCounts = valueMethodMinArgs[calledName];
+                }
                 const retType = getReturnType(node);
                 let shouldAwait = state.awaited;
 
@@ -2180,8 +2204,12 @@ function transpileMethodToRust(opts: {
     return currentOutput.value + '\n';
 }
 
-function generateRustDispatchFunction(className: string, apiMethods: Record<string, { apiName: string; method: string; path: string }>) {
+function generateRustDispatchFunction(className: string, apiMethods: Record<string, { apiName: string; method: string; path: string }>, ownMethodNames: Set<string>) {
     const capitalizedClassName = capitalizeFirstLetter(className);
+    const hasOwnRequest = ownMethodNames.has('request');
+    const requestCall = hasOwnRequest
+        ? `<Self as ${capitalizedClassName}>::request(self, `
+        : `self.request(`;
     const bodyParts = [
         `
 async fn dispatch(&mut self, method: Value, params: Value, context: Value) -> Value {
@@ -2191,7 +2219,7 @@ async fn dispatch(&mut self, method: Value, params: Value, context: Value) -> Va
     ];
     for (const [k, v] of Object.entries(apiMethods)) {
         bodyParts.push(
-            `                "${k}" => ${capitalizedClassName}::request(self, "${v.path}".into(), "${v.apiName}".into(), "${v.method.toUpperCase()}".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,`
+            `                "${k}" => ${requestCall}"${v.path}".into(), "${v.apiName}".into(), "${v.method.toUpperCase()}".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,`
         );
     }
     bodyParts.push(`                _ => unimplemented!(),
@@ -2212,7 +2240,12 @@ class RustTranspiler {
             // Built-in call normalization pass (safe textual rewrites only).
             .replace(/\.toString\(\)/g, '.to_string()')
             .replace(/\.toUpperCase\(\)/g, '.to_upper_case()')
-            .replace(/\.toLowerCase\(\)/g, '.to_lower_case()');
+            .replace(/\.toLowerCase\(\)/g, '.to_lower_case()')
+            // Fix crypto hash identifiers used as values (not calls) — they are 0-arg functions
+            .replace(/\b(keccak|secp256k1|sha256|sha384|sha512|md5|ed25519)\b(?!\s*\()/g, '$1()')
+            // Fix error type constructors used as bare values in JSON (describe) — replace with string names
+            .replace(/": (BadRequest|InvalidOrder|ExchangeError|InsufficientFunds|OrderNotFound|AuthenticationError|PermissionDenied|ExchangeNotAvailable|ArgumentsRequired|RateLimitExceeded|OrderNotFillable|OrderImmediatelyFillable|NotSupported|DuplicateOrderId)\b/g, '": "$1"')
+;
     }
 
     createRustClass(className: string, baseClass: string, body: string[], methods: string[]) {
@@ -2244,6 +2277,30 @@ class RustTranspiler {
             'fn rsa(msg: Value, secret: Value, _hash: Value) -> Value { msg }',
             'fn eddsa(msg: Value, secret: Value, _curve: Value) -> Value { msg }',
             'fn secp256k1() -> Value { Value::from("secp256k1") }',
+            'fn keccak() -> Value { Value::from("keccak") }',
+            'fn ecdsa(msg: Value, secret: Value, algo: Value, hash_fn: Value) -> Value { msg }',
+            'fn totp(secret: Value) -> Value { Value::Undefined }',
+            'fn jwt(data: Value, secret: Value, hash: Value, is_rsa: Value) -> Value { Value::Undefined }',
+            'fn parse_float(value: Value) -> Value { value }',
+            'fn decimals(value: Value) -> Value { Value::from(0) }',
+            'fn shift_1(value: Value) -> Value { value }',
+            'fn shift_3(value: Value) -> (Value, Value, Value) { (value.clone(), Value::Undefined, Value::Undefined) }',
+            'fn shift_4(value: Value) -> (Value, Value, Value, Value) { (value.clone(), Value::Undefined, Value::Undefined, Value::Undefined) }',
+            '// Error type constructors',
+            'fn BadRequest(msg: Value) -> Value { msg }',
+            'fn InvalidOrder(msg: Value) -> Value { msg }',
+            'fn ExchangeError(msg: Value) -> Value { msg }',
+            'fn InsufficientFunds(msg: Value) -> Value { msg }',
+            'fn OrderNotFound(msg: Value) -> Value { msg }',
+            'fn AuthenticationError(msg: Value) -> Value { msg }',
+            'fn PermissionDenied(msg: Value) -> Value { msg }',
+            'fn ExchangeNotAvailable(msg: Value) -> Value { msg }',
+            'fn ArgumentsRequired(msg: Value) -> Value { msg }',
+            'fn RateLimitExceeded(msg: Value) -> Value { msg }',
+            'fn OrderNotFillable(msg: Value) -> Value { msg }',
+            'fn OrderImmediatelyFillable(msg: Value) -> Value { msg }',
+            'fn NotSupported(msg: Value) -> Value { msg }',
+            'fn DuplicateOrderId(msg: Value) -> Value { msg }',
             '',
             'use crate::exchange::{PRECISE_BASE, TRUNCATE, ROUND, ROUND_UP, ROUND_DOWN};',
             'use crate::exchange::{DECIMAL_PLACES, SIGNIFICANT_DIGITS, TICK_SIZE, NO_PADDING, PAD_WITH_ZERO};',
@@ -2293,7 +2350,7 @@ class RustTranspiler {
     fn join(&self, glue: Value) -> Value { self.0.join(glue) }
     fn to_string(&self) -> Value { self.0.to_string() }
     fn typeof_(&self) -> Value { self.0.typeof_() }
-    fn slice(&self, start: Value) -> Value { self.0.slice(start) }
+    fn slice(&self, start: Value, end: Value) -> Value { self.0.slice(start, end) }
 }`,
             '',
             `impl ${capitalizedClassName}Impl {`,
@@ -2367,9 +2424,9 @@ class RustTranspiler {
         // no need to re-emit them in the derived exchange trait.
         // This avoids E0034 (multiple applicable items) ambiguity.
 
-        if (exchangeDescribe?.api) {
-            rust.push(generateRustDispatchFunction(className, apiMethodsMap));
-        }
+        // Always generate dispatch — even for exchanges without explicit api
+        // (pattern-based fallback in isDispatchCall may emit self.dispatch() calls)
+        rust.push(generateRustDispatchFunction(className, apiMethodsMap, ownMethodNames));
 
         return {
             rust: this.createRustClass(className, baseClass, rust, methodNames),

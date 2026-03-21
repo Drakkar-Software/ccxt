@@ -13,14 +13,38 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, BoolExt, JSON, Array, Object, Math, Promise, parse_int, shift_2, extend_2, normalize};
 // Crypto hash identifiers
-fn sha256() -> Value { Value::from("sha256") }
-fn sha384() -> Value { Value::from("sha384") }
-fn sha512() -> Value { Value::from("sha512") }
-fn md5() -> Value { Value::from("md5") }
-fn ed25519() -> Value { Value::from("ed25519") }
+fn sha256() -> Value { Value::from("sha256()") }
+fn sha384() -> Value { Value::from("sha384()") }
+fn sha512() -> Value { Value::from("sha512()") }
+fn md5() -> Value { Value::from("md5()") }
+fn ed25519() -> Value { Value::from("ed25519()") }
 fn rsa(msg: Value, secret: Value, _hash: Value) -> Value { msg }
 fn eddsa(msg: Value, secret: Value, _curve: Value) -> Value { msg }
-fn secp256k1() -> Value { Value::from("secp256k1") }
+fn secp256k1() -> Value { Value::from("secp256k1()") }
+fn keccak() -> Value { Value::from("keccak()") }
+fn ecdsa(msg: Value, secret: Value, algo: Value, hash_fn: Value) -> Value { msg }
+fn totp(secret: Value) -> Value { Value::Undefined }
+fn jwt(data: Value, secret: Value, hash: Value, is_rsa: Value) -> Value { Value::Undefined }
+fn parse_float(value: Value) -> Value { value }
+fn decimals(value: Value) -> Value { Value::from(0) }
+fn shift_1(value: Value) -> Value { value }
+fn shift_3(value: Value) -> (Value, Value, Value) { (value.clone(), Value::Undefined, Value::Undefined) }
+fn shift_4(value: Value) -> (Value, Value, Value, Value) { (value.clone(), Value::Undefined, Value::Undefined, Value::Undefined) }
+// Error type constructors
+fn BadRequest(msg: Value) -> Value { msg }
+fn InvalidOrder(msg: Value) -> Value { msg }
+fn ExchangeError(msg: Value) -> Value { msg }
+fn InsufficientFunds(msg: Value) -> Value { msg }
+fn OrderNotFound(msg: Value) -> Value { msg }
+fn AuthenticationError(msg: Value) -> Value { msg }
+fn PermissionDenied(msg: Value) -> Value { msg }
+fn ExchangeNotAvailable(msg: Value) -> Value { msg }
+fn ArgumentsRequired(msg: Value) -> Value { msg }
+fn RateLimitExceeded(msg: Value) -> Value { msg }
+fn OrderNotFillable(msg: Value) -> Value { msg }
+fn OrderImmediatelyFillable(msg: Value) -> Value { msg }
+fn NotSupported(msg: Value) -> Value { msg }
+fn DuplicateOrderId(msg: Value) -> Value { msg }
 
 use crate::exchange::{PRECISE_BASE, TRUNCATE, ROUND, ROUND_UP, ROUND_DOWN};
 use crate::exchange::{DECIMAL_PLACES, SIGNIFICANT_DIGITS, TICK_SIZE, NO_PADDING, PAD_WITH_ZERO};
@@ -874,14 +898,14 @@ pub trait Phemex : Exchange {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = <Self as Phemex>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() { return rv; }
                 }
             }
         }
         let candidates = vec![("public", "GET", "depth"), ("public", "GET", "orderbook"), ("public", "GET", "order_book")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Phemex>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -986,14 +1010,14 @@ pub trait Phemex : Exchange {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = <Self as Phemex>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() { return rv; }
                 }
             }
         }
         let candidates = vec![("public", "GET", "klines"), ("public", "GET", "candles"), ("public", "GET", "ohlcv")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Phemex>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -1057,7 +1081,7 @@ pub trait Phemex : Exchange {
         let mut market_id: Value = self.safe_string(ticker.clone(), Value::from("symbol"), Value::Undefined);
         market = self.safe_market(market_id.clone(), market.clone(), Value::Undefined, Value::Undefined);
         let mut symbol: Value = market.get(Value::from("symbol"));
-        let mut timestamp: Value = self.safe_integer_product(ticker.clone(), Value::from("timestamp"), Value::from(0.000001));
+        let mut timestamp: Value = self.safe_integer_product(ticker.clone(), Value::from("timestamp"), Value::from(0.000001), Value::Undefined);
         let mut last: Value = <Self as Phemex>::from_ep(self, self.safe_string_2(ticker.clone(), Value::from("lastEp"), Value::from("closeRp"), Value::Undefined), market.clone());
         let mut quote_volume: Value = <Self as Phemex>::from_er(self, self.safe_string_2(ticker.clone(), Value::from("turnoverEv"), Value::from("turnoverRv"), Value::Undefined), market.clone());
         let mut base_volume: Value = self.safe_string(ticker.clone(), Value::from("volume"), Value::Undefined);
@@ -1106,14 +1130,14 @@ pub trait Phemex : Exchange {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = <Self as Phemex>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() { return rv; }
                 }
             }
         }
         let candidates = vec![("public", "GET", "ticker/24hr"), ("public", "GET", "ticker"), ("public", "GET", "ticker/price")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Phemex>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -1135,14 +1159,14 @@ pub trait Phemex : Exchange {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = <Self as Phemex>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() { return rv; }
                 }
             }
         }
         let candidates = vec![("public", "GET", "ticker/24hr"), ("public", "GET", "tickers"), ("public", "GET", "ticker")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Phemex>::request(self,path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -1156,7 +1180,7 @@ pub trait Phemex : Exchange {
         if limit.is_nonnullish() { request.set("limit".into(), limit.clone()); }
         let candidates = vec![("public", "GET", "trades"), ("public", "GET", "recent_trades"), ("public", "GET", "aggTrades")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Phemex>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -1363,7 +1387,7 @@ pub trait Phemex : Exchange {
         let mut taker_or_maker: Value = Value::Undefined;
         if Array::is_array(trade.clone()).is_truthy() {
             let mut trade_length: usize = trade.len();
-            timestamp = self.safe_integer_product(trade.clone(), Value::from(0), Value::from(0.000001));
+            timestamp = self.safe_integer_product(trade.clone(), Value::from(0), Value::from(0.000001), Value::Undefined);
             if trade_length.clone() > Value::from(4) {
                 id = self.safe_string(trade.clone(), trade_length.clone() - Value::from(4), Value::Undefined);
             };
@@ -1375,7 +1399,7 @@ pub trait Phemex : Exchange {
                 amount_string = <Self as Phemex>::from_ev(self, amount_string.clone(), market.clone());
             };
         } else {
-            timestamp = self.safe_integer_product(trade.clone(), Value::from("transactTimeNs"), Value::from(0.000001));
+            timestamp = self.safe_integer_product(trade.clone(), Value::from("transactTimeNs"), Value::from(0.000001), Value::Undefined);
             if timestamp.clone().is_nullish() {
                 timestamp = self.safe_integer(trade.clone(), Value::from("createdAt"), Value::Undefined);
             };
@@ -1507,7 +1531,7 @@ pub trait Phemex : Exchange {
             let mut locked_trading_balance: Value = <Self as Phemex>::from_en(self, locked_trading_balance_ev.clone(), scale.clone());
             let mut locked_withdraw: Value = <Self as Phemex>::from_en(self, locked_withdraw_ev.clone(), scale.clone());
             let mut used: Value = Precise::string_add(locked_trading_balance.clone(), locked_withdraw.clone());
-            let mut last_update_time_ns: Value = self.safe_integer_product(balance.clone(), Value::from("lastUpdateTimeNs"), Value::from(0.000001));
+            let mut last_update_time_ns: Value = self.safe_integer_product(balance.clone(), Value::from("lastUpdateTimeNs"), Value::from(0.000001), Value::Undefined);
             timestamp = if timestamp.clone().is_nullish() { last_update_time_ns.clone() } else { Math::max(timestamp.clone(), last_update_time_ns.clone()) };
             account.set("total".into(), total.clone());
             account.set("used".into(), used.clone());
@@ -1857,7 +1881,7 @@ pub trait Phemex : Exchange {
         let mut status: Value = <Self as Phemex>::parse_order_status(self, self.safe_string(order.clone(), Value::from("ordStatus"), Value::Undefined));
         let mut side: Value = self.safe_string_lower(order.clone(), Value::from("side"), Value::Undefined);
         let mut r#type: Value = <Self as Phemex>::parse_order_type(self, self.safe_string(order.clone(), Value::from("ordType"), Value::Undefined));
-        let mut timestamp: Value = self.safe_integer_product_2(order.clone(), Value::from("actionTimeNs"), Value::from("createTimeNs"), Value::from(0.000001));
+        let mut timestamp: Value = self.safe_integer_product_2(order.clone(), Value::from("actionTimeNs"), Value::from("createTimeNs"), Value::from(0.000001), Value::Undefined);
         let mut fee: Value = Value::Undefined;
         let mut fee_cost: Value = <Self as Phemex>::from_ev(self, self.safe_string(order.clone(), Value::from("cumFeeEv"), Value::Undefined), market.clone());
         if fee_cost.clone().is_nonnullish() {
@@ -2022,12 +2046,12 @@ pub trait Phemex : Exchange {
         let mut amount: Value = self.safe_number_2(order.clone(), Value::from("orderQty"), Value::from("orderQtyRq"), Value::Undefined);
         let mut filled: Value = self.safe_number_2(order.clone(), Value::from("cumQty"), Value::from("cumQtyRq"), Value::Undefined);
         let mut remaining: Value = self.safe_number_2(order.clone(), Value::from("leavesQty"), Value::from("leavesQtyRq"), Value::Undefined);
-        let mut timestamp: Value = self.safe_integer_product(order.clone(), Value::from("actionTimeNs"), Value::from(0.000001));
+        let mut timestamp: Value = self.safe_integer_product(order.clone(), Value::from("actionTimeNs"), Value::from(0.000001), Value::Undefined);
         if timestamp.clone().is_nullish() {
             timestamp = self.safe_integer(order.clone(), Value::from("createdAt"), Value::Undefined);
         };
         let mut cost: Value = self.safe_number_2(order.clone(), Value::from("cumValue"), Value::from("cumValueRv"), Value::Undefined);
-        let mut last_trade_timestamp: Value = self.safe_integer_product(order.clone(), Value::from("transactTimeNs"), Value::from(0.000001));
+        let mut last_trade_timestamp: Value = self.safe_integer_product(order.clone(), Value::from("transactTimeNs"), Value::from(0.000001), Value::Undefined);
         if last_trade_timestamp.clone() == Value::from(0) {
             last_trade_timestamp = Value::Undefined;
         };
@@ -2208,7 +2232,7 @@ pub trait Phemex : Exchange {
             if is_stable_settled.is_truthy() {
                 request.set("orderQtyRq".into(), amount.clone());
             } else {
-                request.set("orderQty".into(), self.parse_to_int(amount.clone(), Value::Undefined));
+                request.set("orderQty".into(), self.parse_to_int(amount.clone()));
             };
             if trigger_price.clone().is_nonnullish() {
                 let mut trigger_type: Value = self.safe_string(params.clone(), Value::from("triggerType"), Value::from("ByMarkPrice"));
@@ -3375,7 +3399,7 @@ pub trait Phemex : Exchange {
             "lastPrice": Value::Undefined,
             "entryPrice": self.parse_number(entry_price_string.clone(), Value::Undefined),
             "timestamp": Value::Undefined,
-            "lastUpdateTimestamp": self.safe_integer_product(position.clone(), Value::from("transactTimeNs"), Value::from(0.000001)),
+            "lastUpdateTimestamp": self.safe_integer_product(position.clone(), Value::from("transactTimeNs"), Value::from(0.000001), Value::Undefined),
             "initialMargin": self.parse_number(initial_margin_string.clone(), Value::Undefined),
             "initialMarginPercentage": self.parse_number(initial_margin_percentage_string.clone(), Value::Undefined),
             "maintenanceMargin": self.parse_number(maintenance_margin_string.clone(), Value::Undefined),
@@ -3559,7 +3583,7 @@ pub trait Phemex : Exchange {
         //
         let mut market_id: Value = self.safe_string(contract.clone(), Value::from("symbol"), Value::Undefined);
         let mut symbol: Value = self.safe_symbol(market_id.clone(), market.clone(), Value::Undefined, Value::Undefined);
-        let mut timestamp: Value = self.safe_integer_product(contract.clone(), Value::from("timestamp"), Value::from(0.000001));
+        let mut timestamp: Value = self.safe_integer_product(contract.clone(), Value::from("timestamp"), Value::from(0.000001), Value::Undefined);
         let mut mark_ep: Value = <Self as Phemex>::from_ep(self, self.safe_string(contract.clone(), Value::from("markEp"), Value::Undefined), market.clone());
         let mut index_ep: Value = <Self as Phemex>::from_ep(self, self.safe_string(contract.clone(), Value::from("indexEp"), Value::Undefined), market.clone());
         let mut funding_rate_er: Value = <Self as Phemex>::from_er(self, self.safe_string(contract.clone(), Value::from("fundingRateEr"), Value::Undefined), market.clone());
@@ -4378,120 +4402,120 @@ pub trait Phemex : Exchange {
         match method {
             Value::Json(serde_json::Value::String(ref m)) => {
                 match m.as_ref() {
-                    "publicGetCfgv2products" => Phemex::request(self, "cfg/v2/products".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetCfgfundingrates" => Phemex::request(self, "cfg/fundingRates".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetProducts" => Phemex::request(self, "products".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetNomicstrades" => Phemex::request(self, "nomics/trades".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetMdkline" => Phemex::request(self, "md/kline".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetMdv2klinelist" => Phemex::request(self, "md/v2/kline/list".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetMdv2kline" => Phemex::request(self, "md/v2/kline".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetMdv2klinelast" => Phemex::request(self, "md/v2/kline/last".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetMdorderbook" => Phemex::request(self, "md/orderbook".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetMdtrade" => Phemex::request(self, "md/trade".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetMdspotticker24hr" => Phemex::request(self, "md/spot/ticker/24hr".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetExchangepubliccfgchainsettings" => Phemex::request(self, "exchange/public/cfg/chain-settings".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1GetMdfullbook" => Phemex::request(self, "md/fullbook".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1GetMdorderbook" => Phemex::request(self, "md/orderbook".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1GetMdtrade" => Phemex::request(self, "md/trade".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1GetMdticker24hr" => Phemex::request(self, "md/ticker/24hr".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1GetMdticker24hrall" => Phemex::request(self, "md/ticker/24hr/all".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1GetMdspotticker24hr" => Phemex::request(self, "md/spot/ticker/24hr".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1GetMdspotticker24hrall" => Phemex::request(self, "md/spot/ticker/24hr/all".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1GetExchangepublicproducts" => Phemex::request(self, "exchange/public/products".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1GetApidatapublicdatafundingratehistory" => Phemex::request(self, "api-data/public/data/funding-rate-history".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2GetPublicproducts" => Phemex::request(self, "public/products".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2GetPublicproductsplus" => Phemex::request(self, "public/products-plus".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2GetMdv2orderbook" => Phemex::request(self, "md/v2/orderbook".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2GetMdv2trade" => Phemex::request(self, "md/v2/trade".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2GetMdv2ticker24hr" => Phemex::request(self, "md/v2/ticker/24hr".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2GetMdv2ticker24hrall" => Phemex::request(self, "md/v2/ticker/24hr/all".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2GetApidatapublicdatafundingratehistory" => Phemex::request(self, "api-data/public/data/funding-rate-history".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetSpotordersactive" => Phemex::request(self, "spot/orders/active".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetSpotorders" => Phemex::request(self, "spot/orders".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetSpotwallets" => Phemex::request(self, "spot/wallets".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetExchangespotorder" => Phemex::request(self, "exchange/spot/order".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetExchangespotordertrades" => Phemex::request(self, "exchange/spot/order/trades".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetExchangeorderv2orderlist" => Phemex::request(self, "exchange/order/v2/orderList".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetExchangeorderv2tradinglist" => Phemex::request(self, "exchange/order/v2/tradingList".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetAccountsaccountpositions" => Phemex::request(self, "accounts/accountPositions".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetGaccountsaccountpositions" => Phemex::request(self, "g-accounts/accountPositions".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetGaccountspositions" => Phemex::request(self, "g-accounts/positions".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetGaccountsriskunit" => Phemex::request(self, "g-accounts/risk-unit".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetApidatafuturesfundingfees" => Phemex::request(self, "api-data/futures/funding-fees".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetApidatagfuturesfundingfees" => Phemex::request(self, "api-data/g-futures/funding-fees".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetApidatafuturesorders" => Phemex::request(self, "api-data/futures/orders".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetApidatagfuturesorders" => Phemex::request(self, "api-data/g-futures/orders".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetApidatafuturesordersbyorderid" => Phemex::request(self, "api-data/futures/orders/by-order-id".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetApidatagfuturesordersbyorderid" => Phemex::request(self, "api-data/g-futures/orders/by-order-id".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetApidatafuturestrades" => Phemex::request(self, "api-data/futures/trades".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetApidatagfuturestrades" => Phemex::request(self, "api-data/g-futures/trades".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetApidatafuturestradingfees" => Phemex::request(self, "api-data/futures/trading-fees".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetApidatagfuturestradingfees" => Phemex::request(self, "api-data/g-futures/trading-fees".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetApidatafuturesv2tradeaccountdetail" => Phemex::request(self, "api-data/futures/v2/tradeAccountDetail".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetGordersactivelist" => Phemex::request(self, "g-orders/activeList".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetOrdersactivelist" => Phemex::request(self, "orders/activeList".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetExchangeorderlist" => Phemex::request(self, "exchange/order/list".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetExchangeorder" => Phemex::request(self, "exchange/order".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetExchangeordertrade" => Phemex::request(self, "exchange/order/trade".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetPhemexuseruserschildren" => Phemex::request(self, "phemex-user/users/children".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetPhemexuserwalletsv2depositaddress" => Phemex::request(self, "phemex-user/wallets/v2/depositAddress".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetPhemexuserwalletstradeaccountdetail" => Phemex::request(self, "phemex-user/wallets/tradeAccountDetail".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetPhemexdepositwalletsapidepositaddress" => Phemex::request(self, "phemex-deposit/wallets/api/depositAddress".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetPhemexdepositwalletsapideposithist" => Phemex::request(self, "phemex-deposit/wallets/api/depositHist".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetPhemexdepositwalletsapichaincfg" => Phemex::request(self, "phemex-deposit/wallets/api/chainCfg".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetPhemexwithdrawwalletsapiwithdrawhist" => Phemex::request(self, "phemex-withdraw/wallets/api/withdrawHist".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetPhemexwithdrawwalletsapiassetinfo" => Phemex::request(self, "phemex-withdraw/wallets/api/asset/info".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetPhemexuserorderclosedpositionlist" => Phemex::request(self, "phemex-user/order/closedPositionList".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetExchangemarginstransfer" => Phemex::request(self, "exchange/margins/transfer".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetExchangewalletsconfirmwithdraw" => Phemex::request(self, "exchange/wallets/confirm/withdraw".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetExchangewalletswithdrawlist" => Phemex::request(self, "exchange/wallets/withdrawList".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetExchangewalletsdepositlist" => Phemex::request(self, "exchange/wallets/depositList".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetExchangewalletsv2depositaddress" => Phemex::request(self, "exchange/wallets/v2/depositAddress".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetApidataspotsfunds" => Phemex::request(self, "api-data/spots/funds".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetApidataspotsorders" => Phemex::request(self, "api-data/spots/orders".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetApidataspotsordersbyorderid" => Phemex::request(self, "api-data/spots/orders/by-order-id".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetApidataspotspnls" => Phemex::request(self, "api-data/spots/pnls".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetApidataspotstrades" => Phemex::request(self, "api-data/spots/trades".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetApidataspotstradesbyorderid" => Phemex::request(self, "api-data/spots/trades/by-order-id".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetAssetsconvert" => Phemex::request(self, "assets/convert".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetAssetstransfer" => Phemex::request(self, "assets/transfer".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetAssetsspotssubaccountstransfer" => Phemex::request(self, "assets/spots/sub-accounts/transfer".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetAssetsfuturessubaccountstransfer" => Phemex::request(self, "assets/futures/sub-accounts/transfer".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetAssetsquote" => Phemex::request(self, "assets/quote".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostSpotorders" => Phemex::request(self, "spot/orders".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostOrders" => Phemex::request(self, "orders".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostGorders" => Phemex::request(self, "g-orders".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostPositionsassign" => Phemex::request(self, "positions/assign".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostExchangewalletstransferout" => Phemex::request(self, "exchange/wallets/transferOut".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostExchangewalletstransferin" => Phemex::request(self, "exchange/wallets/transferIn".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostExchangemargins" => Phemex::request(self, "exchange/margins".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostExchangewalletscreatewithdraw" => Phemex::request(self, "exchange/wallets/createWithdraw".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostExchangewalletscancelwithdraw" => Phemex::request(self, "exchange/wallets/cancelWithdraw".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostExchangewalletscreatewithdrawaddress" => Phemex::request(self, "exchange/wallets/createWithdrawAddress".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostAssetstransfer" => Phemex::request(self, "assets/transfer".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostAssetsspotssubaccountstransfer" => Phemex::request(self, "assets/spots/sub-accounts/transfer".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostAssetsfuturessubaccountstransfer" => Phemex::request(self, "assets/futures/sub-accounts/transfer".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostAssetsuniversaltransfer" => Phemex::request(self, "assets/universal-transfer".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostAssetsconvert" => Phemex::request(self, "assets/convert".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostPhemexwithdrawwalletsapicreatewithdraw" => Phemex::request(self, "phemex-withdraw/wallets/api/createWithdraw".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostPhemexwithdrawwalletsapicancelwithdraw" => Phemex::request(self, "phemex-withdraw/wallets/api/cancelWithdraw".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePutSpotorderscreate" => Phemex::request(self, "spot/orders/create".into(), "private".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePutSpotorders" => Phemex::request(self, "spot/orders".into(), "private".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePutOrdersreplace" => Phemex::request(self, "orders/replace".into(), "private".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePutGordersreplace" => Phemex::request(self, "g-orders/replace".into(), "private".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePutGorderscreate" => Phemex::request(self, "g-orders/create".into(), "private".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePutPositionsleverage" => Phemex::request(self, "positions/leverage".into(), "private".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePutGpositionsleverage" => Phemex::request(self, "g-positions/leverage".into(), "private".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePutGpositionsswitchposmodesync" => Phemex::request(self, "g-positions/switch-pos-mode-sync".into(), "private".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePutPositionsrisklimit" => Phemex::request(self, "positions/riskLimit".into(), "private".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateDeleteSpotorders" => Phemex::request(self, "spot/orders".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateDeleteSpotordersall" => Phemex::request(self, "spot/orders/all".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateDeleteOrderscancel" => Phemex::request(self, "orders/cancel".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateDeleteOrders" => Phemex::request(self, "orders".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateDeleteOrdersall" => Phemex::request(self, "orders/all".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateDeleteGorderscancel" => Phemex::request(self, "g-orders/cancel".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateDeleteGorders" => Phemex::request(self, "g-orders".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateDeleteGordersall" => Phemex::request(self, "g-orders/all".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetCfgv2products" => self.request("cfg/v2/products".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetCfgfundingrates" => self.request("cfg/fundingRates".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetProducts" => self.request("products".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetNomicstrades" => self.request("nomics/trades".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetMdkline" => self.request("md/kline".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetMdv2klinelist" => self.request("md/v2/kline/list".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetMdv2kline" => self.request("md/v2/kline".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetMdv2klinelast" => self.request("md/v2/kline/last".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetMdorderbook" => self.request("md/orderbook".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetMdtrade" => self.request("md/trade".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetMdspotticker24hr" => self.request("md/spot/ticker/24hr".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetExchangepubliccfgchainsettings" => self.request("exchange/public/cfg/chain-settings".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1GetMdfullbook" => self.request("md/fullbook".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1GetMdorderbook" => self.request("md/orderbook".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1GetMdtrade" => self.request("md/trade".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1GetMdticker24hr" => self.request("md/ticker/24hr".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1GetMdticker24hrall" => self.request("md/ticker/24hr/all".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1GetMdspotticker24hr" => self.request("md/spot/ticker/24hr".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1GetMdspotticker24hrall" => self.request("md/spot/ticker/24hr/all".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1GetExchangepublicproducts" => self.request("exchange/public/products".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1GetApidatapublicdatafundingratehistory" => self.request("api-data/public/data/funding-rate-history".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2GetPublicproducts" => self.request("public/products".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2GetPublicproductsplus" => self.request("public/products-plus".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2GetMdv2orderbook" => self.request("md/v2/orderbook".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2GetMdv2trade" => self.request("md/v2/trade".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2GetMdv2ticker24hr" => self.request("md/v2/ticker/24hr".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2GetMdv2ticker24hrall" => self.request("md/v2/ticker/24hr/all".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2GetApidatapublicdatafundingratehistory" => self.request("api-data/public/data/funding-rate-history".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetSpotordersactive" => self.request("spot/orders/active".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetSpotorders" => self.request("spot/orders".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetSpotwallets" => self.request("spot/wallets".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetExchangespotorder" => self.request("exchange/spot/order".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetExchangespotordertrades" => self.request("exchange/spot/order/trades".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetExchangeorderv2orderlist" => self.request("exchange/order/v2/orderList".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetExchangeorderv2tradinglist" => self.request("exchange/order/v2/tradingList".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetAccountsaccountpositions" => self.request("accounts/accountPositions".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetGaccountsaccountpositions" => self.request("g-accounts/accountPositions".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetGaccountspositions" => self.request("g-accounts/positions".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetGaccountsriskunit" => self.request("g-accounts/risk-unit".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetApidatafuturesfundingfees" => self.request("api-data/futures/funding-fees".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetApidatagfuturesfundingfees" => self.request("api-data/g-futures/funding-fees".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetApidatafuturesorders" => self.request("api-data/futures/orders".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetApidatagfuturesorders" => self.request("api-data/g-futures/orders".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetApidatafuturesordersbyorderid" => self.request("api-data/futures/orders/by-order-id".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetApidatagfuturesordersbyorderid" => self.request("api-data/g-futures/orders/by-order-id".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetApidatafuturestrades" => self.request("api-data/futures/trades".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetApidatagfuturestrades" => self.request("api-data/g-futures/trades".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetApidatafuturestradingfees" => self.request("api-data/futures/trading-fees".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetApidatagfuturestradingfees" => self.request("api-data/g-futures/trading-fees".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetApidatafuturesv2tradeaccountdetail" => self.request("api-data/futures/v2/tradeAccountDetail".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetGordersactivelist" => self.request("g-orders/activeList".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetOrdersactivelist" => self.request("orders/activeList".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetExchangeorderlist" => self.request("exchange/order/list".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetExchangeorder" => self.request("exchange/order".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetExchangeordertrade" => self.request("exchange/order/trade".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetPhemexuseruserschildren" => self.request("phemex-user/users/children".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetPhemexuserwalletsv2depositaddress" => self.request("phemex-user/wallets/v2/depositAddress".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetPhemexuserwalletstradeaccountdetail" => self.request("phemex-user/wallets/tradeAccountDetail".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetPhemexdepositwalletsapidepositaddress" => self.request("phemex-deposit/wallets/api/depositAddress".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetPhemexdepositwalletsapideposithist" => self.request("phemex-deposit/wallets/api/depositHist".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetPhemexdepositwalletsapichaincfg" => self.request("phemex-deposit/wallets/api/chainCfg".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetPhemexwithdrawwalletsapiwithdrawhist" => self.request("phemex-withdraw/wallets/api/withdrawHist".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetPhemexwithdrawwalletsapiassetinfo" => self.request("phemex-withdraw/wallets/api/asset/info".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetPhemexuserorderclosedpositionlist" => self.request("phemex-user/order/closedPositionList".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetExchangemarginstransfer" => self.request("exchange/margins/transfer".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetExchangewalletsconfirmwithdraw" => self.request("exchange/wallets/confirm/withdraw".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetExchangewalletswithdrawlist" => self.request("exchange/wallets/withdrawList".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetExchangewalletsdepositlist" => self.request("exchange/wallets/depositList".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetExchangewalletsv2depositaddress" => self.request("exchange/wallets/v2/depositAddress".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetApidataspotsfunds" => self.request("api-data/spots/funds".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetApidataspotsorders" => self.request("api-data/spots/orders".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetApidataspotsordersbyorderid" => self.request("api-data/spots/orders/by-order-id".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetApidataspotspnls" => self.request("api-data/spots/pnls".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetApidataspotstrades" => self.request("api-data/spots/trades".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetApidataspotstradesbyorderid" => self.request("api-data/spots/trades/by-order-id".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetAssetsconvert" => self.request("assets/convert".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetAssetstransfer" => self.request("assets/transfer".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetAssetsspotssubaccountstransfer" => self.request("assets/spots/sub-accounts/transfer".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetAssetsfuturessubaccountstransfer" => self.request("assets/futures/sub-accounts/transfer".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetAssetsquote" => self.request("assets/quote".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostSpotorders" => self.request("spot/orders".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostOrders" => self.request("orders".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostGorders" => self.request("g-orders".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostPositionsassign" => self.request("positions/assign".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostExchangewalletstransferout" => self.request("exchange/wallets/transferOut".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostExchangewalletstransferin" => self.request("exchange/wallets/transferIn".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostExchangemargins" => self.request("exchange/margins".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostExchangewalletscreatewithdraw" => self.request("exchange/wallets/createWithdraw".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostExchangewalletscancelwithdraw" => self.request("exchange/wallets/cancelWithdraw".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostExchangewalletscreatewithdrawaddress" => self.request("exchange/wallets/createWithdrawAddress".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAssetstransfer" => self.request("assets/transfer".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAssetsspotssubaccountstransfer" => self.request("assets/spots/sub-accounts/transfer".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAssetsfuturessubaccountstransfer" => self.request("assets/futures/sub-accounts/transfer".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAssetsuniversaltransfer" => self.request("assets/universal-transfer".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAssetsconvert" => self.request("assets/convert".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostPhemexwithdrawwalletsapicreatewithdraw" => self.request("phemex-withdraw/wallets/api/createWithdraw".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostPhemexwithdrawwalletsapicancelwithdraw" => self.request("phemex-withdraw/wallets/api/cancelWithdraw".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePutSpotorderscreate" => self.request("spot/orders/create".into(), "private".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePutSpotorders" => self.request("spot/orders".into(), "private".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePutOrdersreplace" => self.request("orders/replace".into(), "private".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePutGordersreplace" => self.request("g-orders/replace".into(), "private".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePutGorderscreate" => self.request("g-orders/create".into(), "private".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePutPositionsleverage" => self.request("positions/leverage".into(), "private".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePutGpositionsleverage" => self.request("g-positions/leverage".into(), "private".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePutGpositionsswitchposmodesync" => self.request("g-positions/switch-pos-mode-sync".into(), "private".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePutPositionsrisklimit" => self.request("positions/riskLimit".into(), "private".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateDeleteSpotorders" => self.request("spot/orders".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateDeleteSpotordersall" => self.request("spot/orders/all".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateDeleteOrderscancel" => self.request("orders/cancel".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateDeleteOrders" => self.request("orders".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateDeleteOrdersall" => self.request("orders/all".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateDeleteGorderscancel" => self.request("g-orders/cancel".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateDeleteGorders" => self.request("g-orders".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateDeleteGordersall" => self.request("g-orders/all".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     _ => unimplemented!(),
                 }
             },
@@ -4535,7 +4559,7 @@ impl ValueTrait for PhemexImpl {
     fn join(&self, glue: Value) -> Value { self.0.join(glue) }
     fn to_string(&self) -> Value { self.0.to_string() }
     fn typeof_(&self) -> Value { self.0.typeof_() }
-    fn slice(&self, start: Value) -> Value { self.0.slice(start) }
+    fn slice(&self, start: Value, end: Value) -> Value { self.0.slice(start, end) }
 }
 
 impl PhemexImpl {

@@ -13,14 +13,38 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, BoolExt, JSON, Array, Object, Math, Promise, parse_int, shift_2, extend_2, normalize};
 // Crypto hash identifiers
-fn sha256() -> Value { Value::from("sha256") }
-fn sha384() -> Value { Value::from("sha384") }
-fn sha512() -> Value { Value::from("sha512") }
-fn md5() -> Value { Value::from("md5") }
-fn ed25519() -> Value { Value::from("ed25519") }
+fn sha256() -> Value { Value::from("sha256()") }
+fn sha384() -> Value { Value::from("sha384()") }
+fn sha512() -> Value { Value::from("sha512()") }
+fn md5() -> Value { Value::from("md5()") }
+fn ed25519() -> Value { Value::from("ed25519()") }
 fn rsa(msg: Value, secret: Value, _hash: Value) -> Value { msg }
 fn eddsa(msg: Value, secret: Value, _curve: Value) -> Value { msg }
-fn secp256k1() -> Value { Value::from("secp256k1") }
+fn secp256k1() -> Value { Value::from("secp256k1()") }
+fn keccak() -> Value { Value::from("keccak()") }
+fn ecdsa(msg: Value, secret: Value, algo: Value, hash_fn: Value) -> Value { msg }
+fn totp(secret: Value) -> Value { Value::Undefined }
+fn jwt(data: Value, secret: Value, hash: Value, is_rsa: Value) -> Value { Value::Undefined }
+fn parse_float(value: Value) -> Value { value }
+fn decimals(value: Value) -> Value { Value::from(0) }
+fn shift_1(value: Value) -> Value { value }
+fn shift_3(value: Value) -> (Value, Value, Value) { (value.clone(), Value::Undefined, Value::Undefined) }
+fn shift_4(value: Value) -> (Value, Value, Value, Value) { (value.clone(), Value::Undefined, Value::Undefined, Value::Undefined) }
+// Error type constructors
+fn BadRequest(msg: Value) -> Value { msg }
+fn InvalidOrder(msg: Value) -> Value { msg }
+fn ExchangeError(msg: Value) -> Value { msg }
+fn InsufficientFunds(msg: Value) -> Value { msg }
+fn OrderNotFound(msg: Value) -> Value { msg }
+fn AuthenticationError(msg: Value) -> Value { msg }
+fn PermissionDenied(msg: Value) -> Value { msg }
+fn ExchangeNotAvailable(msg: Value) -> Value { msg }
+fn ArgumentsRequired(msg: Value) -> Value { msg }
+fn RateLimitExceeded(msg: Value) -> Value { msg }
+fn OrderNotFillable(msg: Value) -> Value { msg }
+fn OrderImmediatelyFillable(msg: Value) -> Value { msg }
+fn NotSupported(msg: Value) -> Value { msg }
+fn DuplicateOrderId(msg: Value) -> Value { msg }
 
 use crate::exchange::{PRECISE_BASE, TRUNCATE, ROUND, ROUND_UP, ROUND_DOWN};
 use crate::exchange::{DECIMAL_PLACES, SIGNIFICANT_DIGITS, TICK_SIZE, NO_PADDING, PAD_WITH_ZERO};
@@ -1850,85 +1874,85 @@ pub trait Coinbaseexchange : Exchange {
         match method {
             Value::Json(serde_json::Value::String(ref m)) => {
                 match m.as_ref() {
-                    "publicGetCurrencies" => Coinbaseexchange::request(self, "currencies".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetProducts" => Coinbaseexchange::request(self, "products".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetProductsid" => Coinbaseexchange::request(self, "products/{id}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetProductsidbook" => Coinbaseexchange::request(self, "products/{id}/book".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetProductsidcandles" => Coinbaseexchange::request(self, "products/{id}/candles".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetProductsidstats" => Coinbaseexchange::request(self, "products/{id}/stats".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetProductsidticker" => Coinbaseexchange::request(self, "products/{id}/ticker".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetProductsidtrades" => Coinbaseexchange::request(self, "products/{id}/trades".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetTime" => Coinbaseexchange::request(self, "time".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetProductssparklines" => Coinbaseexchange::request(self, "products/spark-lines".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetProductsvolumesummary" => Coinbaseexchange::request(self, "products/volume-summary".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetAddressbook" => Coinbaseexchange::request(self, "address-book".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetAccounts" => Coinbaseexchange::request(self, "accounts".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetAccountsid" => Coinbaseexchange::request(self, "accounts/{id}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetAccountsidholds" => Coinbaseexchange::request(self, "accounts/{id}/holds".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetAccountsidledger" => Coinbaseexchange::request(self, "accounts/{id}/ledger".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetAccountsidtransfers" => Coinbaseexchange::request(self, "accounts/{id}/transfers".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetCoinbaseaccounts" => Coinbaseexchange::request(self, "coinbase-accounts".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetFills" => Coinbaseexchange::request(self, "fills".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetFunding" => Coinbaseexchange::request(self, "funding".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetFees" => Coinbaseexchange::request(self, "fees".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetMarginprofileinformation" => Coinbaseexchange::request(self, "margin/profile_information".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetMarginbuyingpower" => Coinbaseexchange::request(self, "margin/buying_power".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetMarginwithdrawalpower" => Coinbaseexchange::request(self, "margin/withdrawal_power".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetMarginwithdrawalpowerall" => Coinbaseexchange::request(self, "margin/withdrawal_power_all".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetMarginexitplan" => Coinbaseexchange::request(self, "margin/exit_plan".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetMarginliquidationhistory" => Coinbaseexchange::request(self, "margin/liquidation_history".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetMarginpositionrefreshamounts" => Coinbaseexchange::request(self, "margin/position_refresh_amounts".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetMarginstatus" => Coinbaseexchange::request(self, "margin/status".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetOracle" => Coinbaseexchange::request(self, "oracle".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetOrders" => Coinbaseexchange::request(self, "orders".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetOrdersid" => Coinbaseexchange::request(self, "orders/{id}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetOrdersclientclientoid" => Coinbaseexchange::request(self, "orders/client:{client_oid}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetOtcorders" => Coinbaseexchange::request(self, "otc/orders".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetPaymentmethods" => Coinbaseexchange::request(self, "payment-methods".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetPosition" => Coinbaseexchange::request(self, "position".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetProfiles" => Coinbaseexchange::request(self, "profiles".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetProfilesid" => Coinbaseexchange::request(self, "profiles/{id}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetReportsreportid" => Coinbaseexchange::request(self, "reports/{report_id}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetTransfers" => Coinbaseexchange::request(self, "transfers".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetTransferstransferid" => Coinbaseexchange::request(self, "transfers/{transfer_id}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetUsersselfexchangelimits" => Coinbaseexchange::request(self, "users/self/exchange-limits".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetUsersselfholdbalances" => Coinbaseexchange::request(self, "users/self/hold-balances".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetUsersselftrailingvolume" => Coinbaseexchange::request(self, "users/self/trailing-volume".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetWithdrawalsfeeestimate" => Coinbaseexchange::request(self, "withdrawals/fee-estimate".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetConversionsconversionid" => Coinbaseexchange::request(self, "conversions/{conversion_id}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetConversions" => Coinbaseexchange::request(self, "conversions".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetConversionsfees" => Coinbaseexchange::request(self, "conversions/fees".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetLoanslendingoverview" => Coinbaseexchange::request(self, "loans/lending-overview".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetLoanslendingoverviewxm" => Coinbaseexchange::request(self, "loans/lending-overview-xm".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetLoansloanpreview" => Coinbaseexchange::request(self, "loans/loan-preview".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetLoansloanpreviewxm" => Coinbaseexchange::request(self, "loans/loan-preview-xm".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetLoansrepaymentpreview" => Coinbaseexchange::request(self, "loans/repayment-preview".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetLoansrepaymentpreviewxm" => Coinbaseexchange::request(self, "loans/repayment-preview-xm".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetLoansinterestloanid" => Coinbaseexchange::request(self, "loans/interest/{loan_id}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetLoansinteresthistoryloanid" => Coinbaseexchange::request(self, "loans/interest/history/{loan_id}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetLoansinterest" => Coinbaseexchange::request(self, "loans/interest".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetLoansassets" => Coinbaseexchange::request(self, "loans/assets".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetLoans" => Coinbaseexchange::request(self, "loans".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostConversions" => Coinbaseexchange::request(self, "conversions".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostDepositscoinbaseaccount" => Coinbaseexchange::request(self, "deposits/coinbase-account".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostDepositspaymentmethod" => Coinbaseexchange::request(self, "deposits/payment-method".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostCoinbaseaccountsidaddresses" => Coinbaseexchange::request(self, "coinbase-accounts/{id}/addresses".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostFundingrepay" => Coinbaseexchange::request(self, "funding/repay".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostOrders" => Coinbaseexchange::request(self, "orders".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostPositionclose" => Coinbaseexchange::request(self, "position/close".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostProfilesmargintransfer" => Coinbaseexchange::request(self, "profiles/margin-transfer".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostProfilestransfer" => Coinbaseexchange::request(self, "profiles/transfer".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostReports" => Coinbaseexchange::request(self, "reports".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostWithdrawalscoinbase" => Coinbaseexchange::request(self, "withdrawals/coinbase".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostWithdrawalscoinbaseaccount" => Coinbaseexchange::request(self, "withdrawals/coinbase-account".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostWithdrawalscrypto" => Coinbaseexchange::request(self, "withdrawals/crypto".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostWithdrawalspaymentmethod" => Coinbaseexchange::request(self, "withdrawals/payment-method".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostLoansopen" => Coinbaseexchange::request(self, "loans/open".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostLoansrepayinterest" => Coinbaseexchange::request(self, "loans/repay-interest".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostLoansrepayprincipal" => Coinbaseexchange::request(self, "loans/repay-principal".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateDeleteOrders" => Coinbaseexchange::request(self, "orders".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateDeleteOrdersclientclientoid" => Coinbaseexchange::request(self, "orders/client:{client_oid}".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateDeleteOrdersid" => Coinbaseexchange::request(self, "orders/{id}".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetCurrencies" => <Self as Coinbaseexchange>::request(self, "currencies".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetProducts" => <Self as Coinbaseexchange>::request(self, "products".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetProductsid" => <Self as Coinbaseexchange>::request(self, "products/{id}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetProductsidbook" => <Self as Coinbaseexchange>::request(self, "products/{id}/book".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetProductsidcandles" => <Self as Coinbaseexchange>::request(self, "products/{id}/candles".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetProductsidstats" => <Self as Coinbaseexchange>::request(self, "products/{id}/stats".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetProductsidticker" => <Self as Coinbaseexchange>::request(self, "products/{id}/ticker".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetProductsidtrades" => <Self as Coinbaseexchange>::request(self, "products/{id}/trades".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetTime" => <Self as Coinbaseexchange>::request(self, "time".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetProductssparklines" => <Self as Coinbaseexchange>::request(self, "products/spark-lines".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetProductsvolumesummary" => <Self as Coinbaseexchange>::request(self, "products/volume-summary".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetAddressbook" => <Self as Coinbaseexchange>::request(self, "address-book".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetAccounts" => <Self as Coinbaseexchange>::request(self, "accounts".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetAccountsid" => <Self as Coinbaseexchange>::request(self, "accounts/{id}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetAccountsidholds" => <Self as Coinbaseexchange>::request(self, "accounts/{id}/holds".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetAccountsidledger" => <Self as Coinbaseexchange>::request(self, "accounts/{id}/ledger".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetAccountsidtransfers" => <Self as Coinbaseexchange>::request(self, "accounts/{id}/transfers".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetCoinbaseaccounts" => <Self as Coinbaseexchange>::request(self, "coinbase-accounts".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetFills" => <Self as Coinbaseexchange>::request(self, "fills".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetFunding" => <Self as Coinbaseexchange>::request(self, "funding".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetFees" => <Self as Coinbaseexchange>::request(self, "fees".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetMarginprofileinformation" => <Self as Coinbaseexchange>::request(self, "margin/profile_information".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetMarginbuyingpower" => <Self as Coinbaseexchange>::request(self, "margin/buying_power".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetMarginwithdrawalpower" => <Self as Coinbaseexchange>::request(self, "margin/withdrawal_power".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetMarginwithdrawalpowerall" => <Self as Coinbaseexchange>::request(self, "margin/withdrawal_power_all".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetMarginexitplan" => <Self as Coinbaseexchange>::request(self, "margin/exit_plan".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetMarginliquidationhistory" => <Self as Coinbaseexchange>::request(self, "margin/liquidation_history".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetMarginpositionrefreshamounts" => <Self as Coinbaseexchange>::request(self, "margin/position_refresh_amounts".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetMarginstatus" => <Self as Coinbaseexchange>::request(self, "margin/status".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetOracle" => <Self as Coinbaseexchange>::request(self, "oracle".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetOrders" => <Self as Coinbaseexchange>::request(self, "orders".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetOrdersid" => <Self as Coinbaseexchange>::request(self, "orders/{id}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetOrdersclientclientoid" => <Self as Coinbaseexchange>::request(self, "orders/client:{client_oid}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetOtcorders" => <Self as Coinbaseexchange>::request(self, "otc/orders".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetPaymentmethods" => <Self as Coinbaseexchange>::request(self, "payment-methods".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetPosition" => <Self as Coinbaseexchange>::request(self, "position".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetProfiles" => <Self as Coinbaseexchange>::request(self, "profiles".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetProfilesid" => <Self as Coinbaseexchange>::request(self, "profiles/{id}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetReportsreportid" => <Self as Coinbaseexchange>::request(self, "reports/{report_id}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetTransfers" => <Self as Coinbaseexchange>::request(self, "transfers".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetTransferstransferid" => <Self as Coinbaseexchange>::request(self, "transfers/{transfer_id}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetUsersselfexchangelimits" => <Self as Coinbaseexchange>::request(self, "users/self/exchange-limits".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetUsersselfholdbalances" => <Self as Coinbaseexchange>::request(self, "users/self/hold-balances".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetUsersselftrailingvolume" => <Self as Coinbaseexchange>::request(self, "users/self/trailing-volume".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetWithdrawalsfeeestimate" => <Self as Coinbaseexchange>::request(self, "withdrawals/fee-estimate".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetConversionsconversionid" => <Self as Coinbaseexchange>::request(self, "conversions/{conversion_id}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetConversions" => <Self as Coinbaseexchange>::request(self, "conversions".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetConversionsfees" => <Self as Coinbaseexchange>::request(self, "conversions/fees".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetLoanslendingoverview" => <Self as Coinbaseexchange>::request(self, "loans/lending-overview".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetLoanslendingoverviewxm" => <Self as Coinbaseexchange>::request(self, "loans/lending-overview-xm".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetLoansloanpreview" => <Self as Coinbaseexchange>::request(self, "loans/loan-preview".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetLoansloanpreviewxm" => <Self as Coinbaseexchange>::request(self, "loans/loan-preview-xm".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetLoansrepaymentpreview" => <Self as Coinbaseexchange>::request(self, "loans/repayment-preview".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetLoansrepaymentpreviewxm" => <Self as Coinbaseexchange>::request(self, "loans/repayment-preview-xm".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetLoansinterestloanid" => <Self as Coinbaseexchange>::request(self, "loans/interest/{loan_id}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetLoansinteresthistoryloanid" => <Self as Coinbaseexchange>::request(self, "loans/interest/history/{loan_id}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetLoansinterest" => <Self as Coinbaseexchange>::request(self, "loans/interest".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetLoansassets" => <Self as Coinbaseexchange>::request(self, "loans/assets".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetLoans" => <Self as Coinbaseexchange>::request(self, "loans".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostConversions" => <Self as Coinbaseexchange>::request(self, "conversions".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostDepositscoinbaseaccount" => <Self as Coinbaseexchange>::request(self, "deposits/coinbase-account".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostDepositspaymentmethod" => <Self as Coinbaseexchange>::request(self, "deposits/payment-method".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostCoinbaseaccountsidaddresses" => <Self as Coinbaseexchange>::request(self, "coinbase-accounts/{id}/addresses".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostFundingrepay" => <Self as Coinbaseexchange>::request(self, "funding/repay".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostOrders" => <Self as Coinbaseexchange>::request(self, "orders".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostPositionclose" => <Self as Coinbaseexchange>::request(self, "position/close".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostProfilesmargintransfer" => <Self as Coinbaseexchange>::request(self, "profiles/margin-transfer".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostProfilestransfer" => <Self as Coinbaseexchange>::request(self, "profiles/transfer".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostReports" => <Self as Coinbaseexchange>::request(self, "reports".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostWithdrawalscoinbase" => <Self as Coinbaseexchange>::request(self, "withdrawals/coinbase".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostWithdrawalscoinbaseaccount" => <Self as Coinbaseexchange>::request(self, "withdrawals/coinbase-account".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostWithdrawalscrypto" => <Self as Coinbaseexchange>::request(self, "withdrawals/crypto".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostWithdrawalspaymentmethod" => <Self as Coinbaseexchange>::request(self, "withdrawals/payment-method".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostLoansopen" => <Self as Coinbaseexchange>::request(self, "loans/open".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostLoansrepayinterest" => <Self as Coinbaseexchange>::request(self, "loans/repay-interest".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostLoansrepayprincipal" => <Self as Coinbaseexchange>::request(self, "loans/repay-principal".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateDeleteOrders" => <Self as Coinbaseexchange>::request(self, "orders".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateDeleteOrdersclientclientoid" => <Self as Coinbaseexchange>::request(self, "orders/client:{client_oid}".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateDeleteOrdersid" => <Self as Coinbaseexchange>::request(self, "orders/{id}".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     _ => unimplemented!(),
                 }
             },
@@ -1972,7 +1996,7 @@ impl ValueTrait for CoinbaseexchangeImpl {
     fn join(&self, glue: Value) -> Value { self.0.join(glue) }
     fn to_string(&self) -> Value { self.0.to_string() }
     fn typeof_(&self) -> Value { self.0.typeof_() }
-    fn slice(&self, start: Value) -> Value { self.0.slice(start) }
+    fn slice(&self, start: Value, end: Value) -> Value { self.0.slice(start, end) }
 }
 
 impl CoinbaseexchangeImpl {

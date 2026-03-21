@@ -13,14 +13,38 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, BoolExt, JSON, Array, Object, Math, Promise, parse_int, shift_2, extend_2, normalize};
 // Crypto hash identifiers
-fn sha256() -> Value { Value::from("sha256") }
-fn sha384() -> Value { Value::from("sha384") }
-fn sha512() -> Value { Value::from("sha512") }
-fn md5() -> Value { Value::from("md5") }
-fn ed25519() -> Value { Value::from("ed25519") }
+fn sha256() -> Value { Value::from("sha256()") }
+fn sha384() -> Value { Value::from("sha384()") }
+fn sha512() -> Value { Value::from("sha512()") }
+fn md5() -> Value { Value::from("md5()") }
+fn ed25519() -> Value { Value::from("ed25519()") }
 fn rsa(msg: Value, secret: Value, _hash: Value) -> Value { msg }
 fn eddsa(msg: Value, secret: Value, _curve: Value) -> Value { msg }
-fn secp256k1() -> Value { Value::from("secp256k1") }
+fn secp256k1() -> Value { Value::from("secp256k1()") }
+fn keccak() -> Value { Value::from("keccak()") }
+fn ecdsa(msg: Value, secret: Value, algo: Value, hash_fn: Value) -> Value { msg }
+fn totp(secret: Value) -> Value { Value::Undefined }
+fn jwt(data: Value, secret: Value, hash: Value, is_rsa: Value) -> Value { Value::Undefined }
+fn parse_float(value: Value) -> Value { value }
+fn decimals(value: Value) -> Value { Value::from(0) }
+fn shift_1(value: Value) -> Value { value }
+fn shift_3(value: Value) -> (Value, Value, Value) { (value.clone(), Value::Undefined, Value::Undefined) }
+fn shift_4(value: Value) -> (Value, Value, Value, Value) { (value.clone(), Value::Undefined, Value::Undefined, Value::Undefined) }
+// Error type constructors
+fn BadRequest(msg: Value) -> Value { msg }
+fn InvalidOrder(msg: Value) -> Value { msg }
+fn ExchangeError(msg: Value) -> Value { msg }
+fn InsufficientFunds(msg: Value) -> Value { msg }
+fn OrderNotFound(msg: Value) -> Value { msg }
+fn AuthenticationError(msg: Value) -> Value { msg }
+fn PermissionDenied(msg: Value) -> Value { msg }
+fn ExchangeNotAvailable(msg: Value) -> Value { msg }
+fn ArgumentsRequired(msg: Value) -> Value { msg }
+fn RateLimitExceeded(msg: Value) -> Value { msg }
+fn OrderNotFillable(msg: Value) -> Value { msg }
+fn OrderImmediatelyFillable(msg: Value) -> Value { msg }
+fn NotSupported(msg: Value) -> Value { msg }
+fn DuplicateOrderId(msg: Value) -> Value { msg }
 
 use crate::exchange::{PRECISE_BASE, TRUNCATE, ROUND, ROUND_UP, ROUND_DOWN};
 use crate::exchange::{DECIMAL_PLACES, SIGNIFICANT_DIGITS, TICK_SIZE, NO_PADDING, PAD_WITH_ZERO};
@@ -443,14 +467,14 @@ pub trait Coinone : Exchange {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = <Self as Coinone>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() { return rv; }
                 }
             }
         }
         let candidates = vec![("public", "GET", "depth"), ("public", "GET", "orderbook"), ("public", "GET", "order_book")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Coinone>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -472,14 +496,14 @@ pub trait Coinone : Exchange {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = <Self as Coinone>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() { return rv; }
                 }
             }
         }
         let candidates = vec![("public", "GET", "ticker/24hr"), ("public", "GET", "tickers"), ("public", "GET", "ticker")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Coinone>::request(self,path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -503,14 +527,14 @@ pub trait Coinone : Exchange {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = <Self as Coinone>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() { return rv; }
                 }
             }
         }
         let candidates = vec![("public", "GET", "ticker/24hr"), ("public", "GET", "ticker"), ("public", "GET", "ticker/price")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Coinone>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -647,7 +671,7 @@ pub trait Coinone : Exchange {
         if limit.is_nonnullish() { request.set("limit".into(), limit.clone()); }
         let candidates = vec![("public", "GET", "trades"), ("public", "GET", "recent_trades"), ("public", "GET", "aggTrades")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Coinone>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -1005,69 +1029,69 @@ pub trait Coinone : Exchange {
         match method {
             Value::Json(serde_json::Value::String(ref m)) => {
                 match m.as_ref() {
-                    "publicGetOrderbook" => Coinone::request(self, "orderbook".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetTicker" => Coinone::request(self, "ticker".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetTickerutc" => Coinone::request(self, "ticker_utc".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetTrades" => Coinone::request(self, "trades".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2publicGetRangeunits" => Coinone::request(self, "range_units".into(), "v2Public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2publicGetMarketsquotecurrency" => Coinone::request(self, "markets/{quote_currency}".into(), "v2Public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2publicGetMarketsquotecurrencytargetcurrency" => Coinone::request(self, "markets/{quote_currency}/{target_currency}".into(), "v2Public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2publicGetOrderbookquotecurrencytargetcurrency" => Coinone::request(self, "orderbook/{quote_currency}/{target_currency}".into(), "v2Public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2publicGetTradesquotecurrencytargetcurrency" => Coinone::request(self, "trades/{quote_currency}/{target_currency}".into(), "v2Public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2publicGetTickernewquotecurrency" => Coinone::request(self, "ticker_new/{quote_currency}".into(), "v2Public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2publicGetTickernewquotecurrencytargetcurrency" => Coinone::request(self, "ticker_new/{quote_currency}/{target_currency}".into(), "v2Public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2publicGetTickerutcnewquotecurrency" => Coinone::request(self, "ticker_utc_new/{quote_currency}".into(), "v2Public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2publicGetTickerutcnewquotecurrencytargetcurrency" => Coinone::request(self, "ticker_utc_new/{quote_currency}/{target_currency}".into(), "v2Public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2publicGetCurrencies" => Coinone::request(self, "currencies".into(), "v2Public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2publicGetCurrenciescurrency" => Coinone::request(self, "currencies/{currency}".into(), "v2Public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2publicGetChartquotecurrencytargetcurrency" => Coinone::request(self, "chart/{quote_currency}/{target_currency}".into(), "v2Public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostAccountdepositaddress" => Coinone::request(self, "account/deposit_address".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostAccountbtcdepositaddress" => Coinone::request(self, "account/btc_deposit_address".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostAccountbalance" => Coinone::request(self, "account/balance".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostAccountdailybalance" => Coinone::request(self, "account/daily_balance".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostAccountuserinfo" => Coinone::request(self, "account/user_info".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostAccountvirtualaccount" => Coinone::request(self, "account/virtual_account".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostOrdercancelall" => Coinone::request(self, "order/cancel_all".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostOrdercancel" => Coinone::request(self, "order/cancel".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostOrderlimitbuy" => Coinone::request(self, "order/limit_buy".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostOrderlimitsell" => Coinone::request(self, "order/limit_sell".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostOrdercompleteorders" => Coinone::request(self, "order/complete_orders".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostOrderlimitorders" => Coinone::request(self, "order/limit_orders".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostOrderorderinfo" => Coinone::request(self, "order/order_info".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostTransactionauthnumber" => Coinone::request(self, "transaction/auth_number".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostTransactionhistory" => Coinone::request(self, "transaction/history".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostTransactionkrwhistory" => Coinone::request(self, "transaction/krw/history".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostTransactionbtc" => Coinone::request(self, "transaction/btc".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostTransactioncoin" => Coinone::request(self, "transaction/coin".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2privatePostAccountbalance" => Coinone::request(self, "account/balance".into(), "v2Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2privatePostAccountdepositaddress" => Coinone::request(self, "account/deposit_address".into(), "v2Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2privatePostAccountuserinfo" => Coinone::request(self, "account/user_info".into(), "v2Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2privatePostAccountvirtualaccount" => Coinone::request(self, "account/virtual_account".into(), "v2Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2privatePostOrdercancel" => Coinone::request(self, "order/cancel".into(), "v2Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2privatePostOrderlimitbuy" => Coinone::request(self, "order/limit_buy".into(), "v2Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2privatePostOrderlimitsell" => Coinone::request(self, "order/limit_sell".into(), "v2Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2privatePostOrderlimitorders" => Coinone::request(self, "order/limit_orders".into(), "v2Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2privatePostOrdercompleteorders" => Coinone::request(self, "order/complete_orders".into(), "v2Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2privatePostOrderqueryorder" => Coinone::request(self, "order/query_order".into(), "v2Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2privatePostTransactionauthnumber" => Coinone::request(self, "transaction/auth_number".into(), "v2Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2privatePostTransactionbtc" => Coinone::request(self, "transaction/btc".into(), "v2Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2privatePostTransactionhistory" => Coinone::request(self, "transaction/history".into(), "v2Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2privatePostTransactionkrwhistory" => Coinone::request(self, "transaction/krw/history".into(), "v2Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v21privatePostAccountbalanceall" => Coinone::request(self, "account/balance/all".into(), "v2_1Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v21privatePostAccountbalance" => Coinone::request(self, "account/balance".into(), "v2_1Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v21privatePostAccounttradefee" => Coinone::request(self, "account/trade_fee".into(), "v2_1Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v21privatePostAccounttradefeequotecurrencytargetcurrency" => Coinone::request(self, "account/trade_fee/{quote_currency}/{target_currency}".into(), "v2_1Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v21privatePostOrderlimit" => Coinone::request(self, "order/limit".into(), "v2_1Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v21privatePostOrdercancel" => Coinone::request(self, "order/cancel".into(), "v2_1Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v21privatePostOrdercancelall" => Coinone::request(self, "order/cancel/all".into(), "v2_1Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v21privatePostOrderopenorders" => Coinone::request(self, "order/open_orders".into(), "v2_1Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v21privatePostOrderopenordersall" => Coinone::request(self, "order/open_orders/all".into(), "v2_1Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v21privatePostOrdercompleteorders" => Coinone::request(self, "order/complete_orders".into(), "v2_1Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v21privatePostOrdercompleteordersall" => Coinone::request(self, "order/complete_orders/all".into(), "v2_1Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v21privatePostOrderinfo" => Coinone::request(self, "order/info".into(), "v2_1Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v21privatePostTransactionkrwhistory" => Coinone::request(self, "transaction/krw/history".into(), "v2_1Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v21privatePostTransactioncoinhistory" => Coinone::request(self, "transaction/coin/history".into(), "v2_1Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v21privatePostTransactioncoinwithdrawallimit" => Coinone::request(self, "transaction/coin/withdrawal/limit".into(), "v2_1Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetOrderbook" => self.request("orderbook".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetTicker" => self.request("ticker".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetTickerutc" => self.request("ticker_utc".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetTrades" => self.request("trades".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2publicGetRangeunits" => self.request("range_units".into(), "v2Public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2publicGetMarketsquotecurrency" => self.request("markets/{quote_currency}".into(), "v2Public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2publicGetMarketsquotecurrencytargetcurrency" => self.request("markets/{quote_currency}/{target_currency}".into(), "v2Public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2publicGetOrderbookquotecurrencytargetcurrency" => self.request("orderbook/{quote_currency}/{target_currency}".into(), "v2Public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2publicGetTradesquotecurrencytargetcurrency" => self.request("trades/{quote_currency}/{target_currency}".into(), "v2Public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2publicGetTickernewquotecurrency" => self.request("ticker_new/{quote_currency}".into(), "v2Public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2publicGetTickernewquotecurrencytargetcurrency" => self.request("ticker_new/{quote_currency}/{target_currency}".into(), "v2Public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2publicGetTickerutcnewquotecurrency" => self.request("ticker_utc_new/{quote_currency}".into(), "v2Public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2publicGetTickerutcnewquotecurrencytargetcurrency" => self.request("ticker_utc_new/{quote_currency}/{target_currency}".into(), "v2Public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2publicGetCurrencies" => self.request("currencies".into(), "v2Public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2publicGetCurrenciescurrency" => self.request("currencies/{currency}".into(), "v2Public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2publicGetChartquotecurrencytargetcurrency" => self.request("chart/{quote_currency}/{target_currency}".into(), "v2Public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAccountdepositaddress" => self.request("account/deposit_address".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAccountbtcdepositaddress" => self.request("account/btc_deposit_address".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAccountbalance" => self.request("account/balance".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAccountdailybalance" => self.request("account/daily_balance".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAccountuserinfo" => self.request("account/user_info".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAccountvirtualaccount" => self.request("account/virtual_account".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostOrdercancelall" => self.request("order/cancel_all".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostOrdercancel" => self.request("order/cancel".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostOrderlimitbuy" => self.request("order/limit_buy".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostOrderlimitsell" => self.request("order/limit_sell".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostOrdercompleteorders" => self.request("order/complete_orders".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostOrderlimitorders" => self.request("order/limit_orders".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostOrderorderinfo" => self.request("order/order_info".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostTransactionauthnumber" => self.request("transaction/auth_number".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostTransactionhistory" => self.request("transaction/history".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostTransactionkrwhistory" => self.request("transaction/krw/history".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostTransactionbtc" => self.request("transaction/btc".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostTransactioncoin" => self.request("transaction/coin".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2privatePostAccountbalance" => self.request("account/balance".into(), "v2Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2privatePostAccountdepositaddress" => self.request("account/deposit_address".into(), "v2Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2privatePostAccountuserinfo" => self.request("account/user_info".into(), "v2Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2privatePostAccountvirtualaccount" => self.request("account/virtual_account".into(), "v2Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2privatePostOrdercancel" => self.request("order/cancel".into(), "v2Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2privatePostOrderlimitbuy" => self.request("order/limit_buy".into(), "v2Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2privatePostOrderlimitsell" => self.request("order/limit_sell".into(), "v2Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2privatePostOrderlimitorders" => self.request("order/limit_orders".into(), "v2Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2privatePostOrdercompleteorders" => self.request("order/complete_orders".into(), "v2Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2privatePostOrderqueryorder" => self.request("order/query_order".into(), "v2Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2privatePostTransactionauthnumber" => self.request("transaction/auth_number".into(), "v2Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2privatePostTransactionbtc" => self.request("transaction/btc".into(), "v2Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2privatePostTransactionhistory" => self.request("transaction/history".into(), "v2Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2privatePostTransactionkrwhistory" => self.request("transaction/krw/history".into(), "v2Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v21privatePostAccountbalanceall" => self.request("account/balance/all".into(), "v2_1Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v21privatePostAccountbalance" => self.request("account/balance".into(), "v2_1Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v21privatePostAccounttradefee" => self.request("account/trade_fee".into(), "v2_1Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v21privatePostAccounttradefeequotecurrencytargetcurrency" => self.request("account/trade_fee/{quote_currency}/{target_currency}".into(), "v2_1Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v21privatePostOrderlimit" => self.request("order/limit".into(), "v2_1Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v21privatePostOrdercancel" => self.request("order/cancel".into(), "v2_1Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v21privatePostOrdercancelall" => self.request("order/cancel/all".into(), "v2_1Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v21privatePostOrderopenorders" => self.request("order/open_orders".into(), "v2_1Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v21privatePostOrderopenordersall" => self.request("order/open_orders/all".into(), "v2_1Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v21privatePostOrdercompleteorders" => self.request("order/complete_orders".into(), "v2_1Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v21privatePostOrdercompleteordersall" => self.request("order/complete_orders/all".into(), "v2_1Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v21privatePostOrderinfo" => self.request("order/info".into(), "v2_1Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v21privatePostTransactionkrwhistory" => self.request("transaction/krw/history".into(), "v2_1Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v21privatePostTransactioncoinhistory" => self.request("transaction/coin/history".into(), "v2_1Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v21privatePostTransactioncoinwithdrawallimit" => self.request("transaction/coin/withdrawal/limit".into(), "v2_1Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     _ => unimplemented!(),
                 }
             },
@@ -1111,7 +1135,7 @@ impl ValueTrait for CoinoneImpl {
     fn join(&self, glue: Value) -> Value { self.0.join(glue) }
     fn to_string(&self) -> Value { self.0.to_string() }
     fn typeof_(&self) -> Value { self.0.typeof_() }
-    fn slice(&self, start: Value) -> Value { self.0.slice(start) }
+    fn slice(&self, start: Value, end: Value) -> Value { self.0.slice(start, end) }
 }
 
 impl CoinoneImpl {

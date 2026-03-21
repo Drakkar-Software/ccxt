@@ -13,14 +13,38 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, BoolExt, JSON, Array, Object, Math, Promise, parse_int, shift_2, extend_2, normalize};
 // Crypto hash identifiers
-fn sha256() -> Value { Value::from("sha256") }
-fn sha384() -> Value { Value::from("sha384") }
-fn sha512() -> Value { Value::from("sha512") }
-fn md5() -> Value { Value::from("md5") }
-fn ed25519() -> Value { Value::from("ed25519") }
+fn sha256() -> Value { Value::from("sha256()") }
+fn sha384() -> Value { Value::from("sha384()") }
+fn sha512() -> Value { Value::from("sha512()") }
+fn md5() -> Value { Value::from("md5()") }
+fn ed25519() -> Value { Value::from("ed25519()") }
 fn rsa(msg: Value, secret: Value, _hash: Value) -> Value { msg }
 fn eddsa(msg: Value, secret: Value, _curve: Value) -> Value { msg }
-fn secp256k1() -> Value { Value::from("secp256k1") }
+fn secp256k1() -> Value { Value::from("secp256k1()") }
+fn keccak() -> Value { Value::from("keccak()") }
+fn ecdsa(msg: Value, secret: Value, algo: Value, hash_fn: Value) -> Value { msg }
+fn totp(secret: Value) -> Value { Value::Undefined }
+fn jwt(data: Value, secret: Value, hash: Value, is_rsa: Value) -> Value { Value::Undefined }
+fn parse_float(value: Value) -> Value { value }
+fn decimals(value: Value) -> Value { Value::from(0) }
+fn shift_1(value: Value) -> Value { value }
+fn shift_3(value: Value) -> (Value, Value, Value) { (value.clone(), Value::Undefined, Value::Undefined) }
+fn shift_4(value: Value) -> (Value, Value, Value, Value) { (value.clone(), Value::Undefined, Value::Undefined, Value::Undefined) }
+// Error type constructors
+fn BadRequest(msg: Value) -> Value { msg }
+fn InvalidOrder(msg: Value) -> Value { msg }
+fn ExchangeError(msg: Value) -> Value { msg }
+fn InsufficientFunds(msg: Value) -> Value { msg }
+fn OrderNotFound(msg: Value) -> Value { msg }
+fn AuthenticationError(msg: Value) -> Value { msg }
+fn PermissionDenied(msg: Value) -> Value { msg }
+fn ExchangeNotAvailable(msg: Value) -> Value { msg }
+fn ArgumentsRequired(msg: Value) -> Value { msg }
+fn RateLimitExceeded(msg: Value) -> Value { msg }
+fn OrderNotFillable(msg: Value) -> Value { msg }
+fn OrderImmediatelyFillable(msg: Value) -> Value { msg }
+fn NotSupported(msg: Value) -> Value { msg }
+fn DuplicateOrderId(msg: Value) -> Value { msg }
 
 use crate::exchange::{PRECISE_BASE, TRUNCATE, ROUND, ROUND_UP, ROUND_DOWN};
 use crate::exchange::{DECIMAL_PLACES, SIGNIFICANT_DIGITS, TICK_SIZE, NO_PADDING, PAD_WITH_ZERO};
@@ -506,7 +530,7 @@ pub trait Alpaca : Exchange {
     async fn fetch_time(&mut self, mut params: Value) -> Value {
         let candidates = vec![("public", "GET", "time"), ("public", "GET", "server/time"), ("public", "GET", "timestamp")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Alpaca>::request(self,path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -612,7 +636,7 @@ pub trait Alpaca : Exchange {
         if limit.is_nonnullish() { request.set("limit".into(), limit.clone()); }
         let candidates = vec![("public", "GET", "trades"), ("public", "GET", "recent_trades"), ("public", "GET", "aggTrades")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Alpaca>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -637,14 +661,14 @@ pub trait Alpaca : Exchange {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = <Self as Alpaca>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() { return rv; }
                 }
             }
         }
         let candidates = vec![("public", "GET", "depth"), ("public", "GET", "orderbook"), ("public", "GET", "order_book")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Alpaca>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -672,14 +696,14 @@ pub trait Alpaca : Exchange {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = <Self as Alpaca>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() { return rv; }
                 }
             }
         }
         let candidates = vec![("public", "GET", "klines"), ("public", "GET", "candles"), ("public", "GET", "ohlcv")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Alpaca>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -721,14 +745,14 @@ pub trait Alpaca : Exchange {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = <Self as Alpaca>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() { return rv; }
                 }
             }
         }
         let candidates = vec![("public", "GET", "ticker/24hr"), ("public", "GET", "ticker"), ("public", "GET", "ticker/price")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Alpaca>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -750,14 +774,14 @@ pub trait Alpaca : Exchange {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = <Self as Alpaca>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() { return rv; }
                 }
             }
         }
         let candidates = vec![("public", "GET", "ticker/24hr"), ("public", "GET", "tickers"), ("public", "GET", "ticker")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Alpaca>::request(self,path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -1031,7 +1055,7 @@ pub trait Alpaca : Exchange {
         };
         request.set("client_order_id".into(), <Self as Alpaca>::generate_client_order_id(self, params.clone()));
         params = self.omit(params.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("clientOrderId").into()])));
-        let mut response: Value = self.trader_private_patch_v2_orders_order_id(extend_2(request.clone(), params.clone())).await;
+        let mut response: Value = self.dispatch("traderPrivatePatchV2OrdersOrderId".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         return <Self as Alpaca>::parse_order(self, response.clone(), market.clone());
     }
 
@@ -1520,74 +1544,74 @@ pub trait Alpaca : Exchange {
         match method {
             Value::Json(serde_json::Value::String(ref m)) => {
                 match m.as_ref() {
-                    "traderPrivateGetV2account" => Alpaca::request(self, "v2/account".into(), "trader".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "traderPrivateGetV2orders" => Alpaca::request(self, "v2/orders".into(), "trader".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "traderPrivateGetV2ordersorderid" => Alpaca::request(self, "v2/orders/{order_id}".into(), "trader".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "traderPrivateGetV2positions" => Alpaca::request(self, "v2/positions".into(), "trader".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "traderPrivateGetV2positionssymbolorassetid" => Alpaca::request(self, "v2/positions/{symbol_or_asset_id}".into(), "trader".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "traderPrivateGetV2accountportfoliohistory" => Alpaca::request(self, "v2/account/portfolio/history".into(), "trader".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "traderPrivateGetV2watchlists" => Alpaca::request(self, "v2/watchlists".into(), "trader".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "traderPrivateGetV2watchlistswatchlistid" => Alpaca::request(self, "v2/watchlists/{watchlist_id}".into(), "trader".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "traderPrivateGetV2watchlistsbyname" => Alpaca::request(self, "v2/watchlists:by_name".into(), "trader".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "traderPrivateGetV2accountconfigurations" => Alpaca::request(self, "v2/account/configurations".into(), "trader".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "traderPrivateGetV2accountactivities" => Alpaca::request(self, "v2/account/activities".into(), "trader".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "traderPrivateGetV2accountactivitiesactivitytype" => Alpaca::request(self, "v2/account/activities/{activity_type}".into(), "trader".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "traderPrivateGetV2calendar" => Alpaca::request(self, "v2/calendar".into(), "trader".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "traderPrivateGetV2clock" => Alpaca::request(self, "v2/clock".into(), "trader".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "traderPrivateGetV2assets" => Alpaca::request(self, "v2/assets".into(), "trader".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "traderPrivateGetV2assetssymbolorassetid" => Alpaca::request(self, "v2/assets/{symbol_or_asset_id}".into(), "trader".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "traderPrivateGetV2corporateactionsannouncementsid" => Alpaca::request(self, "v2/corporate_actions/announcements/{id}".into(), "trader".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "traderPrivateGetV2corporateactionsannouncements" => Alpaca::request(self, "v2/corporate_actions/announcements".into(), "trader".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "traderPrivateGetV2wallets" => Alpaca::request(self, "v2/wallets".into(), "trader".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "traderPrivateGetV2walletstransfers" => Alpaca::request(self, "v2/wallets/transfers".into(), "trader".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "traderPrivatePostV2orders" => Alpaca::request(self, "v2/orders".into(), "trader".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "traderPrivatePostV2watchlists" => Alpaca::request(self, "v2/watchlists".into(), "trader".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "traderPrivatePostV2watchlistswatchlistid" => Alpaca::request(self, "v2/watchlists/{watchlist_id}".into(), "trader".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "traderPrivatePostV2watchlistsbyname" => Alpaca::request(self, "v2/watchlists:by_name".into(), "trader".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "traderPrivatePostV2walletstransfers" => Alpaca::request(self, "v2/wallets/transfers".into(), "trader".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "traderPrivatePutV2ordersorderid" => Alpaca::request(self, "v2/orders/{order_id}".into(), "trader".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "traderPrivatePutV2watchlistswatchlistid" => Alpaca::request(self, "v2/watchlists/{watchlist_id}".into(), "trader".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "traderPrivatePutV2watchlistsbyname" => Alpaca::request(self, "v2/watchlists:by_name".into(), "trader".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "traderPrivateDeleteV2orders" => Alpaca::request(self, "v2/orders".into(), "trader".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "traderPrivateDeleteV2ordersorderid" => Alpaca::request(self, "v2/orders/{order_id}".into(), "trader".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "traderPrivateDeleteV2positions" => Alpaca::request(self, "v2/positions".into(), "trader".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "traderPrivateDeleteV2positionssymbolorassetid" => Alpaca::request(self, "v2/positions/{symbol_or_asset_id}".into(), "trader".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "traderPrivateDeleteV2watchlistswatchlistid" => Alpaca::request(self, "v2/watchlists/{watchlist_id}".into(), "trader".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "traderPrivateDeleteV2watchlistsbyname" => Alpaca::request(self, "v2/watchlists:by_name".into(), "trader".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "traderPrivateDeleteV2watchlistswatchlistidsymbol" => Alpaca::request(self, "v2/watchlists/{watchlist_id}/{symbol}".into(), "trader".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "marketPublicGetV1beta3cryptolocbars" => Alpaca::request(self, "v1beta3/crypto/{loc}/bars".into(), "market".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "marketPublicGetV1beta3cryptoloclatestbars" => Alpaca::request(self, "v1beta3/crypto/{loc}/latest/bars".into(), "market".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "marketPublicGetV1beta3cryptoloclatestorderbooks" => Alpaca::request(self, "v1beta3/crypto/{loc}/latest/orderbooks".into(), "market".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "marketPublicGetV1beta3cryptoloclatestquotes" => Alpaca::request(self, "v1beta3/crypto/{loc}/latest/quotes".into(), "market".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "marketPublicGetV1beta3cryptoloclatesttrades" => Alpaca::request(self, "v1beta3/crypto/{loc}/latest/trades".into(), "market".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "marketPublicGetV1beta3cryptolocquotes" => Alpaca::request(self, "v1beta3/crypto/{loc}/quotes".into(), "market".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "marketPublicGetV1beta3cryptolocsnapshots" => Alpaca::request(self, "v1beta3/crypto/{loc}/snapshots".into(), "market".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "marketPublicGetV1beta3cryptoloctrades" => Alpaca::request(self, "v1beta3/crypto/{loc}/trades".into(), "market".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "marketPrivateGetV1beta1corporateactions" => Alpaca::request(self, "v1beta1/corporate-actions".into(), "market".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "marketPrivateGetV1beta1forexlatestrates" => Alpaca::request(self, "v1beta1/forex/latest/rates".into(), "market".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "marketPrivateGetV1beta1forexrates" => Alpaca::request(self, "v1beta1/forex/rates".into(), "market".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "marketPrivateGetV1beta1logossymbol" => Alpaca::request(self, "v1beta1/logos/{symbol}".into(), "market".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "marketPrivateGetV1beta1news" => Alpaca::request(self, "v1beta1/news".into(), "market".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "marketPrivateGetV1beta1screenerstocksmostactives" => Alpaca::request(self, "v1beta1/screener/stocks/most-actives".into(), "market".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "marketPrivateGetV1beta1screenermarkettypemovers" => Alpaca::request(self, "v1beta1/screener/{market_type}/movers".into(), "market".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "marketPrivateGetV2stocksauctions" => Alpaca::request(self, "v2/stocks/auctions".into(), "market".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "marketPrivateGetV2stocksbars" => Alpaca::request(self, "v2/stocks/bars".into(), "market".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "marketPrivateGetV2stocksbarslatest" => Alpaca::request(self, "v2/stocks/bars/latest".into(), "market".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "marketPrivateGetV2stocksmetaconditionsticktype" => Alpaca::request(self, "v2/stocks/meta/conditions/{ticktype}".into(), "market".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "marketPrivateGetV2stocksmetaexchanges" => Alpaca::request(self, "v2/stocks/meta/exchanges".into(), "market".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "marketPrivateGetV2stocksquotes" => Alpaca::request(self, "v2/stocks/quotes".into(), "market".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "marketPrivateGetV2stocksquoteslatest" => Alpaca::request(self, "v2/stocks/quotes/latest".into(), "market".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "marketPrivateGetV2stockssnapshots" => Alpaca::request(self, "v2/stocks/snapshots".into(), "market".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "marketPrivateGetV2stockstrades" => Alpaca::request(self, "v2/stocks/trades".into(), "market".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "marketPrivateGetV2stockstradeslatest" => Alpaca::request(self, "v2/stocks/trades/latest".into(), "market".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "marketPrivateGetV2stockssymbolauctions" => Alpaca::request(self, "v2/stocks/{symbol}/auctions".into(), "market".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "marketPrivateGetV2stockssymbolbars" => Alpaca::request(self, "v2/stocks/{symbol}/bars".into(), "market".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "marketPrivateGetV2stockssymbolbarslatest" => Alpaca::request(self, "v2/stocks/{symbol}/bars/latest".into(), "market".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "marketPrivateGetV2stockssymbolquotes" => Alpaca::request(self, "v2/stocks/{symbol}/quotes".into(), "market".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "marketPrivateGetV2stockssymbolquoteslatest" => Alpaca::request(self, "v2/stocks/{symbol}/quotes/latest".into(), "market".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "marketPrivateGetV2stockssymbolsnapshot" => Alpaca::request(self, "v2/stocks/{symbol}/snapshot".into(), "market".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "marketPrivateGetV2stockssymboltrades" => Alpaca::request(self, "v2/stocks/{symbol}/trades".into(), "market".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "marketPrivateGetV2stockssymboltradeslatest" => Alpaca::request(self, "v2/stocks/{symbol}/trades/latest".into(), "market".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "traderPrivateGetV2account" => self.request("v2/account".into(), "trader".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "traderPrivateGetV2orders" => self.request("v2/orders".into(), "trader".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "traderPrivateGetV2ordersorderid" => self.request("v2/orders/{order_id}".into(), "trader".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "traderPrivateGetV2positions" => self.request("v2/positions".into(), "trader".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "traderPrivateGetV2positionssymbolorassetid" => self.request("v2/positions/{symbol_or_asset_id}".into(), "trader".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "traderPrivateGetV2accountportfoliohistory" => self.request("v2/account/portfolio/history".into(), "trader".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "traderPrivateGetV2watchlists" => self.request("v2/watchlists".into(), "trader".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "traderPrivateGetV2watchlistswatchlistid" => self.request("v2/watchlists/{watchlist_id}".into(), "trader".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "traderPrivateGetV2watchlistsbyname" => self.request("v2/watchlists:by_name".into(), "trader".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "traderPrivateGetV2accountconfigurations" => self.request("v2/account/configurations".into(), "trader".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "traderPrivateGetV2accountactivities" => self.request("v2/account/activities".into(), "trader".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "traderPrivateGetV2accountactivitiesactivitytype" => self.request("v2/account/activities/{activity_type}".into(), "trader".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "traderPrivateGetV2calendar" => self.request("v2/calendar".into(), "trader".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "traderPrivateGetV2clock" => self.request("v2/clock".into(), "trader".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "traderPrivateGetV2assets" => self.request("v2/assets".into(), "trader".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "traderPrivateGetV2assetssymbolorassetid" => self.request("v2/assets/{symbol_or_asset_id}".into(), "trader".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "traderPrivateGetV2corporateactionsannouncementsid" => self.request("v2/corporate_actions/announcements/{id}".into(), "trader".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "traderPrivateGetV2corporateactionsannouncements" => self.request("v2/corporate_actions/announcements".into(), "trader".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "traderPrivateGetV2wallets" => self.request("v2/wallets".into(), "trader".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "traderPrivateGetV2walletstransfers" => self.request("v2/wallets/transfers".into(), "trader".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "traderPrivatePostV2orders" => self.request("v2/orders".into(), "trader".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "traderPrivatePostV2watchlists" => self.request("v2/watchlists".into(), "trader".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "traderPrivatePostV2watchlistswatchlistid" => self.request("v2/watchlists/{watchlist_id}".into(), "trader".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "traderPrivatePostV2watchlistsbyname" => self.request("v2/watchlists:by_name".into(), "trader".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "traderPrivatePostV2walletstransfers" => self.request("v2/wallets/transfers".into(), "trader".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "traderPrivatePutV2ordersorderid" => self.request("v2/orders/{order_id}".into(), "trader".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "traderPrivatePutV2watchlistswatchlistid" => self.request("v2/watchlists/{watchlist_id}".into(), "trader".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "traderPrivatePutV2watchlistsbyname" => self.request("v2/watchlists:by_name".into(), "trader".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "traderPrivateDeleteV2orders" => self.request("v2/orders".into(), "trader".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "traderPrivateDeleteV2ordersorderid" => self.request("v2/orders/{order_id}".into(), "trader".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "traderPrivateDeleteV2positions" => self.request("v2/positions".into(), "trader".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "traderPrivateDeleteV2positionssymbolorassetid" => self.request("v2/positions/{symbol_or_asset_id}".into(), "trader".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "traderPrivateDeleteV2watchlistswatchlistid" => self.request("v2/watchlists/{watchlist_id}".into(), "trader".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "traderPrivateDeleteV2watchlistsbyname" => self.request("v2/watchlists:by_name".into(), "trader".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "traderPrivateDeleteV2watchlistswatchlistidsymbol" => self.request("v2/watchlists/{watchlist_id}/{symbol}".into(), "trader".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "marketPublicGetV1beta3cryptolocbars" => self.request("v1beta3/crypto/{loc}/bars".into(), "market".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "marketPublicGetV1beta3cryptoloclatestbars" => self.request("v1beta3/crypto/{loc}/latest/bars".into(), "market".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "marketPublicGetV1beta3cryptoloclatestorderbooks" => self.request("v1beta3/crypto/{loc}/latest/orderbooks".into(), "market".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "marketPublicGetV1beta3cryptoloclatestquotes" => self.request("v1beta3/crypto/{loc}/latest/quotes".into(), "market".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "marketPublicGetV1beta3cryptoloclatesttrades" => self.request("v1beta3/crypto/{loc}/latest/trades".into(), "market".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "marketPublicGetV1beta3cryptolocquotes" => self.request("v1beta3/crypto/{loc}/quotes".into(), "market".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "marketPublicGetV1beta3cryptolocsnapshots" => self.request("v1beta3/crypto/{loc}/snapshots".into(), "market".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "marketPublicGetV1beta3cryptoloctrades" => self.request("v1beta3/crypto/{loc}/trades".into(), "market".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "marketPrivateGetV1beta1corporateactions" => self.request("v1beta1/corporate-actions".into(), "market".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "marketPrivateGetV1beta1forexlatestrates" => self.request("v1beta1/forex/latest/rates".into(), "market".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "marketPrivateGetV1beta1forexrates" => self.request("v1beta1/forex/rates".into(), "market".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "marketPrivateGetV1beta1logossymbol" => self.request("v1beta1/logos/{symbol}".into(), "market".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "marketPrivateGetV1beta1news" => self.request("v1beta1/news".into(), "market".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "marketPrivateGetV1beta1screenerstocksmostactives" => self.request("v1beta1/screener/stocks/most-actives".into(), "market".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "marketPrivateGetV1beta1screenermarkettypemovers" => self.request("v1beta1/screener/{market_type}/movers".into(), "market".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "marketPrivateGetV2stocksauctions" => self.request("v2/stocks/auctions".into(), "market".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "marketPrivateGetV2stocksbars" => self.request("v2/stocks/bars".into(), "market".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "marketPrivateGetV2stocksbarslatest" => self.request("v2/stocks/bars/latest".into(), "market".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "marketPrivateGetV2stocksmetaconditionsticktype" => self.request("v2/stocks/meta/conditions/{ticktype}".into(), "market".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "marketPrivateGetV2stocksmetaexchanges" => self.request("v2/stocks/meta/exchanges".into(), "market".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "marketPrivateGetV2stocksquotes" => self.request("v2/stocks/quotes".into(), "market".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "marketPrivateGetV2stocksquoteslatest" => self.request("v2/stocks/quotes/latest".into(), "market".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "marketPrivateGetV2stockssnapshots" => self.request("v2/stocks/snapshots".into(), "market".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "marketPrivateGetV2stockstrades" => self.request("v2/stocks/trades".into(), "market".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "marketPrivateGetV2stockstradeslatest" => self.request("v2/stocks/trades/latest".into(), "market".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "marketPrivateGetV2stockssymbolauctions" => self.request("v2/stocks/{symbol}/auctions".into(), "market".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "marketPrivateGetV2stockssymbolbars" => self.request("v2/stocks/{symbol}/bars".into(), "market".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "marketPrivateGetV2stockssymbolbarslatest" => self.request("v2/stocks/{symbol}/bars/latest".into(), "market".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "marketPrivateGetV2stockssymbolquotes" => self.request("v2/stocks/{symbol}/quotes".into(), "market".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "marketPrivateGetV2stockssymbolquoteslatest" => self.request("v2/stocks/{symbol}/quotes/latest".into(), "market".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "marketPrivateGetV2stockssymbolsnapshot" => self.request("v2/stocks/{symbol}/snapshot".into(), "market".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "marketPrivateGetV2stockssymboltrades" => self.request("v2/stocks/{symbol}/trades".into(), "market".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "marketPrivateGetV2stockssymboltradeslatest" => self.request("v2/stocks/{symbol}/trades/latest".into(), "market".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     _ => unimplemented!(),
                 }
             },
@@ -1631,7 +1655,7 @@ impl ValueTrait for AlpacaImpl {
     fn join(&self, glue: Value) -> Value { self.0.join(glue) }
     fn to_string(&self) -> Value { self.0.to_string() }
     fn typeof_(&self) -> Value { self.0.typeof_() }
-    fn slice(&self, start: Value) -> Value { self.0.slice(start) }
+    fn slice(&self, start: Value, end: Value) -> Value { self.0.slice(start, end) }
 }
 
 impl AlpacaImpl {

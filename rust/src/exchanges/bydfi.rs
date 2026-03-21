@@ -13,14 +13,38 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, BoolExt, JSON, Array, Object, Math, Promise, parse_int, shift_2, extend_2, normalize};
 // Crypto hash identifiers
-fn sha256() -> Value { Value::from("sha256") }
-fn sha384() -> Value { Value::from("sha384") }
-fn sha512() -> Value { Value::from("sha512") }
-fn md5() -> Value { Value::from("md5") }
-fn ed25519() -> Value { Value::from("ed25519") }
+fn sha256() -> Value { Value::from("sha256()") }
+fn sha384() -> Value { Value::from("sha384()") }
+fn sha512() -> Value { Value::from("sha512()") }
+fn md5() -> Value { Value::from("md5()") }
+fn ed25519() -> Value { Value::from("ed25519()") }
 fn rsa(msg: Value, secret: Value, _hash: Value) -> Value { msg }
 fn eddsa(msg: Value, secret: Value, _curve: Value) -> Value { msg }
-fn secp256k1() -> Value { Value::from("secp256k1") }
+fn secp256k1() -> Value { Value::from("secp256k1()") }
+fn keccak() -> Value { Value::from("keccak()") }
+fn ecdsa(msg: Value, secret: Value, algo: Value, hash_fn: Value) -> Value { msg }
+fn totp(secret: Value) -> Value { Value::Undefined }
+fn jwt(data: Value, secret: Value, hash: Value, is_rsa: Value) -> Value { Value::Undefined }
+fn parse_float(value: Value) -> Value { value }
+fn decimals(value: Value) -> Value { Value::from(0) }
+fn shift_1(value: Value) -> Value { value }
+fn shift_3(value: Value) -> (Value, Value, Value) { (value.clone(), Value::Undefined, Value::Undefined) }
+fn shift_4(value: Value) -> (Value, Value, Value, Value) { (value.clone(), Value::Undefined, Value::Undefined, Value::Undefined) }
+// Error type constructors
+fn BadRequest(msg: Value) -> Value { msg }
+fn InvalidOrder(msg: Value) -> Value { msg }
+fn ExchangeError(msg: Value) -> Value { msg }
+fn InsufficientFunds(msg: Value) -> Value { msg }
+fn OrderNotFound(msg: Value) -> Value { msg }
+fn AuthenticationError(msg: Value) -> Value { msg }
+fn PermissionDenied(msg: Value) -> Value { msg }
+fn ExchangeNotAvailable(msg: Value) -> Value { msg }
+fn ArgumentsRequired(msg: Value) -> Value { msg }
+fn RateLimitExceeded(msg: Value) -> Value { msg }
+fn OrderNotFillable(msg: Value) -> Value { msg }
+fn OrderImmediatelyFillable(msg: Value) -> Value { msg }
+fn NotSupported(msg: Value) -> Value { msg }
+fn DuplicateOrderId(msg: Value) -> Value { msg }
 
 use crate::exchange::{PRECISE_BASE, TRUNCATE, ROUND, ROUND_UP, ROUND_DOWN};
 use crate::exchange::{DECIMAL_PLACES, SIGNIFICANT_DIGITS, TICK_SIZE, NO_PADDING, PAD_WITH_ZERO};
@@ -360,26 +384,26 @@ pub trait Bydfi : Exchange {
             "precisionMode": TICK_SIZE.into(),
             "exceptions": Value::Json(normalize(&Value::Json(json!({
                 "exact": Value::Json(normalize(&Value::Json(json!({
-                    "101001": AuthenticationError,
-                    "101103": AuthenticationError,
-                    "102001": BadRequest,
-                    "102002": PermissionDenied,
-                    "401": AuthenticationError,
-                    "500": ExchangeError,
-                    "501": ExchangeError,
-                    "506": ExchangeError,
-                    "510": RateLimitExceeded,
-                    "511": AuthenticationError,
-                    "513": BadRequest,
-                    "514": BadRequest,
-                    "600": BadRequest,
-                    "Position does not exist": BadRequest,
-                    "Requires transaction permissions": PermissionDenied,
-                    "Service error": ExchangeError,
-                    "transfer failed": InsufficientFunds
+                    "101001": "AuthenticationError",
+                    "101103": "AuthenticationError",
+                    "102001": "BadRequest",
+                    "102002": "PermissionDenied",
+                    "401": "AuthenticationError",
+                    "500": "ExchangeError",
+                    "501": "ExchangeError",
+                    "506": "ExchangeError",
+                    "510": "RateLimitExceeded",
+                    "511": "AuthenticationError",
+                    "513": "BadRequest",
+                    "514": "BadRequest",
+                    "600": "BadRequest",
+                    "Position does not exist": "BadRequest",
+                    "Requires transaction permissions": "PermissionDenied",
+                    "Service error": "ExchangeError",
+                    "transfer failed": "InsufficientFunds"
                 }))).unwrap()),
                 "broad": Value::Json(normalize(&Value::Json(json!({
-                    "is missing": ArgumentsRequired
+                    "is missing": "ArgumentsRequired"
                 }))).unwrap())
             }))).unwrap()),
             "commonCurrencies": Value::new_object(),
@@ -537,14 +561,14 @@ pub trait Bydfi : Exchange {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = <Self as Bydfi>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() { return rv; }
                 }
             }
         }
         let candidates = vec![("public", "GET", "depth"), ("public", "GET", "orderbook"), ("public", "GET", "order_book")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Bydfi>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -572,7 +596,7 @@ pub trait Bydfi : Exchange {
         if limit.is_nonnullish() { request.set("limit".into(), limit.clone()); }
         let candidates = vec![("public", "GET", "trades"), ("public", "GET", "recent_trades"), ("public", "GET", "aggTrades")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Bydfi>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -606,7 +630,7 @@ pub trait Bydfi : Exchange {
         if limit.clone().is_nonnullish() {
             request.set("limit".into(), limit.clone());
         };
-        let mut response: Value = self.private_get_v1_swap_trade_history_trade(extend_2(request.clone(), params.clone())).await;
+        let mut response: Value = self.dispatch("privateGetV1SwapTradeHistoryTrade".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         //
         //     {
         //         "code": 200,
@@ -734,14 +758,14 @@ pub trait Bydfi : Exchange {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = <Self as Bydfi>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() { return rv; }
                 }
             }
         }
         let candidates = vec![("public", "GET", "klines"), ("public", "GET", "candles"), ("public", "GET", "ohlcv")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Bydfi>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -778,14 +802,14 @@ pub trait Bydfi : Exchange {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = <Self as Bydfi>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() { return rv; }
                 }
             }
         }
         let candidates = vec![("public", "GET", "ticker/24hr"), ("public", "GET", "tickers"), ("public", "GET", "ticker")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Bydfi>::request(self,path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -809,14 +833,14 @@ pub trait Bydfi : Exchange {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = <Self as Bydfi>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() { return rv; }
                 }
             }
         }
         let candidates = vec![("public", "GET", "ticker/24hr"), ("public", "GET", "ticker"), ("public", "GET", "ticker/price")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Bydfi>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -873,7 +897,7 @@ pub trait Bydfi : Exchange {
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
             "symbol": market.get(Value::from("id"))
         }))).unwrap());
-        let mut response: Value = self.public_get_v1_swap_market_funding_rate(extend_2(request.clone(), params.clone())).await;
+        let mut response: Value = self.dispatch("publicGetV1SwapMarketFundingRate".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         //
         //     {
         //         "code": 200,
@@ -947,7 +971,7 @@ pub trait Bydfi : Exchange {
         if until.clone().is_nonnullish() {
             request.set("endTime".into(), until.clone());
         };
-        let mut response: Value = self.public_get_v1_swap_market_funding_rate_history(extend_2(request.clone(), params.clone())).await;
+        let mut response: Value = self.dispatch("publicGetV1SwapMarketFundingRateHistory".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         //
         //     {
         //         "code": 200,
@@ -997,7 +1021,7 @@ pub trait Bydfi : Exchange {
         order_request = extend_2(order_request.clone(), Value::Json(normalize(&Value::Json(json!({
             "wallet": wallet
         }))).unwrap()));
-        let mut response: Value = self.private_post_v1_swap_trade_place_order(order_request.clone()).await;
+        let mut response: Value = self.dispatch("privatePostV1SwapTradePlaceOrder".into(), order_request.clone(), Value::Undefined).await;
         //
         //     {
         //         "code": 200,
@@ -1170,7 +1194,7 @@ pub trait Bydfi : Exchange {
             "wallet": wallet,
             "orders": orders_requests
         }))).unwrap());
-        let mut response: Value = self.private_post_v1_swap_trade_batch_place_order(extend_2(request.clone(), params.clone())).await;
+        let mut response: Value = self.dispatch("privatePostV1SwapTradeBatchPlaceOrder".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         let mut data: Value = self.safe_list(response.clone(), Value::from("data"), Value::new_array());
         return self.parse_orders(data.clone(), Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined);
     }
@@ -1182,7 +1206,7 @@ pub trait Bydfi : Exchange {
         let mut wallet: Value = Value::from("W001");
         (wallet, params) = shift_2(self.handle_option_and_params(params.clone(), Value::from("editOrder"), Value::from("wallet"), wallet.clone()));
         request.set("wallet".into(), wallet.clone());
-        let mut response: Value = self.private_post_v1_swap_trade_edit_order(request.clone()).await;
+        let mut response: Value = self.dispatch("privatePostV1SwapTradeEditOrder".into(), request.clone(), Value::Undefined).await;
         let mut data: Value = self.safe_dict(response.clone(), Value::from("data"), Value::new_object());
         return <Self as Bydfi>::parse_order(self, data.clone(), Value::Undefined);
     }
@@ -1214,7 +1238,7 @@ pub trait Bydfi : Exchange {
             "wallet": wallet,
             "editOrders": orders_requests
         }))).unwrap());
-        let mut response: Value = self.private_post_v1_swap_trade_batch_edit_order(extend_2(request.clone(), params.clone())).await;
+        let mut response: Value = self.dispatch("privatePostV1SwapTradeBatchEditOrder".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         let mut data: Value = self.safe_list(response.clone(), Value::from("data"), Value::new_array());
         return self.parse_orders(data.clone(), Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined);
     }
@@ -1255,7 +1279,7 @@ pub trait Bydfi : Exchange {
             "symbol": market.get(Value::from("id")),
             "wallet": wallet
         }))).unwrap());
-        let mut response: Value = self.private_post_v1_swap_trade_cancel_all_order(extend_2(request.clone(), params.clone())).await;
+        let mut response: Value = self.dispatch("privatePostV1SwapTradeCancelAllOrder".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         //
         //     {
         //         "code": 200,
@@ -1341,9 +1365,9 @@ pub trait Bydfi : Exchange {
             //         "success": true
             //     }
             //
-            response = self.private_get_v1_swap_trade_open_order(extend_2(request.clone(), params.clone())).await;
+            response = self.dispatch("privateGetV1SwapTradeOpenOrder".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         } else {
-            response = self.private_get_v1_swap_trade_plan_order(extend_2(request.clone(), params.clone())).await;
+            response = self.dispatch("privateGetV1SwapTradePlanOrder".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         };
         let mut data: Value = self.safe_list(response.clone(), Value::from("data"), Value::new_array());
         return self.parse_orders(data.clone(), market.clone(), since.clone(), limit.clone(), Value::Undefined);
@@ -1372,9 +1396,9 @@ pub trait Bydfi : Exchange {
         let mut trigger: Value = false.into();
         (trigger, params) = shift_2(self.handle_option_and_params(params.clone(), Value::from("fetchOpenOrder"), Value::from("trigger"), trigger.clone()));
         if !trigger.is_truthy() {
-            response = self.private_get_v1_swap_trade_open_order(extend_2(request.clone(), params.clone())).await;
+            response = self.dispatch("privateGetV1SwapTradeOpenOrder".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         } else {
-            response = self.private_get_v1_swap_trade_plan_order(extend_2(request.clone(), params.clone())).await;
+            response = self.dispatch("privateGetV1SwapTradePlanOrder".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         };
         let mut data: Value = self.safe_list(response.clone(), Value::from("data"), Value::new_array());
         let mut order: Value = self.safe_dict(data.clone(), Value::from(0), Value::new_object());
@@ -1408,7 +1432,7 @@ pub trait Bydfi : Exchange {
         if limit.clone().is_nonnullish() {
             request.set("limit".into(), limit.clone());
         };
-        let mut response: Value = self.private_get_v1_swap_trade_history_order(extend_2(request.clone(), params.clone())).await;
+        let mut response: Value = self.dispatch("privateGetV1SwapTradeHistoryOrder".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         //
         //     {
         //         "code": 200,
@@ -1657,7 +1681,7 @@ pub trait Bydfi : Exchange {
             "leverage": leverage,
             "wallet": wallet
         }))).unwrap());
-        let mut response: Value = self.private_post_v1_swap_trade_leverage(extend_2(request.clone(), params.clone())).await;
+        let mut response: Value = self.dispatch("privatePostV1SwapTradeLeverage".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         let mut data: Value = self.safe_dict(response.clone(), Value::from("data"), Value::new_object());
         return data.clone();
     }
@@ -1675,7 +1699,7 @@ pub trait Bydfi : Exchange {
             "symbol": market.get(Value::from("id")),
             "wallet": wallet
         }))).unwrap());
-        let mut response: Value = self.private_get_v1_swap_trade_leverage(extend_2(request.clone(), params.clone())).await;
+        let mut response: Value = self.dispatch("privateGetV1SwapTradeLeverage".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         //
         //     {
         //         "code": 200,
@@ -1711,7 +1735,7 @@ pub trait Bydfi : Exchange {
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
             "contractType": contract_type
         }))).unwrap());
-        let mut response: Value = self.private_get_v1_swap_trade_positions(extend_2(request.clone(), params.clone())).await;
+        let mut response: Value = self.dispatch("privateGetV1SwapTradePositions".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         //
         //     {
         //         "code": 200,
@@ -1748,7 +1772,7 @@ pub trait Bydfi : Exchange {
             "contractType": contract_type,
             "symbol": market.get(Value::from("id"))
         }))).unwrap());
-        let mut response: Value = self.private_get_v1_swap_trade_positions(extend_2(request.clone(), params.clone())).await;
+        let mut response: Value = self.dispatch("privateGetV1SwapTradePositions".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         let mut data: Value = self.safe_list(response.clone(), Value::from("data"), Value::new_array());
         return self.parse_positions(data.clone(), Value::Json(serde_json::Value::Array(vec![market.get(Value::from("symbol")).into()])), Value::Undefined);
     }
@@ -1880,7 +1904,7 @@ pub trait Bydfi : Exchange {
         if limit.clone().is_nonnullish() {
             request.set("limit".into(), limit.clone());
         };
-        let mut response: Value = self.private_get_v1_swap_trade_position_history(extend_2(request.clone(), params.clone())).await;
+        let mut response: Value = self.dispatch("privateGetV1SwapTradePositionHistory".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         //
         //
         let mut data: Value = self.safe_list(response.clone(), Value::from("data"), Value::new_array());
@@ -1900,7 +1924,7 @@ pub trait Bydfi : Exchange {
         if limit.clone().is_nonnullish() {
             request.set("limit".into(), limit.clone());
         };
-        let mut response: Value = self.private_get_v1_swap_trade_position_history(extend_2(request.clone(), params.clone())).await;
+        let mut response: Value = self.dispatch("privateGetV1SwapTradePositionHistory".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         //
         //     {
         //         "code": 200,
@@ -1961,7 +1985,7 @@ pub trait Bydfi : Exchange {
             "symbol": market.get(Value::from("id")),
             "wallet": wallet
         }))).unwrap());
-        let mut response: Value = self.private_get_v1_swap_user_data_assets_margin(extend_2(request.clone(), params.clone())).await;
+        let mut response: Value = self.dispatch("privateGetV1SwapUserDataAssetsMargin".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         //
         //     {
         //         "code": 200,
@@ -2015,7 +2039,7 @@ pub trait Bydfi : Exchange {
         //         "success": true
         //     }
         //
-        return self.private_post_v1_swap_user_data_position_side_dual(extend_2(request.clone(), params.clone())).await;
+        return self.dispatch("privatePostV1SwapUserDataPositionSideDual".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
     }
 
     async fn fetch_position_mode(&mut self, mut symbol: Value, mut params: Value) -> Value {
@@ -2037,7 +2061,7 @@ pub trait Bydfi : Exchange {
             "settleCoin": settle_coin,
             "wallet": wallet
         }))).unwrap());
-        let mut response: Value = self.private_get_v1_swap_user_data_position_side_dual(extend_2(request.clone(), params.clone())).await;
+        let mut response: Value = self.dispatch("privateGetV1SwapUserDataPositionSideDual".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         //
         //     {
         //         "code": 200,
@@ -2090,7 +2114,7 @@ pub trait Bydfi : Exchange {
             //         "success": true
             //     }
             //
-            response = self.private_get_v1_account_assets(extend_2(request.clone(), params.clone())).await;
+            response = self.dispatch("privateGetV1AccountAssets".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         } else {
             let mut wallet: Value = Value::from("W001");
             (wallet, params) = shift_2(self.handle_option_and_params(params.clone(), Value::from("fetchBalance"), Value::from("wallet"), wallet.clone()));
@@ -2123,7 +2147,7 @@ pub trait Bydfi : Exchange {
             //         ],
             //         "success": true
             //     }
-            response = self.private_get_v1_swap_account_balance(extend_2(request.clone(), params.clone())).await;
+            response = self.dispatch("privateGetV1SwapAccountBalance".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         };
         let mut data: Value = self.safe_list(response.clone(), Value::from("data"), Value::new_array());
         return <Self as Bydfi>::parse_balance(self, data.clone());
@@ -2163,7 +2187,7 @@ pub trait Bydfi : Exchange {
             "fromType": from_id,
             "toType": to_id
         }))).unwrap());
-        let mut response: Value = self.private_post_v1_account_transfer(extend_2(request.clone(), params.clone())).await;
+        let mut response: Value = self.dispatch("privatePostV1AccountTransfer".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         //
         //     {
         //         "code": 200,
@@ -2221,7 +2245,7 @@ pub trait Bydfi : Exchange {
         if limit.clone().is_nonnullish() {
             request.set("rows".into(), limit.clone());
         };
-        let mut response: Value = self.private_get_v1_account_transfer_records(extend_2(request.clone(), params.clone())).await;
+        let mut response: Value = self.dispatch("privateGetV1AccountTransferRecords".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         //
         //     {
         //         "code": 200,
@@ -2378,12 +2402,12 @@ pub trait Bydfi : Exchange {
             //         "success": true
             //     }
             //
-            response = self.private_get_v1_spot_deposit_records(extend_2(request.clone(), params.clone())).await;
+            response = self.dispatch("privateGetV1SpotDepositRecords".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         } else {
             //
             // todo check after withdrawal
             //
-            response = self.private_get_v1_spot_withdraw_records(extend_2(request.clone(), params.clone())).await;
+            response = self.dispatch("privateGetV1SpotWithdrawRecords".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         };
         let mut data: Value = self.safe_list(response.clone(), Value::from("data"), Value::new_array());
         let mut transaction_params: Value = Value::Json(normalize(&Value::Json(json!({
@@ -2458,6 +2482,17 @@ pub trait Bydfi : Exchange {
 
     
 
+    
+    async fn dispatch(&mut self, method: Value, params: Value, context: Value) -> Value {
+        match method {
+            Value::Json(serde_json::Value::String(ref m)) => {
+                match m.as_ref() {
+                    _ => unimplemented!(),
+                }
+            },
+            _ => unimplemented!()
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -2495,7 +2530,7 @@ impl ValueTrait for BydfiImpl {
     fn join(&self, glue: Value) -> Value { self.0.join(glue) }
     fn to_string(&self) -> Value { self.0.to_string() }
     fn typeof_(&self) -> Value { self.0.typeof_() }
-    fn slice(&self, start: Value) -> Value { self.0.slice(start) }
+    fn slice(&self, start: Value, end: Value) -> Value { self.0.slice(start, end) }
 }
 
 impl BydfiImpl {

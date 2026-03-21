@@ -13,14 +13,38 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, BoolExt, JSON, Array, Object, Math, Promise, parse_int, shift_2, extend_2, normalize};
 // Crypto hash identifiers
-fn sha256() -> Value { Value::from("sha256") }
-fn sha384() -> Value { Value::from("sha384") }
-fn sha512() -> Value { Value::from("sha512") }
-fn md5() -> Value { Value::from("md5") }
-fn ed25519() -> Value { Value::from("ed25519") }
+fn sha256() -> Value { Value::from("sha256()") }
+fn sha384() -> Value { Value::from("sha384()") }
+fn sha512() -> Value { Value::from("sha512()") }
+fn md5() -> Value { Value::from("md5()") }
+fn ed25519() -> Value { Value::from("ed25519()") }
 fn rsa(msg: Value, secret: Value, _hash: Value) -> Value { msg }
 fn eddsa(msg: Value, secret: Value, _curve: Value) -> Value { msg }
-fn secp256k1() -> Value { Value::from("secp256k1") }
+fn secp256k1() -> Value { Value::from("secp256k1()") }
+fn keccak() -> Value { Value::from("keccak()") }
+fn ecdsa(msg: Value, secret: Value, algo: Value, hash_fn: Value) -> Value { msg }
+fn totp(secret: Value) -> Value { Value::Undefined }
+fn jwt(data: Value, secret: Value, hash: Value, is_rsa: Value) -> Value { Value::Undefined }
+fn parse_float(value: Value) -> Value { value }
+fn decimals(value: Value) -> Value { Value::from(0) }
+fn shift_1(value: Value) -> Value { value }
+fn shift_3(value: Value) -> (Value, Value, Value) { (value.clone(), Value::Undefined, Value::Undefined) }
+fn shift_4(value: Value) -> (Value, Value, Value, Value) { (value.clone(), Value::Undefined, Value::Undefined, Value::Undefined) }
+// Error type constructors
+fn BadRequest(msg: Value) -> Value { msg }
+fn InvalidOrder(msg: Value) -> Value { msg }
+fn ExchangeError(msg: Value) -> Value { msg }
+fn InsufficientFunds(msg: Value) -> Value { msg }
+fn OrderNotFound(msg: Value) -> Value { msg }
+fn AuthenticationError(msg: Value) -> Value { msg }
+fn PermissionDenied(msg: Value) -> Value { msg }
+fn ExchangeNotAvailable(msg: Value) -> Value { msg }
+fn ArgumentsRequired(msg: Value) -> Value { msg }
+fn RateLimitExceeded(msg: Value) -> Value { msg }
+fn OrderNotFillable(msg: Value) -> Value { msg }
+fn OrderImmediatelyFillable(msg: Value) -> Value { msg }
+fn NotSupported(msg: Value) -> Value { msg }
+fn DuplicateOrderId(msg: Value) -> Value { msg }
 
 use crate::exchange::{PRECISE_BASE, TRUNCATE, ROUND, ROUND_UP, ROUND_DOWN};
 use crate::exchange::{DECIMAL_PLACES, SIGNIFICANT_DIGITS, TICK_SIZE, NO_PADDING, PAD_WITH_ZERO};
@@ -386,14 +410,14 @@ pub trait Zaif : Exchange {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = <Self as Zaif>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() { return rv; }
                 }
             }
         }
         let candidates = vec![("public", "GET", "depth"), ("public", "GET", "orderbook"), ("public", "GET", "order_book")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Zaif>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -458,14 +482,14 @@ pub trait Zaif : Exchange {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = <Self as Zaif>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() { return rv; }
                 }
             }
         }
         let candidates = vec![("public", "GET", "ticker/24hr"), ("public", "GET", "ticker"), ("public", "GET", "ticker/price")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Zaif>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -517,7 +541,7 @@ pub trait Zaif : Exchange {
         if limit.is_nonnullish() { request.set("limit".into(), limit.clone()); }
         let candidates = vec![("public", "GET", "trades"), ("public", "GET", "recent_trades"), ("public", "GET", "aggTrades")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Zaif>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -762,40 +786,40 @@ pub trait Zaif : Exchange {
         match method {
             Value::Json(serde_json::Value::String(ref m)) => {
                 match m.as_ref() {
-                    "publicGetDepthpair" => Zaif::request(self, "depth/{pair}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetCurrenciespair" => Zaif::request(self, "currencies/{pair}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetCurrenciesall" => Zaif::request(self, "currencies/all".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetCurrencypairspair" => Zaif::request(self, "currency_pairs/{pair}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetCurrencypairsall" => Zaif::request(self, "currency_pairs/all".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetLastpricepair" => Zaif::request(self, "last_price/{pair}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetTickerpair" => Zaif::request(self, "ticker/{pair}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetTradespair" => Zaif::request(self, "trades/{pair}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostActiveorders" => Zaif::request(self, "active_orders".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostCancelorder" => Zaif::request(self, "cancel_order".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostDeposithistory" => Zaif::request(self, "deposit_history".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostGetidinfo" => Zaif::request(self, "get_id_info".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostGetinfo" => Zaif::request(self, "get_info".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostGetinfo2" => Zaif::request(self, "get_info2".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostGetpersonalinfo" => Zaif::request(self, "get_personal_info".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostTrade" => Zaif::request(self, "trade".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostTradehistory" => Zaif::request(self, "trade_history".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostWithdraw" => Zaif::request(self, "withdraw".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostWithdrawhistory" => Zaif::request(self, "withdraw_history".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "ecapiPostCreateinvoice" => Zaif::request(self, "createInvoice".into(), "ecapi".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "ecapiPostGetinvoice" => Zaif::request(self, "getInvoice".into(), "ecapi".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "ecapiPostGetinvoiceidsbyordernumber" => Zaif::request(self, "getInvoiceIdsByOrderNumber".into(), "ecapi".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "ecapiPostCancelinvoice" => Zaif::request(self, "cancelInvoice".into(), "ecapi".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "tlapiPostGetpositions" => Zaif::request(self, "get_positions".into(), "tlapi".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "tlapiPostPositionhistory" => Zaif::request(self, "position_history".into(), "tlapi".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "tlapiPostActivepositions" => Zaif::request(self, "active_positions".into(), "tlapi".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "tlapiPostCreateposition" => Zaif::request(self, "create_position".into(), "tlapi".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "tlapiPostChangeposition" => Zaif::request(self, "change_position".into(), "tlapi".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "tlapiPostCancelposition" => Zaif::request(self, "cancel_position".into(), "tlapi".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "fapiGetGroupsgroupid" => Zaif::request(self, "groups/{group_id}".into(), "fapi".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "fapiGetLastpricegroupidpair" => Zaif::request(self, "last_price/{group_id}/{pair}".into(), "fapi".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "fapiGetTickergroupidpair" => Zaif::request(self, "ticker/{group_id}/{pair}".into(), "fapi".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "fapiGetTradesgroupidpair" => Zaif::request(self, "trades/{group_id}/{pair}".into(), "fapi".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "fapiGetDepthgroupidpair" => Zaif::request(self, "depth/{group_id}/{pair}".into(), "fapi".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetDepthpair" => self.request("depth/{pair}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetCurrenciespair" => self.request("currencies/{pair}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetCurrenciesall" => self.request("currencies/all".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetCurrencypairspair" => self.request("currency_pairs/{pair}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetCurrencypairsall" => self.request("currency_pairs/all".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetLastpricepair" => self.request("last_price/{pair}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetTickerpair" => self.request("ticker/{pair}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetTradespair" => self.request("trades/{pair}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostActiveorders" => self.request("active_orders".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostCancelorder" => self.request("cancel_order".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostDeposithistory" => self.request("deposit_history".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostGetidinfo" => self.request("get_id_info".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostGetinfo" => self.request("get_info".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostGetinfo2" => self.request("get_info2".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostGetpersonalinfo" => self.request("get_personal_info".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostTrade" => self.request("trade".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostTradehistory" => self.request("trade_history".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostWithdraw" => self.request("withdraw".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostWithdrawhistory" => self.request("withdraw_history".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "ecapiPostCreateinvoice" => self.request("createInvoice".into(), "ecapi".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "ecapiPostGetinvoice" => self.request("getInvoice".into(), "ecapi".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "ecapiPostGetinvoiceidsbyordernumber" => self.request("getInvoiceIdsByOrderNumber".into(), "ecapi".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "ecapiPostCancelinvoice" => self.request("cancelInvoice".into(), "ecapi".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "tlapiPostGetpositions" => self.request("get_positions".into(), "tlapi".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "tlapiPostPositionhistory" => self.request("position_history".into(), "tlapi".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "tlapiPostActivepositions" => self.request("active_positions".into(), "tlapi".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "tlapiPostCreateposition" => self.request("create_position".into(), "tlapi".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "tlapiPostChangeposition" => self.request("change_position".into(), "tlapi".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "tlapiPostCancelposition" => self.request("cancel_position".into(), "tlapi".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "fapiGetGroupsgroupid" => self.request("groups/{group_id}".into(), "fapi".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "fapiGetLastpricegroupidpair" => self.request("last_price/{group_id}/{pair}".into(), "fapi".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "fapiGetTickergroupidpair" => self.request("ticker/{group_id}/{pair}".into(), "fapi".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "fapiGetTradesgroupidpair" => self.request("trades/{group_id}/{pair}".into(), "fapi".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "fapiGetDepthgroupidpair" => self.request("depth/{group_id}/{pair}".into(), "fapi".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     _ => unimplemented!(),
                 }
             },
@@ -839,7 +863,7 @@ impl ValueTrait for ZaifImpl {
     fn join(&self, glue: Value) -> Value { self.0.join(glue) }
     fn to_string(&self) -> Value { self.0.to_string() }
     fn typeof_(&self) -> Value { self.0.typeof_() }
-    fn slice(&self, start: Value) -> Value { self.0.slice(start) }
+    fn slice(&self, start: Value, end: Value) -> Value { self.0.slice(start, end) }
 }
 
 impl ZaifImpl {

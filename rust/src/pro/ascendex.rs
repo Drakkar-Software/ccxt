@@ -13,14 +13,38 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, BoolExt, JSON, Array, Object, Math, Promise, parse_int, shift_2, extend_2, normalize};
 // Crypto hash identifiers
-fn sha256() -> Value { Value::from("sha256") }
-fn sha384() -> Value { Value::from("sha384") }
-fn sha512() -> Value { Value::from("sha512") }
-fn md5() -> Value { Value::from("md5") }
-fn ed25519() -> Value { Value::from("ed25519") }
+fn sha256() -> Value { Value::from("sha256()") }
+fn sha384() -> Value { Value::from("sha384()") }
+fn sha512() -> Value { Value::from("sha512()") }
+fn md5() -> Value { Value::from("md5()") }
+fn ed25519() -> Value { Value::from("ed25519()") }
 fn rsa(msg: Value, secret: Value, _hash: Value) -> Value { msg }
 fn eddsa(msg: Value, secret: Value, _curve: Value) -> Value { msg }
-fn secp256k1() -> Value { Value::from("secp256k1") }
+fn secp256k1() -> Value { Value::from("secp256k1()") }
+fn keccak() -> Value { Value::from("keccak()") }
+fn ecdsa(msg: Value, secret: Value, algo: Value, hash_fn: Value) -> Value { msg }
+fn totp(secret: Value) -> Value { Value::Undefined }
+fn jwt(data: Value, secret: Value, hash: Value, is_rsa: Value) -> Value { Value::Undefined }
+fn parse_float(value: Value) -> Value { value }
+fn decimals(value: Value) -> Value { Value::from(0) }
+fn shift_1(value: Value) -> Value { value }
+fn shift_3(value: Value) -> (Value, Value, Value) { (value.clone(), Value::Undefined, Value::Undefined) }
+fn shift_4(value: Value) -> (Value, Value, Value, Value) { (value.clone(), Value::Undefined, Value::Undefined, Value::Undefined) }
+// Error type constructors
+fn BadRequest(msg: Value) -> Value { msg }
+fn InvalidOrder(msg: Value) -> Value { msg }
+fn ExchangeError(msg: Value) -> Value { msg }
+fn InsufficientFunds(msg: Value) -> Value { msg }
+fn OrderNotFound(msg: Value) -> Value { msg }
+fn AuthenticationError(msg: Value) -> Value { msg }
+fn PermissionDenied(msg: Value) -> Value { msg }
+fn ExchangeNotAvailable(msg: Value) -> Value { msg }
+fn ArgumentsRequired(msg: Value) -> Value { msg }
+fn RateLimitExceeded(msg: Value) -> Value { msg }
+fn OrderNotFillable(msg: Value) -> Value { msg }
+fn OrderImmediatelyFillable(msg: Value) -> Value { msg }
+fn NotSupported(msg: Value) -> Value { msg }
+fn DuplicateOrderId(msg: Value) -> Value { msg }
 
 use crate::exchange::{PRECISE_BASE, TRUNCATE, ROUND, ROUND_UP, ROUND_DOWN};
 use crate::exchange::{DECIMAL_PLACES, SIGNIFICANT_DIGITS, TICK_SIZE, NO_PADDING, PAD_WITH_ZERO};
@@ -726,7 +750,7 @@ pub trait Ascendex : Exchange {
         let mut message_hash: Value = channel.clone() + Value::from(":") + symbol.clone();
         let mut orderbook: Value = self.get("orderbooks".into()).get(symbol.clone());
         let mut data: Value = self.safe_value(message.clone(), Value::from("data"), Value::Undefined);
-        let mut snapshot: Value = self.parse_order_book(data.clone(), symbol.clone(), Value::Undefined, Value::Undefined, Value::Undefined);
+        let mut snapshot: Value = self.parse_order_book(data.clone(), symbol.clone(), Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined);
         snapshot.set("nonce".into(), self.safe_integer(data.clone(), Value::from("seqnum"), Value::Undefined));
         orderbook.reset(snapshot.clone());
         // unroll the accumulated deltas
@@ -1417,7 +1441,7 @@ pub trait Ascendex : Exchange {
             let mut version: Value = self.safe_string(url_parts.clone(), parts_length.clone() - Value::from(2), Value::Undefined);
             let mut auth: Value = timestamp.clone() + Value::from("+") + version.clone() + Value::from("/") + path.clone();
             let mut secret: Value = self.base64_to_binary(self.get("secret".into()));
-            let mut signature: Value = self.hmac(self.encode(auth.clone()), secret.clone(), sha256.clone(), Value::from("base64"));
+            let mut signature: Value = self.hmac(self.encode(auth.clone()), secret.clone(), sha256().clone(), Value::from("base64"));
             let mut request: Value = Value::Json(normalize(&Value::Json(json!({
                 "op": "auth",
                 "id": self.nonce().to_string(),
@@ -1436,79 +1460,79 @@ pub trait Ascendex : Exchange {
         match method {
             Value::Json(serde_json::Value::String(ref m)) => {
                 match m.as_ref() {
-                    "v1PublicGetAssets" => Ascendex::request(self, "assets".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetProducts" => Ascendex::request(self, "products".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetTicker" => Ascendex::request(self, "ticker".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetBarhistinfo" => Ascendex::request(self, "barhist/info".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetBarhist" => Ascendex::request(self, "barhist".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetDepth" => Ascendex::request(self, "depth".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetTrades" => Ascendex::request(self, "trades".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetCashassets" => Ascendex::request(self, "cash/assets".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetCashproducts" => Ascendex::request(self, "cash/products".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetMarginassets" => Ascendex::request(self, "margin/assets".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetMarginproducts" => Ascendex::request(self, "margin/products".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetFuturescollateral" => Ascendex::request(self, "futures/collateral".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetFuturescontracts" => Ascendex::request(self, "futures/contracts".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetFuturesrefpx" => Ascendex::request(self, "futures/ref-px".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetFuturesmarketdata" => Ascendex::request(self, "futures/market-data".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetFuturesfundingrates" => Ascendex::request(self, "futures/funding-rates".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetRisklimitinfo" => Ascendex::request(self, "risk-limit-info".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetExchangeinfo" => Ascendex::request(self, "exchange-info".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetInfo" => Ascendex::request(self, "info".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetWallettransactions" => Ascendex::request(self, "wallet/transactions".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetWalletdepositaddress" => Ascendex::request(self, "wallet/deposit/address".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetDatabalancesnapshot" => Ascendex::request(self, "data/balance/snapshot".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetDatabalancehistory" => Ascendex::request(self, "data/balance/history".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateAccountcategoryGetBalance" => Ascendex::request(self, "balance".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateAccountcategoryGetOrderopen" => Ascendex::request(self, "order/open".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateAccountcategoryGetOrderstatus" => Ascendex::request(self, "order/status".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateAccountcategoryGetOrderhistcurrent" => Ascendex::request(self, "order/hist/current".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateAccountcategoryGetRisk" => Ascendex::request(self, "risk".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateAccountcategoryPostOrder" => Ascendex::request(self, "order".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateAccountcategoryPostOrderbatch" => Ascendex::request(self, "order/batch".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateAccountcategoryDeleteOrder" => Ascendex::request(self, "order".into(), "v1".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateAccountcategoryDeleteOrderall" => Ascendex::request(self, "order/all".into(), "v1".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateAccountcategoryDeleteOrderbatch" => Ascendex::request(self, "order/batch".into(), "v1".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateAccountgroupGetCashbalance" => Ascendex::request(self, "cash/balance".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateAccountgroupGetMarginbalance" => Ascendex::request(self, "margin/balance".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateAccountgroupGetMarginrisk" => Ascendex::request(self, "margin/risk".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateAccountgroupGetFuturescollateralbalance" => Ascendex::request(self, "futures/collateral-balance".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateAccountgroupGetFuturesposition" => Ascendex::request(self, "futures/position".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateAccountgroupGetFuturesrisk" => Ascendex::request(self, "futures/risk".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateAccountgroupGetFuturesfundingpayments" => Ascendex::request(self, "futures/funding-payments".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateAccountgroupGetOrderhist" => Ascendex::request(self, "order/hist".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateAccountgroupGetSpotfee" => Ascendex::request(self, "spot/fee".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateAccountgroupPostTransfer" => Ascendex::request(self, "transfer".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateAccountgroupPostFuturestransferdeposit" => Ascendex::request(self, "futures/transfer/deposit".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateAccountgroupPostFuturestransferwithdraw" => Ascendex::request(self, "futures/transfer/withdraw".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PublicGetAssets" => Ascendex::request(self, "assets".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PublicGetFuturescontract" => Ascendex::request(self, "futures/contract".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PublicGetFuturescollateral" => Ascendex::request(self, "futures/collateral".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PublicGetFuturespricingdata" => Ascendex::request(self, "futures/pricing-data".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PublicGetFuturesticker" => Ascendex::request(self, "futures/ticker".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PublicGetRisklimitinfo" => Ascendex::request(self, "risk-limit-info".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivateDataGetOrderhist" => Ascendex::request(self, "order/hist".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivateGetAccountinfo" => Ascendex::request(self, "account/info".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivateAccountgroupGetOrderhist" => Ascendex::request(self, "order/hist".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivateAccountgroupGetFuturesposition" => Ascendex::request(self, "futures/position".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivateAccountgroupGetFuturesfreemargin" => Ascendex::request(self, "futures/free-margin".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivateAccountgroupGetFuturesorderhistcurrent" => Ascendex::request(self, "futures/order/hist/current".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivateAccountgroupGetFuturesfundingpayments" => Ascendex::request(self, "futures/funding-payments".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivateAccountgroupGetFuturesorderopen" => Ascendex::request(self, "futures/order/open".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivateAccountgroupGetFuturesorderstatus" => Ascendex::request(self, "futures/order/status".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivateAccountgroupPostFuturesisolatedpositionmargin" => Ascendex::request(self, "futures/isolated-position-margin".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivateAccountgroupPostFuturesmargintype" => Ascendex::request(self, "futures/margin-type".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivateAccountgroupPostFuturesleverage" => Ascendex::request(self, "futures/leverage".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivateAccountgroupPostFuturestransferdeposit" => Ascendex::request(self, "futures/transfer/deposit".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivateAccountgroupPostFuturestransferwithdraw" => Ascendex::request(self, "futures/transfer/withdraw".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivateAccountgroupPostFuturesorder" => Ascendex::request(self, "futures/order".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivateAccountgroupPostFuturesorderbatch" => Ascendex::request(self, "futures/order/batch".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivateAccountgroupPostFuturesorderopen" => Ascendex::request(self, "futures/order/open".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivateAccountgroupPostSubusersubusertransfer" => Ascendex::request(self, "subuser/subuser-transfer".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivateAccountgroupPostSubusersubusertransferhist" => Ascendex::request(self, "subuser/subuser-transfer-hist".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivateAccountgroupDeleteFuturesorder" => Ascendex::request(self, "futures/order".into(), "v2".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivateAccountgroupDeleteFuturesorderbatch" => Ascendex::request(self, "futures/order/batch".into(), "v2".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivateAccountgroupDeleteFuturesorderall" => Ascendex::request(self, "futures/order/all".into(), "v2".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetAssets" => self.request("assets".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetProducts" => self.request("products".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetTicker" => self.request("ticker".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetBarhistinfo" => self.request("barhist/info".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetBarhist" => self.request("barhist".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetDepth" => self.request("depth".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetTrades" => self.request("trades".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetCashassets" => self.request("cash/assets".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetCashproducts" => self.request("cash/products".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetMarginassets" => self.request("margin/assets".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetMarginproducts" => self.request("margin/products".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetFuturescollateral" => self.request("futures/collateral".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetFuturescontracts" => self.request("futures/contracts".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetFuturesrefpx" => self.request("futures/ref-px".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetFuturesmarketdata" => self.request("futures/market-data".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetFuturesfundingrates" => self.request("futures/funding-rates".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetRisklimitinfo" => self.request("risk-limit-info".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetExchangeinfo" => self.request("exchange-info".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetInfo" => self.request("info".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetWallettransactions" => self.request("wallet/transactions".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetWalletdepositaddress" => self.request("wallet/deposit/address".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetDatabalancesnapshot" => self.request("data/balance/snapshot".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetDatabalancehistory" => self.request("data/balance/history".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateAccountcategoryGetBalance" => self.request("balance".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateAccountcategoryGetOrderopen" => self.request("order/open".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateAccountcategoryGetOrderstatus" => self.request("order/status".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateAccountcategoryGetOrderhistcurrent" => self.request("order/hist/current".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateAccountcategoryGetRisk" => self.request("risk".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateAccountcategoryPostOrder" => self.request("order".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateAccountcategoryPostOrderbatch" => self.request("order/batch".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateAccountcategoryDeleteOrder" => self.request("order".into(), "v1".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateAccountcategoryDeleteOrderall" => self.request("order/all".into(), "v1".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateAccountcategoryDeleteOrderbatch" => self.request("order/batch".into(), "v1".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateAccountgroupGetCashbalance" => self.request("cash/balance".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateAccountgroupGetMarginbalance" => self.request("margin/balance".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateAccountgroupGetMarginrisk" => self.request("margin/risk".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateAccountgroupGetFuturescollateralbalance" => self.request("futures/collateral-balance".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateAccountgroupGetFuturesposition" => self.request("futures/position".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateAccountgroupGetFuturesrisk" => self.request("futures/risk".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateAccountgroupGetFuturesfundingpayments" => self.request("futures/funding-payments".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateAccountgroupGetOrderhist" => self.request("order/hist".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateAccountgroupGetSpotfee" => self.request("spot/fee".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateAccountgroupPostTransfer" => self.request("transfer".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateAccountgroupPostFuturestransferdeposit" => self.request("futures/transfer/deposit".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateAccountgroupPostFuturestransferwithdraw" => self.request("futures/transfer/withdraw".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PublicGetAssets" => self.request("assets".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PublicGetFuturescontract" => self.request("futures/contract".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PublicGetFuturescollateral" => self.request("futures/collateral".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PublicGetFuturespricingdata" => self.request("futures/pricing-data".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PublicGetFuturesticker" => self.request("futures/ticker".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PublicGetRisklimitinfo" => self.request("risk-limit-info".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivateDataGetOrderhist" => self.request("order/hist".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivateGetAccountinfo" => self.request("account/info".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivateAccountgroupGetOrderhist" => self.request("order/hist".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivateAccountgroupGetFuturesposition" => self.request("futures/position".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivateAccountgroupGetFuturesfreemargin" => self.request("futures/free-margin".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivateAccountgroupGetFuturesorderhistcurrent" => self.request("futures/order/hist/current".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivateAccountgroupGetFuturesfundingpayments" => self.request("futures/funding-payments".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivateAccountgroupGetFuturesorderopen" => self.request("futures/order/open".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivateAccountgroupGetFuturesorderstatus" => self.request("futures/order/status".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivateAccountgroupPostFuturesisolatedpositionmargin" => self.request("futures/isolated-position-margin".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivateAccountgroupPostFuturesmargintype" => self.request("futures/margin-type".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivateAccountgroupPostFuturesleverage" => self.request("futures/leverage".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivateAccountgroupPostFuturestransferdeposit" => self.request("futures/transfer/deposit".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivateAccountgroupPostFuturestransferwithdraw" => self.request("futures/transfer/withdraw".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivateAccountgroupPostFuturesorder" => self.request("futures/order".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivateAccountgroupPostFuturesorderbatch" => self.request("futures/order/batch".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivateAccountgroupPostFuturesorderopen" => self.request("futures/order/open".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivateAccountgroupPostSubusersubusertransfer" => self.request("subuser/subuser-transfer".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivateAccountgroupPostSubusersubusertransferhist" => self.request("subuser/subuser-transfer-hist".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivateAccountgroupDeleteFuturesorder" => self.request("futures/order".into(), "v2".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivateAccountgroupDeleteFuturesorderbatch" => self.request("futures/order/batch".into(), "v2".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivateAccountgroupDeleteFuturesorderall" => self.request("futures/order/all".into(), "v2".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     _ => unimplemented!(),
                 }
             },
@@ -1552,7 +1576,7 @@ impl ValueTrait for AscendexImpl {
     fn join(&self, glue: Value) -> Value { self.0.join(glue) }
     fn to_string(&self) -> Value { self.0.to_string() }
     fn typeof_(&self) -> Value { self.0.typeof_() }
-    fn slice(&self, start: Value) -> Value { self.0.slice(start) }
+    fn slice(&self, start: Value, end: Value) -> Value { self.0.slice(start, end) }
 }
 
 impl AscendexImpl {

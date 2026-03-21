@@ -13,14 +13,38 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, BoolExt, JSON, Array, Object, Math, Promise, parse_int, shift_2, extend_2, normalize};
 // Crypto hash identifiers
-fn sha256() -> Value { Value::from("sha256") }
-fn sha384() -> Value { Value::from("sha384") }
-fn sha512() -> Value { Value::from("sha512") }
-fn md5() -> Value { Value::from("md5") }
-fn ed25519() -> Value { Value::from("ed25519") }
+fn sha256() -> Value { Value::from("sha256()") }
+fn sha384() -> Value { Value::from("sha384()") }
+fn sha512() -> Value { Value::from("sha512()") }
+fn md5() -> Value { Value::from("md5()") }
+fn ed25519() -> Value { Value::from("ed25519()") }
 fn rsa(msg: Value, secret: Value, _hash: Value) -> Value { msg }
 fn eddsa(msg: Value, secret: Value, _curve: Value) -> Value { msg }
-fn secp256k1() -> Value { Value::from("secp256k1") }
+fn secp256k1() -> Value { Value::from("secp256k1()") }
+fn keccak() -> Value { Value::from("keccak()") }
+fn ecdsa(msg: Value, secret: Value, algo: Value, hash_fn: Value) -> Value { msg }
+fn totp(secret: Value) -> Value { Value::Undefined }
+fn jwt(data: Value, secret: Value, hash: Value, is_rsa: Value) -> Value { Value::Undefined }
+fn parse_float(value: Value) -> Value { value }
+fn decimals(value: Value) -> Value { Value::from(0) }
+fn shift_1(value: Value) -> Value { value }
+fn shift_3(value: Value) -> (Value, Value, Value) { (value.clone(), Value::Undefined, Value::Undefined) }
+fn shift_4(value: Value) -> (Value, Value, Value, Value) { (value.clone(), Value::Undefined, Value::Undefined, Value::Undefined) }
+// Error type constructors
+fn BadRequest(msg: Value) -> Value { msg }
+fn InvalidOrder(msg: Value) -> Value { msg }
+fn ExchangeError(msg: Value) -> Value { msg }
+fn InsufficientFunds(msg: Value) -> Value { msg }
+fn OrderNotFound(msg: Value) -> Value { msg }
+fn AuthenticationError(msg: Value) -> Value { msg }
+fn PermissionDenied(msg: Value) -> Value { msg }
+fn ExchangeNotAvailable(msg: Value) -> Value { msg }
+fn ArgumentsRequired(msg: Value) -> Value { msg }
+fn RateLimitExceeded(msg: Value) -> Value { msg }
+fn OrderNotFillable(msg: Value) -> Value { msg }
+fn OrderImmediatelyFillable(msg: Value) -> Value { msg }
+fn NotSupported(msg: Value) -> Value { msg }
+fn DuplicateOrderId(msg: Value) -> Value { msg }
 
 use crate::exchange::{PRECISE_BASE, TRUNCATE, ROUND, ROUND_UP, ROUND_DOWN};
 use crate::exchange::{DECIMAL_PLACES, SIGNIFICANT_DIGITS, TICK_SIZE, NO_PADDING, PAD_WITH_ZERO};
@@ -787,7 +811,7 @@ pub trait Bingx : Exchange {
     async fn fetch_time(&mut self, mut params: Value) -> Value {
         let candidates = vec![("public", "GET", "time"), ("public", "GET", "server/time"), ("public", "GET", "timestamp")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Bingx>::request(self,path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -1150,14 +1174,14 @@ pub trait Bingx : Exchange {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = <Self as Bingx>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() { return rv; }
                 }
             }
         }
         let candidates = vec![("public", "GET", "klines"), ("public", "GET", "candles"), ("public", "GET", "ohlcv")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Bingx>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -1211,7 +1235,7 @@ pub trait Bingx : Exchange {
         if limit.is_nonnullish() { request.set("limit".into(), limit.clone()); }
         let candidates = vec![("public", "GET", "trades"), ("public", "GET", "recent_trades"), ("public", "GET", "aggTrades")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Bingx>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -1405,14 +1429,14 @@ pub trait Bingx : Exchange {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = <Self as Bingx>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() { return rv; }
                 }
             }
         }
         let candidates = vec![("public", "GET", "depth"), ("public", "GET", "orderbook"), ("public", "GET", "order_book")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Bingx>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -1734,14 +1758,14 @@ pub trait Bingx : Exchange {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = <Self as Bingx>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() { return rv; }
                 }
             }
         }
         let candidates = vec![("public", "GET", "ticker/24hr"), ("public", "GET", "ticker"), ("public", "GET", "ticker/price")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Bingx>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -1763,14 +1787,14 @@ pub trait Bingx : Exchange {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = <Self as Bingx>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() { return rv; }
                 }
             }
         }
         let candidates = vec![("public", "GET", "ticker/24hr"), ("public", "GET", "tickers"), ("public", "GET", "ticker")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Bingx>::request(self,path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -3818,7 +3842,7 @@ pub trait Bingx : Exchange {
         let mut is_active: Value = (timeout.clone() > Value::from(0)).into();
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
             "type": if is_active.is_truthy() { Value::from("ACTIVATE") } else { Value::from("CLOSE") },
-            "timeOut": if is_active.is_truthy() { self.parse_to_int(timeout.clone() / Value::from(1000), Value::Undefined) } else { Value::from(0) }
+            "timeOut": if is_active.is_truthy() { self.parse_to_int(timeout.clone() / Value::from(1000)) } else { Value::from(0) }
         }))).unwrap());
         let mut response: Value = Value::Undefined;
         let mut r#type: Value = Value::Undefined;
@@ -5983,193 +6007,193 @@ pub trait Bingx : Exchange {
         match method {
             Value::Json(serde_json::Value::String(ref m)) => {
                 match m.as_ref() {
-                    "fundV1PrivateGetAccountbalance" => Bingx::request(self, "account/balance".into(), "fund".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotV1PublicGetServertime" => Bingx::request(self, "server/time".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotV1PublicGetCommonsymbols" => Bingx::request(self, "common/symbols".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotV1PublicGetMarkettrades" => Bingx::request(self, "market/trades".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotV1PublicGetMarketdepth" => Bingx::request(self, "market/depth".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotV1PublicGetMarketkline" => Bingx::request(self, "market/kline".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotV1PublicGetTicker24hr" => Bingx::request(self, "ticker/24hr".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotV1PublicGetTickerprice" => Bingx::request(self, "ticker/price".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotV1PublicGetTickerbookticker" => Bingx::request(self, "ticker/bookTicker".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotV1PrivateGetTradequery" => Bingx::request(self, "trade/query".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotV1PrivateGetTradeopenorders" => Bingx::request(self, "trade/openOrders".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotV1PrivateGetTradehistoryorders" => Bingx::request(self, "trade/historyOrders".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotV1PrivateGetTrademytrades" => Bingx::request(self, "trade/myTrades".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotV1PrivateGetUsercommissionrate" => Bingx::request(self, "user/commissionRate".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotV1PrivateGetAccountbalance" => Bingx::request(self, "account/balance".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotV1PrivateGetOcoorderlist" => Bingx::request(self, "oco/orderList".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotV1PrivateGetOcoopenorderlist" => Bingx::request(self, "oco/openOrderList".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotV1PrivateGetOcohistoryorderlist" => Bingx::request(self, "oco/historyOrderList".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotV1PrivatePostTradeorder" => Bingx::request(self, "trade/order".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotV1PrivatePostTradecancel" => Bingx::request(self, "trade/cancel".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotV1PrivatePostTradebatchorders" => Bingx::request(self, "trade/batchOrders".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotV1PrivatePostTradeordercancelreplace" => Bingx::request(self, "trade/order/cancelReplace".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotV1PrivatePostTradecancelorders" => Bingx::request(self, "trade/cancelOrders".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotV1PrivatePostTradecancelopenorders" => Bingx::request(self, "trade/cancelOpenOrders".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotV1PrivatePostTradecancelallafter" => Bingx::request(self, "trade/cancelAllAfter".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotV1PrivatePostOcoorder" => Bingx::request(self, "oco/order".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotV1PrivatePostOcocancel" => Bingx::request(self, "oco/cancel".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotV2PublicGetMarketdepth" => Bingx::request(self, "market/depth".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotV2PublicGetMarketkline" => Bingx::request(self, "market/kline".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotV2PublicGetTickerprice" => Bingx::request(self, "ticker/price".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotV3PrivateGetGetassettransfer" => Bingx::request(self, "get/asset/transfer".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotV3PrivateGetAssettransfer" => Bingx::request(self, "asset/transfer".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotV3PrivateGetCapitaldeposithisrec" => Bingx::request(self, "capital/deposit/hisrec".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotV3PrivateGetCapitalwithdrawhistory" => Bingx::request(self, "capital/withdraw/history".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotV3PrivatePostPostassettransfer" => Bingx::request(self, "post/asset/transfer".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "swapV1PublicGetTickerprice" => Bingx::request(self, "ticker/price".into(), "swap".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "swapV1PublicGetMarkethistoricaltrades" => Bingx::request(self, "market/historicalTrades".into(), "swap".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "swapV1PublicGetMarketmarkpriceklines" => Bingx::request(self, "market/markPriceKlines".into(), "swap".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "swapV1PublicGetTrademultiassetsrules" => Bingx::request(self, "trade/multiAssetsRules".into(), "swap".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "swapV1PublicGetTradingrules" => Bingx::request(self, "tradingRules".into(), "swap".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "swapV1PrivateGetPositionsidedual" => Bingx::request(self, "positionSide/dual".into(), "swap".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "swapV1PrivateGetTradebatchcancelreplace" => Bingx::request(self, "trade/batchCancelReplace".into(), "swap".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "swapV1PrivateGetTradefullorder" => Bingx::request(self, "trade/fullOrder".into(), "swap".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "swapV1PrivateGetMaintmarginratio" => Bingx::request(self, "maintMarginRatio".into(), "swap".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "swapV1PrivateGetTradepositionhistory" => Bingx::request(self, "trade/positionHistory".into(), "swap".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "swapV1PrivateGetPositionmarginhistory" => Bingx::request(self, "positionMargin/history".into(), "swap".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "swapV1PrivateGetTwapopenorders" => Bingx::request(self, "twap/openOrders".into(), "swap".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "swapV1PrivateGetTwaphistoryorders" => Bingx::request(self, "twap/historyOrders".into(), "swap".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "swapV1PrivateGetTwaporderdetail" => Bingx::request(self, "twap/orderDetail".into(), "swap".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "swapV1PrivateGetTradeassetmode" => Bingx::request(self, "trade/assetMode".into(), "swap".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "swapV1PrivateGetUsermarginassets" => Bingx::request(self, "user/marginAssets".into(), "swap".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "swapV1PrivatePostTradeamend" => Bingx::request(self, "trade/amend".into(), "swap".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "swapV1PrivatePostTradecancelreplace" => Bingx::request(self, "trade/cancelReplace".into(), "swap".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "swapV1PrivatePostPositionsidedual" => Bingx::request(self, "positionSide/dual".into(), "swap".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "swapV1PrivatePostTradebatchcancelreplace" => Bingx::request(self, "trade/batchCancelReplace".into(), "swap".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "swapV1PrivatePostTradecloseposition" => Bingx::request(self, "trade/closePosition".into(), "swap".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "swapV1PrivatePostTradegetvst" => Bingx::request(self, "trade/getVst".into(), "swap".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "swapV1PrivatePostTwaporder" => Bingx::request(self, "twap/order".into(), "swap".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "swapV1PrivatePostTwapcancelorder" => Bingx::request(self, "twap/cancelOrder".into(), "swap".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "swapV1PrivatePostTradeassetmode" => Bingx::request(self, "trade/assetMode".into(), "swap".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "swapV1PrivatePostTradereverse" => Bingx::request(self, "trade/reverse".into(), "swap".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "swapV1PrivatePostTradeautoaddmargin" => Bingx::request(self, "trade/autoAddMargin".into(), "swap".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "swapV2PublicGetServertime" => Bingx::request(self, "server/time".into(), "swap".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "swapV2PublicGetQuotecontracts" => Bingx::request(self, "quote/contracts".into(), "swap".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "swapV2PublicGetQuoteprice" => Bingx::request(self, "quote/price".into(), "swap".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "swapV2PublicGetQuotedepth" => Bingx::request(self, "quote/depth".into(), "swap".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "swapV2PublicGetQuotetrades" => Bingx::request(self, "quote/trades".into(), "swap".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "swapV2PublicGetQuotepremiumindex" => Bingx::request(self, "quote/premiumIndex".into(), "swap".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "swapV2PublicGetQuotefundingrate" => Bingx::request(self, "quote/fundingRate".into(), "swap".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "swapV2PublicGetQuoteklines" => Bingx::request(self, "quote/klines".into(), "swap".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "swapV2PublicGetQuoteopeninterest" => Bingx::request(self, "quote/openInterest".into(), "swap".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "swapV2PublicGetQuoteticker" => Bingx::request(self, "quote/ticker".into(), "swap".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "swapV2PublicGetQuotebookticker" => Bingx::request(self, "quote/bookTicker".into(), "swap".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "swapV2PrivateGetUserbalance" => Bingx::request(self, "user/balance".into(), "swap".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "swapV2PrivateGetUserpositions" => Bingx::request(self, "user/positions".into(), "swap".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "swapV2PrivateGetUserincome" => Bingx::request(self, "user/income".into(), "swap".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "swapV2PrivateGetTradeopenorders" => Bingx::request(self, "trade/openOrders".into(), "swap".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "swapV2PrivateGetTradeopenorder" => Bingx::request(self, "trade/openOrder".into(), "swap".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "swapV2PrivateGetTradeorder" => Bingx::request(self, "trade/order".into(), "swap".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "swapV2PrivateGetTrademargintype" => Bingx::request(self, "trade/marginType".into(), "swap".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "swapV2PrivateGetTradeleverage" => Bingx::request(self, "trade/leverage".into(), "swap".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "swapV2PrivateGetTradeforceorders" => Bingx::request(self, "trade/forceOrders".into(), "swap".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "swapV2PrivateGetTradeallorders" => Bingx::request(self, "trade/allOrders".into(), "swap".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "swapV2PrivateGetTradeallfillorders" => Bingx::request(self, "trade/allFillOrders".into(), "swap".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "swapV2PrivateGetTradefillhistory" => Bingx::request(self, "trade/fillHistory".into(), "swap".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "swapV2PrivateGetUserincomeexport" => Bingx::request(self, "user/income/export".into(), "swap".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "swapV2PrivateGetUsercommissionrate" => Bingx::request(self, "user/commissionRate".into(), "swap".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "swapV2PrivateGetQuotebookticker" => Bingx::request(self, "quote/bookTicker".into(), "swap".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "swapV2PrivatePostTradegetvst" => Bingx::request(self, "trade/getVst".into(), "swap".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "swapV2PrivatePostTradeorder" => Bingx::request(self, "trade/order".into(), "swap".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "swapV2PrivatePostTradebatchorders" => Bingx::request(self, "trade/batchOrders".into(), "swap".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "swapV2PrivatePostTradecloseallpositions" => Bingx::request(self, "trade/closeAllPositions".into(), "swap".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "swapV2PrivatePostTradecancelallafter" => Bingx::request(self, "trade/cancelAllAfter".into(), "swap".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "swapV2PrivatePostTrademargintype" => Bingx::request(self, "trade/marginType".into(), "swap".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "swapV2PrivatePostTradeleverage" => Bingx::request(self, "trade/leverage".into(), "swap".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "swapV2PrivatePostTradepositionmargin" => Bingx::request(self, "trade/positionMargin".into(), "swap".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "swapV2PrivatePostTradeordertest" => Bingx::request(self, "trade/order/test".into(), "swap".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "swapV2PrivateDeleteTradeorder" => Bingx::request(self, "trade/order".into(), "swap".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "swapV2PrivateDeleteTradebatchorders" => Bingx::request(self, "trade/batchOrders".into(), "swap".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "swapV2PrivateDeleteTradeallopenorders" => Bingx::request(self, "trade/allOpenOrders".into(), "swap".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "swapV3PublicGetQuoteklines" => Bingx::request(self, "quote/klines".into(), "swap".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "swapV3PrivateGetUserbalance" => Bingx::request(self, "user/balance".into(), "swap".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "cswapV1PublicGetMarketcontracts" => Bingx::request(self, "market/contracts".into(), "cswap".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "cswapV1PublicGetMarketpremiumindex" => Bingx::request(self, "market/premiumIndex".into(), "cswap".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "cswapV1PublicGetMarketopeninterest" => Bingx::request(self, "market/openInterest".into(), "cswap".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "cswapV1PublicGetMarketklines" => Bingx::request(self, "market/klines".into(), "cswap".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "cswapV1PublicGetMarketdepth" => Bingx::request(self, "market/depth".into(), "cswap".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "cswapV1PublicGetMarketticker" => Bingx::request(self, "market/ticker".into(), "cswap".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "cswapV1PrivateGetTradeleverage" => Bingx::request(self, "trade/leverage".into(), "cswap".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "cswapV1PrivateGetTradeforceorders" => Bingx::request(self, "trade/forceOrders".into(), "cswap".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "cswapV1PrivateGetTradeallfillorders" => Bingx::request(self, "trade/allFillOrders".into(), "cswap".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "cswapV1PrivateGetTradeopenorders" => Bingx::request(self, "trade/openOrders".into(), "cswap".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "cswapV1PrivateGetTradeorderdetail" => Bingx::request(self, "trade/orderDetail".into(), "cswap".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "cswapV1PrivateGetTradeorderhistory" => Bingx::request(self, "trade/orderHistory".into(), "cswap".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "cswapV1PrivateGetTrademargintype" => Bingx::request(self, "trade/marginType".into(), "cswap".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "cswapV1PrivateGetUsercommissionrate" => Bingx::request(self, "user/commissionRate".into(), "cswap".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "cswapV1PrivateGetUserpositions" => Bingx::request(self, "user/positions".into(), "cswap".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "cswapV1PrivateGetUserbalance" => Bingx::request(self, "user/balance".into(), "cswap".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "cswapV1PrivatePostTradeorder" => Bingx::request(self, "trade/order".into(), "cswap".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "cswapV1PrivatePostTradeleverage" => Bingx::request(self, "trade/leverage".into(), "cswap".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "cswapV1PrivatePostTradeallopenorders" => Bingx::request(self, "trade/allOpenOrders".into(), "cswap".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "cswapV1PrivatePostTradecloseallpositions" => Bingx::request(self, "trade/closeAllPositions".into(), "cswap".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "cswapV1PrivatePostTrademargintype" => Bingx::request(self, "trade/marginType".into(), "cswap".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "cswapV1PrivatePostTradepositionmargin" => Bingx::request(self, "trade/positionMargin".into(), "cswap".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "cswapV1PrivateDeleteTradeallopenorders" => Bingx::request(self, "trade/allOpenOrders".into(), "cswap".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "cswapV1PrivateDeleteTradecancelorder" => Bingx::request(self, "trade/cancelOrder".into(), "cswap".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "contractV1PrivateGetAllposition" => Bingx::request(self, "allPosition".into(), "contract".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "contractV1PrivateGetAllorders" => Bingx::request(self, "allOrders".into(), "contract".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "contractV1PrivateGetBalance" => Bingx::request(self, "balance".into(), "contract".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "walletsV1PrivateGetCapitalconfiggetall" => Bingx::request(self, "capital/config/getall".into(), "wallets".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "walletsV1PrivateGetCapitaldepositaddress" => Bingx::request(self, "capital/deposit/address".into(), "wallets".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "walletsV1PrivateGetCapitalinnertransferrecords" => Bingx::request(self, "capital/innerTransfer/records".into(), "wallets".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "walletsV1PrivateGetCapitalsubaccountdepositaddress" => Bingx::request(self, "capital/subAccount/deposit/address".into(), "wallets".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "walletsV1PrivateGetCapitaldepositsubhisrec" => Bingx::request(self, "capital/deposit/subHisrec".into(), "wallets".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "walletsV1PrivateGetCapitalsubaccountinnertransferrecords" => Bingx::request(self, "capital/subAccount/innerTransfer/records".into(), "wallets".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "walletsV1PrivateGetCapitaldepositriskrecords" => Bingx::request(self, "capital/deposit/riskRecords".into(), "wallets".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "walletsV1PrivatePostCapitalwithdrawapply" => Bingx::request(self, "capital/withdraw/apply".into(), "wallets".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "walletsV1PrivatePostCapitalinnertransferapply" => Bingx::request(self, "capital/innerTransfer/apply".into(), "wallets".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "walletsV1PrivatePostCapitalsubaccountinnertransferapply" => Bingx::request(self, "capital/subAccountInnerTransfer/apply".into(), "wallets".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "walletsV1PrivatePostCapitaldepositcreatesubaddress" => Bingx::request(self, "capital/deposit/createSubAddress".into(), "wallets".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "subaccountV1PrivateGetList" => Bingx::request(self, "list".into(), "subAccount".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "subaccountV1PrivateGetAssets" => Bingx::request(self, "assets".into(), "subAccount".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "subaccountV1PrivateGetAllaccountbalance" => Bingx::request(self, "allAccountBalance".into(), "subAccount".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "subaccountV1PrivatePostCreate" => Bingx::request(self, "create".into(), "subAccount".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "subaccountV1PrivatePostApikeycreate" => Bingx::request(self, "apiKey/create".into(), "subAccount".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "subaccountV1PrivatePostApikeyedit" => Bingx::request(self, "apiKey/edit".into(), "subAccount".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "subaccountV1PrivatePostApikeydel" => Bingx::request(self, "apiKey/del".into(), "subAccount".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "subaccountV1PrivatePostUpdatestatus" => Bingx::request(self, "updateStatus".into(), "subAccount".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "accountV1PrivateGetUid" => Bingx::request(self, "uid".into(), "account".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "accountV1PrivateGetApikeyquery" => Bingx::request(self, "apiKey/query".into(), "account".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "accountV1PrivateGetAccountapipermissions" => Bingx::request(self, "account/apiPermissions".into(), "account".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "accountV1PrivateGetAllaccountbalance" => Bingx::request(self, "allAccountBalance".into(), "account".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "accountV1PrivatePostInnertransferauthorizesubaccount" => Bingx::request(self, "innerTransfer/authorizeSubAccount".into(), "account".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "accountTransferV1PrivateGetSubaccountassettransferhistory" => Bingx::request(self, "subAccount/asset/transferHistory".into(), "account".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "accountTransferV1PrivatePostSubaccounttransferassetsupportcoins" => Bingx::request(self, "subAccount/transferAsset/supportCoins".into(), "account".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "accountTransferV1PrivatePostSubaccounttransferasset" => Bingx::request(self, "subAccount/transferAsset".into(), "account".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "userAuthPrivatePostUserdatastream" => Bingx::request(self, "userDataStream".into(), "user".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "userAuthPrivatePutUserdatastream" => Bingx::request(self, "userDataStream".into(), "user".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "userAuthPrivateDeleteUserdatastream" => Bingx::request(self, "userDataStream".into(), "user".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "copytradingV1PrivateGetSwaptracecurrenttrack" => Bingx::request(self, "swap/trace/currentTrack".into(), "copyTrading".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "copytradingV1PrivateGetPfuturestraderdetail" => Bingx::request(self, "PFutures/traderDetail".into(), "copyTrading".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "copytradingV1PrivateGetPfuturesprofithistorysummarys" => Bingx::request(self, "PFutures/profitHistorySummarys".into(), "copyTrading".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "copytradingV1PrivateGetPfuturesprofitdetail" => Bingx::request(self, "PFutures/profitDetail".into(), "copyTrading".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "copytradingV1PrivateGetPfuturestradingpairs" => Bingx::request(self, "PFutures/tradingPairs".into(), "copyTrading".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "copytradingV1PrivateGetSpottraderdetail" => Bingx::request(self, "spot/traderDetail".into(), "copyTrading".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "copytradingV1PrivateGetSpotprofithistorysummarys" => Bingx::request(self, "spot/profitHistorySummarys".into(), "copyTrading".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "copytradingV1PrivateGetSpotprofitdetail" => Bingx::request(self, "spot/profitDetail".into(), "copyTrading".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "copytradingV1PrivateGetSpothistoryorder" => Bingx::request(self, "spot/historyOrder".into(), "copyTrading".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "copytradingV1PrivatePostSwaptraceclosetrackorder" => Bingx::request(self, "swap/trace/closeTrackOrder".into(), "copyTrading".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "copytradingV1PrivatePostSwaptracesettpsl" => Bingx::request(self, "swap/trace/setTPSL".into(), "copyTrading".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "copytradingV1PrivatePostPfuturessetcommission" => Bingx::request(self, "PFutures/setCommission".into(), "copyTrading".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "copytradingV1PrivatePostSpottradersellorder" => Bingx::request(self, "spot/trader/sellOrder".into(), "copyTrading".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "apiV3PrivateGetAssettransfer" => Bingx::request(self, "asset/transfer".into(), "api".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "apiV3PrivateGetAssettransferrecord" => Bingx::request(self, "asset/transferRecord".into(), "api".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "apiV3PrivateGetCapitaldeposithisrec" => Bingx::request(self, "capital/deposit/hisrec".into(), "api".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "apiV3PrivateGetCapitalwithdrawhistory" => Bingx::request(self, "capital/withdraw/history".into(), "api".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "apiV3PrivatePostPostassettransfer" => Bingx::request(self, "post/asset/transfer".into(), "api".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "apiAssetV1PrivatePostTransfer" => Bingx::request(self, "transfer".into(), "api".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "apiAssetV1PublicGetTransfersupportcoins" => Bingx::request(self, "transfer/supportCoins".into(), "api".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "agentV1PrivateGetAccountinviteaccountlist" => Bingx::request(self, "account/inviteAccountList".into(), "agent".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "agentV1PrivateGetRewardcommissiondatalist" => Bingx::request(self, "reward/commissionDataList".into(), "agent".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "agentV1PrivateGetAccountinviterelationcheck" => Bingx::request(self, "account/inviteRelationCheck".into(), "agent".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "agentV1PrivateGetAssetdepositdetaillist" => Bingx::request(self, "asset/depositDetailList".into(), "agent".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "agentV1PrivateGetRewardthirdcommissiondatalist" => Bingx::request(self, "reward/third/commissionDataList".into(), "agent".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "agentV1PrivateGetAssetpartnerdata" => Bingx::request(self, "asset/partnerData".into(), "agent".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "agentV1PrivateGetCommissiondatalistreferralcode" => Bingx::request(self, "commissionDataList/referralCode".into(), "agent".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "agentV1PrivateGetAccountsuperiorcheck" => Bingx::request(self, "account/superiorCheck".into(), "agent".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "fundV1PrivateGetAccountbalance" => self.request("account/balance".into(), "fund".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotV1PublicGetServertime" => self.request("server/time".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotV1PublicGetCommonsymbols" => self.request("common/symbols".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotV1PublicGetMarkettrades" => self.request("market/trades".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotV1PublicGetMarketdepth" => self.request("market/depth".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotV1PublicGetMarketkline" => self.request("market/kline".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotV1PublicGetTicker24hr" => self.request("ticker/24hr".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotV1PublicGetTickerprice" => self.request("ticker/price".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotV1PublicGetTickerbookticker" => self.request("ticker/bookTicker".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotV1PrivateGetTradequery" => self.request("trade/query".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotV1PrivateGetTradeopenorders" => self.request("trade/openOrders".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotV1PrivateGetTradehistoryorders" => self.request("trade/historyOrders".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotV1PrivateGetTrademytrades" => self.request("trade/myTrades".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotV1PrivateGetUsercommissionrate" => self.request("user/commissionRate".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotV1PrivateGetAccountbalance" => self.request("account/balance".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotV1PrivateGetOcoorderlist" => self.request("oco/orderList".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotV1PrivateGetOcoopenorderlist" => self.request("oco/openOrderList".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotV1PrivateGetOcohistoryorderlist" => self.request("oco/historyOrderList".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotV1PrivatePostTradeorder" => self.request("trade/order".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotV1PrivatePostTradecancel" => self.request("trade/cancel".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotV1PrivatePostTradebatchorders" => self.request("trade/batchOrders".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotV1PrivatePostTradeordercancelreplace" => self.request("trade/order/cancelReplace".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotV1PrivatePostTradecancelorders" => self.request("trade/cancelOrders".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotV1PrivatePostTradecancelopenorders" => self.request("trade/cancelOpenOrders".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotV1PrivatePostTradecancelallafter" => self.request("trade/cancelAllAfter".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotV1PrivatePostOcoorder" => self.request("oco/order".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotV1PrivatePostOcocancel" => self.request("oco/cancel".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotV2PublicGetMarketdepth" => self.request("market/depth".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotV2PublicGetMarketkline" => self.request("market/kline".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotV2PublicGetTickerprice" => self.request("ticker/price".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotV3PrivateGetGetassettransfer" => self.request("get/asset/transfer".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotV3PrivateGetAssettransfer" => self.request("asset/transfer".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotV3PrivateGetCapitaldeposithisrec" => self.request("capital/deposit/hisrec".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotV3PrivateGetCapitalwithdrawhistory" => self.request("capital/withdraw/history".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotV3PrivatePostPostassettransfer" => self.request("post/asset/transfer".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "swapV1PublicGetTickerprice" => self.request("ticker/price".into(), "swap".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "swapV1PublicGetMarkethistoricaltrades" => self.request("market/historicalTrades".into(), "swap".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "swapV1PublicGetMarketmarkpriceklines" => self.request("market/markPriceKlines".into(), "swap".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "swapV1PublicGetTrademultiassetsrules" => self.request("trade/multiAssetsRules".into(), "swap".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "swapV1PublicGetTradingrules" => self.request("tradingRules".into(), "swap".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "swapV1PrivateGetPositionsidedual" => self.request("positionSide/dual".into(), "swap".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "swapV1PrivateGetTradebatchcancelreplace" => self.request("trade/batchCancelReplace".into(), "swap".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "swapV1PrivateGetTradefullorder" => self.request("trade/fullOrder".into(), "swap".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "swapV1PrivateGetMaintmarginratio" => self.request("maintMarginRatio".into(), "swap".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "swapV1PrivateGetTradepositionhistory" => self.request("trade/positionHistory".into(), "swap".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "swapV1PrivateGetPositionmarginhistory" => self.request("positionMargin/history".into(), "swap".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "swapV1PrivateGetTwapopenorders" => self.request("twap/openOrders".into(), "swap".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "swapV1PrivateGetTwaphistoryorders" => self.request("twap/historyOrders".into(), "swap".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "swapV1PrivateGetTwaporderdetail" => self.request("twap/orderDetail".into(), "swap".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "swapV1PrivateGetTradeassetmode" => self.request("trade/assetMode".into(), "swap".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "swapV1PrivateGetUsermarginassets" => self.request("user/marginAssets".into(), "swap".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "swapV1PrivatePostTradeamend" => self.request("trade/amend".into(), "swap".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "swapV1PrivatePostTradecancelreplace" => self.request("trade/cancelReplace".into(), "swap".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "swapV1PrivatePostPositionsidedual" => self.request("positionSide/dual".into(), "swap".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "swapV1PrivatePostTradebatchcancelreplace" => self.request("trade/batchCancelReplace".into(), "swap".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "swapV1PrivatePostTradecloseposition" => self.request("trade/closePosition".into(), "swap".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "swapV1PrivatePostTradegetvst" => self.request("trade/getVst".into(), "swap".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "swapV1PrivatePostTwaporder" => self.request("twap/order".into(), "swap".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "swapV1PrivatePostTwapcancelorder" => self.request("twap/cancelOrder".into(), "swap".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "swapV1PrivatePostTradeassetmode" => self.request("trade/assetMode".into(), "swap".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "swapV1PrivatePostTradereverse" => self.request("trade/reverse".into(), "swap".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "swapV1PrivatePostTradeautoaddmargin" => self.request("trade/autoAddMargin".into(), "swap".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "swapV2PublicGetServertime" => self.request("server/time".into(), "swap".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "swapV2PublicGetQuotecontracts" => self.request("quote/contracts".into(), "swap".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "swapV2PublicGetQuoteprice" => self.request("quote/price".into(), "swap".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "swapV2PublicGetQuotedepth" => self.request("quote/depth".into(), "swap".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "swapV2PublicGetQuotetrades" => self.request("quote/trades".into(), "swap".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "swapV2PublicGetQuotepremiumindex" => self.request("quote/premiumIndex".into(), "swap".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "swapV2PublicGetQuotefundingrate" => self.request("quote/fundingRate".into(), "swap".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "swapV2PublicGetQuoteklines" => self.request("quote/klines".into(), "swap".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "swapV2PublicGetQuoteopeninterest" => self.request("quote/openInterest".into(), "swap".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "swapV2PublicGetQuoteticker" => self.request("quote/ticker".into(), "swap".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "swapV2PublicGetQuotebookticker" => self.request("quote/bookTicker".into(), "swap".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "swapV2PrivateGetUserbalance" => self.request("user/balance".into(), "swap".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "swapV2PrivateGetUserpositions" => self.request("user/positions".into(), "swap".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "swapV2PrivateGetUserincome" => self.request("user/income".into(), "swap".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "swapV2PrivateGetTradeopenorders" => self.request("trade/openOrders".into(), "swap".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "swapV2PrivateGetTradeopenorder" => self.request("trade/openOrder".into(), "swap".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "swapV2PrivateGetTradeorder" => self.request("trade/order".into(), "swap".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "swapV2PrivateGetTrademargintype" => self.request("trade/marginType".into(), "swap".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "swapV2PrivateGetTradeleverage" => self.request("trade/leverage".into(), "swap".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "swapV2PrivateGetTradeforceorders" => self.request("trade/forceOrders".into(), "swap".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "swapV2PrivateGetTradeallorders" => self.request("trade/allOrders".into(), "swap".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "swapV2PrivateGetTradeallfillorders" => self.request("trade/allFillOrders".into(), "swap".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "swapV2PrivateGetTradefillhistory" => self.request("trade/fillHistory".into(), "swap".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "swapV2PrivateGetUserincomeexport" => self.request("user/income/export".into(), "swap".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "swapV2PrivateGetUsercommissionrate" => self.request("user/commissionRate".into(), "swap".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "swapV2PrivateGetQuotebookticker" => self.request("quote/bookTicker".into(), "swap".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "swapV2PrivatePostTradegetvst" => self.request("trade/getVst".into(), "swap".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "swapV2PrivatePostTradeorder" => self.request("trade/order".into(), "swap".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "swapV2PrivatePostTradebatchorders" => self.request("trade/batchOrders".into(), "swap".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "swapV2PrivatePostTradecloseallpositions" => self.request("trade/closeAllPositions".into(), "swap".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "swapV2PrivatePostTradecancelallafter" => self.request("trade/cancelAllAfter".into(), "swap".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "swapV2PrivatePostTrademargintype" => self.request("trade/marginType".into(), "swap".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "swapV2PrivatePostTradeleverage" => self.request("trade/leverage".into(), "swap".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "swapV2PrivatePostTradepositionmargin" => self.request("trade/positionMargin".into(), "swap".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "swapV2PrivatePostTradeordertest" => self.request("trade/order/test".into(), "swap".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "swapV2PrivateDeleteTradeorder" => self.request("trade/order".into(), "swap".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "swapV2PrivateDeleteTradebatchorders" => self.request("trade/batchOrders".into(), "swap".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "swapV2PrivateDeleteTradeallopenorders" => self.request("trade/allOpenOrders".into(), "swap".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "swapV3PublicGetQuoteklines" => self.request("quote/klines".into(), "swap".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "swapV3PrivateGetUserbalance" => self.request("user/balance".into(), "swap".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "cswapV1PublicGetMarketcontracts" => self.request("market/contracts".into(), "cswap".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "cswapV1PublicGetMarketpremiumindex" => self.request("market/premiumIndex".into(), "cswap".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "cswapV1PublicGetMarketopeninterest" => self.request("market/openInterest".into(), "cswap".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "cswapV1PublicGetMarketklines" => self.request("market/klines".into(), "cswap".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "cswapV1PublicGetMarketdepth" => self.request("market/depth".into(), "cswap".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "cswapV1PublicGetMarketticker" => self.request("market/ticker".into(), "cswap".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "cswapV1PrivateGetTradeleverage" => self.request("trade/leverage".into(), "cswap".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "cswapV1PrivateGetTradeforceorders" => self.request("trade/forceOrders".into(), "cswap".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "cswapV1PrivateGetTradeallfillorders" => self.request("trade/allFillOrders".into(), "cswap".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "cswapV1PrivateGetTradeopenorders" => self.request("trade/openOrders".into(), "cswap".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "cswapV1PrivateGetTradeorderdetail" => self.request("trade/orderDetail".into(), "cswap".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "cswapV1PrivateGetTradeorderhistory" => self.request("trade/orderHistory".into(), "cswap".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "cswapV1PrivateGetTrademargintype" => self.request("trade/marginType".into(), "cswap".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "cswapV1PrivateGetUsercommissionrate" => self.request("user/commissionRate".into(), "cswap".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "cswapV1PrivateGetUserpositions" => self.request("user/positions".into(), "cswap".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "cswapV1PrivateGetUserbalance" => self.request("user/balance".into(), "cswap".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "cswapV1PrivatePostTradeorder" => self.request("trade/order".into(), "cswap".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "cswapV1PrivatePostTradeleverage" => self.request("trade/leverage".into(), "cswap".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "cswapV1PrivatePostTradeallopenorders" => self.request("trade/allOpenOrders".into(), "cswap".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "cswapV1PrivatePostTradecloseallpositions" => self.request("trade/closeAllPositions".into(), "cswap".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "cswapV1PrivatePostTrademargintype" => self.request("trade/marginType".into(), "cswap".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "cswapV1PrivatePostTradepositionmargin" => self.request("trade/positionMargin".into(), "cswap".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "cswapV1PrivateDeleteTradeallopenorders" => self.request("trade/allOpenOrders".into(), "cswap".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "cswapV1PrivateDeleteTradecancelorder" => self.request("trade/cancelOrder".into(), "cswap".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "contractV1PrivateGetAllposition" => self.request("allPosition".into(), "contract".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "contractV1PrivateGetAllorders" => self.request("allOrders".into(), "contract".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "contractV1PrivateGetBalance" => self.request("balance".into(), "contract".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "walletsV1PrivateGetCapitalconfiggetall" => self.request("capital/config/getall".into(), "wallets".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "walletsV1PrivateGetCapitaldepositaddress" => self.request("capital/deposit/address".into(), "wallets".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "walletsV1PrivateGetCapitalinnertransferrecords" => self.request("capital/innerTransfer/records".into(), "wallets".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "walletsV1PrivateGetCapitalsubaccountdepositaddress" => self.request("capital/subAccount/deposit/address".into(), "wallets".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "walletsV1PrivateGetCapitaldepositsubhisrec" => self.request("capital/deposit/subHisrec".into(), "wallets".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "walletsV1PrivateGetCapitalsubaccountinnertransferrecords" => self.request("capital/subAccount/innerTransfer/records".into(), "wallets".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "walletsV1PrivateGetCapitaldepositriskrecords" => self.request("capital/deposit/riskRecords".into(), "wallets".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "walletsV1PrivatePostCapitalwithdrawapply" => self.request("capital/withdraw/apply".into(), "wallets".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "walletsV1PrivatePostCapitalinnertransferapply" => self.request("capital/innerTransfer/apply".into(), "wallets".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "walletsV1PrivatePostCapitalsubaccountinnertransferapply" => self.request("capital/subAccountInnerTransfer/apply".into(), "wallets".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "walletsV1PrivatePostCapitaldepositcreatesubaddress" => self.request("capital/deposit/createSubAddress".into(), "wallets".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "subaccountV1PrivateGetList" => self.request("list".into(), "subAccount".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "subaccountV1PrivateGetAssets" => self.request("assets".into(), "subAccount".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "subaccountV1PrivateGetAllaccountbalance" => self.request("allAccountBalance".into(), "subAccount".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "subaccountV1PrivatePostCreate" => self.request("create".into(), "subAccount".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "subaccountV1PrivatePostApikeycreate" => self.request("apiKey/create".into(), "subAccount".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "subaccountV1PrivatePostApikeyedit" => self.request("apiKey/edit".into(), "subAccount".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "subaccountV1PrivatePostApikeydel" => self.request("apiKey/del".into(), "subAccount".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "subaccountV1PrivatePostUpdatestatus" => self.request("updateStatus".into(), "subAccount".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "accountV1PrivateGetUid" => self.request("uid".into(), "account".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "accountV1PrivateGetApikeyquery" => self.request("apiKey/query".into(), "account".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "accountV1PrivateGetAccountapipermissions" => self.request("account/apiPermissions".into(), "account".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "accountV1PrivateGetAllaccountbalance" => self.request("allAccountBalance".into(), "account".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "accountV1PrivatePostInnertransferauthorizesubaccount" => self.request("innerTransfer/authorizeSubAccount".into(), "account".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "accountTransferV1PrivateGetSubaccountassettransferhistory" => self.request("subAccount/asset/transferHistory".into(), "account".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "accountTransferV1PrivatePostSubaccounttransferassetsupportcoins" => self.request("subAccount/transferAsset/supportCoins".into(), "account".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "accountTransferV1PrivatePostSubaccounttransferasset" => self.request("subAccount/transferAsset".into(), "account".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "userAuthPrivatePostUserdatastream" => self.request("userDataStream".into(), "user".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "userAuthPrivatePutUserdatastream" => self.request("userDataStream".into(), "user".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "userAuthPrivateDeleteUserdatastream" => self.request("userDataStream".into(), "user".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "copytradingV1PrivateGetSwaptracecurrenttrack" => self.request("swap/trace/currentTrack".into(), "copyTrading".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "copytradingV1PrivateGetPfuturestraderdetail" => self.request("PFutures/traderDetail".into(), "copyTrading".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "copytradingV1PrivateGetPfuturesprofithistorysummarys" => self.request("PFutures/profitHistorySummarys".into(), "copyTrading".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "copytradingV1PrivateGetPfuturesprofitdetail" => self.request("PFutures/profitDetail".into(), "copyTrading".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "copytradingV1PrivateGetPfuturestradingpairs" => self.request("PFutures/tradingPairs".into(), "copyTrading".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "copytradingV1PrivateGetSpottraderdetail" => self.request("spot/traderDetail".into(), "copyTrading".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "copytradingV1PrivateGetSpotprofithistorysummarys" => self.request("spot/profitHistorySummarys".into(), "copyTrading".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "copytradingV1PrivateGetSpotprofitdetail" => self.request("spot/profitDetail".into(), "copyTrading".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "copytradingV1PrivateGetSpothistoryorder" => self.request("spot/historyOrder".into(), "copyTrading".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "copytradingV1PrivatePostSwaptraceclosetrackorder" => self.request("swap/trace/closeTrackOrder".into(), "copyTrading".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "copytradingV1PrivatePostSwaptracesettpsl" => self.request("swap/trace/setTPSL".into(), "copyTrading".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "copytradingV1PrivatePostPfuturessetcommission" => self.request("PFutures/setCommission".into(), "copyTrading".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "copytradingV1PrivatePostSpottradersellorder" => self.request("spot/trader/sellOrder".into(), "copyTrading".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "apiV3PrivateGetAssettransfer" => self.request("asset/transfer".into(), "api".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "apiV3PrivateGetAssettransferrecord" => self.request("asset/transferRecord".into(), "api".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "apiV3PrivateGetCapitaldeposithisrec" => self.request("capital/deposit/hisrec".into(), "api".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "apiV3PrivateGetCapitalwithdrawhistory" => self.request("capital/withdraw/history".into(), "api".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "apiV3PrivatePostPostassettransfer" => self.request("post/asset/transfer".into(), "api".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "apiAssetV1PrivatePostTransfer" => self.request("transfer".into(), "api".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "apiAssetV1PublicGetTransfersupportcoins" => self.request("transfer/supportCoins".into(), "api".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "agentV1PrivateGetAccountinviteaccountlist" => self.request("account/inviteAccountList".into(), "agent".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "agentV1PrivateGetRewardcommissiondatalist" => self.request("reward/commissionDataList".into(), "agent".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "agentV1PrivateGetAccountinviterelationcheck" => self.request("account/inviteRelationCheck".into(), "agent".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "agentV1PrivateGetAssetdepositdetaillist" => self.request("asset/depositDetailList".into(), "agent".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "agentV1PrivateGetRewardthirdcommissiondatalist" => self.request("reward/third/commissionDataList".into(), "agent".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "agentV1PrivateGetAssetpartnerdata" => self.request("asset/partnerData".into(), "agent".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "agentV1PrivateGetCommissiondatalistreferralcode" => self.request("commissionDataList/referralCode".into(), "agent".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "agentV1PrivateGetAccountsuperiorcheck" => self.request("account/superiorCheck".into(), "agent".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     _ => unimplemented!(),
                 }
             },
@@ -6213,7 +6237,7 @@ impl ValueTrait for BingxImpl {
     fn join(&self, glue: Value) -> Value { self.0.join(glue) }
     fn to_string(&self) -> Value { self.0.to_string() }
     fn typeof_(&self) -> Value { self.0.typeof_() }
-    fn slice(&self, start: Value) -> Value { self.0.slice(start) }
+    fn slice(&self, start: Value, end: Value) -> Value { self.0.slice(start, end) }
 }
 
 impl BingxImpl {

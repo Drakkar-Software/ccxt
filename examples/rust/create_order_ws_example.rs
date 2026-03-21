@@ -13,6 +13,5 @@ async fn main() {
     let rv = exchange.create_order_ws(symbol.clone(), Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined).await;
     println!("createOrderWs: {}", normalize(&rv).map(|v| v.to_string()).unwrap_or_else(|| "undefined".into()));
     // skipped: loadMarkets (not found in transpiled trait)
-    let rv = exchange.set_sandbox_mode(Value::Undefined);
-    println!("setSandboxMode: {}", normalize(&rv).map(|v| v.to_string()).unwrap_or_else(|| "undefined".into()));
+    // skipped: setSandboxMode (not found in transpiled trait)
 }

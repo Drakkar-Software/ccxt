@@ -13,14 +13,38 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, BoolExt, JSON, Array, Object, Math, Promise, parse_int, shift_2, extend_2, normalize};
 // Crypto hash identifiers
-fn sha256() -> Value { Value::from("sha256") }
-fn sha384() -> Value { Value::from("sha384") }
-fn sha512() -> Value { Value::from("sha512") }
-fn md5() -> Value { Value::from("md5") }
-fn ed25519() -> Value { Value::from("ed25519") }
+fn sha256() -> Value { Value::from("sha256()") }
+fn sha384() -> Value { Value::from("sha384()") }
+fn sha512() -> Value { Value::from("sha512()") }
+fn md5() -> Value { Value::from("md5()") }
+fn ed25519() -> Value { Value::from("ed25519()") }
 fn rsa(msg: Value, secret: Value, _hash: Value) -> Value { msg }
 fn eddsa(msg: Value, secret: Value, _curve: Value) -> Value { msg }
-fn secp256k1() -> Value { Value::from("secp256k1") }
+fn secp256k1() -> Value { Value::from("secp256k1()") }
+fn keccak() -> Value { Value::from("keccak()") }
+fn ecdsa(msg: Value, secret: Value, algo: Value, hash_fn: Value) -> Value { msg }
+fn totp(secret: Value) -> Value { Value::Undefined }
+fn jwt(data: Value, secret: Value, hash: Value, is_rsa: Value) -> Value { Value::Undefined }
+fn parse_float(value: Value) -> Value { value }
+fn decimals(value: Value) -> Value { Value::from(0) }
+fn shift_1(value: Value) -> Value { value }
+fn shift_3(value: Value) -> (Value, Value, Value) { (value.clone(), Value::Undefined, Value::Undefined) }
+fn shift_4(value: Value) -> (Value, Value, Value, Value) { (value.clone(), Value::Undefined, Value::Undefined, Value::Undefined) }
+// Error type constructors
+fn BadRequest(msg: Value) -> Value { msg }
+fn InvalidOrder(msg: Value) -> Value { msg }
+fn ExchangeError(msg: Value) -> Value { msg }
+fn InsufficientFunds(msg: Value) -> Value { msg }
+fn OrderNotFound(msg: Value) -> Value { msg }
+fn AuthenticationError(msg: Value) -> Value { msg }
+fn PermissionDenied(msg: Value) -> Value { msg }
+fn ExchangeNotAvailable(msg: Value) -> Value { msg }
+fn ArgumentsRequired(msg: Value) -> Value { msg }
+fn RateLimitExceeded(msg: Value) -> Value { msg }
+fn OrderNotFillable(msg: Value) -> Value { msg }
+fn OrderImmediatelyFillable(msg: Value) -> Value { msg }
+fn NotSupported(msg: Value) -> Value { msg }
+fn DuplicateOrderId(msg: Value) -> Value { msg }
 
 use crate::exchange::{PRECISE_BASE, TRUNCATE, ROUND, ROUND_UP, ROUND_DOWN};
 use crate::exchange::{DECIMAL_PLACES, SIGNIFICANT_DIGITS, TICK_SIZE, NO_PADDING, PAD_WITH_ZERO};
@@ -684,14 +708,14 @@ pub trait Bigone : Exchange {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = <Self as Bigone>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() { return rv; }
                 }
             }
         }
         let candidates = vec![("public", "GET", "ticker/24hr"), ("public", "GET", "ticker"), ("public", "GET", "ticker/price")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Bigone>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -713,14 +737,14 @@ pub trait Bigone : Exchange {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = <Self as Bigone>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() { return rv; }
                 }
             }
         }
         let candidates = vec![("public", "GET", "ticker/24hr"), ("public", "GET", "tickers"), ("public", "GET", "ticker")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Bigone>::request(self,path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -730,7 +754,7 @@ pub trait Bigone : Exchange {
     async fn fetch_time(&mut self, mut params: Value) -> Value {
         let candidates = vec![("public", "GET", "time"), ("public", "GET", "server/time"), ("public", "GET", "timestamp")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Bigone>::request(self,path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -755,14 +779,14 @@ pub trait Bigone : Exchange {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = <Self as Bigone>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() { return rv; }
                 }
             }
         }
         let candidates = vec![("public", "GET", "depth"), ("public", "GET", "orderbook"), ("public", "GET", "order_book")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Bigone>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -948,7 +972,7 @@ pub trait Bigone : Exchange {
         if limit.is_nonnullish() { request.set("limit".into(), limit.clone()); }
         let candidates = vec![("public", "GET", "trades"), ("public", "GET", "recent_trades"), ("public", "GET", "aggTrades")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Bigone>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -990,14 +1014,14 @@ pub trait Bigone : Exchange {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = <Self as Bigone>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() { return rv; }
                 }
             }
         }
         let candidates = vec![("public", "GET", "klines"), ("public", "GET", "candles"), ("public", "GET", "ohlcv")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Bigone>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -1794,47 +1818,47 @@ pub trait Bigone : Exchange {
         match method {
             Value::Json(serde_json::Value::String(ref m)) => {
                 match m.as_ref() {
-                    "publicGetPing" => Bigone::request(self, "ping".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetAssetpairs" => Bigone::request(self, "asset_pairs".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetAssetpairsassetpairnamedepth" => Bigone::request(self, "asset_pairs/{asset_pair_name}/depth".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetAssetpairsassetpairnametrades" => Bigone::request(self, "asset_pairs/{asset_pair_name}/trades".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetAssetpairsassetpairnameticker" => Bigone::request(self, "asset_pairs/{asset_pair_name}/ticker".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetAssetpairsassetpairnamecandles" => Bigone::request(self, "asset_pairs/{asset_pair_name}/candles".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetAssetpairstickers" => Bigone::request(self, "asset_pairs/tickers".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetAccounts" => Bigone::request(self, "accounts".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetFundaccounts" => Bigone::request(self, "fund/accounts".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetAssetsassetsymboladdress" => Bigone::request(self, "assets/{asset_symbol}/address".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetOrders" => Bigone::request(self, "orders".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetOrdersid" => Bigone::request(self, "orders/{id}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetOrdersmulti" => Bigone::request(self, "orders/multi".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetTrades" => Bigone::request(self, "trades".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetWithdrawals" => Bigone::request(self, "withdrawals".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetDeposits" => Bigone::request(self, "deposits".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostOrders" => Bigone::request(self, "orders".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostOrdersidcancel" => Bigone::request(self, "orders/{id}/cancel".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostOrderscancel" => Bigone::request(self, "orders/cancel".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostWithdrawals" => Bigone::request(self, "withdrawals".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostTransfer" => Bigone::request(self, "transfer".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "contractpublicGetSymbols" => Bigone::request(self, "symbols".into(), "contractPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "contractpublicGetInstruments" => Bigone::request(self, "instruments".into(), "contractPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "contractpublicGetDepthsymbolsnapshot" => Bigone::request(self, "depth@{symbol}/snapshot".into(), "contractPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "contractpublicGetInstrumentsdifference" => Bigone::request(self, "instruments/difference".into(), "contractPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "contractpublicGetInstrumentsprices" => Bigone::request(self, "instruments/prices".into(), "contractPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "contractprivateGetAccounts" => Bigone::request(self, "accounts".into(), "contractPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "contractprivateGetOrdersid" => Bigone::request(self, "orders/{id}".into(), "contractPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "contractprivateGetOrders" => Bigone::request(self, "orders".into(), "contractPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "contractprivateGetOrdersopening" => Bigone::request(self, "orders/opening".into(), "contractPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "contractprivateGetOrderscount" => Bigone::request(self, "orders/count".into(), "contractPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "contractprivateGetOrdersopeningcount" => Bigone::request(self, "orders/opening/count".into(), "contractPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "contractprivateGetTrades" => Bigone::request(self, "trades".into(), "contractPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "contractprivateGetTradescount" => Bigone::request(self, "trades/count".into(), "contractPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "contractprivatePostOrders" => Bigone::request(self, "orders".into(), "contractPrivate".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "contractprivatePostOrdersbatch" => Bigone::request(self, "orders/batch".into(), "contractPrivate".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "contractprivatePutPositionssymbolmargin" => Bigone::request(self, "positions/{symbol}/margin".into(), "contractPrivate".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "contractprivatePutPositionssymbolrisklimit" => Bigone::request(self, "positions/{symbol}/risk-limit".into(), "contractPrivate".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "contractprivateDeleteOrdersid" => Bigone::request(self, "orders/{id}".into(), "contractPrivate".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "contractprivateDeleteOrdersbatch" => Bigone::request(self, "orders/batch".into(), "contractPrivate".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "webexchangeGetV3assets" => Bigone::request(self, "v3/assets".into(), "webExchange".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetPing" => self.request("ping".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetAssetpairs" => self.request("asset_pairs".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetAssetpairsassetpairnamedepth" => self.request("asset_pairs/{asset_pair_name}/depth".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetAssetpairsassetpairnametrades" => self.request("asset_pairs/{asset_pair_name}/trades".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetAssetpairsassetpairnameticker" => self.request("asset_pairs/{asset_pair_name}/ticker".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetAssetpairsassetpairnamecandles" => self.request("asset_pairs/{asset_pair_name}/candles".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetAssetpairstickers" => self.request("asset_pairs/tickers".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetAccounts" => self.request("accounts".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetFundaccounts" => self.request("fund/accounts".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetAssetsassetsymboladdress" => self.request("assets/{asset_symbol}/address".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetOrders" => self.request("orders".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetOrdersid" => self.request("orders/{id}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetOrdersmulti" => self.request("orders/multi".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetTrades" => self.request("trades".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetWithdrawals" => self.request("withdrawals".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetDeposits" => self.request("deposits".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostOrders" => self.request("orders".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostOrdersidcancel" => self.request("orders/{id}/cancel".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostOrderscancel" => self.request("orders/cancel".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostWithdrawals" => self.request("withdrawals".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostTransfer" => self.request("transfer".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "contractpublicGetSymbols" => self.request("symbols".into(), "contractPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "contractpublicGetInstruments" => self.request("instruments".into(), "contractPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "contractpublicGetDepthsymbolsnapshot" => self.request("depth@{symbol}/snapshot".into(), "contractPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "contractpublicGetInstrumentsdifference" => self.request("instruments/difference".into(), "contractPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "contractpublicGetInstrumentsprices" => self.request("instruments/prices".into(), "contractPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "contractprivateGetAccounts" => self.request("accounts".into(), "contractPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "contractprivateGetOrdersid" => self.request("orders/{id}".into(), "contractPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "contractprivateGetOrders" => self.request("orders".into(), "contractPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "contractprivateGetOrdersopening" => self.request("orders/opening".into(), "contractPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "contractprivateGetOrderscount" => self.request("orders/count".into(), "contractPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "contractprivateGetOrdersopeningcount" => self.request("orders/opening/count".into(), "contractPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "contractprivateGetTrades" => self.request("trades".into(), "contractPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "contractprivateGetTradescount" => self.request("trades/count".into(), "contractPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "contractprivatePostOrders" => self.request("orders".into(), "contractPrivate".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "contractprivatePostOrdersbatch" => self.request("orders/batch".into(), "contractPrivate".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "contractprivatePutPositionssymbolmargin" => self.request("positions/{symbol}/margin".into(), "contractPrivate".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "contractprivatePutPositionssymbolrisklimit" => self.request("positions/{symbol}/risk-limit".into(), "contractPrivate".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "contractprivateDeleteOrdersid" => self.request("orders/{id}".into(), "contractPrivate".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "contractprivateDeleteOrdersbatch" => self.request("orders/batch".into(), "contractPrivate".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "webexchangeGetV3assets" => self.request("v3/assets".into(), "webExchange".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     _ => unimplemented!(),
                 }
             },
@@ -1878,7 +1902,7 @@ impl ValueTrait for BigoneImpl {
     fn join(&self, glue: Value) -> Value { self.0.join(glue) }
     fn to_string(&self) -> Value { self.0.to_string() }
     fn typeof_(&self) -> Value { self.0.typeof_() }
-    fn slice(&self, start: Value) -> Value { self.0.slice(start) }
+    fn slice(&self, start: Value, end: Value) -> Value { self.0.slice(start, end) }
 }
 
 impl BigoneImpl {

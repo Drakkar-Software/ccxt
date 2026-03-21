@@ -13,14 +13,38 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, BoolExt, JSON, Array, Object, Math, Promise, parse_int, shift_2, extend_2, normalize};
 // Crypto hash identifiers
-fn sha256() -> Value { Value::from("sha256") }
-fn sha384() -> Value { Value::from("sha384") }
-fn sha512() -> Value { Value::from("sha512") }
-fn md5() -> Value { Value::from("md5") }
-fn ed25519() -> Value { Value::from("ed25519") }
+fn sha256() -> Value { Value::from("sha256()") }
+fn sha384() -> Value { Value::from("sha384()") }
+fn sha512() -> Value { Value::from("sha512()") }
+fn md5() -> Value { Value::from("md5()") }
+fn ed25519() -> Value { Value::from("ed25519()") }
 fn rsa(msg: Value, secret: Value, _hash: Value) -> Value { msg }
 fn eddsa(msg: Value, secret: Value, _curve: Value) -> Value { msg }
-fn secp256k1() -> Value { Value::from("secp256k1") }
+fn secp256k1() -> Value { Value::from("secp256k1()") }
+fn keccak() -> Value { Value::from("keccak()") }
+fn ecdsa(msg: Value, secret: Value, algo: Value, hash_fn: Value) -> Value { msg }
+fn totp(secret: Value) -> Value { Value::Undefined }
+fn jwt(data: Value, secret: Value, hash: Value, is_rsa: Value) -> Value { Value::Undefined }
+fn parse_float(value: Value) -> Value { value }
+fn decimals(value: Value) -> Value { Value::from(0) }
+fn shift_1(value: Value) -> Value { value }
+fn shift_3(value: Value) -> (Value, Value, Value) { (value.clone(), Value::Undefined, Value::Undefined) }
+fn shift_4(value: Value) -> (Value, Value, Value, Value) { (value.clone(), Value::Undefined, Value::Undefined, Value::Undefined) }
+// Error type constructors
+fn BadRequest(msg: Value) -> Value { msg }
+fn InvalidOrder(msg: Value) -> Value { msg }
+fn ExchangeError(msg: Value) -> Value { msg }
+fn InsufficientFunds(msg: Value) -> Value { msg }
+fn OrderNotFound(msg: Value) -> Value { msg }
+fn AuthenticationError(msg: Value) -> Value { msg }
+fn PermissionDenied(msg: Value) -> Value { msg }
+fn ExchangeNotAvailable(msg: Value) -> Value { msg }
+fn ArgumentsRequired(msg: Value) -> Value { msg }
+fn RateLimitExceeded(msg: Value) -> Value { msg }
+fn OrderNotFillable(msg: Value) -> Value { msg }
+fn OrderImmediatelyFillable(msg: Value) -> Value { msg }
+fn NotSupported(msg: Value) -> Value { msg }
+fn DuplicateOrderId(msg: Value) -> Value { msg }
 
 use crate::exchange::{PRECISE_BASE, TRUNCATE, ROUND, ROUND_UP, ROUND_DOWN};
 use crate::exchange::{DECIMAL_PLACES, SIGNIFICANT_DIGITS, TICK_SIZE, NO_PADDING, PAD_WITH_ZERO};
@@ -275,14 +299,14 @@ pub trait Bitbns : Exchange {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = <Self as Bitbns>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() { return rv; }
                 }
             }
         }
         let candidates = vec![("public", "GET", "status"), ("public", "GET", "ping"), ("public", "GET", "time"), ("sapi", "GET", "system/status")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Bitbns>::request(self,path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -309,14 +333,14 @@ pub trait Bitbns : Exchange {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = <Self as Bitbns>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() { return rv; }
                 }
             }
         }
         let candidates = vec![("public", "GET", "depth"), ("public", "GET", "orderbook"), ("public", "GET", "order_book")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Bitbns>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -397,14 +421,14 @@ pub trait Bitbns : Exchange {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = <Self as Bitbns>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() { return rv; }
                 }
             }
         }
         let candidates = vec![("public", "GET", "ticker/24hr"), ("public", "GET", "tickers"), ("public", "GET", "ticker")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Bitbns>::request(self,path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -861,7 +885,7 @@ pub trait Bitbns : Exchange {
         if limit.is_nonnullish() { request.set("limit".into(), limit.clone()); }
         let candidates = vec![("public", "GET", "trades"), ("public", "GET", "recent_trades"), ("public", "GET", "aggTrades")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Bitbns>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -1062,42 +1086,42 @@ pub trait Bitbns : Exchange {
         match method {
             Value::Json(serde_json::Value::String(ref m)) => {
                 match m.as_ref() {
-                    "wwwGetOrderfetchmarkets" => Bitbns::request(self, "order/fetchMarkets".into(), "www".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "wwwGetOrderfetchtickers" => Bitbns::request(self, "order/fetchTickers".into(), "www".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "wwwGetOrderfetchorderbook" => Bitbns::request(self, "order/fetchOrderbook".into(), "www".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "wwwGetOrdergettickerwithvolume" => Bitbns::request(self, "order/getTickerWithVolume".into(), "www".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "wwwGetExchangedataohlc" => Bitbns::request(self, "exchangeData/ohlc".into(), "www".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "wwwGetExchangedataorderbook" => Bitbns::request(self, "exchangeData/orderBook".into(), "www".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "wwwGetExchangedatatradedetails" => Bitbns::request(self, "exchangeData/tradedetails".into(), "www".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1GetPlatformstatus" => Bitbns::request(self, "platform/status".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1GetTickers" => Bitbns::request(self, "tickers".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1GetOrderbooksellsymbol" => Bitbns::request(self, "orderbook/sell/{symbol}".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1GetOrderbookbuysymbol" => Bitbns::request(self, "orderbook/buy/{symbol}".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PostCurrentcoinbalanceeverything" => Bitbns::request(self, "currentCoinBalance/EVERYTHING".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PostGetapiusagestatususage" => Bitbns::request(self, "getApiUsageStatus/USAGE".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PostGetordersockettokenusage" => Bitbns::request(self, "getOrderSocketToken/USAGE".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PostCurrentcoinbalancesymbol" => Bitbns::request(self, "currentCoinBalance/{symbol}".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PostOrderstatussymbol" => Bitbns::request(self, "orderStatus/{symbol}".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PostDeposithistorysymbol" => Bitbns::request(self, "depositHistory/{symbol}".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PostWithdrawhistorysymbol" => Bitbns::request(self, "withdrawHistory/{symbol}".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PostWithdrawhistoryallsymbol" => Bitbns::request(self, "withdrawHistoryAll/{symbol}".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PostDeposithistoryallsymbol" => Bitbns::request(self, "depositHistoryAll/{symbol}".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PostListopenorderssymbol" => Bitbns::request(self, "listOpenOrders/{symbol}".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PostListopenstoporderssymbol" => Bitbns::request(self, "listOpenStopOrders/{symbol}".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PostGetcoinaddresssymbol" => Bitbns::request(self, "getCoinAddress/{symbol}".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PostPlacesellordersymbol" => Bitbns::request(self, "placeSellOrder/{symbol}".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PostPlacebuyordersymbol" => Bitbns::request(self, "placeBuyOrder/{symbol}".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PostBuystoplosssymbol" => Bitbns::request(self, "buyStopLoss/{symbol}".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PostSellstoplosssymbol" => Bitbns::request(self, "sellStopLoss/{symbol}".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PostCancelordersymbol" => Bitbns::request(self, "cancelOrder/{symbol}".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PostCancelstoplossordersymbol" => Bitbns::request(self, "cancelStopLossOrder/{symbol}".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PostListexecutedorderssymbol" => Bitbns::request(self, "listExecutedOrders/{symbol}".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PostPlacemarketordersymbol" => Bitbns::request(self, "placeMarketOrder/{symbol}".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PostPlacemarketorderqntysymbol" => Bitbns::request(self, "placeMarketOrderQnty/{symbol}".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PostOrders" => Bitbns::request(self, "orders".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PostCancel" => Bitbns::request(self, "cancel".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PostGetordersnew" => Bitbns::request(self, "getordersnew".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PostMarginorders" => Bitbns::request(self, "marginOrders".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "wwwGetOrderfetchmarkets" => self.request("order/fetchMarkets".into(), "www".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "wwwGetOrderfetchtickers" => self.request("order/fetchTickers".into(), "www".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "wwwGetOrderfetchorderbook" => self.request("order/fetchOrderbook".into(), "www".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "wwwGetOrdergettickerwithvolume" => self.request("order/getTickerWithVolume".into(), "www".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "wwwGetExchangedataohlc" => self.request("exchangeData/ohlc".into(), "www".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "wwwGetExchangedataorderbook" => self.request("exchangeData/orderBook".into(), "www".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "wwwGetExchangedatatradedetails" => self.request("exchangeData/tradedetails".into(), "www".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1GetPlatformstatus" => self.request("platform/status".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1GetTickers" => self.request("tickers".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1GetOrderbooksellsymbol" => self.request("orderbook/sell/{symbol}".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1GetOrderbookbuysymbol" => self.request("orderbook/buy/{symbol}".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PostCurrentcoinbalanceeverything" => self.request("currentCoinBalance/EVERYTHING".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PostGetapiusagestatususage" => self.request("getApiUsageStatus/USAGE".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PostGetordersockettokenusage" => self.request("getOrderSocketToken/USAGE".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PostCurrentcoinbalancesymbol" => self.request("currentCoinBalance/{symbol}".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PostOrderstatussymbol" => self.request("orderStatus/{symbol}".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PostDeposithistorysymbol" => self.request("depositHistory/{symbol}".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PostWithdrawhistorysymbol" => self.request("withdrawHistory/{symbol}".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PostWithdrawhistoryallsymbol" => self.request("withdrawHistoryAll/{symbol}".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PostDeposithistoryallsymbol" => self.request("depositHistoryAll/{symbol}".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PostListopenorderssymbol" => self.request("listOpenOrders/{symbol}".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PostListopenstoporderssymbol" => self.request("listOpenStopOrders/{symbol}".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PostGetcoinaddresssymbol" => self.request("getCoinAddress/{symbol}".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PostPlacesellordersymbol" => self.request("placeSellOrder/{symbol}".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PostPlacebuyordersymbol" => self.request("placeBuyOrder/{symbol}".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PostBuystoplosssymbol" => self.request("buyStopLoss/{symbol}".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PostSellstoplosssymbol" => self.request("sellStopLoss/{symbol}".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PostCancelordersymbol" => self.request("cancelOrder/{symbol}".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PostCancelstoplossordersymbol" => self.request("cancelStopLossOrder/{symbol}".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PostListexecutedorderssymbol" => self.request("listExecutedOrders/{symbol}".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PostPlacemarketordersymbol" => self.request("placeMarketOrder/{symbol}".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PostPlacemarketorderqntysymbol" => self.request("placeMarketOrderQnty/{symbol}".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PostOrders" => self.request("orders".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PostCancel" => self.request("cancel".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PostGetordersnew" => self.request("getordersnew".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PostMarginorders" => self.request("marginOrders".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     _ => unimplemented!(),
                 }
             },
@@ -1141,7 +1165,7 @@ impl ValueTrait for BitbnsImpl {
     fn join(&self, glue: Value) -> Value { self.0.join(glue) }
     fn to_string(&self) -> Value { self.0.to_string() }
     fn typeof_(&self) -> Value { self.0.typeof_() }
-    fn slice(&self, start: Value) -> Value { self.0.slice(start) }
+    fn slice(&self, start: Value, end: Value) -> Value { self.0.slice(start, end) }
 }
 
 impl BitbnsImpl {

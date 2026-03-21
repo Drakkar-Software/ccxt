@@ -13,14 +13,38 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, BoolExt, JSON, Array, Object, Math, Promise, parse_int, shift_2, extend_2, normalize};
 // Crypto hash identifiers
-fn sha256() -> Value { Value::from("sha256") }
-fn sha384() -> Value { Value::from("sha384") }
-fn sha512() -> Value { Value::from("sha512") }
-fn md5() -> Value { Value::from("md5") }
-fn ed25519() -> Value { Value::from("ed25519") }
+fn sha256() -> Value { Value::from("sha256()") }
+fn sha384() -> Value { Value::from("sha384()") }
+fn sha512() -> Value { Value::from("sha512()") }
+fn md5() -> Value { Value::from("md5()") }
+fn ed25519() -> Value { Value::from("ed25519()") }
 fn rsa(msg: Value, secret: Value, _hash: Value) -> Value { msg }
 fn eddsa(msg: Value, secret: Value, _curve: Value) -> Value { msg }
-fn secp256k1() -> Value { Value::from("secp256k1") }
+fn secp256k1() -> Value { Value::from("secp256k1()") }
+fn keccak() -> Value { Value::from("keccak()") }
+fn ecdsa(msg: Value, secret: Value, algo: Value, hash_fn: Value) -> Value { msg }
+fn totp(secret: Value) -> Value { Value::Undefined }
+fn jwt(data: Value, secret: Value, hash: Value, is_rsa: Value) -> Value { Value::Undefined }
+fn parse_float(value: Value) -> Value { value }
+fn decimals(value: Value) -> Value { Value::from(0) }
+fn shift_1(value: Value) -> Value { value }
+fn shift_3(value: Value) -> (Value, Value, Value) { (value.clone(), Value::Undefined, Value::Undefined) }
+fn shift_4(value: Value) -> (Value, Value, Value, Value) { (value.clone(), Value::Undefined, Value::Undefined, Value::Undefined) }
+// Error type constructors
+fn BadRequest(msg: Value) -> Value { msg }
+fn InvalidOrder(msg: Value) -> Value { msg }
+fn ExchangeError(msg: Value) -> Value { msg }
+fn InsufficientFunds(msg: Value) -> Value { msg }
+fn OrderNotFound(msg: Value) -> Value { msg }
+fn AuthenticationError(msg: Value) -> Value { msg }
+fn PermissionDenied(msg: Value) -> Value { msg }
+fn ExchangeNotAvailable(msg: Value) -> Value { msg }
+fn ArgumentsRequired(msg: Value) -> Value { msg }
+fn RateLimitExceeded(msg: Value) -> Value { msg }
+fn OrderNotFillable(msg: Value) -> Value { msg }
+fn OrderImmediatelyFillable(msg: Value) -> Value { msg }
+fn NotSupported(msg: Value) -> Value { msg }
+fn DuplicateOrderId(msg: Value) -> Value { msg }
 
 use crate::exchange::{PRECISE_BASE, TRUNCATE, ROUND, ROUND_UP, ROUND_DOWN};
 use crate::exchange::{DECIMAL_PLACES, SIGNIFICANT_DIGITS, TICK_SIZE, NO_PADDING, PAD_WITH_ZERO};
@@ -559,7 +583,7 @@ pub trait Woofipro : Exchange {
         };
         let mut orderbook: Value = self.get("orderbooks".into()).get(symbol.clone());
         let mut timestamp: Value = self.safe_integer(message.clone(), Value::from("ts"), Value::Undefined);
-        let mut snapshot: Value = self.parse_order_book(data.clone(), symbol.clone(), timestamp.clone(), Value::from("bids"), Value::from("asks"));
+        let mut snapshot: Value = self.parse_order_book(data.clone(), symbol.clone(), timestamp.clone(), Value::from("bids"), Value::from("asks"), Value::Undefined, Value::Undefined, Value::Undefined);
         orderbook.reset(snapshot.clone());
         client.resolve(orderbook.clone(), topic.clone());
         Value::Undefined
@@ -994,11 +1018,11 @@ pub trait Woofipro : Exchange {
             let mut ts: Value = self.nonce().to_string();
             let mut auth: Value = ts.clone();
             let mut secret: Value = self.get("secret".into());
-            if secret.index_of(Value::from("ed25519:")) >= Value::from(0) {
-                let mut parts: Value = secret.split(Value::from("ed25519:"));
+            if secret.index_of(Value::from("ed25519():")) >= Value::from(0) {
+                let mut parts: Value = secret.split(Value::from("ed25519():"));
                 secret = parts.get(Value::from(1));
             };
-            let mut signature: Value = eddsa(self.encode(auth.clone()), self.base58_to_binary(secret.clone()), ed25519.clone());
+            let mut signature: Value = eddsa(self.encode(auth.clone()), self.base58_to_binary(secret.clone()), ed25519().clone());
             let mut request: Value = Value::Json(normalize(&Value::Json(json!({
                 "event": event,
                 "params": Value::Json(normalize(&Value::Json(json!({
@@ -1721,121 +1745,121 @@ pub trait Woofipro : Exchange {
         match method {
             Value::Json(serde_json::Value::String(ref m)) => {
                 match m.as_ref() {
-                    "v1PublicGetPublicvolumestats" => Woofipro::request(self, "public/volume/stats".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetPublicbrokername" => Woofipro::request(self, "public/broker/name".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetPublicchaininfobrokerid" => Woofipro::request(self, "public/chain_info/{broker_id}".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetPublicsysteminfo" => Woofipro::request(self, "public/system_info".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetPublicvaultbalance" => Woofipro::request(self, "public/vault_balance".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetPublicinsurancefund" => Woofipro::request(self, "public/insurancefund".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetPublicchaininfo" => Woofipro::request(self, "public/chain_info".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetFaucetusdc" => Woofipro::request(self, "faucet/usdc".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetPublicaccount" => Woofipro::request(self, "public/account".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetGetaccount" => Woofipro::request(self, "get_account".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetRegistrationnonce" => Woofipro::request(self, "registration_nonce".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetGetorderlykey" => Woofipro::request(self, "get_orderly_key".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetPublicliquidation" => Woofipro::request(self, "public/liquidation".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetPublicliquidatedpositions" => Woofipro::request(self, "public/liquidated_positions".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetPublicconfig" => Woofipro::request(self, "public/config".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetPubliccampaignranking" => Woofipro::request(self, "public/campaign/ranking".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetPubliccampaignstats" => Woofipro::request(self, "public/campaign/stats".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetPubliccampaignuser" => Woofipro::request(self, "public/campaign/user".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetPubliccampaignstatsdetails" => Woofipro::request(self, "public/campaign/stats/details".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetPubliccampaigns" => Woofipro::request(self, "public/campaigns".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetPublicpointsleaderboard" => Woofipro::request(self, "public/points/leaderboard".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetClientpoints" => Woofipro::request(self, "client/points".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetPublicpointsepoch" => Woofipro::request(self, "public/points/epoch".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetPublicpointsepochdates" => Woofipro::request(self, "public/points/epoch_dates".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetPublicreferralcheckrefcode" => Woofipro::request(self, "public/referral/check_ref_code".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetPublicreferralverifyrefcode" => Woofipro::request(self, "public/referral/verify_ref_code".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetReferraladmininfo" => Woofipro::request(self, "referral/admin_info".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetReferralinfo" => Woofipro::request(self, "referral/info".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetReferralrefereeinfo" => Woofipro::request(self, "referral/referee_info".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetReferralrefereerebatesummary" => Woofipro::request(self, "referral/referee_rebate_summary".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetReferralrefereehistory" => Woofipro::request(self, "referral/referee_history".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetReferralreferralhistory" => Woofipro::request(self, "referral/referral_history".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetReferralrebatesummary" => Woofipro::request(self, "referral/rebate_summary".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetClientdistributionhistory" => Woofipro::request(self, "client/distribution_history".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetTvconfig" => Woofipro::request(self, "tv/config".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetTvhistory" => Woofipro::request(self, "tv/history".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetTvsymbolinfo" => Woofipro::request(self, "tv/symbol_info".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetPublicfundingratehistory" => Woofipro::request(self, "public/funding_rate_history".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetPublicfundingratesymbol" => Woofipro::request(self, "public/funding_rate/{symbol}".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetPublicfundingrates" => Woofipro::request(self, "public/funding_rates".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetPublicinfo" => Woofipro::request(self, "public/info".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetPublicinfosymbol" => Woofipro::request(self, "public/info/{symbol}".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetPublicmarkettrades" => Woofipro::request(self, "public/market_trades".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetPublictoken" => Woofipro::request(self, "public/token".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetPublicfutures" => Woofipro::request(self, "public/futures".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetPublicfuturessymbol" => Woofipro::request(self, "public/futures/{symbol}".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicPostRegisteraccount" => Woofipro::request(self, "register_account".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetClientkeyinfo" => Woofipro::request(self, "client/key_info".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetClientorderlykeyiprestriction" => Woofipro::request(self, "client/orderly_key_ip_restriction".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetOrderoid" => Woofipro::request(self, "order/{oid}".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetClientorderclientorderid" => Woofipro::request(self, "client/order/{client_order_id}".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetAlgoorderoid" => Woofipro::request(self, "algo/order/{oid}".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetAlgoclientorderclientorderid" => Woofipro::request(self, "algo/client/order/{client_order_id}".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetOrders" => Woofipro::request(self, "orders".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetAlgoorders" => Woofipro::request(self, "algo/orders".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetTradetid" => Woofipro::request(self, "trade/{tid}".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetTrades" => Woofipro::request(self, "trades".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetOrderoidtrades" => Woofipro::request(self, "order/{oid}/trades".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetClientliquidatorliquidations" => Woofipro::request(self, "client/liquidator_liquidations".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetLiquidations" => Woofipro::request(self, "liquidations".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetAssethistory" => Woofipro::request(self, "asset/history".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetClientholding" => Woofipro::request(self, "client/holding".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetWithdrawnonce" => Woofipro::request(self, "withdraw_nonce".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetSettlenonce" => Woofipro::request(self, "settle_nonce".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetPnlsettlementhistory" => Woofipro::request(self, "pnl_settlement/history".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetVolumeuserdaily" => Woofipro::request(self, "volume/user/daily".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetVolumeuserstats" => Woofipro::request(self, "volume/user/stats".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetClientstatistics" => Woofipro::request(self, "client/statistics".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetClientinfo" => Woofipro::request(self, "client/info".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetClientstatisticsdaily" => Woofipro::request(self, "client/statistics/daily".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetPositions" => Woofipro::request(self, "positions".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetPositionsymbol" => Woofipro::request(self, "position/{symbol}".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetFundingfeehistory" => Woofipro::request(self, "funding_fee/history".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetNotificationinboxnotifications" => Woofipro::request(self, "notification/inbox/notifications".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetNotificationinboxunread" => Woofipro::request(self, "notification/inbox/unread".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetVolumebrokerdaily" => Woofipro::request(self, "volume/broker/daily".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetBrokerfeeratedefault" => Woofipro::request(self, "broker/fee_rate/default".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetBrokeruserinfo" => Woofipro::request(self, "broker/user_info".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetOrderbooksymbol" => Woofipro::request(self, "orderbook/{symbol}".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetKline" => Woofipro::request(self, "kline".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostOrderlykey" => Woofipro::request(self, "orderly_key".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostClientsetorderlykeyiprestriction" => Woofipro::request(self, "client/set_orderly_key_ip_restriction".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostClientresetorderlykeyiprestriction" => Woofipro::request(self, "client/reset_orderly_key_ip_restriction".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostOrder" => Woofipro::request(self, "order".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostBatchorder" => Woofipro::request(self, "batch-order".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostAlgoorder" => Woofipro::request(self, "algo/order".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostLiquidation" => Woofipro::request(self, "liquidation".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostClaiminsurancefund" => Woofipro::request(self, "claim_insurance_fund".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostWithdrawrequest" => Woofipro::request(self, "withdraw_request".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostSettlepnl" => Woofipro::request(self, "settle_pnl".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostNotificationinboxmarkread" => Woofipro::request(self, "notification/inbox/mark_read".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostNotificationinboxmarkreadall" => Woofipro::request(self, "notification/inbox/mark_read_all".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostClientleverage" => Woofipro::request(self, "client/leverage".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostClientmaintenanceconfig" => Woofipro::request(self, "client/maintenance_config".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostDelegatesigner" => Woofipro::request(self, "delegate_signer".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostDelegateorderlykey" => Woofipro::request(self, "delegate_orderly_key".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostDelegatesettlepnl" => Woofipro::request(self, "delegate_settle_pnl".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostDelegatewithdrawrequest" => Woofipro::request(self, "delegate_withdraw_request".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostBrokerfeerateset" => Woofipro::request(self, "broker/fee_rate/set".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostBrokerfeeratesetdefault" => Woofipro::request(self, "broker/fee_rate/set_default".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostBrokerfeeratedefault" => Woofipro::request(self, "broker/fee_rate/default".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostReferralcreate" => Woofipro::request(self, "referral/create".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostReferralupdate" => Woofipro::request(self, "referral/update".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostReferralbind" => Woofipro::request(self, "referral/bind".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostReferraleditsplit" => Woofipro::request(self, "referral/edit_split".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePutOrder" => Woofipro::request(self, "order".into(), "v1".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePutAlgoorder" => Woofipro::request(self, "algo/order".into(), "v1".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateDeleteOrder" => Woofipro::request(self, "order".into(), "v1".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateDeleteAlgoorder" => Woofipro::request(self, "algo/order".into(), "v1".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateDeleteClientorder" => Woofipro::request(self, "client/order".into(), "v1".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateDeleteAlgoclientorder" => Woofipro::request(self, "algo/client/order".into(), "v1".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateDeleteAlgoorders" => Woofipro::request(self, "algo/orders".into(), "v1".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateDeleteOrders" => Woofipro::request(self, "orders".into(), "v1".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateDeleteBatchorder" => Woofipro::request(self, "batch-order".into(), "v1".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateDeleteClientbatchorder" => Woofipro::request(self, "client/batch-order".into(), "v1".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetPublicvolumestats" => self.request("public/volume/stats".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetPublicbrokername" => self.request("public/broker/name".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetPublicchaininfobrokerid" => self.request("public/chain_info/{broker_id}".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetPublicsysteminfo" => self.request("public/system_info".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetPublicvaultbalance" => self.request("public/vault_balance".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetPublicinsurancefund" => self.request("public/insurancefund".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetPublicchaininfo" => self.request("public/chain_info".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetFaucetusdc" => self.request("faucet/usdc".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetPublicaccount" => self.request("public/account".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetGetaccount" => self.request("get_account".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetRegistrationnonce" => self.request("registration_nonce".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetGetorderlykey" => self.request("get_orderly_key".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetPublicliquidation" => self.request("public/liquidation".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetPublicliquidatedpositions" => self.request("public/liquidated_positions".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetPublicconfig" => self.request("public/config".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetPubliccampaignranking" => self.request("public/campaign/ranking".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetPubliccampaignstats" => self.request("public/campaign/stats".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetPubliccampaignuser" => self.request("public/campaign/user".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetPubliccampaignstatsdetails" => self.request("public/campaign/stats/details".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetPubliccampaigns" => self.request("public/campaigns".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetPublicpointsleaderboard" => self.request("public/points/leaderboard".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetClientpoints" => self.request("client/points".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetPublicpointsepoch" => self.request("public/points/epoch".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetPublicpointsepochdates" => self.request("public/points/epoch_dates".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetPublicreferralcheckrefcode" => self.request("public/referral/check_ref_code".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetPublicreferralverifyrefcode" => self.request("public/referral/verify_ref_code".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetReferraladmininfo" => self.request("referral/admin_info".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetReferralinfo" => self.request("referral/info".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetReferralrefereeinfo" => self.request("referral/referee_info".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetReferralrefereerebatesummary" => self.request("referral/referee_rebate_summary".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetReferralrefereehistory" => self.request("referral/referee_history".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetReferralreferralhistory" => self.request("referral/referral_history".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetReferralrebatesummary" => self.request("referral/rebate_summary".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetClientdistributionhistory" => self.request("client/distribution_history".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetTvconfig" => self.request("tv/config".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetTvhistory" => self.request("tv/history".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetTvsymbolinfo" => self.request("tv/symbol_info".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetPublicfundingratehistory" => self.request("public/funding_rate_history".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetPublicfundingratesymbol" => self.request("public/funding_rate/{symbol}".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetPublicfundingrates" => self.request("public/funding_rates".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetPublicinfo" => self.request("public/info".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetPublicinfosymbol" => self.request("public/info/{symbol}".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetPublicmarkettrades" => self.request("public/market_trades".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetPublictoken" => self.request("public/token".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetPublicfutures" => self.request("public/futures".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetPublicfuturessymbol" => self.request("public/futures/{symbol}".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicPostRegisteraccount" => self.request("register_account".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetClientkeyinfo" => self.request("client/key_info".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetClientorderlykeyiprestriction" => self.request("client/orderly_key_ip_restriction".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetOrderoid" => self.request("order/{oid}".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetClientorderclientorderid" => self.request("client/order/{client_order_id}".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetAlgoorderoid" => self.request("algo/order/{oid}".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetAlgoclientorderclientorderid" => self.request("algo/client/order/{client_order_id}".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetOrders" => self.request("orders".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetAlgoorders" => self.request("algo/orders".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetTradetid" => self.request("trade/{tid}".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetTrades" => self.request("trades".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetOrderoidtrades" => self.request("order/{oid}/trades".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetClientliquidatorliquidations" => self.request("client/liquidator_liquidations".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetLiquidations" => self.request("liquidations".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetAssethistory" => self.request("asset/history".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetClientholding" => self.request("client/holding".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetWithdrawnonce" => self.request("withdraw_nonce".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetSettlenonce" => self.request("settle_nonce".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetPnlsettlementhistory" => self.request("pnl_settlement/history".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetVolumeuserdaily" => self.request("volume/user/daily".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetVolumeuserstats" => self.request("volume/user/stats".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetClientstatistics" => self.request("client/statistics".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetClientinfo" => self.request("client/info".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetClientstatisticsdaily" => self.request("client/statistics/daily".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetPositions" => self.request("positions".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetPositionsymbol" => self.request("position/{symbol}".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetFundingfeehistory" => self.request("funding_fee/history".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetNotificationinboxnotifications" => self.request("notification/inbox/notifications".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetNotificationinboxunread" => self.request("notification/inbox/unread".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetVolumebrokerdaily" => self.request("volume/broker/daily".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetBrokerfeeratedefault" => self.request("broker/fee_rate/default".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetBrokeruserinfo" => self.request("broker/user_info".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetOrderbooksymbol" => self.request("orderbook/{symbol}".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetKline" => self.request("kline".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostOrderlykey" => self.request("orderly_key".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostClientsetorderlykeyiprestriction" => self.request("client/set_orderly_key_ip_restriction".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostClientresetorderlykeyiprestriction" => self.request("client/reset_orderly_key_ip_restriction".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostOrder" => self.request("order".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostBatchorder" => self.request("batch-order".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostAlgoorder" => self.request("algo/order".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostLiquidation" => self.request("liquidation".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostClaiminsurancefund" => self.request("claim_insurance_fund".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostWithdrawrequest" => self.request("withdraw_request".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostSettlepnl" => self.request("settle_pnl".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostNotificationinboxmarkread" => self.request("notification/inbox/mark_read".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostNotificationinboxmarkreadall" => self.request("notification/inbox/mark_read_all".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostClientleverage" => self.request("client/leverage".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostClientmaintenanceconfig" => self.request("client/maintenance_config".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostDelegatesigner" => self.request("delegate_signer".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostDelegateorderlykey" => self.request("delegate_orderly_key".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostDelegatesettlepnl" => self.request("delegate_settle_pnl".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostDelegatewithdrawrequest" => self.request("delegate_withdraw_request".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostBrokerfeerateset" => self.request("broker/fee_rate/set".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostBrokerfeeratesetdefault" => self.request("broker/fee_rate/set_default".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostBrokerfeeratedefault" => self.request("broker/fee_rate/default".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostReferralcreate" => self.request("referral/create".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostReferralupdate" => self.request("referral/update".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostReferralbind" => self.request("referral/bind".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostReferraleditsplit" => self.request("referral/edit_split".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePutOrder" => self.request("order".into(), "v1".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePutAlgoorder" => self.request("algo/order".into(), "v1".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateDeleteOrder" => self.request("order".into(), "v1".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateDeleteAlgoorder" => self.request("algo/order".into(), "v1".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateDeleteClientorder" => self.request("client/order".into(), "v1".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateDeleteAlgoclientorder" => self.request("algo/client/order".into(), "v1".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateDeleteAlgoorders" => self.request("algo/orders".into(), "v1".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateDeleteOrders" => self.request("orders".into(), "v1".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateDeleteBatchorder" => self.request("batch-order".into(), "v1".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateDeleteClientbatchorder" => self.request("client/batch-order".into(), "v1".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     _ => unimplemented!(),
                 }
             },
@@ -1879,7 +1903,7 @@ impl ValueTrait for WoofiproImpl {
     fn join(&self, glue: Value) -> Value { self.0.join(glue) }
     fn to_string(&self) -> Value { self.0.to_string() }
     fn typeof_(&self) -> Value { self.0.typeof_() }
-    fn slice(&self, start: Value) -> Value { self.0.slice(start) }
+    fn slice(&self, start: Value, end: Value) -> Value { self.0.slice(start, end) }
 }
 
 impl WoofiproImpl {

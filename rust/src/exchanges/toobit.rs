@@ -13,14 +13,38 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, BoolExt, JSON, Array, Object, Math, Promise, parse_int, shift_2, extend_2, normalize};
 // Crypto hash identifiers
-fn sha256() -> Value { Value::from("sha256") }
-fn sha384() -> Value { Value::from("sha384") }
-fn sha512() -> Value { Value::from("sha512") }
-fn md5() -> Value { Value::from("md5") }
-fn ed25519() -> Value { Value::from("ed25519") }
+fn sha256() -> Value { Value::from("sha256()") }
+fn sha384() -> Value { Value::from("sha384()") }
+fn sha512() -> Value { Value::from("sha512()") }
+fn md5() -> Value { Value::from("md5()") }
+fn ed25519() -> Value { Value::from("ed25519()") }
 fn rsa(msg: Value, secret: Value, _hash: Value) -> Value { msg }
 fn eddsa(msg: Value, secret: Value, _curve: Value) -> Value { msg }
-fn secp256k1() -> Value { Value::from("secp256k1") }
+fn secp256k1() -> Value { Value::from("secp256k1()") }
+fn keccak() -> Value { Value::from("keccak()") }
+fn ecdsa(msg: Value, secret: Value, algo: Value, hash_fn: Value) -> Value { msg }
+fn totp(secret: Value) -> Value { Value::Undefined }
+fn jwt(data: Value, secret: Value, hash: Value, is_rsa: Value) -> Value { Value::Undefined }
+fn parse_float(value: Value) -> Value { value }
+fn decimals(value: Value) -> Value { Value::from(0) }
+fn shift_1(value: Value) -> Value { value }
+fn shift_3(value: Value) -> (Value, Value, Value) { (value.clone(), Value::Undefined, Value::Undefined) }
+fn shift_4(value: Value) -> (Value, Value, Value, Value) { (value.clone(), Value::Undefined, Value::Undefined, Value::Undefined) }
+// Error type constructors
+fn BadRequest(msg: Value) -> Value { msg }
+fn InvalidOrder(msg: Value) -> Value { msg }
+fn ExchangeError(msg: Value) -> Value { msg }
+fn InsufficientFunds(msg: Value) -> Value { msg }
+fn OrderNotFound(msg: Value) -> Value { msg }
+fn AuthenticationError(msg: Value) -> Value { msg }
+fn PermissionDenied(msg: Value) -> Value { msg }
+fn ExchangeNotAvailable(msg: Value) -> Value { msg }
+fn ArgumentsRequired(msg: Value) -> Value { msg }
+fn RateLimitExceeded(msg: Value) -> Value { msg }
+fn OrderNotFillable(msg: Value) -> Value { msg }
+fn OrderImmediatelyFillable(msg: Value) -> Value { msg }
+fn NotSupported(msg: Value) -> Value { msg }
+fn DuplicateOrderId(msg: Value) -> Value { msg }
 
 use crate::exchange::{PRECISE_BASE, TRUNCATE, ROUND, ROUND_UP, ROUND_DOWN};
 use crate::exchange::{DECIMAL_PLACES, SIGNIFICANT_DIGITS, TICK_SIZE, NO_PADDING, PAD_WITH_ZERO};
@@ -358,14 +382,14 @@ pub trait Toobit : Exchange {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = <Self as Toobit>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() { return rv; }
                 }
             }
         }
         let candidates = vec![("public", "GET", "status"), ("public", "GET", "ping"), ("public", "GET", "time"), ("sapi", "GET", "system/status")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Toobit>::request(self,path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -375,7 +399,7 @@ pub trait Toobit : Exchange {
     async fn fetch_time(&mut self, mut params: Value) -> Value {
         let candidates = vec![("public", "GET", "time"), ("public", "GET", "server/time"), ("public", "GET", "timestamp")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Toobit>::request(self,path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -680,14 +704,14 @@ pub trait Toobit : Exchange {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = <Self as Toobit>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() { return rv; }
                 }
             }
         }
         let candidates = vec![("public", "GET", "depth"), ("public", "GET", "orderbook"), ("public", "GET", "order_book")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Toobit>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -701,7 +725,7 @@ pub trait Toobit : Exchange {
         if limit.is_nonnullish() { request.set("limit".into(), limit.clone()); }
         let candidates = vec![("public", "GET", "trades"), ("public", "GET", "recent_trades"), ("public", "GET", "aggTrades")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Toobit>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -829,14 +853,14 @@ pub trait Toobit : Exchange {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = <Self as Toobit>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() { return rv; }
                 }
             }
         }
         let candidates = vec![("public", "GET", "klines"), ("public", "GET", "candles"), ("public", "GET", "ohlcv")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Toobit>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -862,14 +886,14 @@ pub trait Toobit : Exchange {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = <Self as Toobit>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() { return rv; }
                 }
             }
         }
         let candidates = vec![("public", "GET", "ticker/24hr"), ("public", "GET", "tickers"), ("public", "GET", "ticker")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Toobit>::request(self,path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -947,7 +971,7 @@ pub trait Toobit : Exchange {
         if symbols.is_nonnullish() { request.set("symbols".into(), symbols.clone()); }
         let candidates = vec![("public", "GET", "ticker/bookTicker"), ("public", "GET", "bookticker"), ("public", "GET", "bidsasks"), ("public", "GET", "tickers")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Toobit>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -2353,65 +2377,65 @@ pub trait Toobit : Exchange {
         match method {
             Value::Json(serde_json::Value::String(ref m)) => {
                 match m.as_ref() {
-                    "commonGetApiv1time" => Toobit::request(self, "api/v1/time".into(), "common".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "commonGetApiv1ping" => Toobit::request(self, "api/v1/ping".into(), "common".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "commonGetApiv1exchangeinfo" => Toobit::request(self, "api/v1/exchangeInfo".into(), "common".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "commonGetQuotev1depth" => Toobit::request(self, "quote/v1/depth".into(), "common".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "commonGetQuotev1depthmerged" => Toobit::request(self, "quote/v1/depth/merged".into(), "common".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "commonGetQuotev1trades" => Toobit::request(self, "quote/v1/trades".into(), "common".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "commonGetQuotev1klines" => Toobit::request(self, "quote/v1/klines".into(), "common".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "commonGetQuotev1indexklines" => Toobit::request(self, "quote/v1/index/klines".into(), "common".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "commonGetQuotev1markpriceklines" => Toobit::request(self, "quote/v1/markPrice/klines".into(), "common".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "commonGetQuotev1markprice" => Toobit::request(self, "quote/v1/markPrice".into(), "common".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "commonGetQuotev1index" => Toobit::request(self, "quote/v1/index".into(), "common".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "commonGetQuotev1ticker24hr" => Toobit::request(self, "quote/v1/ticker/24hr".into(), "common".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "commonGetQuotev1contractticker24hr" => Toobit::request(self, "quote/v1/contract/ticker/24hr".into(), "common".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "commonGetQuotev1tickerprice" => Toobit::request(self, "quote/v1/ticker/price".into(), "common".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "commonGetQuotev1tickerbookticker" => Toobit::request(self, "quote/v1/ticker/bookTicker".into(), "common".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "commonGetApiv1futuresfundingrate" => Toobit::request(self, "api/v1/futures/fundingRate".into(), "common".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "commonGetApiv1futureshistoryfundingrate" => Toobit::request(self, "api/v1/futures/historyFundingRate".into(), "common".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetApiv1account" => Toobit::request(self, "api/v1/account".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetApiv1accountcheckapikey" => Toobit::request(self, "api/v1/account/checkApiKey".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetApiv1spotorder" => Toobit::request(self, "api/v1/spot/order".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetApiv1spotopenorders" => Toobit::request(self, "api/v1/spot/openOrders".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetApiv1futuresopenorders" => Toobit::request(self, "api/v1/futures/openOrders".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetApiv1spottradeorders" => Toobit::request(self, "api/v1/spot/tradeOrders".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetApiv1futureshistoryorders" => Toobit::request(self, "api/v1/futures/historyOrders".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetApiv1accounttrades" => Toobit::request(self, "api/v1/account/trades".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetApiv1accountbalanceflow" => Toobit::request(self, "api/v1/account/balanceFlow".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetApiv1accountdepositorders" => Toobit::request(self, "api/v1/account/depositOrders".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetApiv1accountwithdraworders" => Toobit::request(self, "api/v1/account/withdrawOrders".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetApiv1accountdepositaddress" => Toobit::request(self, "api/v1/account/deposit/address".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetApiv1subaccount" => Toobit::request(self, "api/v1/subAccount".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetApiv1futuresaccountleverage" => Toobit::request(self, "api/v1/futures/accountLeverage".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetApiv1futuresorder" => Toobit::request(self, "api/v1/futures/order".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetApiv1futurespositions" => Toobit::request(self, "api/v1/futures/positions".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetApiv1futuresbalance" => Toobit::request(self, "api/v1/futures/balance".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetApiv1futuresusertrades" => Toobit::request(self, "api/v1/futures/userTrades".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetApiv1futuresbalanceflow" => Toobit::request(self, "api/v1/futures/balanceFlow".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetApiv1futurescommissionrate" => Toobit::request(self, "api/v1/futures/commissionRate".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetApiv1futurestodaypnl" => Toobit::request(self, "api/v1/futures/todayPnl".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostApiv1spotordertest" => Toobit::request(self, "api/v1/spot/orderTest".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostApiv1spotorder" => Toobit::request(self, "api/v1/spot/order".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostApiv1futuresorder" => Toobit::request(self, "api/v1/futures/order".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostApiv1spotbatchorders" => Toobit::request(self, "api/v1/spot/batchOrders".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostApiv1subaccounttransfer" => Toobit::request(self, "api/v1/subAccount/transfer".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostApiv1accountwithdraw" => Toobit::request(self, "api/v1/account/withdraw".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostApiv1futuresmargintype" => Toobit::request(self, "api/v1/futures/marginType".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostApiv1futuresleverage" => Toobit::request(self, "api/v1/futures/leverage".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostApiv1futuresbatchorders" => Toobit::request(self, "api/v1/futures/batchOrders".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostApiv1futurespositiontradingstop" => Toobit::request(self, "api/v1/futures/position/trading-stop".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostApiv1futurespositionmargin" => Toobit::request(self, "api/v1/futures/positionMargin".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostApiv1userdatastream" => Toobit::request(self, "api/v1/userDataStream".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostApiv1listenkey" => Toobit::request(self, "api/v1/listenKey".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateDeleteApiv1spotorder" => Toobit::request(self, "api/v1/spot/order".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateDeleteApiv1futuresorder" => Toobit::request(self, "api/v1/futures/order".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateDeleteApiv1spotopenorders" => Toobit::request(self, "api/v1/spot/openOrders".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateDeleteApiv1futuresbatchorders" => Toobit::request(self, "api/v1/futures/batchOrders".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateDeleteApiv1spotcancelorderbyids" => Toobit::request(self, "api/v1/spot/cancelOrderByIds".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateDeleteApiv1futurescancelorderbyids" => Toobit::request(self, "api/v1/futures/cancelOrderByIds".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateDeleteApiv1listenkey" => Toobit::request(self, "api/v1/listenKey".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePutApiv1listenkey" => Toobit::request(self, "api/v1/listenKey".into(), "private".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "commonGetApiv1time" => self.request("api/v1/time".into(), "common".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "commonGetApiv1ping" => self.request("api/v1/ping".into(), "common".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "commonGetApiv1exchangeinfo" => self.request("api/v1/exchangeInfo".into(), "common".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "commonGetQuotev1depth" => self.request("quote/v1/depth".into(), "common".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "commonGetQuotev1depthmerged" => self.request("quote/v1/depth/merged".into(), "common".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "commonGetQuotev1trades" => self.request("quote/v1/trades".into(), "common".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "commonGetQuotev1klines" => self.request("quote/v1/klines".into(), "common".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "commonGetQuotev1indexklines" => self.request("quote/v1/index/klines".into(), "common".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "commonGetQuotev1markpriceklines" => self.request("quote/v1/markPrice/klines".into(), "common".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "commonGetQuotev1markprice" => self.request("quote/v1/markPrice".into(), "common".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "commonGetQuotev1index" => self.request("quote/v1/index".into(), "common".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "commonGetQuotev1ticker24hr" => self.request("quote/v1/ticker/24hr".into(), "common".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "commonGetQuotev1contractticker24hr" => self.request("quote/v1/contract/ticker/24hr".into(), "common".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "commonGetQuotev1tickerprice" => self.request("quote/v1/ticker/price".into(), "common".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "commonGetQuotev1tickerbookticker" => self.request("quote/v1/ticker/bookTicker".into(), "common".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "commonGetApiv1futuresfundingrate" => self.request("api/v1/futures/fundingRate".into(), "common".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "commonGetApiv1futureshistoryfundingrate" => self.request("api/v1/futures/historyFundingRate".into(), "common".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetApiv1account" => self.request("api/v1/account".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetApiv1accountcheckapikey" => self.request("api/v1/account/checkApiKey".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetApiv1spotorder" => self.request("api/v1/spot/order".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetApiv1spotopenorders" => self.request("api/v1/spot/openOrders".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetApiv1futuresopenorders" => self.request("api/v1/futures/openOrders".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetApiv1spottradeorders" => self.request("api/v1/spot/tradeOrders".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetApiv1futureshistoryorders" => self.request("api/v1/futures/historyOrders".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetApiv1accounttrades" => self.request("api/v1/account/trades".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetApiv1accountbalanceflow" => self.request("api/v1/account/balanceFlow".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetApiv1accountdepositorders" => self.request("api/v1/account/depositOrders".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetApiv1accountwithdraworders" => self.request("api/v1/account/withdrawOrders".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetApiv1accountdepositaddress" => self.request("api/v1/account/deposit/address".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetApiv1subaccount" => self.request("api/v1/subAccount".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetApiv1futuresaccountleverage" => self.request("api/v1/futures/accountLeverage".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetApiv1futuresorder" => self.request("api/v1/futures/order".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetApiv1futurespositions" => self.request("api/v1/futures/positions".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetApiv1futuresbalance" => self.request("api/v1/futures/balance".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetApiv1futuresusertrades" => self.request("api/v1/futures/userTrades".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetApiv1futuresbalanceflow" => self.request("api/v1/futures/balanceFlow".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetApiv1futurescommissionrate" => self.request("api/v1/futures/commissionRate".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetApiv1futurestodaypnl" => self.request("api/v1/futures/todayPnl".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostApiv1spotordertest" => self.request("api/v1/spot/orderTest".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostApiv1spotorder" => self.request("api/v1/spot/order".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostApiv1futuresorder" => self.request("api/v1/futures/order".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostApiv1spotbatchorders" => self.request("api/v1/spot/batchOrders".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostApiv1subaccounttransfer" => self.request("api/v1/subAccount/transfer".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostApiv1accountwithdraw" => self.request("api/v1/account/withdraw".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostApiv1futuresmargintype" => self.request("api/v1/futures/marginType".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostApiv1futuresleverage" => self.request("api/v1/futures/leverage".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostApiv1futuresbatchorders" => self.request("api/v1/futures/batchOrders".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostApiv1futurespositiontradingstop" => self.request("api/v1/futures/position/trading-stop".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostApiv1futurespositionmargin" => self.request("api/v1/futures/positionMargin".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostApiv1userdatastream" => self.request("api/v1/userDataStream".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostApiv1listenkey" => self.request("api/v1/listenKey".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateDeleteApiv1spotorder" => self.request("api/v1/spot/order".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateDeleteApiv1futuresorder" => self.request("api/v1/futures/order".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateDeleteApiv1spotopenorders" => self.request("api/v1/spot/openOrders".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateDeleteApiv1futuresbatchorders" => self.request("api/v1/futures/batchOrders".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateDeleteApiv1spotcancelorderbyids" => self.request("api/v1/spot/cancelOrderByIds".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateDeleteApiv1futurescancelorderbyids" => self.request("api/v1/futures/cancelOrderByIds".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateDeleteApiv1listenkey" => self.request("api/v1/listenKey".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePutApiv1listenkey" => self.request("api/v1/listenKey".into(), "private".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     _ => unimplemented!(),
                 }
             },
@@ -2455,7 +2479,7 @@ impl ValueTrait for ToobitImpl {
     fn join(&self, glue: Value) -> Value { self.0.join(glue) }
     fn to_string(&self) -> Value { self.0.to_string() }
     fn typeof_(&self) -> Value { self.0.typeof_() }
-    fn slice(&self, start: Value) -> Value { self.0.slice(start) }
+    fn slice(&self, start: Value, end: Value) -> Value { self.0.slice(start, end) }
 }
 
 impl ToobitImpl {

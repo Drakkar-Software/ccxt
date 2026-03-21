@@ -13,14 +13,38 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, BoolExt, JSON, Array, Object, Math, Promise, parse_int, shift_2, extend_2, normalize};
 // Crypto hash identifiers
-fn sha256() -> Value { Value::from("sha256") }
-fn sha384() -> Value { Value::from("sha384") }
-fn sha512() -> Value { Value::from("sha512") }
-fn md5() -> Value { Value::from("md5") }
-fn ed25519() -> Value { Value::from("ed25519") }
+fn sha256() -> Value { Value::from("sha256()") }
+fn sha384() -> Value { Value::from("sha384()") }
+fn sha512() -> Value { Value::from("sha512()") }
+fn md5() -> Value { Value::from("md5()") }
+fn ed25519() -> Value { Value::from("ed25519()") }
 fn rsa(msg: Value, secret: Value, _hash: Value) -> Value { msg }
 fn eddsa(msg: Value, secret: Value, _curve: Value) -> Value { msg }
-fn secp256k1() -> Value { Value::from("secp256k1") }
+fn secp256k1() -> Value { Value::from("secp256k1()") }
+fn keccak() -> Value { Value::from("keccak()") }
+fn ecdsa(msg: Value, secret: Value, algo: Value, hash_fn: Value) -> Value { msg }
+fn totp(secret: Value) -> Value { Value::Undefined }
+fn jwt(data: Value, secret: Value, hash: Value, is_rsa: Value) -> Value { Value::Undefined }
+fn parse_float(value: Value) -> Value { value }
+fn decimals(value: Value) -> Value { Value::from(0) }
+fn shift_1(value: Value) -> Value { value }
+fn shift_3(value: Value) -> (Value, Value, Value) { (value.clone(), Value::Undefined, Value::Undefined) }
+fn shift_4(value: Value) -> (Value, Value, Value, Value) { (value.clone(), Value::Undefined, Value::Undefined, Value::Undefined) }
+// Error type constructors
+fn BadRequest(msg: Value) -> Value { msg }
+fn InvalidOrder(msg: Value) -> Value { msg }
+fn ExchangeError(msg: Value) -> Value { msg }
+fn InsufficientFunds(msg: Value) -> Value { msg }
+fn OrderNotFound(msg: Value) -> Value { msg }
+fn AuthenticationError(msg: Value) -> Value { msg }
+fn PermissionDenied(msg: Value) -> Value { msg }
+fn ExchangeNotAvailable(msg: Value) -> Value { msg }
+fn ArgumentsRequired(msg: Value) -> Value { msg }
+fn RateLimitExceeded(msg: Value) -> Value { msg }
+fn OrderNotFillable(msg: Value) -> Value { msg }
+fn OrderImmediatelyFillable(msg: Value) -> Value { msg }
+fn NotSupported(msg: Value) -> Value { msg }
+fn DuplicateOrderId(msg: Value) -> Value { msg }
 
 use crate::exchange::{PRECISE_BASE, TRUNCATE, ROUND, ROUND_UP, ROUND_DOWN};
 use crate::exchange::{DECIMAL_PLACES, SIGNIFICANT_DIGITS, TICK_SIZE, NO_PADDING, PAD_WITH_ZERO};
@@ -1351,7 +1375,7 @@ pub trait Gate : Exchange {
     async fn fetch_time(&mut self, mut params: Value) -> Value {
         let candidates = vec![("public", "GET", "time"), ("public", "GET", "server/time"), ("public", "GET", "timestamp")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Gate>::request(self,path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -1494,7 +1518,7 @@ pub trait Gate : Exchange {
             let mut trade_status: Value = self.safe_string(market.clone(), Value::from("trade_status"), Value::Undefined);
             let mut leverage: Value = self.safe_number(market.clone(), Value::from("leverage"), Value::Undefined);
             let mut margin: Value = (leverage.clone().is_nonnullish()).into();
-            let mut buy_start: Value = self.safe_integer_product(spot_market.clone(), Value::from("buy_start"), Value::from(1000));
+            let mut buy_start: Value = self.safe_integer_product(spot_market.clone(), Value::from("buy_start"), Value::from(1000), Value::Undefined);
             // buy_start is the trading start time, while sell_start is offline orders start time
             let mut created_ts: Value = if buy_start.clone() != Value::from(0) { buy_start.clone() } else { Value::Undefined };
             result.push(Value::Json(normalize(&Value::Json(json!({
@@ -1774,7 +1798,7 @@ pub trait Gate : Exchange {
                     "max": Value::Undefined
                 }))).unwrap())
             }))).unwrap()),
-            "created": self.safe_integer_product(market.clone(), Value::from("create_time"), Value::from(1000)),
+            "created": self.safe_integer_product(market.clone(), Value::from("create_time"), Value::from(1000), Value::Undefined),
             "info": market
         }))).unwrap());
     }
@@ -2696,7 +2720,7 @@ pub trait Gate : Exchange {
         // 'dnw' 'pnl' 'fee' 'refr' 'fund' 'point_dnw' 'point_fee' 'point_refr'
         if since.clone().is_nonnullish() {
             // from should be integer
-            request.set("from".into(), self.parse_to_int(since.clone() / Value::from(1000), Value::Undefined));
+            request.set("from".into(), self.parse_to_int(since.clone() / Value::from(1000)));
         };
         if limit.clone().is_nonnullish() {
             request.set("limit".into(), limit.clone());
@@ -2779,14 +2803,14 @@ pub trait Gate : Exchange {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = <Self as Gate>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() { return rv; }
                 }
             }
         }
         let candidates = vec![("public", "GET", "depth"), ("public", "GET", "orderbook"), ("public", "GET", "order_book")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Gate>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -2810,14 +2834,14 @@ pub trait Gate : Exchange {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = <Self as Gate>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() { return rv; }
                 }
             }
         }
         let candidates = vec![("public", "GET", "ticker/24hr"), ("public", "GET", "ticker"), ("public", "GET", "ticker/price")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Gate>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -2954,14 +2978,14 @@ pub trait Gate : Exchange {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = <Self as Gate>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() { return rv; }
                 }
             }
         }
         let candidates = vec![("public", "GET", "ticker/24hr"), ("public", "GET", "tickers"), ("public", "GET", "ticker")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Gate>::request(self,path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -3281,14 +3305,14 @@ pub trait Gate : Exchange {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = <Self as Gate>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() { return rv; }
                 }
             }
         }
         let candidates = vec![("public", "GET", "klines"), ("public", "GET", "candles"), ("public", "GET", "ohlcv")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Gate>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -3329,12 +3353,12 @@ pub trait Gate : Exchange {
             request.set("limit".into(), limit.clone());
         };
         if since.clone().is_nonnullish() {
-            request.set("from".into(), self.parse_to_int(since.clone() / Value::from(1000), Value::Undefined));
+            request.set("from".into(), self.parse_to_int(since.clone() / Value::from(1000)));
         };
         let mut until: Value = self.safe_integer(params.clone(), Value::from("until"), Value::Undefined);
         if until.clone().is_nonnullish() {
             params = self.omit(params.clone(), Value::from("until"));
-            request.set("to".into(), self.parse_to_int(until.clone() / Value::from(1000), Value::Undefined));
+            request.set("to".into(), self.parse_to_int(until.clone() / Value::from(1000)));
         };
         let mut response: Value = self.dispatch("publicFuturesGetSettleFundingRate".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         //
@@ -3403,7 +3427,7 @@ pub trait Gate : Exchange {
         if limit.is_nonnullish() { request.set("limit".into(), limit.clone()); }
         let candidates = vec![("public", "GET", "trades"), ("public", "GET", "recent_trades"), ("public", "GET", "aggTrades")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Gate>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -3476,10 +3500,10 @@ pub trait Gate : Exchange {
         };
         // default 100, max 1000
         if since.clone().is_nonnullish() {
-            request.set("from".into(), self.parse_to_int(since.clone() / Value::from(1000), Value::Undefined));
+            request.set("from".into(), self.parse_to_int(since.clone() / Value::from(1000)));
         };
         if until.clone().is_nonnullish() {
-            request.set("to".into(), self.parse_to_int(until.clone() / Value::from(1000), Value::Undefined));
+            request.set("to".into(), self.parse_to_int(until.clone() / Value::from(1000)));
         };
         let mut response: Value = Value::Undefined;
         if r#type.clone() == Value::from("spot") || r#type.clone() == Value::from("margin") {
@@ -3668,7 +3692,7 @@ pub trait Gate : Exchange {
         if ms_string.clone().is_nonnullish() {
             ms_string = Precise::string_mul(ms_string.clone(), Value::from("1000"));
             ms_string = ms_string.slice(Value::from(0), Value::from(13));
-            timestamp = self.parse_to_int(ms_string.clone(), Value::Undefined);
+            timestamp = self.parse_to_int(ms_string.clone());
         } else {
             timestamp = self.safe_timestamp_2(trade.clone(), Value::from("time"), Value::from("create_time"), Value::Undefined);
         };
@@ -3746,7 +3770,7 @@ pub trait Gate : Exchange {
             request.set("limit".into(), limit.clone());
         };
         if since.clone().is_nonnullish() {
-            let mut start: Value = self.parse_to_int(since.clone() / Value::from(1000), Value::Undefined);
+            let mut start: Value = self.parse_to_int(since.clone() / Value::from(1000));
             request.set("from".into(), start.clone());
             request.set("to".into(), self.sum(start.clone(), Value::from(30) * Value::from(24) * Value::from(60) * Value::from(60)));
         };
@@ -3774,7 +3798,7 @@ pub trait Gate : Exchange {
             request.set("limit".into(), limit.clone());
         };
         if since.clone().is_nonnullish() {
-            let mut start: Value = self.parse_to_int(since.clone() / Value::from(1000), Value::Undefined);
+            let mut start: Value = self.parse_to_int(since.clone() / Value::from(1000));
             request.set("from".into(), start.clone());
             request.set("to".into(), self.sum(start.clone(), Value::from(30) * Value::from(24) * Value::from(60) * Value::from(60)));
         };
@@ -4434,7 +4458,7 @@ pub trait Gate : Exchange {
         let mut extended_request: Value = <Self as Gate>::edit_order_request(self, id.clone(), symbol.clone(), r#type.clone(), side.clone(), amount.clone(), price.clone(), params.clone());
         let mut response: Value = Value::Undefined;
         if market.get(Value::from("spot")).is_truthy() {
-            response = self.private_spot_patch_orders_order_id(extended_request.clone()).await;
+            response = self.dispatch("privateSpotPatchOrdersOrderId".into(), extended_request.clone(), Value::Undefined).await;
         } else {
             response = self.dispatch("privateFuturesPutSettleOrdersOrderId".into(), extended_request.clone(), Value::Undefined).await;
         };
@@ -4769,10 +4793,10 @@ pub trait Gate : Exchange {
         let mut timestamp: Value = Value::Undefined;
         let mut last_trade_timestamp: Value = Value::Undefined;
         if timestamp_str.clone().is_nonnullish() {
-            timestamp = self.parse_to_int(timestamp_str.clone(), Value::Undefined);
+            timestamp = self.parse_to_int(timestamp_str.clone());
         };
         if last_trade_timestamp_str.clone().is_nonnullish() {
-            last_trade_timestamp = self.parse_to_int(last_trade_timestamp_str.clone(), Value::Undefined);
+            last_trade_timestamp = self.parse_to_int(last_trade_timestamp_str.clone());
         };
         return self.safe_order(Value::Json(normalize(&Value::Json(json!({
             "id": self.safe_string(order.clone(), Value::from("id"), Value::Undefined),
@@ -4884,11 +4908,11 @@ pub trait Gate : Exchange {
         let mut request: Value = Value::new_object();
         (request, params) = shift_2(<Self as Gate>::prepare_request(self, market.clone(), r#type.clone(), params.clone()));
         if since.clone().is_nonnullish() {
-            request.set("from".into(), self.parse_to_int(since.clone() / Value::from(1000), Value::Undefined));
+            request.set("from".into(), self.parse_to_int(since.clone() / Value::from(1000)));
         };
         if until.clone().is_nonnullish() {
             params = self.omit(params.clone(), Value::from("until"));
-            request.set("to".into(), self.parse_to_int(until.clone() / Value::from(1000), Value::Undefined));
+            request.set("to".into(), self.parse_to_int(until.clone() / Value::from(1000)));
         };
         if limit.clone().is_nonnullish() {
             request.set("limit".into(), limit.clone());
@@ -4923,12 +4947,12 @@ pub trait Gate : Exchange {
         };
         if spot.is_truthy() {
             if since.clone().is_nonnullish() {
-                request.set("from".into(), self.parse_to_int(since.clone() / Value::from(1000), Value::Undefined));
+                request.set("from".into(), self.parse_to_int(since.clone() / Value::from(1000)));
             };
             let mut until: Value = self.safe_integer(params.clone(), Value::from("until"), Value::Undefined);
             if until.clone().is_nonnullish() {
                 params = self.omit(params.clone(), Value::from("until"));
-                request.set("to".into(), self.parse_to_int(until.clone() / Value::from(1000), Value::Undefined));
+                request.set("to".into(), self.parse_to_int(until.clone() / Value::from(1000)));
             };
         };
         let (mut last_id, mut final_params) = shift_2(self.handle_param_string_2(params.clone(), Value::from("lastId"), Value::from("last_id"), Value::Undefined));
@@ -7523,10 +7547,10 @@ pub trait Gate : Exchange {
             request.set("limit".into(), limit.clone());
         };
         if since.clone().is_nonnullish() {
-            request.set("from".into(), self.parse_to_int(since.clone() / Value::from(1000), Value::Undefined));
+            request.set("from".into(), self.parse_to_int(since.clone() / Value::from(1000)));
         };
         if until.clone().is_nonnullish() {
-            request.set("to".into(), self.parse_to_int(until.clone() / Value::from(1000), Value::Undefined));
+            request.set("to".into(), self.parse_to_int(until.clone() / Value::from(1000)));
         };
         let mut response: Value = Value::Undefined;
         if market_type.clone() == Value::from("swap") {
@@ -7566,341 +7590,341 @@ pub trait Gate : Exchange {
         match method {
             Value::Json(serde_json::Value::String(ref m)) => {
                 match m.as_ref() {
-                    "publicWalletGetCurrencychains" => Gate::request(self, "currency_chains".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicUnifiedGetCurrencies" => Gate::request(self, "currencies".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicUnifiedGetHistoryloanrate" => Gate::request(self, "history_loan_rate".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicSpotGetCurrencies" => Gate::request(self, "currencies".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicSpotGetCurrenciescurrency" => Gate::request(self, "currencies/{currency}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicSpotGetCurrencypairs" => Gate::request(self, "currency_pairs".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicSpotGetCurrencypairscurrencypair" => Gate::request(self, "currency_pairs/{currency_pair}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicSpotGetTickers" => Gate::request(self, "tickers".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicSpotGetOrderbook" => Gate::request(self, "order_book".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicSpotGetTrades" => Gate::request(self, "trades".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicSpotGetCandlesticks" => Gate::request(self, "candlesticks".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicSpotGetTime" => Gate::request(self, "time".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicSpotGetInsurancehistory" => Gate::request(self, "insurance_history".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicMarginGetUnicurrencypairs" => Gate::request(self, "uni/currency_pairs".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicMarginGetUnicurrencypairscurrencypair" => Gate::request(self, "uni/currency_pairs/{currency_pair}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicMarginGetLoanmargintiers" => Gate::request(self, "loan_margin_tiers".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicMarginGetCurrencypairs" => Gate::request(self, "currency_pairs".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicMarginGetCurrencypairscurrencypair" => Gate::request(self, "currency_pairs/{currency_pair}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicMarginGetFundingbook" => Gate::request(self, "funding_book".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicMarginGetCrosscurrencies" => Gate::request(self, "cross/currencies".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicMarginGetCrosscurrenciescurrency" => Gate::request(self, "cross/currencies/{currency}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicFlashSwapGetCurrencypairs" => Gate::request(self, "currency_pairs".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicFlashSwapGetCurrencies" => Gate::request(self, "currencies".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicFuturesGetSettlecontracts" => Gate::request(self, "{settle}/contracts".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicFuturesGetSettlecontractscontract" => Gate::request(self, "{settle}/contracts/{contract}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicFuturesGetSettleorderbook" => Gate::request(self, "{settle}/order_book".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicFuturesGetSettletrades" => Gate::request(self, "{settle}/trades".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicFuturesGetSettlecandlesticks" => Gate::request(self, "{settle}/candlesticks".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicFuturesGetSettlepremiumindex" => Gate::request(self, "{settle}/premium_index".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicFuturesGetSettletickers" => Gate::request(self, "{settle}/tickers".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicFuturesGetSettlefundingrate" => Gate::request(self, "{settle}/funding_rate".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicFuturesGetSettleinsurance" => Gate::request(self, "{settle}/insurance".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicFuturesGetSettlecontractstats" => Gate::request(self, "{settle}/contract_stats".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicFuturesGetSettleindexconstituentsindex" => Gate::request(self, "{settle}/index_constituents/{index}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicFuturesGetSettleliqorders" => Gate::request(self, "{settle}/liq_orders".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicFuturesGetSettlerisklimittiers" => Gate::request(self, "{settle}/risk_limit_tiers".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicDeliveryGetSettlecontracts" => Gate::request(self, "{settle}/contracts".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicDeliveryGetSettlecontractscontract" => Gate::request(self, "{settle}/contracts/{contract}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicDeliveryGetSettleorderbook" => Gate::request(self, "{settle}/order_book".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicDeliveryGetSettletrades" => Gate::request(self, "{settle}/trades".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicDeliveryGetSettlecandlesticks" => Gate::request(self, "{settle}/candlesticks".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicDeliveryGetSettletickers" => Gate::request(self, "{settle}/tickers".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicDeliveryGetSettleinsurance" => Gate::request(self, "{settle}/insurance".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicDeliveryGetSettlerisklimittiers" => Gate::request(self, "{settle}/risk_limit_tiers".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicOptionsGetUnderlyings" => Gate::request(self, "underlyings".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicOptionsGetExpirations" => Gate::request(self, "expirations".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicOptionsGetContracts" => Gate::request(self, "contracts".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicOptionsGetContractscontract" => Gate::request(self, "contracts/{contract}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicOptionsGetSettlements" => Gate::request(self, "settlements".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicOptionsGetSettlementscontract" => Gate::request(self, "settlements/{contract}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicOptionsGetOrderbook" => Gate::request(self, "order_book".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicOptionsGetTickers" => Gate::request(self, "tickers".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicOptionsGetUnderlyingtickersunderlying" => Gate::request(self, "underlying/tickers/{underlying}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicOptionsGetCandlesticks" => Gate::request(self, "candlesticks".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicOptionsGetUnderlyingcandlesticks" => Gate::request(self, "underlying/candlesticks".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicOptionsGetTrades" => Gate::request(self, "trades".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicEarnGetUnicurrencies" => Gate::request(self, "uni/currencies".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicEarnGetUnicurrenciescurrency" => Gate::request(self, "uni/currencies/{currency}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicEarnGetDualinvestmentplan" => Gate::request(self, "dual/investment_plan".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicEarnGetStructuredproducts" => Gate::request(self, "structured/products".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicLoanGetCollateralcurrencies" => Gate::request(self, "collateral/currencies".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicLoanGetMulticollateralcurrencies" => Gate::request(self, "multi_collateral/currencies".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicLoanGetMulticollateralltv" => Gate::request(self, "multi_collateral/ltv".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicLoanGetMulticollateralfixedrate" => Gate::request(self, "multi_collateral/fixed_rate".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicLoanGetMulticollateralcurrentrate" => Gate::request(self, "multi_collateral/current_rate".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateWithdrawalsPostWithdrawals" => Gate::request(self, "withdrawals".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateWithdrawalsPostPush" => Gate::request(self, "push".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateWithdrawalsDeleteWithdrawalswithdrawalid" => Gate::request(self, "withdrawals/{withdrawal_id}".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateWalletGetDepositaddress" => Gate::request(self, "deposit_address".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateWalletGetWithdrawals" => Gate::request(self, "withdrawals".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateWalletGetDeposits" => Gate::request(self, "deposits".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateWalletGetSubaccounttransfers" => Gate::request(self, "sub_account_transfers".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateWalletGetOrderstatus" => Gate::request(self, "order_status".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateWalletGetWithdrawstatus" => Gate::request(self, "withdraw_status".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateWalletGetSubaccountbalances" => Gate::request(self, "sub_account_balances".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateWalletGetSubaccountmarginbalances" => Gate::request(self, "sub_account_margin_balances".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateWalletGetSubaccountfuturesbalances" => Gate::request(self, "sub_account_futures_balances".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateWalletGetSubaccountcrossmarginbalances" => Gate::request(self, "sub_account_cross_margin_balances".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateWalletGetSavedaddress" => Gate::request(self, "saved_address".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateWalletGetFee" => Gate::request(self, "fee".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateWalletGetTotalbalance" => Gate::request(self, "total_balance".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateWalletGetSmallbalance" => Gate::request(self, "small_balance".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateWalletGetSmallbalancehistory" => Gate::request(self, "small_balance_history".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateWalletGetPush" => Gate::request(self, "push".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateWalletGetGetlowcapexchangelist" => Gate::request(self, "getLowCapExchangeList".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateWalletPostTransfers" => Gate::request(self, "transfers".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateWalletPostSubaccounttransfers" => Gate::request(self, "sub_account_transfers".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateWalletPostSubaccounttosubaccount" => Gate::request(self, "sub_account_to_sub_account".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateWalletPostSmallbalance" => Gate::request(self, "small_balance".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateSubaccountsGetSubaccounts" => Gate::request(self, "sub_accounts".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateSubaccountsGetSubaccountsuserid" => Gate::request(self, "sub_accounts/{user_id}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateSubaccountsGetSubaccountsuseridkeys" => Gate::request(self, "sub_accounts/{user_id}/keys".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateSubaccountsGetSubaccountsuseridkeyskey" => Gate::request(self, "sub_accounts/{user_id}/keys/{key}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateSubaccountsPostSubaccounts" => Gate::request(self, "sub_accounts".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateSubaccountsPostSubaccountsuseridkeys" => Gate::request(self, "sub_accounts/{user_id}/keys".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateSubaccountsPostSubaccountsuseridlock" => Gate::request(self, "sub_accounts/{user_id}/lock".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateSubaccountsPostSubaccountsuseridunlock" => Gate::request(self, "sub_accounts/{user_id}/unlock".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateSubaccountsPutSubaccountsuseridkeyskey" => Gate::request(self, "sub_accounts/{user_id}/keys/{key}".into(), "private".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateSubaccountsDeleteSubaccountsuseridkeyskey" => Gate::request(self, "sub_accounts/{user_id}/keys/{key}".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateUnifiedGetAccounts" => Gate::request(self, "accounts".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateUnifiedGetBorrowable" => Gate::request(self, "borrowable".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateUnifiedGetTransferable" => Gate::request(self, "transferable".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateUnifiedGetTransferables" => Gate::request(self, "transferables".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateUnifiedGetBatchborrowable" => Gate::request(self, "batch_borrowable".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateUnifiedGetLoans" => Gate::request(self, "loans".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateUnifiedGetLoanrecords" => Gate::request(self, "loan_records".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateUnifiedGetInterestrecords" => Gate::request(self, "interest_records".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateUnifiedGetRiskunits" => Gate::request(self, "risk_units".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateUnifiedGetUnifiedmode" => Gate::request(self, "unified_mode".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateUnifiedGetEstimaterate" => Gate::request(self, "estimate_rate".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateUnifiedGetCurrencydiscounttiers" => Gate::request(self, "currency_discount_tiers".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateUnifiedGetLoanmargintiers" => Gate::request(self, "loan_margin_tiers".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateUnifiedGetLeverageusercurrencyconfig" => Gate::request(self, "leverage/user_currency_config".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateUnifiedGetLeverageusercurrencysetting" => Gate::request(self, "leverage/user_currency_setting".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateUnifiedGetAccountmode" => Gate::request(self, "account_mode".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateUnifiedPostLoans" => Gate::request(self, "loans".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateUnifiedPostPortfoliocalculator" => Gate::request(self, "portfolio_calculator".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateUnifiedPostLeverageusercurrencysetting" => Gate::request(self, "leverage/user_currency_setting".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateUnifiedPostCollateralcurrencies" => Gate::request(self, "collateral_currencies".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateUnifiedPostAccountmode" => Gate::request(self, "account_mode".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateUnifiedPutUnifiedmode" => Gate::request(self, "unified_mode".into(), "private".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateSpotGetFee" => Gate::request(self, "fee".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateSpotGetBatchfee" => Gate::request(self, "batch_fee".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateSpotGetAccounts" => Gate::request(self, "accounts".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateSpotGetAccountbook" => Gate::request(self, "account_book".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateSpotGetOpenorders" => Gate::request(self, "open_orders".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateSpotGetOrders" => Gate::request(self, "orders".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateSpotGetOrdersorderid" => Gate::request(self, "orders/{order_id}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateSpotGetMytrades" => Gate::request(self, "my_trades".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateSpotGetPriceorders" => Gate::request(self, "price_orders".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateSpotGetPriceordersorderid" => Gate::request(self, "price_orders/{order_id}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateSpotPostBatchorders" => Gate::request(self, "batch_orders".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateSpotPostCrossliquidateorders" => Gate::request(self, "cross_liquidate_orders".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateSpotPostOrders" => Gate::request(self, "orders".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateSpotPostCancelbatchorders" => Gate::request(self, "cancel_batch_orders".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateSpotPostCountdowncancelall" => Gate::request(self, "countdown_cancel_all".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateSpotPostAmendbatchorders" => Gate::request(self, "amend_batch_orders".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateSpotPostPriceorders" => Gate::request(self, "price_orders".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateSpotDeleteOrders" => Gate::request(self, "orders".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateSpotDeleteOrdersorderid" => Gate::request(self, "orders/{order_id}".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateSpotDeletePriceorders" => Gate::request(self, "price_orders".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateSpotDeletePriceordersorderid" => Gate::request(self, "price_orders/{order_id}".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateMarginGetAccounts" => Gate::request(self, "accounts".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateMarginGetAccountbook" => Gate::request(self, "account_book".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateMarginGetFundingaccounts" => Gate::request(self, "funding_accounts".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateMarginGetAutorepay" => Gate::request(self, "auto_repay".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateMarginGetTransferable" => Gate::request(self, "transferable".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateMarginGetUniestimaterate" => Gate::request(self, "uni/estimate_rate".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateMarginGetUniloans" => Gate::request(self, "uni/loans".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateMarginGetUniloanrecords" => Gate::request(self, "uni/loan_records".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateMarginGetUniinterestrecords" => Gate::request(self, "uni/interest_records".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateMarginGetUniborrowable" => Gate::request(self, "uni/borrowable".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateMarginGetUserloanmargintiers" => Gate::request(self, "user/loan_margin_tiers".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateMarginGetUseraccount" => Gate::request(self, "user/account".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateMarginGetLoans" => Gate::request(self, "loans".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateMarginGetLoansloanid" => Gate::request(self, "loans/{loan_id}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateMarginGetLoansloanidrepayment" => Gate::request(self, "loans/{loan_id}/repayment".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateMarginGetLoanrecords" => Gate::request(self, "loan_records".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateMarginGetLoanrecordsloanrecordid" => Gate::request(self, "loan_records/{loan_record_id}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateMarginGetBorrowable" => Gate::request(self, "borrowable".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateMarginGetCrossaccounts" => Gate::request(self, "cross/accounts".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateMarginGetCrossaccountbook" => Gate::request(self, "cross/account_book".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateMarginGetCrossloans" => Gate::request(self, "cross/loans".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateMarginGetCrossloansloanid" => Gate::request(self, "cross/loans/{loan_id}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateMarginGetCrossrepayments" => Gate::request(self, "cross/repayments".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateMarginGetCrossinterestrecords" => Gate::request(self, "cross/interest_records".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateMarginGetCrosstransferable" => Gate::request(self, "cross/transferable".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateMarginGetCrossestimaterate" => Gate::request(self, "cross/estimate_rate".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateMarginGetCrossborrowable" => Gate::request(self, "cross/borrowable".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateMarginPostAutorepay" => Gate::request(self, "auto_repay".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateMarginPostUniloans" => Gate::request(self, "uni/loans".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateMarginPostLeverageusermarketsetting" => Gate::request(self, "leverage/user_market_setting".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateMarginPostLoans" => Gate::request(self, "loans".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateMarginPostMergedloans" => Gate::request(self, "merged_loans".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateMarginPostLoansloanidrepayment" => Gate::request(self, "loans/{loan_id}/repayment".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateMarginPostCrossloans" => Gate::request(self, "cross/loans".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateMarginPostCrossrepayments" => Gate::request(self, "cross/repayments".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateMarginDeleteLoansloanid" => Gate::request(self, "loans/{loan_id}".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateFlashSwapGetOrders" => Gate::request(self, "orders".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateFlashSwapGetOrdersorderid" => Gate::request(self, "orders/{order_id}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateFlashSwapPostOrders" => Gate::request(self, "orders".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateFlashSwapPostOrderspreview" => Gate::request(self, "orders/preview".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateFuturesGetSettleaccounts" => Gate::request(self, "{settle}/accounts".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateFuturesGetSettleaccountbook" => Gate::request(self, "{settle}/account_book".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateFuturesGetSettlepositions" => Gate::request(self, "{settle}/positions".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateFuturesGetSettlepositionscontract" => Gate::request(self, "{settle}/positions/{contract}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateFuturesGetSettlegetleveragecontract" => Gate::request(self, "{settle}/get_leverage/{contract}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateFuturesGetSettledualcomppositionscontract" => Gate::request(self, "{settle}/dual_comp/positions/{contract}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateFuturesGetSettleorders" => Gate::request(self, "{settle}/orders".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateFuturesGetSettleorderstimerange" => Gate::request(self, "{settle}/orders_timerange".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateFuturesGetSettleordersorderid" => Gate::request(self, "{settle}/orders/{order_id}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateFuturesGetSettlemytrades" => Gate::request(self, "{settle}/my_trades".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateFuturesGetSettlemytradestimerange" => Gate::request(self, "{settle}/my_trades_timerange".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateFuturesGetSettlepositionclose" => Gate::request(self, "{settle}/position_close".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateFuturesGetSettleliquidates" => Gate::request(self, "{settle}/liquidates".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateFuturesGetSettleautodeleverages" => Gate::request(self, "{settle}/auto_deleverages".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateFuturesGetSettlefee" => Gate::request(self, "{settle}/fee".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateFuturesGetSettlerisklimittable" => Gate::request(self, "{settle}/risk_limit_table".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateFuturesGetSettlepriceorders" => Gate::request(self, "{settle}/price_orders".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateFuturesGetSettlepriceordersorderid" => Gate::request(self, "{settle}/price_orders/{order_id}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateFuturesPostSettlepositionscontractmargin" => Gate::request(self, "{settle}/positions/{contract}/margin".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateFuturesPostSettlepositionscontractleverage" => Gate::request(self, "{settle}/positions/{contract}/leverage".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateFuturesPostSettlepositionscontractsetleverage" => Gate::request(self, "{settle}/positions/{contract}/set_leverage".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateFuturesPostSettlepositionscontractrisklimit" => Gate::request(self, "{settle}/positions/{contract}/risk_limit".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateFuturesPostSettlepositionscrossmode" => Gate::request(self, "{settle}/positions/cross_mode".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateFuturesPostSettledualcomppositionscrossmode" => Gate::request(self, "{settle}/dual_comp/positions/cross_mode".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateFuturesPostSettledualmode" => Gate::request(self, "{settle}/dual_mode".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateFuturesPostSettlesetpositionmode" => Gate::request(self, "{settle}/set_position_mode".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateFuturesPostSettledualcomppositionscontractmargin" => Gate::request(self, "{settle}/dual_comp/positions/{contract}/margin".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateFuturesPostSettledualcomppositionscontractleverage" => Gate::request(self, "{settle}/dual_comp/positions/{contract}/leverage".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateFuturesPostSettledualcomppositionscontractrisklimit" => Gate::request(self, "{settle}/dual_comp/positions/{contract}/risk_limit".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateFuturesPostSettleorders" => Gate::request(self, "{settle}/orders".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateFuturesPostSettlebatchorders" => Gate::request(self, "{settle}/batch_orders".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateFuturesPostSettlecountdowncancelall" => Gate::request(self, "{settle}/countdown_cancel_all".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateFuturesPostSettlebatchcancelorders" => Gate::request(self, "{settle}/batch_cancel_orders".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateFuturesPostSettlebatchamendorders" => Gate::request(self, "{settle}/batch_amend_orders".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateFuturesPostSettlebboorders" => Gate::request(self, "{settle}/bbo_orders".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateFuturesPostSettlepriceorders" => Gate::request(self, "{settle}/price_orders".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateFuturesPutSettleordersorderid" => Gate::request(self, "{settle}/orders/{order_id}".into(), "private".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateFuturesPutSettlepriceordersorderid" => Gate::request(self, "{settle}/price_orders/{order_id}".into(), "private".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateFuturesDeleteSettleorders" => Gate::request(self, "{settle}/orders".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateFuturesDeleteSettleordersorderid" => Gate::request(self, "{settle}/orders/{order_id}".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateFuturesDeleteSettlepriceorders" => Gate::request(self, "{settle}/price_orders".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateFuturesDeleteSettlepriceordersorderid" => Gate::request(self, "{settle}/price_orders/{order_id}".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateDeliveryGetSettleaccounts" => Gate::request(self, "{settle}/accounts".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateDeliveryGetSettleaccountbook" => Gate::request(self, "{settle}/account_book".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateDeliveryGetSettlepositions" => Gate::request(self, "{settle}/positions".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateDeliveryGetSettlepositionscontract" => Gate::request(self, "{settle}/positions/{contract}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateDeliveryGetSettleorders" => Gate::request(self, "{settle}/orders".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateDeliveryGetSettleordersorderid" => Gate::request(self, "{settle}/orders/{order_id}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateDeliveryGetSettlemytrades" => Gate::request(self, "{settle}/my_trades".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateDeliveryGetSettlepositionclose" => Gate::request(self, "{settle}/position_close".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateDeliveryGetSettleliquidates" => Gate::request(self, "{settle}/liquidates".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateDeliveryGetSettlesettlements" => Gate::request(self, "{settle}/settlements".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateDeliveryGetSettlepriceorders" => Gate::request(self, "{settle}/price_orders".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateDeliveryGetSettlepriceordersorderid" => Gate::request(self, "{settle}/price_orders/{order_id}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateDeliveryPostSettlepositionscontractmargin" => Gate::request(self, "{settle}/positions/{contract}/margin".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateDeliveryPostSettlepositionscontractleverage" => Gate::request(self, "{settle}/positions/{contract}/leverage".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateDeliveryPostSettlepositionscontractrisklimit" => Gate::request(self, "{settle}/positions/{contract}/risk_limit".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateDeliveryPostSettleorders" => Gate::request(self, "{settle}/orders".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateDeliveryPostSettlepriceorders" => Gate::request(self, "{settle}/price_orders".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateDeliveryDeleteSettleorders" => Gate::request(self, "{settle}/orders".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateDeliveryDeleteSettleordersorderid" => Gate::request(self, "{settle}/orders/{order_id}".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateDeliveryDeleteSettlepriceorders" => Gate::request(self, "{settle}/price_orders".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateDeliveryDeleteSettlepriceordersorderid" => Gate::request(self, "{settle}/price_orders/{order_id}".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateOptionsGetMysettlements" => Gate::request(self, "my_settlements".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateOptionsGetAccounts" => Gate::request(self, "accounts".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateOptionsGetAccountbook" => Gate::request(self, "account_book".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateOptionsGetPositions" => Gate::request(self, "positions".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateOptionsGetPositionscontract" => Gate::request(self, "positions/{contract}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateOptionsGetPositionclose" => Gate::request(self, "position_close".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateOptionsGetOrders" => Gate::request(self, "orders".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateOptionsGetOrdersorderid" => Gate::request(self, "orders/{order_id}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateOptionsGetMytrades" => Gate::request(self, "my_trades".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateOptionsGetMmp" => Gate::request(self, "mmp".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateOptionsPostOrders" => Gate::request(self, "orders".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateOptionsPostCountdowncancelall" => Gate::request(self, "countdown_cancel_all".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateOptionsPostMmp" => Gate::request(self, "mmp".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateOptionsPostMmpreset" => Gate::request(self, "mmp/reset".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateOptionsDeleteOrders" => Gate::request(self, "orders".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateOptionsDeleteOrdersorderid" => Gate::request(self, "orders/{order_id}".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateEarnGetUnilends" => Gate::request(self, "uni/lends".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateEarnGetUnilendrecords" => Gate::request(self, "uni/lend_records".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateEarnGetUniinterestscurrency" => Gate::request(self, "uni/interests/{currency}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateEarnGetUniinterestrecords" => Gate::request(self, "uni/interest_records".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateEarnGetUniintereststatuscurrency" => Gate::request(self, "uni/interest_status/{currency}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateEarnGetUnichart" => Gate::request(self, "uni/chart".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateEarnGetUnirate" => Gate::request(self, "uni/rate".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateEarnGetStakingeth2raterecords" => Gate::request(self, "staking/eth2/rate_records".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateEarnGetDualorders" => Gate::request(self, "dual/orders".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateEarnGetDualbalance" => Gate::request(self, "dual/balance".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateEarnGetStructuredorders" => Gate::request(self, "structured/orders".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateEarnGetStakingcoins" => Gate::request(self, "staking/coins".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateEarnGetStakingorderlist" => Gate::request(self, "staking/order_list".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateEarnGetStakingawardlist" => Gate::request(self, "staking/award_list".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateEarnGetStakingassets" => Gate::request(self, "staking/assets".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateEarnGetUnicurrencies" => Gate::request(self, "uni/currencies".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateEarnGetUnicurrenciescurrency" => Gate::request(self, "uni/currencies/{currency}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateEarnPostUnilends" => Gate::request(self, "uni/lends".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateEarnPostStakingeth2swap" => Gate::request(self, "staking/eth2/swap".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateEarnPostDualorders" => Gate::request(self, "dual/orders".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateEarnPostStructuredorders" => Gate::request(self, "structured/orders".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateEarnPostStakingswap" => Gate::request(self, "staking/swap".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateEarnPutUniinterestreinvest" => Gate::request(self, "uni/interest_reinvest".into(), "private".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateLoanGetCollateralorders" => Gate::request(self, "collateral/orders".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateLoanGetCollateralordersorderid" => Gate::request(self, "collateral/orders/{order_id}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateLoanGetCollateralrepayrecords" => Gate::request(self, "collateral/repay_records".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateLoanGetCollateralcollaterals" => Gate::request(self, "collateral/collaterals".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateLoanGetCollateraltotalamount" => Gate::request(self, "collateral/total_amount".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateLoanGetCollateralltv" => Gate::request(self, "collateral/ltv".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateLoanGetMulticollateralorders" => Gate::request(self, "multi_collateral/orders".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateLoanGetMulticollateralordersorderid" => Gate::request(self, "multi_collateral/orders/{order_id}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateLoanGetMulticollateralrepay" => Gate::request(self, "multi_collateral/repay".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateLoanGetMulticollateralmortgage" => Gate::request(self, "multi_collateral/mortgage".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateLoanGetMulticollateralcurrencyquota" => Gate::request(self, "multi_collateral/currency_quota".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateLoanGetCollateralcurrencies" => Gate::request(self, "collateral/currencies".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateLoanGetMulticollateralcurrencies" => Gate::request(self, "multi_collateral/currencies".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateLoanGetMulticollateralltv" => Gate::request(self, "multi_collateral/ltv".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateLoanGetMulticollateralfixedrate" => Gate::request(self, "multi_collateral/fixed_rate".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateLoanGetMulticollateralcurrentrate" => Gate::request(self, "multi_collateral/current_rate".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateLoanPostCollateralorders" => Gate::request(self, "collateral/orders".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateLoanPostCollateralrepay" => Gate::request(self, "collateral/repay".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateLoanPostCollateralcollaterals" => Gate::request(self, "collateral/collaterals".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateLoanPostMulticollateralorders" => Gate::request(self, "multi_collateral/orders".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateLoanPostMulticollateralrepay" => Gate::request(self, "multi_collateral/repay".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateLoanPostMulticollateralmortgage" => Gate::request(self, "multi_collateral/mortgage".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateAccountGetDetail" => Gate::request(self, "detail".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateAccountGetMainkeys" => Gate::request(self, "main_keys".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateAccountGetRatelimit" => Gate::request(self, "rate_limit".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateAccountGetStpgroups" => Gate::request(self, "stp_groups".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateAccountGetStpgroupsstpidusers" => Gate::request(self, "stp_groups/{stp_id}/users".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateAccountGetStpgroupsdebitfee" => Gate::request(self, "stp_groups/debit_fee".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateAccountGetDebitfee" => Gate::request(self, "debit_fee".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateAccountPostStpgroups" => Gate::request(self, "stp_groups".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateAccountPostStpgroupsstpidusers" => Gate::request(self, "stp_groups/{stp_id}/users".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateAccountPostDebitfee" => Gate::request(self, "debit_fee".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateAccountDeleteStpgroupsstpidusers" => Gate::request(self, "stp_groups/{stp_id}/users".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateRebateGetAgencytransactionhistory" => Gate::request(self, "agency/transaction_history".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateRebateGetAgencycommissionhistory" => Gate::request(self, "agency/commission_history".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateRebateGetPartnertransactionhistory" => Gate::request(self, "partner/transaction_history".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateRebateGetPartnercommissionhistory" => Gate::request(self, "partner/commission_history".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateRebateGetPartnersublist" => Gate::request(self, "partner/sub_list".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateRebateGetBrokercommissionhistory" => Gate::request(self, "broker/commission_history".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateRebateGetBrokertransactionhistory" => Gate::request(self, "broker/transaction_history".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateRebateGetUserinfo" => Gate::request(self, "user/info".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateRebateGetUsersubrelation" => Gate::request(self, "user/sub_relation".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateOtcGetGetuserdefbank" => Gate::request(self, "get_user_def_bank".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateOtcGetOrderlist" => Gate::request(self, "order/list".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateOtcGetStablecoinorderlist" => Gate::request(self, "stable_coin/order/list".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateOtcGetOrderdetail" => Gate::request(self, "order/detail".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateOtcPostQuote" => Gate::request(self, "quote".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateOtcPostOrdercreate" => Gate::request(self, "order/create".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateOtcPostStablecoinordercreate" => Gate::request(self, "stable_coin/order/create".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateOtcPostOrderpaid" => Gate::request(self, "order/paid".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateOtcPostOrdercancel" => Gate::request(self, "order/cancel".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicWalletGetCurrencychains" => self.request("currency_chains".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicUnifiedGetCurrencies" => self.request("currencies".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicUnifiedGetHistoryloanrate" => self.request("history_loan_rate".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicSpotGetCurrencies" => self.request("currencies".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicSpotGetCurrenciescurrency" => self.request("currencies/{currency}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicSpotGetCurrencypairs" => self.request("currency_pairs".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicSpotGetCurrencypairscurrencypair" => self.request("currency_pairs/{currency_pair}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicSpotGetTickers" => self.request("tickers".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicSpotGetOrderbook" => self.request("order_book".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicSpotGetTrades" => self.request("trades".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicSpotGetCandlesticks" => self.request("candlesticks".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicSpotGetTime" => self.request("time".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicSpotGetInsurancehistory" => self.request("insurance_history".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicMarginGetUnicurrencypairs" => self.request("uni/currency_pairs".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicMarginGetUnicurrencypairscurrencypair" => self.request("uni/currency_pairs/{currency_pair}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicMarginGetLoanmargintiers" => self.request("loan_margin_tiers".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicMarginGetCurrencypairs" => self.request("currency_pairs".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicMarginGetCurrencypairscurrencypair" => self.request("currency_pairs/{currency_pair}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicMarginGetFundingbook" => self.request("funding_book".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicMarginGetCrosscurrencies" => self.request("cross/currencies".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicMarginGetCrosscurrenciescurrency" => self.request("cross/currencies/{currency}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicFlashSwapGetCurrencypairs" => self.request("currency_pairs".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicFlashSwapGetCurrencies" => self.request("currencies".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicFuturesGetSettlecontracts" => self.request("{settle}/contracts".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicFuturesGetSettlecontractscontract" => self.request("{settle}/contracts/{contract}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicFuturesGetSettleorderbook" => self.request("{settle}/order_book".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicFuturesGetSettletrades" => self.request("{settle}/trades".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicFuturesGetSettlecandlesticks" => self.request("{settle}/candlesticks".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicFuturesGetSettlepremiumindex" => self.request("{settle}/premium_index".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicFuturesGetSettletickers" => self.request("{settle}/tickers".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicFuturesGetSettlefundingrate" => self.request("{settle}/funding_rate".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicFuturesGetSettleinsurance" => self.request("{settle}/insurance".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicFuturesGetSettlecontractstats" => self.request("{settle}/contract_stats".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicFuturesGetSettleindexconstituentsindex" => self.request("{settle}/index_constituents/{index}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicFuturesGetSettleliqorders" => self.request("{settle}/liq_orders".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicFuturesGetSettlerisklimittiers" => self.request("{settle}/risk_limit_tiers".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicDeliveryGetSettlecontracts" => self.request("{settle}/contracts".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicDeliveryGetSettlecontractscontract" => self.request("{settle}/contracts/{contract}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicDeliveryGetSettleorderbook" => self.request("{settle}/order_book".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicDeliveryGetSettletrades" => self.request("{settle}/trades".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicDeliveryGetSettlecandlesticks" => self.request("{settle}/candlesticks".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicDeliveryGetSettletickers" => self.request("{settle}/tickers".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicDeliveryGetSettleinsurance" => self.request("{settle}/insurance".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicDeliveryGetSettlerisklimittiers" => self.request("{settle}/risk_limit_tiers".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicOptionsGetUnderlyings" => self.request("underlyings".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicOptionsGetExpirations" => self.request("expirations".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicOptionsGetContracts" => self.request("contracts".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicOptionsGetContractscontract" => self.request("contracts/{contract}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicOptionsGetSettlements" => self.request("settlements".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicOptionsGetSettlementscontract" => self.request("settlements/{contract}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicOptionsGetOrderbook" => self.request("order_book".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicOptionsGetTickers" => self.request("tickers".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicOptionsGetUnderlyingtickersunderlying" => self.request("underlying/tickers/{underlying}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicOptionsGetCandlesticks" => self.request("candlesticks".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicOptionsGetUnderlyingcandlesticks" => self.request("underlying/candlesticks".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicOptionsGetTrades" => self.request("trades".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicEarnGetUnicurrencies" => self.request("uni/currencies".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicEarnGetUnicurrenciescurrency" => self.request("uni/currencies/{currency}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicEarnGetDualinvestmentplan" => self.request("dual/investment_plan".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicEarnGetStructuredproducts" => self.request("structured/products".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicLoanGetCollateralcurrencies" => self.request("collateral/currencies".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicLoanGetMulticollateralcurrencies" => self.request("multi_collateral/currencies".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicLoanGetMulticollateralltv" => self.request("multi_collateral/ltv".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicLoanGetMulticollateralfixedrate" => self.request("multi_collateral/fixed_rate".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicLoanGetMulticollateralcurrentrate" => self.request("multi_collateral/current_rate".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateWithdrawalsPostWithdrawals" => self.request("withdrawals".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateWithdrawalsPostPush" => self.request("push".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateWithdrawalsDeleteWithdrawalswithdrawalid" => self.request("withdrawals/{withdrawal_id}".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateWalletGetDepositaddress" => self.request("deposit_address".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateWalletGetWithdrawals" => self.request("withdrawals".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateWalletGetDeposits" => self.request("deposits".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateWalletGetSubaccounttransfers" => self.request("sub_account_transfers".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateWalletGetOrderstatus" => self.request("order_status".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateWalletGetWithdrawstatus" => self.request("withdraw_status".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateWalletGetSubaccountbalances" => self.request("sub_account_balances".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateWalletGetSubaccountmarginbalances" => self.request("sub_account_margin_balances".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateWalletGetSubaccountfuturesbalances" => self.request("sub_account_futures_balances".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateWalletGetSubaccountcrossmarginbalances" => self.request("sub_account_cross_margin_balances".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateWalletGetSavedaddress" => self.request("saved_address".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateWalletGetFee" => self.request("fee".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateWalletGetTotalbalance" => self.request("total_balance".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateWalletGetSmallbalance" => self.request("small_balance".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateWalletGetSmallbalancehistory" => self.request("small_balance_history".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateWalletGetPush" => self.request("push".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateWalletGetGetlowcapexchangelist" => self.request("getLowCapExchangeList".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateWalletPostTransfers" => self.request("transfers".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateWalletPostSubaccounttransfers" => self.request("sub_account_transfers".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateWalletPostSubaccounttosubaccount" => self.request("sub_account_to_sub_account".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateWalletPostSmallbalance" => self.request("small_balance".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateSubaccountsGetSubaccounts" => self.request("sub_accounts".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateSubaccountsGetSubaccountsuserid" => self.request("sub_accounts/{user_id}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateSubaccountsGetSubaccountsuseridkeys" => self.request("sub_accounts/{user_id}/keys".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateSubaccountsGetSubaccountsuseridkeyskey" => self.request("sub_accounts/{user_id}/keys/{key}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateSubaccountsPostSubaccounts" => self.request("sub_accounts".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateSubaccountsPostSubaccountsuseridkeys" => self.request("sub_accounts/{user_id}/keys".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateSubaccountsPostSubaccountsuseridlock" => self.request("sub_accounts/{user_id}/lock".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateSubaccountsPostSubaccountsuseridunlock" => self.request("sub_accounts/{user_id}/unlock".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateSubaccountsPutSubaccountsuseridkeyskey" => self.request("sub_accounts/{user_id}/keys/{key}".into(), "private".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateSubaccountsDeleteSubaccountsuseridkeyskey" => self.request("sub_accounts/{user_id}/keys/{key}".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateUnifiedGetAccounts" => self.request("accounts".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateUnifiedGetBorrowable" => self.request("borrowable".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateUnifiedGetTransferable" => self.request("transferable".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateUnifiedGetTransferables" => self.request("transferables".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateUnifiedGetBatchborrowable" => self.request("batch_borrowable".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateUnifiedGetLoans" => self.request("loans".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateUnifiedGetLoanrecords" => self.request("loan_records".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateUnifiedGetInterestrecords" => self.request("interest_records".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateUnifiedGetRiskunits" => self.request("risk_units".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateUnifiedGetUnifiedmode" => self.request("unified_mode".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateUnifiedGetEstimaterate" => self.request("estimate_rate".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateUnifiedGetCurrencydiscounttiers" => self.request("currency_discount_tiers".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateUnifiedGetLoanmargintiers" => self.request("loan_margin_tiers".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateUnifiedGetLeverageusercurrencyconfig" => self.request("leverage/user_currency_config".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateUnifiedGetLeverageusercurrencysetting" => self.request("leverage/user_currency_setting".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateUnifiedGetAccountmode" => self.request("account_mode".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateUnifiedPostLoans" => self.request("loans".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateUnifiedPostPortfoliocalculator" => self.request("portfolio_calculator".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateUnifiedPostLeverageusercurrencysetting" => self.request("leverage/user_currency_setting".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateUnifiedPostCollateralcurrencies" => self.request("collateral_currencies".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateUnifiedPostAccountmode" => self.request("account_mode".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateUnifiedPutUnifiedmode" => self.request("unified_mode".into(), "private".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateSpotGetFee" => self.request("fee".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateSpotGetBatchfee" => self.request("batch_fee".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateSpotGetAccounts" => self.request("accounts".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateSpotGetAccountbook" => self.request("account_book".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateSpotGetOpenorders" => self.request("open_orders".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateSpotGetOrders" => self.request("orders".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateSpotGetOrdersorderid" => self.request("orders/{order_id}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateSpotGetMytrades" => self.request("my_trades".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateSpotGetPriceorders" => self.request("price_orders".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateSpotGetPriceordersorderid" => self.request("price_orders/{order_id}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateSpotPostBatchorders" => self.request("batch_orders".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateSpotPostCrossliquidateorders" => self.request("cross_liquidate_orders".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateSpotPostOrders" => self.request("orders".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateSpotPostCancelbatchorders" => self.request("cancel_batch_orders".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateSpotPostCountdowncancelall" => self.request("countdown_cancel_all".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateSpotPostAmendbatchorders" => self.request("amend_batch_orders".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateSpotPostPriceorders" => self.request("price_orders".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateSpotDeleteOrders" => self.request("orders".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateSpotDeleteOrdersorderid" => self.request("orders/{order_id}".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateSpotDeletePriceorders" => self.request("price_orders".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateSpotDeletePriceordersorderid" => self.request("price_orders/{order_id}".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateMarginGetAccounts" => self.request("accounts".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateMarginGetAccountbook" => self.request("account_book".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateMarginGetFundingaccounts" => self.request("funding_accounts".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateMarginGetAutorepay" => self.request("auto_repay".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateMarginGetTransferable" => self.request("transferable".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateMarginGetUniestimaterate" => self.request("uni/estimate_rate".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateMarginGetUniloans" => self.request("uni/loans".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateMarginGetUniloanrecords" => self.request("uni/loan_records".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateMarginGetUniinterestrecords" => self.request("uni/interest_records".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateMarginGetUniborrowable" => self.request("uni/borrowable".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateMarginGetUserloanmargintiers" => self.request("user/loan_margin_tiers".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateMarginGetUseraccount" => self.request("user/account".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateMarginGetLoans" => self.request("loans".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateMarginGetLoansloanid" => self.request("loans/{loan_id}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateMarginGetLoansloanidrepayment" => self.request("loans/{loan_id}/repayment".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateMarginGetLoanrecords" => self.request("loan_records".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateMarginGetLoanrecordsloanrecordid" => self.request("loan_records/{loan_record_id}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateMarginGetBorrowable" => self.request("borrowable".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateMarginGetCrossaccounts" => self.request("cross/accounts".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateMarginGetCrossaccountbook" => self.request("cross/account_book".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateMarginGetCrossloans" => self.request("cross/loans".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateMarginGetCrossloansloanid" => self.request("cross/loans/{loan_id}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateMarginGetCrossrepayments" => self.request("cross/repayments".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateMarginGetCrossinterestrecords" => self.request("cross/interest_records".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateMarginGetCrosstransferable" => self.request("cross/transferable".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateMarginGetCrossestimaterate" => self.request("cross/estimate_rate".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateMarginGetCrossborrowable" => self.request("cross/borrowable".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateMarginPostAutorepay" => self.request("auto_repay".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateMarginPostUniloans" => self.request("uni/loans".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateMarginPostLeverageusermarketsetting" => self.request("leverage/user_market_setting".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateMarginPostLoans" => self.request("loans".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateMarginPostMergedloans" => self.request("merged_loans".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateMarginPostLoansloanidrepayment" => self.request("loans/{loan_id}/repayment".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateMarginPostCrossloans" => self.request("cross/loans".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateMarginPostCrossrepayments" => self.request("cross/repayments".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateMarginDeleteLoansloanid" => self.request("loans/{loan_id}".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateFlashSwapGetOrders" => self.request("orders".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateFlashSwapGetOrdersorderid" => self.request("orders/{order_id}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateFlashSwapPostOrders" => self.request("orders".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateFlashSwapPostOrderspreview" => self.request("orders/preview".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateFuturesGetSettleaccounts" => self.request("{settle}/accounts".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateFuturesGetSettleaccountbook" => self.request("{settle}/account_book".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateFuturesGetSettlepositions" => self.request("{settle}/positions".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateFuturesGetSettlepositionscontract" => self.request("{settle}/positions/{contract}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateFuturesGetSettlegetleveragecontract" => self.request("{settle}/get_leverage/{contract}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateFuturesGetSettledualcomppositionscontract" => self.request("{settle}/dual_comp/positions/{contract}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateFuturesGetSettleorders" => self.request("{settle}/orders".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateFuturesGetSettleorderstimerange" => self.request("{settle}/orders_timerange".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateFuturesGetSettleordersorderid" => self.request("{settle}/orders/{order_id}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateFuturesGetSettlemytrades" => self.request("{settle}/my_trades".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateFuturesGetSettlemytradestimerange" => self.request("{settle}/my_trades_timerange".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateFuturesGetSettlepositionclose" => self.request("{settle}/position_close".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateFuturesGetSettleliquidates" => self.request("{settle}/liquidates".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateFuturesGetSettleautodeleverages" => self.request("{settle}/auto_deleverages".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateFuturesGetSettlefee" => self.request("{settle}/fee".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateFuturesGetSettlerisklimittable" => self.request("{settle}/risk_limit_table".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateFuturesGetSettlepriceorders" => self.request("{settle}/price_orders".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateFuturesGetSettlepriceordersorderid" => self.request("{settle}/price_orders/{order_id}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateFuturesPostSettlepositionscontractmargin" => self.request("{settle}/positions/{contract}/margin".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateFuturesPostSettlepositionscontractleverage" => self.request("{settle}/positions/{contract}/leverage".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateFuturesPostSettlepositionscontractsetleverage" => self.request("{settle}/positions/{contract}/set_leverage".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateFuturesPostSettlepositionscontractrisklimit" => self.request("{settle}/positions/{contract}/risk_limit".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateFuturesPostSettlepositionscrossmode" => self.request("{settle}/positions/cross_mode".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateFuturesPostSettledualcomppositionscrossmode" => self.request("{settle}/dual_comp/positions/cross_mode".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateFuturesPostSettledualmode" => self.request("{settle}/dual_mode".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateFuturesPostSettlesetpositionmode" => self.request("{settle}/set_position_mode".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateFuturesPostSettledualcomppositionscontractmargin" => self.request("{settle}/dual_comp/positions/{contract}/margin".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateFuturesPostSettledualcomppositionscontractleverage" => self.request("{settle}/dual_comp/positions/{contract}/leverage".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateFuturesPostSettledualcomppositionscontractrisklimit" => self.request("{settle}/dual_comp/positions/{contract}/risk_limit".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateFuturesPostSettleorders" => self.request("{settle}/orders".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateFuturesPostSettlebatchorders" => self.request("{settle}/batch_orders".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateFuturesPostSettlecountdowncancelall" => self.request("{settle}/countdown_cancel_all".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateFuturesPostSettlebatchcancelorders" => self.request("{settle}/batch_cancel_orders".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateFuturesPostSettlebatchamendorders" => self.request("{settle}/batch_amend_orders".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateFuturesPostSettlebboorders" => self.request("{settle}/bbo_orders".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateFuturesPostSettlepriceorders" => self.request("{settle}/price_orders".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateFuturesPutSettleordersorderid" => self.request("{settle}/orders/{order_id}".into(), "private".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateFuturesPutSettlepriceordersorderid" => self.request("{settle}/price_orders/{order_id}".into(), "private".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateFuturesDeleteSettleorders" => self.request("{settle}/orders".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateFuturesDeleteSettleordersorderid" => self.request("{settle}/orders/{order_id}".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateFuturesDeleteSettlepriceorders" => self.request("{settle}/price_orders".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateFuturesDeleteSettlepriceordersorderid" => self.request("{settle}/price_orders/{order_id}".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateDeliveryGetSettleaccounts" => self.request("{settle}/accounts".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateDeliveryGetSettleaccountbook" => self.request("{settle}/account_book".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateDeliveryGetSettlepositions" => self.request("{settle}/positions".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateDeliveryGetSettlepositionscontract" => self.request("{settle}/positions/{contract}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateDeliveryGetSettleorders" => self.request("{settle}/orders".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateDeliveryGetSettleordersorderid" => self.request("{settle}/orders/{order_id}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateDeliveryGetSettlemytrades" => self.request("{settle}/my_trades".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateDeliveryGetSettlepositionclose" => self.request("{settle}/position_close".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateDeliveryGetSettleliquidates" => self.request("{settle}/liquidates".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateDeliveryGetSettlesettlements" => self.request("{settle}/settlements".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateDeliveryGetSettlepriceorders" => self.request("{settle}/price_orders".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateDeliveryGetSettlepriceordersorderid" => self.request("{settle}/price_orders/{order_id}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateDeliveryPostSettlepositionscontractmargin" => self.request("{settle}/positions/{contract}/margin".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateDeliveryPostSettlepositionscontractleverage" => self.request("{settle}/positions/{contract}/leverage".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateDeliveryPostSettlepositionscontractrisklimit" => self.request("{settle}/positions/{contract}/risk_limit".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateDeliveryPostSettleorders" => self.request("{settle}/orders".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateDeliveryPostSettlepriceorders" => self.request("{settle}/price_orders".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateDeliveryDeleteSettleorders" => self.request("{settle}/orders".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateDeliveryDeleteSettleordersorderid" => self.request("{settle}/orders/{order_id}".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateDeliveryDeleteSettlepriceorders" => self.request("{settle}/price_orders".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateDeliveryDeleteSettlepriceordersorderid" => self.request("{settle}/price_orders/{order_id}".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateOptionsGetMysettlements" => self.request("my_settlements".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateOptionsGetAccounts" => self.request("accounts".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateOptionsGetAccountbook" => self.request("account_book".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateOptionsGetPositions" => self.request("positions".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateOptionsGetPositionscontract" => self.request("positions/{contract}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateOptionsGetPositionclose" => self.request("position_close".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateOptionsGetOrders" => self.request("orders".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateOptionsGetOrdersorderid" => self.request("orders/{order_id}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateOptionsGetMytrades" => self.request("my_trades".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateOptionsGetMmp" => self.request("mmp".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateOptionsPostOrders" => self.request("orders".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateOptionsPostCountdowncancelall" => self.request("countdown_cancel_all".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateOptionsPostMmp" => self.request("mmp".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateOptionsPostMmpreset" => self.request("mmp/reset".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateOptionsDeleteOrders" => self.request("orders".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateOptionsDeleteOrdersorderid" => self.request("orders/{order_id}".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateEarnGetUnilends" => self.request("uni/lends".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateEarnGetUnilendrecords" => self.request("uni/lend_records".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateEarnGetUniinterestscurrency" => self.request("uni/interests/{currency}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateEarnGetUniinterestrecords" => self.request("uni/interest_records".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateEarnGetUniintereststatuscurrency" => self.request("uni/interest_status/{currency}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateEarnGetUnichart" => self.request("uni/chart".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateEarnGetUnirate" => self.request("uni/rate".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateEarnGetStakingeth2raterecords" => self.request("staking/eth2/rate_records".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateEarnGetDualorders" => self.request("dual/orders".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateEarnGetDualbalance" => self.request("dual/balance".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateEarnGetStructuredorders" => self.request("structured/orders".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateEarnGetStakingcoins" => self.request("staking/coins".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateEarnGetStakingorderlist" => self.request("staking/order_list".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateEarnGetStakingawardlist" => self.request("staking/award_list".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateEarnGetStakingassets" => self.request("staking/assets".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateEarnGetUnicurrencies" => self.request("uni/currencies".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateEarnGetUnicurrenciescurrency" => self.request("uni/currencies/{currency}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateEarnPostUnilends" => self.request("uni/lends".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateEarnPostStakingeth2swap" => self.request("staking/eth2/swap".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateEarnPostDualorders" => self.request("dual/orders".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateEarnPostStructuredorders" => self.request("structured/orders".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateEarnPostStakingswap" => self.request("staking/swap".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateEarnPutUniinterestreinvest" => self.request("uni/interest_reinvest".into(), "private".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateLoanGetCollateralorders" => self.request("collateral/orders".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateLoanGetCollateralordersorderid" => self.request("collateral/orders/{order_id}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateLoanGetCollateralrepayrecords" => self.request("collateral/repay_records".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateLoanGetCollateralcollaterals" => self.request("collateral/collaterals".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateLoanGetCollateraltotalamount" => self.request("collateral/total_amount".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateLoanGetCollateralltv" => self.request("collateral/ltv".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateLoanGetMulticollateralorders" => self.request("multi_collateral/orders".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateLoanGetMulticollateralordersorderid" => self.request("multi_collateral/orders/{order_id}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateLoanGetMulticollateralrepay" => self.request("multi_collateral/repay".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateLoanGetMulticollateralmortgage" => self.request("multi_collateral/mortgage".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateLoanGetMulticollateralcurrencyquota" => self.request("multi_collateral/currency_quota".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateLoanGetCollateralcurrencies" => self.request("collateral/currencies".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateLoanGetMulticollateralcurrencies" => self.request("multi_collateral/currencies".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateLoanGetMulticollateralltv" => self.request("multi_collateral/ltv".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateLoanGetMulticollateralfixedrate" => self.request("multi_collateral/fixed_rate".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateLoanGetMulticollateralcurrentrate" => self.request("multi_collateral/current_rate".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateLoanPostCollateralorders" => self.request("collateral/orders".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateLoanPostCollateralrepay" => self.request("collateral/repay".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateLoanPostCollateralcollaterals" => self.request("collateral/collaterals".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateLoanPostMulticollateralorders" => self.request("multi_collateral/orders".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateLoanPostMulticollateralrepay" => self.request("multi_collateral/repay".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateLoanPostMulticollateralmortgage" => self.request("multi_collateral/mortgage".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateAccountGetDetail" => self.request("detail".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateAccountGetMainkeys" => self.request("main_keys".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateAccountGetRatelimit" => self.request("rate_limit".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateAccountGetStpgroups" => self.request("stp_groups".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateAccountGetStpgroupsstpidusers" => self.request("stp_groups/{stp_id}/users".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateAccountGetStpgroupsdebitfee" => self.request("stp_groups/debit_fee".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateAccountGetDebitfee" => self.request("debit_fee".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateAccountPostStpgroups" => self.request("stp_groups".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateAccountPostStpgroupsstpidusers" => self.request("stp_groups/{stp_id}/users".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateAccountPostDebitfee" => self.request("debit_fee".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateAccountDeleteStpgroupsstpidusers" => self.request("stp_groups/{stp_id}/users".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateRebateGetAgencytransactionhistory" => self.request("agency/transaction_history".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateRebateGetAgencycommissionhistory" => self.request("agency/commission_history".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateRebateGetPartnertransactionhistory" => self.request("partner/transaction_history".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateRebateGetPartnercommissionhistory" => self.request("partner/commission_history".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateRebateGetPartnersublist" => self.request("partner/sub_list".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateRebateGetBrokercommissionhistory" => self.request("broker/commission_history".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateRebateGetBrokertransactionhistory" => self.request("broker/transaction_history".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateRebateGetUserinfo" => self.request("user/info".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateRebateGetUsersubrelation" => self.request("user/sub_relation".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateOtcGetGetuserdefbank" => self.request("get_user_def_bank".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateOtcGetOrderlist" => self.request("order/list".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateOtcGetStablecoinorderlist" => self.request("stable_coin/order/list".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateOtcGetOrderdetail" => self.request("order/detail".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateOtcPostQuote" => self.request("quote".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateOtcPostOrdercreate" => self.request("order/create".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateOtcPostStablecoinordercreate" => self.request("stable_coin/order/create".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateOtcPostOrderpaid" => self.request("order/paid".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateOtcPostOrdercancel" => self.request("order/cancel".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     _ => unimplemented!(),
                 }
             },
@@ -7944,7 +7968,7 @@ impl ValueTrait for GateImpl {
     fn join(&self, glue: Value) -> Value { self.0.join(glue) }
     fn to_string(&self) -> Value { self.0.to_string() }
     fn typeof_(&self) -> Value { self.0.typeof_() }
-    fn slice(&self, start: Value) -> Value { self.0.slice(start) }
+    fn slice(&self, start: Value, end: Value) -> Value { self.0.slice(start, end) }
 }
 
 impl GateImpl {

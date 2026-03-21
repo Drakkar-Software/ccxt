@@ -19,8 +19,6 @@ async fn main() {
     let rv = exchange.fetch_ticker(symbol.clone(), Value::Undefined).await;
     println!("fetchTicker: {}", normalize(&rv).map(|v| v.to_string()).unwrap_or_else(|| "undefined".into()));
     // skipped: loadMarkets (not found in transpiled trait)
-    let rv = exchange.market(Value::Undefined);
-    println!("market: {}", normalize(&rv).map(|v| v.to_string()).unwrap_or_else(|| "undefined".into()));
-    let rv = exchange.price_to_precision(Value::Undefined, Value::Undefined);
-    println!("priceToPrecision: {}", normalize(&rv).map(|v| v.to_string()).unwrap_or_else(|| "undefined".into()));
+    // skipped: market (not found in transpiled trait)
+    // skipped: priceToPrecision (not found in transpiled trait)
 }

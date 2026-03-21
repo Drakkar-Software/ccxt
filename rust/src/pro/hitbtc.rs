@@ -13,14 +13,38 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, BoolExt, JSON, Array, Object, Math, Promise, parse_int, shift_2, extend_2, normalize};
 // Crypto hash identifiers
-fn sha256() -> Value { Value::from("sha256") }
-fn sha384() -> Value { Value::from("sha384") }
-fn sha512() -> Value { Value::from("sha512") }
-fn md5() -> Value { Value::from("md5") }
-fn ed25519() -> Value { Value::from("ed25519") }
+fn sha256() -> Value { Value::from("sha256()") }
+fn sha384() -> Value { Value::from("sha384()") }
+fn sha512() -> Value { Value::from("sha512()") }
+fn md5() -> Value { Value::from("md5()") }
+fn ed25519() -> Value { Value::from("ed25519()") }
 fn rsa(msg: Value, secret: Value, _hash: Value) -> Value { msg }
 fn eddsa(msg: Value, secret: Value, _curve: Value) -> Value { msg }
-fn secp256k1() -> Value { Value::from("secp256k1") }
+fn secp256k1() -> Value { Value::from("secp256k1()") }
+fn keccak() -> Value { Value::from("keccak()") }
+fn ecdsa(msg: Value, secret: Value, algo: Value, hash_fn: Value) -> Value { msg }
+fn totp(secret: Value) -> Value { Value::Undefined }
+fn jwt(data: Value, secret: Value, hash: Value, is_rsa: Value) -> Value { Value::Undefined }
+fn parse_float(value: Value) -> Value { value }
+fn decimals(value: Value) -> Value { Value::from(0) }
+fn shift_1(value: Value) -> Value { value }
+fn shift_3(value: Value) -> (Value, Value, Value) { (value.clone(), Value::Undefined, Value::Undefined) }
+fn shift_4(value: Value) -> (Value, Value, Value, Value) { (value.clone(), Value::Undefined, Value::Undefined, Value::Undefined) }
+// Error type constructors
+fn BadRequest(msg: Value) -> Value { msg }
+fn InvalidOrder(msg: Value) -> Value { msg }
+fn ExchangeError(msg: Value) -> Value { msg }
+fn InsufficientFunds(msg: Value) -> Value { msg }
+fn OrderNotFound(msg: Value) -> Value { msg }
+fn AuthenticationError(msg: Value) -> Value { msg }
+fn PermissionDenied(msg: Value) -> Value { msg }
+fn ExchangeNotAvailable(msg: Value) -> Value { msg }
+fn ArgumentsRequired(msg: Value) -> Value { msg }
+fn RateLimitExceeded(msg: Value) -> Value { msg }
+fn OrderNotFillable(msg: Value) -> Value { msg }
+fn OrderImmediatelyFillable(msg: Value) -> Value { msg }
+fn NotSupported(msg: Value) -> Value { msg }
+fn DuplicateOrderId(msg: Value) -> Value { msg }
 
 use crate::exchange::{PRECISE_BASE, TRUNCATE, ROUND, ROUND_UP, ROUND_DOWN};
 use crate::exchange::{DECIMAL_PLACES, SIGNIFICANT_DIGITS, TICK_SIZE, NO_PADDING, PAD_WITH_ZERO};
@@ -703,7 +727,7 @@ pub trait Hitbtc : Exchange {
         let mut authenticated: Value = self.safe_value(client.get(subscriptions.clone()), message_hash.clone(), Value::Undefined);
         if authenticated.clone().is_nullish() {
             let mut timestamp: Value = self.milliseconds();
-            let mut signature: Value = self.hmac(self.encode(self.number_to_string(timestamp.clone())), self.encode(self.get("secret".into())), sha256.clone(), Value::from("hex"));
+            let mut signature: Value = self.hmac(self.encode(self.number_to_string(timestamp.clone())), self.encode(self.get("secret".into())), sha256().clone(), Value::from("hex"));
             let mut request: Value = Value::Json(normalize(&Value::Json(json!({
                 "method": "login",
                 "params": Value::Json(normalize(&Value::Json(json!({
@@ -859,7 +883,7 @@ pub trait Hitbtc : Exchange {
             let mut timestamp: Value = self.safe_integer(item.clone(), Value::from("t"), Value::Undefined);
             let mut nonce: Value = self.safe_integer(item.clone(), Value::from("s"), Value::Undefined);
             if r#type.clone() == Value::from("snapshot") {
-                let mut parsed_snapshot: Value = self.parse_order_book(item.clone(), symbol.clone(), timestamp.clone(), Value::from("b"), Value::from("a"));
+                let mut parsed_snapshot: Value = self.parse_order_book(item.clone(), symbol.clone(), timestamp.clone(), Value::from("b"), Value::from("a"), Value::Undefined, Value::Undefined, Value::Undefined);
                 orderbook.reset(parsed_snapshot.clone());
             } else {
                 let mut asks: Value = self.safe_list(item.clone(), Value::from("a"), Value::new_array());
@@ -1627,11 +1651,11 @@ pub trait Hitbtc : Exchange {
         (request, params) = shift_2(<Self as Hitbtc>::create_order_request(self, market.clone(), market_type.clone(), r#type.clone(), side.clone(), amount.clone(), price.clone(), margin_mode.clone(), params.clone()));
         request = extend_2(request.clone(), params.clone());
         if market_type.clone() == Value::from("swap") {
-            return <Self as Hitbtc>::trade_request(self, Value::from("futures_new_order"), request.clone()).await;
+            return self.dispatch("tradeRequest".into(), Value::from("futures_new_order"), request.clone()).await;
         } else if market_type.clone() == Value::from("margin") || margin_mode.clone().is_nonnullish() {
-            return <Self as Hitbtc>::trade_request(self, Value::from("margin_new_order"), request.clone()).await;
+            return self.dispatch("tradeRequest".into(), Value::from("margin_new_order"), request.clone()).await;
         } else {
-            return <Self as Hitbtc>::trade_request(self, Value::from("spot_new_order"), request.clone()).await;
+            return self.dispatch("tradeRequest".into(), Value::from("spot_new_order"), request.clone()).await;
         };
         Value::Undefined
     }
@@ -1651,11 +1675,11 @@ pub trait Hitbtc : Exchange {
         let (mut margin_mode, mut query) = shift_2(self.handle_margin_mode_and_params(Value::from("cancelOrderWs"), params.clone(), Value::Undefined));
         request = extend_2(request.clone(), query.clone());
         if market_type.clone() == Value::from("swap") {
-            return <Self as Hitbtc>::trade_request(self, Value::from("futures_cancel_order"), request.clone()).await;
+            return self.dispatch("tradeRequest".into(), Value::from("futures_cancel_order"), request.clone()).await;
         } else if market_type.clone() == Value::from("margin") || margin_mode.clone().is_nonnullish() {
-            return <Self as Hitbtc>::trade_request(self, Value::from("margin_cancel_order"), request.clone()).await;
+            return self.dispatch("tradeRequest".into(), Value::from("margin_cancel_order"), request.clone()).await;
         } else {
-            return <Self as Hitbtc>::trade_request(self, Value::from("spot_cancel_order"), request.clone()).await;
+            return self.dispatch("tradeRequest".into(), Value::from("spot_cancel_order"), request.clone()).await;
         };
         Value::Undefined
     }
@@ -1672,11 +1696,11 @@ pub trait Hitbtc : Exchange {
         let mut margin_mode: Value = Value::Undefined;
         (margin_mode, params) = shift_2(self.handle_margin_mode_and_params(Value::from("cancelAllOrdersWs"), params.clone(), Value::Undefined));
         if market_type.clone() == Value::from("swap") {
-            return <Self as Hitbtc>::trade_request(self, Value::from("futures_cancel_orders"), params.clone()).await;
+            return self.dispatch("tradeRequest".into(), Value::from("futures_cancel_orders"), params.clone()).await;
         } else if market_type.clone() == Value::from("margin") || margin_mode.clone().is_nonnullish() {
             panic!(r###"NotSupported::new(self.get("id".into()) + Value::from(" cancelAllOrdersWs is not supported for margin orders"))"###);
         } else {
-            return <Self as Hitbtc>::trade_request(self, Value::from("spot_cancel_orders"), params.clone()).await;
+            return self.dispatch("tradeRequest".into(), Value::from("spot_cancel_orders"), params.clone()).await;
         };
         Value::Undefined
     }
@@ -1695,11 +1719,11 @@ pub trait Hitbtc : Exchange {
         let mut margin_mode: Value = Value::Undefined;
         (margin_mode, params) = shift_2(self.handle_margin_mode_and_params(Value::from("fetchOpenOrdersWs"), params.clone(), Value::Undefined));
         if market_type.clone() == Value::from("swap") {
-            return <Self as Hitbtc>::trade_request(self, Value::from("futures_get_orders"), request.clone()).await;
+            return self.dispatch("tradeRequest".into(), Value::from("futures_get_orders"), request.clone()).await;
         } else if market_type.clone() == Value::from("margin") || margin_mode.clone().is_nonnullish() {
-            return <Self as Hitbtc>::trade_request(self, Value::from("margin_get_orders"), request.clone()).await;
+            return self.dispatch("tradeRequest".into(), Value::from("margin_get_orders"), request.clone()).await;
         } else {
-            return <Self as Hitbtc>::trade_request(self, Value::from("spot_get_orders"), request.clone()).await;
+            return self.dispatch("tradeRequest".into(), Value::from("spot_get_orders"), request.clone()).await;
         };
         Value::Undefined
     }
@@ -1890,114 +1914,114 @@ pub trait Hitbtc : Exchange {
         match method {
             Value::Json(serde_json::Value::String(ref m)) => {
                 match m.as_ref() {
-                    "publicGetPubliccurrency" => Hitbtc::request(self, "public/currency".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetPubliccurrencycurrency" => Hitbtc::request(self, "public/currency/{currency}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetPublicsymbol" => Hitbtc::request(self, "public/symbol".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetPublicsymbolsymbol" => Hitbtc::request(self, "public/symbol/{symbol}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetPublicticker" => Hitbtc::request(self, "public/ticker".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetPublictickersymbol" => Hitbtc::request(self, "public/ticker/{symbol}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetPublicpricerate" => Hitbtc::request(self, "public/price/rate".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetPublicpricehistory" => Hitbtc::request(self, "public/price/history".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetPublicpriceticker" => Hitbtc::request(self, "public/price/ticker".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetPublicpricetickersymbol" => Hitbtc::request(self, "public/price/ticker/{symbol}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetPublictrades" => Hitbtc::request(self, "public/trades".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetPublictradessymbol" => Hitbtc::request(self, "public/trades/{symbol}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetPublicorderbook" => Hitbtc::request(self, "public/orderbook".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetPublicorderbooksymbol" => Hitbtc::request(self, "public/orderbook/{symbol}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetPubliccandles" => Hitbtc::request(self, "public/candles".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetPubliccandlessymbol" => Hitbtc::request(self, "public/candles/{symbol}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetPublicconvertedcandles" => Hitbtc::request(self, "public/converted/candles".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetPublicconvertedcandlessymbol" => Hitbtc::request(self, "public/converted/candles/{symbol}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetPublicfuturesinfo" => Hitbtc::request(self, "public/futures/info".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetPublicfuturesinfosymbol" => Hitbtc::request(self, "public/futures/info/{symbol}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetPublicfutureshistoryfunding" => Hitbtc::request(self, "public/futures/history/funding".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetPublicfutureshistoryfundingsymbol" => Hitbtc::request(self, "public/futures/history/funding/{symbol}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetPublicfuturescandlesindexprice" => Hitbtc::request(self, "public/futures/candles/index_price".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetPublicfuturescandlesindexpricesymbol" => Hitbtc::request(self, "public/futures/candles/index_price/{symbol}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetPublicfuturescandlesmarkprice" => Hitbtc::request(self, "public/futures/candles/mark_price".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetPublicfuturescandlesmarkpricesymbol" => Hitbtc::request(self, "public/futures/candles/mark_price/{symbol}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetPublicfuturescandlespremiumindex" => Hitbtc::request(self, "public/futures/candles/premium_index".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetPublicfuturescandlespremiumindexsymbol" => Hitbtc::request(self, "public/futures/candles/premium_index/{symbol}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetPublicfuturescandlesopeninterest" => Hitbtc::request(self, "public/futures/candles/open_interest".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetPublicfuturescandlesopeninterestsymbol" => Hitbtc::request(self, "public/futures/candles/open_interest/{symbol}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetSpotbalance" => Hitbtc::request(self, "spot/balance".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetSpotbalancecurrency" => Hitbtc::request(self, "spot/balance/{currency}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetSpotorder" => Hitbtc::request(self, "spot/order".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetSpotorderclientorderid" => Hitbtc::request(self, "spot/order/{client_order_id}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetSpotfee" => Hitbtc::request(self, "spot/fee".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetSpotfeesymbol" => Hitbtc::request(self, "spot/fee/{symbol}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetSpothistoryorder" => Hitbtc::request(self, "spot/history/order".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetSpothistorytrade" => Hitbtc::request(self, "spot/history/trade".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetMarginaccount" => Hitbtc::request(self, "margin/account".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetMarginaccountisolatedsymbol" => Hitbtc::request(self, "margin/account/isolated/{symbol}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetMarginaccountcrosscurrency" => Hitbtc::request(self, "margin/account/cross/{currency}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetMarginorder" => Hitbtc::request(self, "margin/order".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetMarginorderclientorderid" => Hitbtc::request(self, "margin/order/{client_order_id}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetMarginconfig" => Hitbtc::request(self, "margin/config".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetMarginhistoryorder" => Hitbtc::request(self, "margin/history/order".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetMarginhistorytrade" => Hitbtc::request(self, "margin/history/trade".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetMarginhistorypositions" => Hitbtc::request(self, "margin/history/positions".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetMarginhistoryclearing" => Hitbtc::request(self, "margin/history/clearing".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetFuturesbalance" => Hitbtc::request(self, "futures/balance".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetFuturesbalancecurrency" => Hitbtc::request(self, "futures/balance/{currency}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetFuturesaccount" => Hitbtc::request(self, "futures/account".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetFuturesaccountisolatedsymbol" => Hitbtc::request(self, "futures/account/isolated/{symbol}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetFuturesorder" => Hitbtc::request(self, "futures/order".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetFuturesorderclientorderid" => Hitbtc::request(self, "futures/order/{client_order_id}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetFuturesconfig" => Hitbtc::request(self, "futures/config".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetFuturesfee" => Hitbtc::request(self, "futures/fee".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetFuturesfeesymbol" => Hitbtc::request(self, "futures/fee/{symbol}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetFutureshistoryorder" => Hitbtc::request(self, "futures/history/order".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetFutureshistorytrade" => Hitbtc::request(self, "futures/history/trade".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetFutureshistorypositions" => Hitbtc::request(self, "futures/history/positions".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetFutureshistoryclearing" => Hitbtc::request(self, "futures/history/clearing".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetWalletbalance" => Hitbtc::request(self, "wallet/balance".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetWalletbalancecurrency" => Hitbtc::request(self, "wallet/balance/{currency}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetWalletcryptoaddress" => Hitbtc::request(self, "wallet/crypto/address".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetWalletcryptoaddressrecentdeposit" => Hitbtc::request(self, "wallet/crypto/address/recent-deposit".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetWalletcryptoaddressrecentwithdraw" => Hitbtc::request(self, "wallet/crypto/address/recent-withdraw".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetWalletcryptoaddresscheckmine" => Hitbtc::request(self, "wallet/crypto/address/check-mine".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetWallettransactions" => Hitbtc::request(self, "wallet/transactions".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetWallettransactionstxid" => Hitbtc::request(self, "wallet/transactions/{tx_id}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetWalletcryptofeeestimate" => Hitbtc::request(self, "wallet/crypto/fee/estimate".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetWalletairdrops" => Hitbtc::request(self, "wallet/airdrops".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetWalletamountlocks" => Hitbtc::request(self, "wallet/amount-locks".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetSubaccount" => Hitbtc::request(self, "sub-account".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetSubaccountacl" => Hitbtc::request(self, "sub-account/acl".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetSubaccountbalancesubaccid" => Hitbtc::request(self, "sub-account/balance/{subAccID}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetSubaccountcryptoaddresssubaccidcurrency" => Hitbtc::request(self, "sub-account/crypto/address/{subAccID}/{currency}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostSpotorder" => Hitbtc::request(self, "spot/order".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostSpotorderlist" => Hitbtc::request(self, "spot/order/list".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostMarginorder" => Hitbtc::request(self, "margin/order".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostMarginorderlist" => Hitbtc::request(self, "margin/order/list".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostFuturesorder" => Hitbtc::request(self, "futures/order".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostFuturesorderlist" => Hitbtc::request(self, "futures/order/list".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostWalletcryptoaddress" => Hitbtc::request(self, "wallet/crypto/address".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostWalletcryptowithdraw" => Hitbtc::request(self, "wallet/crypto/withdraw".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostWalletconvert" => Hitbtc::request(self, "wallet/convert".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostWallettransfer" => Hitbtc::request(self, "wallet/transfer".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostWalletinternalwithdraw" => Hitbtc::request(self, "wallet/internal/withdraw".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostWalletcryptocheckoffchainavailable" => Hitbtc::request(self, "wallet/crypto/check-offchain-available".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostWalletcryptofeesestimate" => Hitbtc::request(self, "wallet/crypto/fees/estimate".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostWalletairdropsidclaim" => Hitbtc::request(self, "wallet/airdrops/{id}/claim".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostSubaccountfreeze" => Hitbtc::request(self, "sub-account/freeze".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostSubaccountactivate" => Hitbtc::request(self, "sub-account/activate".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostSubaccounttransfer" => Hitbtc::request(self, "sub-account/transfer".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostSubaccountacl" => Hitbtc::request(self, "sub-account/acl".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateDeleteSpotorder" => Hitbtc::request(self, "spot/order".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateDeleteSpotorderclientorderid" => Hitbtc::request(self, "spot/order/{client_order_id}".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateDeleteMarginposition" => Hitbtc::request(self, "margin/position".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateDeleteMarginpositionisolatedsymbol" => Hitbtc::request(self, "margin/position/isolated/{symbol}".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateDeleteMarginorder" => Hitbtc::request(self, "margin/order".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateDeleteMarginorderclientorderid" => Hitbtc::request(self, "margin/order/{client_order_id}".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateDeleteFuturesposition" => Hitbtc::request(self, "futures/position".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateDeleteFuturespositionmarginmodesymbol" => Hitbtc::request(self, "futures/position/{margin_mode}/{symbol}".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateDeleteFuturesorder" => Hitbtc::request(self, "futures/order".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateDeleteFuturesorderclientorderid" => Hitbtc::request(self, "futures/order/{client_order_id}".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateDeleteWalletcryptowithdrawid" => Hitbtc::request(self, "wallet/crypto/withdraw/{id}".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePutMarginaccountisolatedsymbol" => Hitbtc::request(self, "margin/account/isolated/{symbol}".into(), "private".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePutFuturesaccountisolatedsymbol" => Hitbtc::request(self, "futures/account/isolated/{symbol}".into(), "private".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePutWalletcryptowithdrawid" => Hitbtc::request(self, "wallet/crypto/withdraw/{id}".into(), "private".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetPubliccurrency" => self.request("public/currency".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetPubliccurrencycurrency" => self.request("public/currency/{currency}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetPublicsymbol" => self.request("public/symbol".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetPublicsymbolsymbol" => self.request("public/symbol/{symbol}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetPublicticker" => self.request("public/ticker".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetPublictickersymbol" => self.request("public/ticker/{symbol}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetPublicpricerate" => self.request("public/price/rate".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetPublicpricehistory" => self.request("public/price/history".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetPublicpriceticker" => self.request("public/price/ticker".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetPublicpricetickersymbol" => self.request("public/price/ticker/{symbol}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetPublictrades" => self.request("public/trades".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetPublictradessymbol" => self.request("public/trades/{symbol}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetPublicorderbook" => self.request("public/orderbook".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetPublicorderbooksymbol" => self.request("public/orderbook/{symbol}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetPubliccandles" => self.request("public/candles".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetPubliccandlessymbol" => self.request("public/candles/{symbol}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetPublicconvertedcandles" => self.request("public/converted/candles".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetPublicconvertedcandlessymbol" => self.request("public/converted/candles/{symbol}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetPublicfuturesinfo" => self.request("public/futures/info".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetPublicfuturesinfosymbol" => self.request("public/futures/info/{symbol}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetPublicfutureshistoryfunding" => self.request("public/futures/history/funding".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetPublicfutureshistoryfundingsymbol" => self.request("public/futures/history/funding/{symbol}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetPublicfuturescandlesindexprice" => self.request("public/futures/candles/index_price".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetPublicfuturescandlesindexpricesymbol" => self.request("public/futures/candles/index_price/{symbol}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetPublicfuturescandlesmarkprice" => self.request("public/futures/candles/mark_price".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetPublicfuturescandlesmarkpricesymbol" => self.request("public/futures/candles/mark_price/{symbol}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetPublicfuturescandlespremiumindex" => self.request("public/futures/candles/premium_index".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetPublicfuturescandlespremiumindexsymbol" => self.request("public/futures/candles/premium_index/{symbol}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetPublicfuturescandlesopeninterest" => self.request("public/futures/candles/open_interest".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetPublicfuturescandlesopeninterestsymbol" => self.request("public/futures/candles/open_interest/{symbol}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetSpotbalance" => self.request("spot/balance".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetSpotbalancecurrency" => self.request("spot/balance/{currency}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetSpotorder" => self.request("spot/order".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetSpotorderclientorderid" => self.request("spot/order/{client_order_id}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetSpotfee" => self.request("spot/fee".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetSpotfeesymbol" => self.request("spot/fee/{symbol}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetSpothistoryorder" => self.request("spot/history/order".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetSpothistorytrade" => self.request("spot/history/trade".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetMarginaccount" => self.request("margin/account".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetMarginaccountisolatedsymbol" => self.request("margin/account/isolated/{symbol}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetMarginaccountcrosscurrency" => self.request("margin/account/cross/{currency}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetMarginorder" => self.request("margin/order".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetMarginorderclientorderid" => self.request("margin/order/{client_order_id}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetMarginconfig" => self.request("margin/config".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetMarginhistoryorder" => self.request("margin/history/order".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetMarginhistorytrade" => self.request("margin/history/trade".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetMarginhistorypositions" => self.request("margin/history/positions".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetMarginhistoryclearing" => self.request("margin/history/clearing".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetFuturesbalance" => self.request("futures/balance".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetFuturesbalancecurrency" => self.request("futures/balance/{currency}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetFuturesaccount" => self.request("futures/account".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetFuturesaccountisolatedsymbol" => self.request("futures/account/isolated/{symbol}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetFuturesorder" => self.request("futures/order".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetFuturesorderclientorderid" => self.request("futures/order/{client_order_id}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetFuturesconfig" => self.request("futures/config".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetFuturesfee" => self.request("futures/fee".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetFuturesfeesymbol" => self.request("futures/fee/{symbol}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetFutureshistoryorder" => self.request("futures/history/order".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetFutureshistorytrade" => self.request("futures/history/trade".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetFutureshistorypositions" => self.request("futures/history/positions".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetFutureshistoryclearing" => self.request("futures/history/clearing".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetWalletbalance" => self.request("wallet/balance".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetWalletbalancecurrency" => self.request("wallet/balance/{currency}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetWalletcryptoaddress" => self.request("wallet/crypto/address".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetWalletcryptoaddressrecentdeposit" => self.request("wallet/crypto/address/recent-deposit".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetWalletcryptoaddressrecentwithdraw" => self.request("wallet/crypto/address/recent-withdraw".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetWalletcryptoaddresscheckmine" => self.request("wallet/crypto/address/check-mine".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetWallettransactions" => self.request("wallet/transactions".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetWallettransactionstxid" => self.request("wallet/transactions/{tx_id}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetWalletcryptofeeestimate" => self.request("wallet/crypto/fee/estimate".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetWalletairdrops" => self.request("wallet/airdrops".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetWalletamountlocks" => self.request("wallet/amount-locks".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetSubaccount" => self.request("sub-account".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetSubaccountacl" => self.request("sub-account/acl".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetSubaccountbalancesubaccid" => self.request("sub-account/balance/{subAccID}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetSubaccountcryptoaddresssubaccidcurrency" => self.request("sub-account/crypto/address/{subAccID}/{currency}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostSpotorder" => self.request("spot/order".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostSpotorderlist" => self.request("spot/order/list".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostMarginorder" => self.request("margin/order".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostMarginorderlist" => self.request("margin/order/list".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostFuturesorder" => self.request("futures/order".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostFuturesorderlist" => self.request("futures/order/list".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostWalletcryptoaddress" => self.request("wallet/crypto/address".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostWalletcryptowithdraw" => self.request("wallet/crypto/withdraw".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostWalletconvert" => self.request("wallet/convert".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostWallettransfer" => self.request("wallet/transfer".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostWalletinternalwithdraw" => self.request("wallet/internal/withdraw".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostWalletcryptocheckoffchainavailable" => self.request("wallet/crypto/check-offchain-available".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostWalletcryptofeesestimate" => self.request("wallet/crypto/fees/estimate".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostWalletairdropsidclaim" => self.request("wallet/airdrops/{id}/claim".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostSubaccountfreeze" => self.request("sub-account/freeze".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostSubaccountactivate" => self.request("sub-account/activate".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostSubaccounttransfer" => self.request("sub-account/transfer".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostSubaccountacl" => self.request("sub-account/acl".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateDeleteSpotorder" => self.request("spot/order".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateDeleteSpotorderclientorderid" => self.request("spot/order/{client_order_id}".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateDeleteMarginposition" => self.request("margin/position".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateDeleteMarginpositionisolatedsymbol" => self.request("margin/position/isolated/{symbol}".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateDeleteMarginorder" => self.request("margin/order".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateDeleteMarginorderclientorderid" => self.request("margin/order/{client_order_id}".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateDeleteFuturesposition" => self.request("futures/position".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateDeleteFuturespositionmarginmodesymbol" => self.request("futures/position/{margin_mode}/{symbol}".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateDeleteFuturesorder" => self.request("futures/order".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateDeleteFuturesorderclientorderid" => self.request("futures/order/{client_order_id}".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateDeleteWalletcryptowithdrawid" => self.request("wallet/crypto/withdraw/{id}".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePutMarginaccountisolatedsymbol" => self.request("margin/account/isolated/{symbol}".into(), "private".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePutFuturesaccountisolatedsymbol" => self.request("futures/account/isolated/{symbol}".into(), "private".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePutWalletcryptowithdrawid" => self.request("wallet/crypto/withdraw/{id}".into(), "private".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     _ => unimplemented!(),
                 }
             },
@@ -2041,7 +2065,7 @@ impl ValueTrait for HitbtcImpl {
     fn join(&self, glue: Value) -> Value { self.0.join(glue) }
     fn to_string(&self) -> Value { self.0.to_string() }
     fn typeof_(&self) -> Value { self.0.typeof_() }
-    fn slice(&self, start: Value) -> Value { self.0.slice(start) }
+    fn slice(&self, start: Value, end: Value) -> Value { self.0.slice(start, end) }
 }
 
 impl HitbtcImpl {

@@ -13,14 +13,38 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, BoolExt, JSON, Array, Object, Math, Promise, parse_int, shift_2, extend_2, normalize};
 // Crypto hash identifiers
-fn sha256() -> Value { Value::from("sha256") }
-fn sha384() -> Value { Value::from("sha384") }
-fn sha512() -> Value { Value::from("sha512") }
-fn md5() -> Value { Value::from("md5") }
-fn ed25519() -> Value { Value::from("ed25519") }
+fn sha256() -> Value { Value::from("sha256()") }
+fn sha384() -> Value { Value::from("sha384()") }
+fn sha512() -> Value { Value::from("sha512()") }
+fn md5() -> Value { Value::from("md5()") }
+fn ed25519() -> Value { Value::from("ed25519()") }
 fn rsa(msg: Value, secret: Value, _hash: Value) -> Value { msg }
 fn eddsa(msg: Value, secret: Value, _curve: Value) -> Value { msg }
-fn secp256k1() -> Value { Value::from("secp256k1") }
+fn secp256k1() -> Value { Value::from("secp256k1()") }
+fn keccak() -> Value { Value::from("keccak()") }
+fn ecdsa(msg: Value, secret: Value, algo: Value, hash_fn: Value) -> Value { msg }
+fn totp(secret: Value) -> Value { Value::Undefined }
+fn jwt(data: Value, secret: Value, hash: Value, is_rsa: Value) -> Value { Value::Undefined }
+fn parse_float(value: Value) -> Value { value }
+fn decimals(value: Value) -> Value { Value::from(0) }
+fn shift_1(value: Value) -> Value { value }
+fn shift_3(value: Value) -> (Value, Value, Value) { (value.clone(), Value::Undefined, Value::Undefined) }
+fn shift_4(value: Value) -> (Value, Value, Value, Value) { (value.clone(), Value::Undefined, Value::Undefined, Value::Undefined) }
+// Error type constructors
+fn BadRequest(msg: Value) -> Value { msg }
+fn InvalidOrder(msg: Value) -> Value { msg }
+fn ExchangeError(msg: Value) -> Value { msg }
+fn InsufficientFunds(msg: Value) -> Value { msg }
+fn OrderNotFound(msg: Value) -> Value { msg }
+fn AuthenticationError(msg: Value) -> Value { msg }
+fn PermissionDenied(msg: Value) -> Value { msg }
+fn ExchangeNotAvailable(msg: Value) -> Value { msg }
+fn ArgumentsRequired(msg: Value) -> Value { msg }
+fn RateLimitExceeded(msg: Value) -> Value { msg }
+fn OrderNotFillable(msg: Value) -> Value { msg }
+fn OrderImmediatelyFillable(msg: Value) -> Value { msg }
+fn NotSupported(msg: Value) -> Value { msg }
+fn DuplicateOrderId(msg: Value) -> Value { msg }
 
 use crate::exchange::{PRECISE_BASE, TRUNCATE, ROUND, ROUND_UP, ROUND_DOWN};
 use crate::exchange::{DECIMAL_PLACES, SIGNIFICANT_DIGITS, TICK_SIZE, NO_PADDING, PAD_WITH_ZERO};
@@ -652,11 +676,11 @@ pub trait Arkham : Exchange {
         };
         let mut orderbook: Value = self.get("orderbooks".into()).get(symbol.clone());
         if r#type.clone() == Value::from("snapshot") {
-            let mut timestamp: Value = self.safe_integer_product(data.clone(), Value::from("lastTime"), Value::from(0.001));
-            let mut parsed_order_book: Value = self.parse_order_book(data.clone(), symbol.clone(), timestamp.clone(), Value::from("bids"), Value::from("asks"));
+            let mut timestamp: Value = self.safe_integer_product(data.clone(), Value::from("lastTime"), Value::from(0.001), Value::Undefined);
+            let mut parsed_order_book: Value = self.parse_order_book(data.clone(), symbol.clone(), timestamp.clone(), Value::from("bids"), Value::from("asks"), Value::from("price"), Value::from("size"), Value::Undefined);
             orderbook.reset(parsed_order_book.clone());
         } else if r#type.clone() == Value::from("update") {
-            let mut timestamp: Value = self.safe_integer_product(data.clone(), Value::from("time"), Value::from(0.001));
+            let mut timestamp: Value = self.safe_integer_product(data.clone(), Value::from("time"), Value::from(0.001), Value::Undefined);
             let mut side: Value = self.safe_string(data.clone(), Value::from("side"), Value::Undefined);
             let mut bookside: Value = if side.clone() == Value::from("buy") { orderbook.get(Value::from("bids")) } else { orderbook.get(Value::from("asks")) };
             <Self as Arkham>::handle_delta(self, bookside.clone(), data.clone());
@@ -736,7 +760,7 @@ pub trait Arkham : Exchange {
             let mut path: Value = Value::from("ws");
             let mut payload: Value = self.get("apiKey".into()) + expires.to_string() + method.to_upper_case() + Value::from("/") + path.clone() + body_str.clone();
             let mut decoded_secret: Value = self.base64_to_binary(self.get("secret".into()));
-            let mut signature: Value = self.hmac(self.encode(payload.clone()), decoded_secret.clone(), sha256.clone(), Value::from("base64"));
+            let mut signature: Value = self.hmac(self.encode(payload.clone()), decoded_secret.clone(), sha256().clone(), Value::from("base64"));
             let mut default_options: Value = Value::Json(normalize(&Value::Json(json!({
                 "ws": Value::Json(normalize(&Value::Json(json!({
                     "options": Value::Json(normalize(&Value::Json(json!({
@@ -1079,120 +1103,120 @@ pub trait Arkham : Exchange {
         match method {
             Value::Json(serde_json::Value::String(ref m)) => {
                 match m.as_ref() {
-                    "v1PublicGetAlerts" => Arkham::request(self, "alerts".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetAnnouncements" => Arkham::request(self, "announcements".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetAssets" => Arkham::request(self, "assets".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetBook" => Arkham::request(self, "book".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetCandles" => Arkham::request(self, "candles".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetChains" => Arkham::request(self, "chains".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetContracts" => Arkham::request(self, "contracts".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetIndexprice" => Arkham::request(self, "index-price".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetIndexprices" => Arkham::request(self, "index-prices".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetMarginschedules" => Arkham::request(self, "margin-schedules".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetMarketcapchart" => Arkham::request(self, "marketcapchart".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetMarketcaps" => Arkham::request(self, "marketcaps".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetPair" => Arkham::request(self, "pair".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetPairs" => Arkham::request(self, "pairs".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetServertime" => Arkham::request(self, "server-time".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetTicker" => Arkham::request(self, "ticker".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetTickers" => Arkham::request(self, "tickers".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetTrades" => Arkham::request(self, "trades".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetUser" => Arkham::request(self, "user".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetOrders" => Arkham::request(self, "orders".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetOrdersbyclientorderid" => Arkham::request(self, "orders/by-client-order-id".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetOrdershistory" => Arkham::request(self, "orders/history".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetOrdershistorybyclientorderid" => Arkham::request(self, "orders/history/by-client-order-id".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetOrdershistoryoffset" => Arkham::request(self, "orders/history_offset".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetOrdersid" => Arkham::request(self, "orders/{id}".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetTrades" => Arkham::request(self, "trades".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetTradeshistory" => Arkham::request(self, "trades/history".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetTradestime" => Arkham::request(self, "trades/time".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetTriggerorders" => Arkham::request(self, "trigger-orders".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetAccountairdrops" => Arkham::request(self, "account/airdrops".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetAccountbalanceupdates" => Arkham::request(self, "account/balance-updates".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetAccountbalances" => Arkham::request(self, "account/balances".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetAccountbalancesll" => Arkham::request(self, "account/balances/ll".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetAccountbalanceshistory" => Arkham::request(self, "account/balances/history".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetAccountbalancescommissions" => Arkham::request(self, "account/balances/commissions".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetAccountdepositaddresses" => Arkham::request(self, "account/deposit/addresses".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetAccountdeposits" => Arkham::request(self, "account/deposits".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetAccountfees" => Arkham::request(self, "account/fees".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetAccountfundingratepayments" => Arkham::request(self, "account/funding-rate-payments".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetAccountleverage" => Arkham::request(self, "account/leverage".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetAccountlspassignments" => Arkham::request(self, "account/lsp-assignments".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetAccountmargin" => Arkham::request(self, "account/margin".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetAccountmarginall" => Arkham::request(self, "account/margin/all".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetAccountnotifications" => Arkham::request(self, "account/notifications".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetAccountpositionupdates" => Arkham::request(self, "account/position-updates".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetAccountpositions" => Arkham::request(self, "account/positions".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetAccountrealizedpnl" => Arkham::request(self, "account/realized-pnl".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetAccountrebates" => Arkham::request(self, "account/rebates".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetAccountreferrallinks" => Arkham::request(self, "account/referral-links".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetAccountsessions" => Arkham::request(self, "account/sessions".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetAccountsettings" => Arkham::request(self, "account/settings".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetAccountsettingspricealert" => Arkham::request(self, "account/settings/price-alert".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetAccounttransfers" => Arkham::request(self, "account/transfers".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetAccountunsubscribe" => Arkham::request(self, "account/unsubscribe".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetAccountwatchlist" => Arkham::request(self, "account/watchlist".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetAccountwithdrawaladdresses" => Arkham::request(self, "account/withdrawal/addresses".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetAccountwithdrawaladdressesid" => Arkham::request(self, "account/withdrawal/addresses/{id}".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetAccountwithdrawals" => Arkham::request(self, "account/withdrawals".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetSubaccounts" => Arkham::request(self, "subaccounts".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetAirdrop" => Arkham::request(self, "airdrop".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetAirdropclaim" => Arkham::request(self, "airdrop/claim".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetAffiliatedashboardcommissionearned" => Arkham::request(self, "affiliate-dashboard/commission-earned".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetAffiliatedashboardminarkmlast30d" => Arkham::request(self, "affiliate-dashboard/min-arkm-last-30d".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetAffiliatedashboardpoints" => Arkham::request(self, "affiliate-dashboard/points".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetAffiliatedashboardpointsseason1" => Arkham::request(self, "affiliate-dashboard/points-season-1".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetAffiliatedashboardpointsseason2" => Arkham::request(self, "affiliate-dashboard/points-season-2".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetAffiliatedashboardrealizedpnl" => Arkham::request(self, "affiliate-dashboard/realized-pnl".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetAffiliatedashboardrebatebalance" => Arkham::request(self, "affiliate-dashboard/rebate-balance".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetAffiliatedashboardreferralcount" => Arkham::request(self, "affiliate-dashboard/referral-count".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetAffiliatedashboardreferralsseason1" => Arkham::request(self, "affiliate-dashboard/referrals-season-1".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetAffiliatedashboardreferralsseason2" => Arkham::request(self, "affiliate-dashboard/referrals-season-2".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetAffiliatedashboardtradingvolumestats" => Arkham::request(self, "affiliate-dashboard/trading-volume-stats".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetAffiliatedashboardvolumeseason1" => Arkham::request(self, "affiliate-dashboard/volume-season-1".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetAffiliatedashboardvolumeseason2" => Arkham::request(self, "affiliate-dashboard/volume-season-2".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetAffiliatedashboardapikey" => Arkham::request(self, "affiliate-dashboard/api-key".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetCompetitionsoptinstatus" => Arkham::request(self, "competitions/opt-in-status".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetRewardsinfo" => Arkham::request(self, "rewards/info".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetRewardsvouchers" => Arkham::request(self, "rewards/vouchers".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostOrdersnew" => Arkham::request(self, "orders/new".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostTriggerordersnew" => Arkham::request(self, "trigger-orders/new".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostOrderscancel" => Arkham::request(self, "orders/cancel".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostTriggerorderscancel" => Arkham::request(self, "trigger-orders/cancel".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostOrderscancelall" => Arkham::request(self, "orders/cancel/all".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostTriggerorderscancelall" => Arkham::request(self, "trigger-orders/cancel/all".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostOrdersnewsimple" => Arkham::request(self, "orders/new/simple".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostAccountdepositaddressesnew" => Arkham::request(self, "account/deposit/addresses/new".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostAccountleverage" => Arkham::request(self, "account/leverage".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostAccountnotificationsread" => Arkham::request(self, "account/notifications/read".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostAccountreferrallinks" => Arkham::request(self, "account/referral-links".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostAccountsessionsdelete" => Arkham::request(self, "account/sessions/delete".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostAccountsessionsterminateall" => Arkham::request(self, "account/sessions/terminate-all".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostAccountsettingsupdate" => Arkham::request(self, "account/settings/update".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostAccountwatchlistadd" => Arkham::request(self, "account/watchlist/add".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostAccountwatchlistremove" => Arkham::request(self, "account/watchlist/remove".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostAccountwithdraw" => Arkham::request(self, "account/withdraw".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostAccountwithdrawaladdressesconfirm" => Arkham::request(self, "account/withdrawal/addresses/confirm".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostSubaccounts" => Arkham::request(self, "subaccounts".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostSubaccountstransfer" => Arkham::request(self, "subaccounts/transfer".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostSubaccountsperptransfer" => Arkham::request(self, "subaccounts/perp-transfer".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostSubaccountsupdatesettings" => Arkham::request(self, "subaccounts/update-settings".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostAirdrop" => Arkham::request(self, "airdrop".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostApikeycreate" => Arkham::request(self, "api-key/create".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostAuthenticate" => Arkham::request(self, "authenticate".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostCompetitionsoptin" => Arkham::request(self, "competitions/opt-in".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostRewardsvouchersclaim" => Arkham::request(self, "rewards/vouchers/claim".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePutAccountreferrallinksidslug" => Arkham::request(self, "account/referral-links/{id}/slug".into(), "v1".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePutAccountsettingspricealert" => Arkham::request(self, "account/settings/price-alert".into(), "v1".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePutAccountwithdrawaladdressesid" => Arkham::request(self, "account/withdrawal/addresses/{id}".into(), "v1".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePutSubaccounts" => Arkham::request(self, "subaccounts".into(), "v1".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePutApikeyupdateid" => Arkham::request(self, "api-key/update/{id}".into(), "v1".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateDeleteAccountsettingspricealert" => Arkham::request(self, "account/settings/price-alert".into(), "v1".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateDeleteAccountwithdrawaladdressesid" => Arkham::request(self, "account/withdrawal/addresses/{id}".into(), "v1".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateDeleteSubaccountssubaccountid" => Arkham::request(self, "subaccounts/{subaccountId}".into(), "v1".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateDeleteApikeyid" => Arkham::request(self, "api-key/{id}".into(), "v1".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetAlerts" => self.request("alerts".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetAnnouncements" => self.request("announcements".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetAssets" => self.request("assets".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetBook" => self.request("book".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetCandles" => self.request("candles".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetChains" => self.request("chains".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetContracts" => self.request("contracts".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetIndexprice" => self.request("index-price".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetIndexprices" => self.request("index-prices".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetMarginschedules" => self.request("margin-schedules".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetMarketcapchart" => self.request("marketcapchart".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetMarketcaps" => self.request("marketcaps".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetPair" => self.request("pair".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetPairs" => self.request("pairs".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetServertime" => self.request("server-time".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetTicker" => self.request("ticker".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetTickers" => self.request("tickers".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetTrades" => self.request("trades".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetUser" => self.request("user".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetOrders" => self.request("orders".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetOrdersbyclientorderid" => self.request("orders/by-client-order-id".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetOrdershistory" => self.request("orders/history".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetOrdershistorybyclientorderid" => self.request("orders/history/by-client-order-id".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetOrdershistoryoffset" => self.request("orders/history_offset".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetOrdersid" => self.request("orders/{id}".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetTrades" => self.request("trades".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetTradeshistory" => self.request("trades/history".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetTradestime" => self.request("trades/time".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetTriggerorders" => self.request("trigger-orders".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetAccountairdrops" => self.request("account/airdrops".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetAccountbalanceupdates" => self.request("account/balance-updates".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetAccountbalances" => self.request("account/balances".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetAccountbalancesll" => self.request("account/balances/ll".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetAccountbalanceshistory" => self.request("account/balances/history".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetAccountbalancescommissions" => self.request("account/balances/commissions".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetAccountdepositaddresses" => self.request("account/deposit/addresses".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetAccountdeposits" => self.request("account/deposits".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetAccountfees" => self.request("account/fees".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetAccountfundingratepayments" => self.request("account/funding-rate-payments".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetAccountleverage" => self.request("account/leverage".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetAccountlspassignments" => self.request("account/lsp-assignments".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetAccountmargin" => self.request("account/margin".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetAccountmarginall" => self.request("account/margin/all".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetAccountnotifications" => self.request("account/notifications".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetAccountpositionupdates" => self.request("account/position-updates".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetAccountpositions" => self.request("account/positions".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetAccountrealizedpnl" => self.request("account/realized-pnl".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetAccountrebates" => self.request("account/rebates".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetAccountreferrallinks" => self.request("account/referral-links".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetAccountsessions" => self.request("account/sessions".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetAccountsettings" => self.request("account/settings".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetAccountsettingspricealert" => self.request("account/settings/price-alert".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetAccounttransfers" => self.request("account/transfers".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetAccountunsubscribe" => self.request("account/unsubscribe".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetAccountwatchlist" => self.request("account/watchlist".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetAccountwithdrawaladdresses" => self.request("account/withdrawal/addresses".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetAccountwithdrawaladdressesid" => self.request("account/withdrawal/addresses/{id}".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetAccountwithdrawals" => self.request("account/withdrawals".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetSubaccounts" => self.request("subaccounts".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetAirdrop" => self.request("airdrop".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetAirdropclaim" => self.request("airdrop/claim".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetAffiliatedashboardcommissionearned" => self.request("affiliate-dashboard/commission-earned".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetAffiliatedashboardminarkmlast30d" => self.request("affiliate-dashboard/min-arkm-last-30d".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetAffiliatedashboardpoints" => self.request("affiliate-dashboard/points".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetAffiliatedashboardpointsseason1" => self.request("affiliate-dashboard/points-season-1".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetAffiliatedashboardpointsseason2" => self.request("affiliate-dashboard/points-season-2".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetAffiliatedashboardrealizedpnl" => self.request("affiliate-dashboard/realized-pnl".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetAffiliatedashboardrebatebalance" => self.request("affiliate-dashboard/rebate-balance".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetAffiliatedashboardreferralcount" => self.request("affiliate-dashboard/referral-count".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetAffiliatedashboardreferralsseason1" => self.request("affiliate-dashboard/referrals-season-1".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetAffiliatedashboardreferralsseason2" => self.request("affiliate-dashboard/referrals-season-2".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetAffiliatedashboardtradingvolumestats" => self.request("affiliate-dashboard/trading-volume-stats".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetAffiliatedashboardvolumeseason1" => self.request("affiliate-dashboard/volume-season-1".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetAffiliatedashboardvolumeseason2" => self.request("affiliate-dashboard/volume-season-2".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetAffiliatedashboardapikey" => self.request("affiliate-dashboard/api-key".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetCompetitionsoptinstatus" => self.request("competitions/opt-in-status".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetRewardsinfo" => self.request("rewards/info".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetRewardsvouchers" => self.request("rewards/vouchers".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostOrdersnew" => self.request("orders/new".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostTriggerordersnew" => self.request("trigger-orders/new".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostOrderscancel" => self.request("orders/cancel".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostTriggerorderscancel" => self.request("trigger-orders/cancel".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostOrderscancelall" => self.request("orders/cancel/all".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostTriggerorderscancelall" => self.request("trigger-orders/cancel/all".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostOrdersnewsimple" => self.request("orders/new/simple".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostAccountdepositaddressesnew" => self.request("account/deposit/addresses/new".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostAccountleverage" => self.request("account/leverage".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostAccountnotificationsread" => self.request("account/notifications/read".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostAccountreferrallinks" => self.request("account/referral-links".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostAccountsessionsdelete" => self.request("account/sessions/delete".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostAccountsessionsterminateall" => self.request("account/sessions/terminate-all".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostAccountsettingsupdate" => self.request("account/settings/update".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostAccountwatchlistadd" => self.request("account/watchlist/add".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostAccountwatchlistremove" => self.request("account/watchlist/remove".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostAccountwithdraw" => self.request("account/withdraw".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostAccountwithdrawaladdressesconfirm" => self.request("account/withdrawal/addresses/confirm".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostSubaccounts" => self.request("subaccounts".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostSubaccountstransfer" => self.request("subaccounts/transfer".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostSubaccountsperptransfer" => self.request("subaccounts/perp-transfer".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostSubaccountsupdatesettings" => self.request("subaccounts/update-settings".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostAirdrop" => self.request("airdrop".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostApikeycreate" => self.request("api-key/create".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostAuthenticate" => self.request("authenticate".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostCompetitionsoptin" => self.request("competitions/opt-in".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostRewardsvouchersclaim" => self.request("rewards/vouchers/claim".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePutAccountreferrallinksidslug" => self.request("account/referral-links/{id}/slug".into(), "v1".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePutAccountsettingspricealert" => self.request("account/settings/price-alert".into(), "v1".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePutAccountwithdrawaladdressesid" => self.request("account/withdrawal/addresses/{id}".into(), "v1".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePutSubaccounts" => self.request("subaccounts".into(), "v1".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePutApikeyupdateid" => self.request("api-key/update/{id}".into(), "v1".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateDeleteAccountsettingspricealert" => self.request("account/settings/price-alert".into(), "v1".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateDeleteAccountwithdrawaladdressesid" => self.request("account/withdrawal/addresses/{id}".into(), "v1".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateDeleteSubaccountssubaccountid" => self.request("subaccounts/{subaccountId}".into(), "v1".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateDeleteApikeyid" => self.request("api-key/{id}".into(), "v1".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     _ => unimplemented!(),
                 }
             },
@@ -1236,7 +1260,7 @@ impl ValueTrait for ArkhamImpl {
     fn join(&self, glue: Value) -> Value { self.0.join(glue) }
     fn to_string(&self) -> Value { self.0.to_string() }
     fn typeof_(&self) -> Value { self.0.typeof_() }
-    fn slice(&self, start: Value) -> Value { self.0.slice(start) }
+    fn slice(&self, start: Value, end: Value) -> Value { self.0.slice(start, end) }
 }
 
 impl ArkhamImpl {
