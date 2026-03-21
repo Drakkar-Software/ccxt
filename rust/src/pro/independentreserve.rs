@@ -11,7 +11,16 @@ use async_trait::async_trait;
 use std::str::FromStr;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, JSON, Array, Object, Math, parse_int, shift_2, extend_2, normalize};
+use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, BoolExt, JSON, Array, Object, Math, Promise, parse_int, shift_2, extend_2, normalize};
+// Crypto hash identifiers
+fn sha256() -> Value { Value::from("sha256") }
+fn sha384() -> Value { Value::from("sha384") }
+fn sha512() -> Value { Value::from("sha512") }
+fn md5() -> Value { Value::from("md5") }
+fn ed25519() -> Value { Value::from("ed25519") }
+fn rsa(msg: Value, secret: Value, _hash: Value) -> Value { msg }
+fn eddsa(msg: Value, secret: Value, _curve: Value) -> Value { msg }
+fn secp256k1() -> Value { Value::from("secp256k1") }
 
 use crate::exchange::{PRECISE_BASE, TRUNCATE, ROUND, ROUND_UP, ROUND_DOWN};
 use crate::exchange::{DECIMAL_PLACES, SIGNIFICANT_DIGITS, TICK_SIZE, NO_PADDING, PAD_WITH_ZERO};
@@ -396,10 +405,10 @@ pub trait Independentreserve : Exchange {
         //    }
         //
         let mut data: Value = self.safe_value(message.clone(), Value::from("Data"), Value::new_object());
-        let mut market_id: Value = self.safe_string(data.clone(), Value::from("Pair"));
+        let mut market_id: Value = self.safe_string(data.clone(), Value::from("Pair"), Value::Undefined);
         let mut symbol: Value = self.safe_symbol(market_id.clone(), Value::Undefined, Value::from("-"), Value::Undefined);
         let mut message_hash: Value = Value::from("trades:") + symbol.clone();
-        let mut stored: Value = self.safe_value(self.get("trades".into()), symbol.clone());
+        let mut stored: Value = self.safe_value(self.get("trades".into()), symbol.clone(), Value::Undefined);
         if stored.clone().is_nullish() {
             let mut limit: Value = self.safe_integer(self.get("options".into()), Value::from("tradesLimit"), Value::from(1000));
             stored = ArrayCache::new(limit);
@@ -425,18 +434,18 @@ pub trait Independentreserve : Exchange {
         //        "Side": "Buy"
         //    }
         //
-        let mut datetime: Value = self.safe_string(trade.clone(), Value::from("TradeDate"));
-        let mut market_id: Value = self.safe_string(market.clone(), Value::from("Pair"));
+        let mut datetime: Value = self.safe_string(trade.clone(), Value::from("TradeDate"), Value::Undefined);
+        let mut market_id: Value = self.safe_string(market.clone(), Value::from("Pair"), Value::Undefined);
         return self.safe_trade(Value::Json(normalize(&Value::Json(json!({
             "info": trade,
-            "id": self.safe_string(trade.clone(), Value::from("TradeGuid")),
-            "order": self.safe_string(trade.clone(), Value::from("orderNo")),
+            "id": self.safe_string(trade.clone(), Value::from("TradeGuid"), Value::Undefined),
+            "order": self.safe_string(trade.clone(), Value::from("orderNo"), Value::Undefined),
             "symbol": self.safe_symbol(market_id.clone(), market.clone(), Value::from("-"), Value::Undefined),
-            "side": self.safe_string_lower(trade.clone(), Value::from("Side")),
+            "side": self.safe_string_lower(trade.clone(), Value::from("Side"), Value::Undefined),
             "type": Value::Undefined,
             "takerOrMaker": Value::Undefined,
-            "price": self.safe_string(trade.clone(), Value::from("Price")),
-            "amount": self.safe_string(trade.clone(), Value::from("Volume")),
+            "price": self.safe_string(trade.clone(), Value::from("Price"), Value::Undefined),
+            "amount": self.safe_string(trade.clone(), Value::from("Volume"), Value::Undefined),
             "cost": Value::Undefined,
             "fee": Value::Undefined,
             "timestamp": self.parse8601(datetime.clone()),
@@ -485,12 +494,12 @@ pub trait Independentreserve : Exchange {
         //        "Event": "OrderBookSnapshot",
         //    }
         //
-        let mut event: Value = self.safe_string(message.clone(), Value::from("Event"));
-        let mut channel: Value = self.safe_string(message.clone(), Value::from("Channel"));
+        let mut event: Value = self.safe_string(message.clone(), Value::from("Event"), Value::Undefined);
+        let mut channel: Value = self.safe_string(message.clone(), Value::from("Channel"), Value::Undefined);
         let mut parts: Value = channel.split(Value::from("/"));
-        let mut depth: Value = self.safe_string(parts.clone(), Value::from(1));
-        let mut base_id: Value = self.safe_string(parts.clone(), Value::from(2));
-        let mut quote_id: Value = self.safe_string(parts.clone(), Value::from(3));
+        let mut depth: Value = self.safe_string(parts.clone(), Value::from(1), Value::Undefined);
+        let mut base_id: Value = self.safe_string(parts.clone(), Value::from(2), Value::Undefined);
+        let mut quote_id: Value = self.safe_string(parts.clone(), Value::from(3), Value::Undefined);
         let mut base: Value = self.safe_currency_code(base_id.clone(), Value::Undefined);
         let mut quote: Value = self.safe_currency_code(quote_id.clone(), Value::Undefined);
         let mut symbol: Value = base.clone() + Value::from("/") + quote.clone();
@@ -498,14 +507,14 @@ pub trait Independentreserve : Exchange {
         let mut message_hash: Value = Value::from("orderbook:") + symbol.clone() + Value::from(":") + depth.clone();
         let mut subscription: Value = self.safe_value(client.get(subscriptions.clone()), message_hash.clone(), Value::new_object());
         let mut received_snapshot: Value = self.safe_bool(subscription.clone(), Value::from("receivedSnapshot"), false.into());
-        let mut timestamp: Value = self.safe_integer(message.clone(), Value::from("Time"));
+        let mut timestamp: Value = self.safe_integer(message.clone(), Value::from("Time"), Value::Undefined);
         // let orderbook = this.safeValue (this.orderbooks, symbol);
         if !self.get("orderbooks".into()).contains_key(symbol.clone()) {
             self.get("orderbooks".into()).set(symbol.clone(), self.order_book(Value::new_object(), Value::Undefined));
         };
         let mut orderbook: Value = self.get("orderbooks".into()).get(symbol.clone());
         if event.clone() == Value::from("OrderBookSnapshot") {
-            let mut snapshot: Value = self.parse_order_book(order_book.clone(), symbol.clone(), timestamp.clone(), Value::from("Bids"), Value::from("Offers"), Value::from("Price"), Value::from("Volume"), Value::Undefined);
+            let mut snapshot: Value = self.parse_order_book(order_book.clone(), symbol.clone(), timestamp.clone(), Value::from("Bids"), Value::from("Offers"));
             orderbook.reset(snapshot.clone());
             subscription.set("receivedSnapshot".into(), true.into());
         } else {
@@ -538,7 +547,7 @@ pub trait Independentreserve : Exchange {
                 i += 1;
             };
             let mut calculated_checksum: Value = self.crc32(payload.clone(), true.into());
-            let mut response_checksum: Value = self.safe_integer(order_book.clone(), Value::from("Crc32"));
+            let mut response_checksum: Value = self.safe_integer(order_book.clone(), Value::from("Crc32"), Value::Undefined);
             if calculated_checksum.clone() != response_checksum.clone() {
                 let mut error: Value = ChecksumError::new(self.get("id".into()) + Value::from(" ") + self.orderbook_checksum_message(symbol.clone()));
                 client.get(subscriptions.clone()).get(message_hash.clone());
@@ -563,7 +572,7 @@ pub trait Independentreserve : Exchange {
     }
 
     fn handle_delta(&mut self, mut bookside: Value, mut delta: Value) -> Value {
-        let mut bid_ask: Value = self.parse_bid_ask(delta.clone(), Value::from("Price"), Value::from("Volume"), Value::Undefined);
+        let mut bid_ask: Value = self.parse_bid_ask(delta.clone(), Value::from("Price"), Value::from("Volume"));
         bookside.store_array(bid_ask.clone());
         Value::Undefined
     }
@@ -599,7 +608,7 @@ pub trait Independentreserve : Exchange {
     }
 
     fn handle_message(&mut self, mut client: Value, mut message: Value) -> Value {
-        let mut event: Value = self.safe_string(message.clone(), Value::from("Event"));
+        let mut event: Value = self.safe_string(message.clone(), Value::from("Event"), Value::Undefined);
         let mut handlers: Value = Value::Json(normalize(&Value::Json(json!({
             "Subscriptions": self.get("handleSubscriptions".into()),
             "Heartbeat": self.get("handleHeartbeat".into()),
@@ -607,7 +616,7 @@ pub trait Independentreserve : Exchange {
             "OrderBookSnapshot": self.get("handleOrderBook".into()),
             "OrderBookChange": self.get("handleOrderBook".into())
         }))).unwrap());
-        let mut handler: Value = self.safe_value(handlers.clone(), event.clone());
+        let mut handler: Value = self.safe_value(handlers.clone(), event.clone(), Value::Undefined);
         if handler.clone().is_nonnullish() {
             handler.call(self, client.clone(), message.clone());
             return Value::Undefined;
@@ -696,8 +705,8 @@ impl ValueTrait for IndependentreserveImpl {
     fn push(&mut self, value: Value) { self.0.push(value) }
     fn split(&self, separator: Value) -> Value { self.0.split(separator) }
     fn contains_key(&self, key: Value) -> bool { self.0.contains_key(key) }
-    fn keys(&self) -> Vec<Value> { self.0.keys() }
-    fn values(&self) -> Vec<Value> { self.0.values() }
+    fn keys(&self) -> Value { self.0.keys() }
+    fn values(&self) -> Value { self.0.values() }
     fn to_array(&self, x: Value) -> Value { self.0.to_array(x) }
     fn index_of(&self, x: Value) -> Value { self.0.index_of(x) }
     fn join(&self, glue: Value) -> Value { self.0.join(glue) }

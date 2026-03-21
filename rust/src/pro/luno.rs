@@ -11,7 +11,16 @@ use async_trait::async_trait;
 use std::str::FromStr;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, JSON, Array, Object, Math, parse_int, shift_2, extend_2, normalize};
+use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, BoolExt, JSON, Array, Object, Math, Promise, parse_int, shift_2, extend_2, normalize};
+// Crypto hash identifiers
+fn sha256() -> Value { Value::from("sha256") }
+fn sha384() -> Value { Value::from("sha384") }
+fn sha512() -> Value { Value::from("sha512") }
+fn md5() -> Value { Value::from("md5") }
+fn ed25519() -> Value { Value::from("ed25519") }
+fn rsa(msg: Value, secret: Value, _hash: Value) -> Value { msg }
+fn eddsa(msg: Value, secret: Value, _curve: Value) -> Value { msg }
+fn secp256k1() -> Value { Value::from("secp256k1") }
 
 use crate::exchange::{PRECISE_BASE, TRUNCATE, ROUND, ROUND_UP, ROUND_DOWN};
 use crate::exchange::{DECIMAL_PLACES, SIGNIFICANT_DIGITS, TICK_SIZE, NO_PADDING, PAD_WITH_ZERO};
@@ -402,7 +411,7 @@ pub trait Luno : Exchange {
         let mut symbol: Value = subscription.get(Value::from("symbol"));
         let mut market: Value = self.market(symbol.clone());
         let mut message_hash: Value = Value::from("trades:") + symbol.clone();
-        let mut stored: Value = self.safe_value(self.get("trades".into()), symbol.clone());
+        let mut stored: Value = self.safe_value(self.get("trades".into()), symbol.clone(), Value::Undefined);
         if stored.clone().is_nullish() {
             let mut limit: Value = self.safe_integer(self.get("options".into()), Value::from("tradesLimit"), Value::from(1000));
             stored = ArrayCache::new(limit);
@@ -443,8 +452,8 @@ pub trait Luno : Exchange {
             "side": Value::Undefined,
             "takerOrMaker": Value::Undefined,
             "price": Value::Undefined,
-            "amount": self.safe_string(trade.clone(), Value::from("base")),
-            "cost": self.safe_string(trade.clone(), Value::from("counter")),
+            "amount": self.safe_string(trade.clone(), Value::from("base"), Value::Undefined),
+            "cost": self.safe_string(trade.clone(), Value::from("counter"), Value::Undefined),
             "fee": Value::Undefined
         }))).unwrap()), market.clone());
     }
@@ -505,11 +514,11 @@ pub trait Luno : Exchange {
         //
         let mut symbol: Value = subscription.get(Value::from("symbol"));
         let mut message_hash: Value = Value::from("orderbook:") + symbol.clone();
-        let mut timestamp: Value = self.safe_integer(message.clone(), Value::from("timestamp"));
+        let mut timestamp: Value = self.safe_integer(message.clone(), Value::from("timestamp"), Value::Undefined);
         if !self.get("orderbooks".into()).contains_key(symbol.clone()) {
             self.get("orderbooks".into()).set(symbol.clone(), self.indexed_order_book(Value::new_object(), Value::Undefined));
         };
-        let mut asks: Value = self.safe_value(message.clone(), Value::from("asks"));
+        let mut asks: Value = self.safe_value(message.clone(), Value::from("asks"), Value::Undefined);
         if asks.clone().is_nonnullish() {
             let mut snapshot: Value = <Self as Luno>::custom_parse_order_book(self, message.clone(), symbol.clone(), timestamp.clone(), Value::from("bids"), Value::from("asks"), Value::from("price"), Value::from("volume"), Value::from("id"));
             self.get("orderbooks".into()).set(symbol.clone(), self.indexed_order_book(snapshot.clone(), Value::Undefined));
@@ -520,7 +529,7 @@ pub trait Luno : Exchange {
             ob.set("datetime".into(), self.iso8601(timestamp.clone()));
         };
         let mut orderbook: Value = self.get("orderbooks".into()).get(symbol.clone());
-        let mut nonce: Value = self.safe_integer(message.clone(), Value::from("sequence"));
+        let mut nonce: Value = self.safe_integer(message.clone(), Value::from("sequence"), Value::Undefined);
         orderbook.set("nonce".into(), nonce.clone());
         client.resolve(orderbook.clone(), message_hash.clone());
         Value::Undefined
@@ -532,12 +541,12 @@ pub trait Luno : Exchange {
         price_key = price_key.or_default(Value::from("price"));
         amount_key = amount_key.or_default(Value::from("volume"));
         count_or_id_key = count_or_id_key.or_default(Value::from(2));
-        let mut bids: Value = <Self as Luno>::parse_bids_asks(self, self.safe_value(orderbook.clone(), bids_key.clone(), Value::new_array()), price_key.clone(), amount_key.clone(), count_or_id_key.clone());
-        let mut asks: Value = <Self as Luno>::parse_bids_asks(self, self.safe_value(orderbook.clone(), asks_key.clone(), Value::new_array()), price_key.clone(), amount_key.clone(), count_or_id_key.clone());
+        let mut bids: Value = self.parse_bids_asks(self.safe_value(orderbook.clone(), bids_key.clone(), Value::new_array()), price_key.clone(), amount_key.clone());
+        let mut asks: Value = self.parse_bids_asks(self.safe_value(orderbook.clone(), asks_key.clone(), Value::new_array()), price_key.clone(), amount_key.clone());
         return Value::Json(normalize(&Value::Json(json!({
             "symbol": symbol,
-            "bids": self.sort_by(bids.clone(), Value::from(0), true.into()),
-            "asks": self.sort_by(asks.clone(), Value::from(0)),
+            "bids": self.sort_by(bids.clone(), Value::from(0), true.into(), Value::Undefined),
+            "asks": self.sort_by(asks.clone(), Value::from(0), Value::Undefined, Value::Undefined),
             "timestamp": timestamp,
             "datetime": self.iso8601(timestamp.clone()),
             "nonce": Value::Undefined
@@ -554,7 +563,7 @@ pub trait Luno : Exchange {
         let mut amount: Value = self.safe_number(bidask.clone(), amount_key.clone(), Value::Undefined);
         let mut result: Value = Value::Json(serde_json::Value::Array(vec![price.clone().into(), amount.clone().into()]));
         if third_key.clone().is_nonnullish() {
-            let mut third_value: Value = self.safe_string(bidask.clone(), third_key.clone());
+            let mut third_value: Value = self.safe_string(bidask.clone(), third_key.clone(), Value::Undefined);
             result.push(third_value.clone());
         };
         return result.clone();
@@ -604,21 +613,21 @@ pub trait Luno : Exchange {
         //         "timestamp": 1660598775360
         //     }
         //
-        let mut create_update: Value = self.safe_value(message.clone(), Value::from("create_update"));
+        let mut create_update: Value = self.safe_value(message.clone(), Value::from("create_update"), Value::Undefined);
         let mut asks_order_side: Value = orderbook.get(Value::from("asks"));
         let mut bids_order_side: Value = orderbook.get(Value::from("bids"));
         if create_update.clone().is_nonnullish() {
             let mut bid_ask_array: Value = <Self as Luno>::custom_parse_bid_ask(self, create_update.clone(), Value::from("price"), Value::from("volume"), Value::from("order_id"));
-            let mut r#type: Value = self.safe_string(create_update.clone(), Value::from("type"));
+            let mut r#type: Value = self.safe_string(create_update.clone(), Value::from("type"), Value::Undefined);
             if r#type.clone() == Value::from("ASK") {
                 asks_order_side.store_array(bid_ask_array.clone());
             } else if r#type.clone() == Value::from("BID") {
                 bids_order_side.store_array(bid_ask_array.clone());
             };
         };
-        let mut delete_update: Value = self.safe_value(message.clone(), Value::from("delete_update"));
+        let mut delete_update: Value = self.safe_value(message.clone(), Value::from("delete_update"), Value::Undefined);
         if delete_update.clone().is_nonnullish() {
-            let mut order_id: Value = self.safe_string(delete_update.clone(), Value::from("order_id"));
+            let mut order_id: Value = self.safe_string(delete_update.clone(), Value::from("order_id"), Value::Undefined);
             asks_order_side.store_array(Value::Json(serde_json::Value::Array(vec![Value::from(0).into(), Value::from(0).into(), order_id.clone().into()])));
             bids_order_side.store_array(Value::Json(serde_json::Value::Array(vec![Value::from(0).into(), Value::from(0).into(), order_id.clone().into()])));
         };
@@ -629,7 +638,7 @@ pub trait Luno : Exchange {
         if message.clone() == Value::from("") {
             return Value::Undefined;
         };
-        let mut subscriptions: Value = Object::values(client.get(subscriptions.clone()));
+        let mut subscriptions: Value = client.get(subscriptions.clone()).values();
         let mut handlers: Value = Value::Json(serde_json::Value::Array(vec![self.get("handleOrderBook".into()).into(), self.get("handleTrades".into()).into()]));
         let mut j: usize = 0;
         while j < handlers.len() {
@@ -715,8 +724,8 @@ impl ValueTrait for LunoImpl {
     fn push(&mut self, value: Value) { self.0.push(value) }
     fn split(&self, separator: Value) -> Value { self.0.split(separator) }
     fn contains_key(&self, key: Value) -> bool { self.0.contains_key(key) }
-    fn keys(&self) -> Vec<Value> { self.0.keys() }
-    fn values(&self) -> Vec<Value> { self.0.values() }
+    fn keys(&self) -> Value { self.0.keys() }
+    fn values(&self) -> Value { self.0.values() }
     fn to_array(&self, x: Value) -> Value { self.0.to_array(x) }
     fn index_of(&self, x: Value) -> Value { self.0.index_of(x) }
     fn join(&self, glue: Value) -> Value { self.0.join(glue) }

@@ -11,7 +11,16 @@ use async_trait::async_trait;
 use std::str::FromStr;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, JSON, Array, Object, Math, parse_int, shift_2, extend_2, normalize};
+use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, BoolExt, JSON, Array, Object, Math, Promise, parse_int, shift_2, extend_2, normalize};
+// Crypto hash identifiers
+fn sha256() -> Value { Value::from("sha256") }
+fn sha384() -> Value { Value::from("sha384") }
+fn sha512() -> Value { Value::from("sha512") }
+fn md5() -> Value { Value::from("md5") }
+fn ed25519() -> Value { Value::from("ed25519") }
+fn rsa(msg: Value, secret: Value, _hash: Value) -> Value { msg }
+fn eddsa(msg: Value, secret: Value, _curve: Value) -> Value { msg }
+fn secp256k1() -> Value { Value::from("secp256k1") }
 
 use crate::exchange::{PRECISE_BASE, TRUNCATE, ROUND, ROUND_UP, ROUND_DOWN};
 use crate::exchange::{DECIMAL_PLACES, SIGNIFICANT_DIGITS, TICK_SIZE, NO_PADDING, PAD_WITH_ZERO};
@@ -409,9 +418,9 @@ pub trait Exmo : Exchange {
         //         }
         //     }
         //
-        let mut topic: Value = self.safe_string(message.clone(), Value::from("topic"));
+        let mut topic: Value = self.safe_string(message.clone(), Value::from("topic"), Value::Undefined);
         let mut parts: Value = topic.split(Value::from("/"));
-        let mut r#type: Value = self.safe_string(parts.clone(), Value::from(0));
+        let mut r#type: Value = self.safe_string(parts.clone(), Value::from(0), Value::Undefined);
         if r#type.clone() == Value::from("spot") {
             <Self as Exmo>::parse_spot_balance(self, message.clone());
         } else if r#type.clone() == Value::from("margin") {
@@ -437,29 +446,29 @@ pub trait Exmo : Exchange {
         //         }
         //     }
         //
-        let mut event: Value = self.safe_string(message.clone(), Value::from("event"));
-        let mut data: Value = self.safe_value(message.clone(), Value::from("data"));
+        let mut event: Value = self.safe_string(message.clone(), Value::from("event"), Value::Undefined);
+        let mut data: Value = self.safe_value(message.clone(), Value::from("data"), Value::Undefined);
         self.get("balance".into()).set("info".into(), data.clone());
         if event.clone() == Value::from("snapshot") {
             let mut balances: Value = self.safe_value(data.clone(), Value::from("balances"), Value::new_object());
             let mut reserved: Value = self.safe_value(data.clone(), Value::from("reserved"), Value::new_object());
-            let mut currencies: Value = Object::keys(balances.clone());
+            let mut currencies: Value = balances.clone().keys();
             let mut i: usize = 0;
             while i < currencies.len() {
                 let mut currency_id: Value = currencies.get(i.into());
                 let mut code: Value = self.safe_currency_code(currency_id.clone(), Value::Undefined);
                 let mut account: Value = self.account();
-                account.set("free".into(), self.safe_string(balances.clone(), currency_id.clone()));
-                account.set("used".into(), self.safe_string(reserved.clone(), currency_id.clone()));
+                account.set("free".into(), self.safe_string(balances.clone(), currency_id.clone(), Value::Undefined));
+                account.set("used".into(), self.safe_string(reserved.clone(), currency_id.clone(), Value::Undefined));
                 self.get("balance".into()).set(code.clone(), account.clone());
                 i += 1;
             };
         } else if event.clone() == Value::from("update") {
-            let mut currency_id: Value = self.safe_string(data.clone(), Value::from("currency"));
+            let mut currency_id: Value = self.safe_string(data.clone(), Value::from("currency"), Value::Undefined);
             let mut code: Value = self.safe_currency_code(currency_id.clone(), Value::Undefined);
             let mut account: Value = self.account();
-            account.set("free".into(), self.safe_string(data.clone(), Value::from("balance")));
-            account.set("used".into(), self.safe_string(data.clone(), Value::from("reserved")));
+            account.set("free".into(), self.safe_string(data.clone(), Value::from("balance"), Value::Undefined));
+            account.set("used".into(), self.safe_string(data.clone(), Value::from("reserved"), Value::Undefined));
             self.get("balance".into()).set(code.clone(), account.clone());
         };
         self.set("balance".into(), self.safe_balance(self.get("balance".into())));
@@ -481,18 +490,18 @@ pub trait Exmo : Exchange {
         //         }
         //     }
         //
-        let mut data: Value = self.safe_value(message.clone(), Value::from("data"));
+        let mut data: Value = self.safe_value(message.clone(), Value::from("data"), Value::Undefined);
         self.get("balance".into()).set("info".into(), data.clone());
-        let mut currencies: Value = Object::keys(data.clone());
+        let mut currencies: Value = data.clone().keys();
         let mut i: usize = 0;
         while i < currencies.len() {
             let mut currency_id: Value = currencies.get(i.into());
             let mut code: Value = self.safe_currency_code(currency_id.clone(), Value::Undefined);
-            let mut wallet: Value = self.safe_value(data.clone(), currency_id.clone());
+            let mut wallet: Value = self.safe_value(data.clone(), currency_id.clone(), Value::Undefined);
             let mut account: Value = self.account();
-            account.set("free".into(), self.safe_string(wallet.clone(), Value::from("free")));
-            account.set("used".into(), self.safe_string(wallet.clone(), Value::from("used")));
-            account.set("total".into(), self.safe_string(wallet.clone(), Value::from("balance")));
+            account.set("free".into(), self.safe_string(wallet.clone(), Value::from("free"), Value::Undefined));
+            account.set("used".into(), self.safe_string(wallet.clone(), Value::from("used"), Value::Undefined));
+            account.set("total".into(), self.safe_string(wallet.clone(), Value::from("balance"), Value::Undefined));
             self.get("balance".into()).set(code.clone(), account.clone());
             self.set("balance".into(), self.safe_balance(self.get("balance".into())));
             i += 1;
@@ -560,9 +569,9 @@ pub trait Exmo : Exchange {
         //          }
         //      }
         //
-        let mut topic: Value = self.safe_string(message.clone(), Value::from("topic"));
+        let mut topic: Value = self.safe_string(message.clone(), Value::from("topic"), Value::Undefined);
         let mut topic_parts: Value = topic.split(Value::from(":"));
-        let mut market_id: Value = self.safe_string(topic_parts.clone(), Value::from(1));
+        let mut market_id: Value = self.safe_string(topic_parts.clone(), Value::from(1), Value::Undefined);
         let mut symbol: Value = self.safe_symbol(market_id.clone(), Value::Undefined, Value::Undefined, Value::Undefined);
         let mut ticker: Value = self.safe_value(message.clone(), Value::from("data"), Value::new_object());
         let mut market: Value = self.safe_market(market_id.clone(), Value::Undefined, Value::Undefined, Value::Undefined);
@@ -606,14 +615,14 @@ pub trait Exmo : Exchange {
         //          }]
         //      }
         //
-        let mut topic: Value = self.safe_string(message.clone(), Value::from("topic"));
+        let mut topic: Value = self.safe_string(message.clone(), Value::from("topic"), Value::Undefined);
         let mut parts: Value = topic.split(Value::from(":"));
-        let mut market_id: Value = self.safe_string(parts.clone(), Value::from(1));
+        let mut market_id: Value = self.safe_string(parts.clone(), Value::from(1), Value::Undefined);
         let mut symbol: Value = self.safe_symbol(market_id.clone(), Value::Undefined, Value::Undefined, Value::Undefined);
         let mut market: Value = self.safe_market(market_id.clone(), Value::Undefined, Value::Undefined, Value::Undefined);
         let mut trades: Value = self.safe_value(message.clone(), Value::from("data"), Value::new_array());
         let mut message_hash: Value = Value::from("trades:") + symbol.clone();
-        let mut stored: Value = self.safe_value(self.get("trades".into()), symbol.clone());
+        let mut stored: Value = self.safe_value(self.get("trades".into()), symbol.clone(), Value::Undefined);
         if stored.clone().is_nullish() {
             let mut limit: Value = self.safe_integer(self.get("options".into()), Value::from("tradesLimit"), Value::from(1000));
             stored = ArrayCache::new(limit);
@@ -713,11 +722,11 @@ pub trait Exmo : Exchange {
         //         }
         //     }
         //
-        let mut topic: Value = self.safe_string(message.clone(), Value::from("topic"));
+        let mut topic: Value = self.safe_string(message.clone(), Value::from("topic"), Value::Undefined);
         let mut parts: Value = topic.split(Value::from("/"));
-        let mut r#type: Value = self.safe_string(parts.clone(), Value::from(0));
+        let mut r#type: Value = self.safe_string(parts.clone(), Value::from(0), Value::Undefined);
         let mut message_hash: Value = Value::from("myTrades:") + r#type.clone();
-        let mut event: Value = self.safe_string(message.clone(), Value::from("event"));
+        let mut event: Value = self.safe_string(message.clone(), Value::from("event"), Value::Undefined);
         let mut raw_trades: Value = Value::new_array();
         let mut my_trades: Value = Value::Undefined;
         if self.get("myTrades".into()).is_nullish() {
@@ -742,7 +751,7 @@ pub trait Exmo : Exchange {
             symbols.set(trade.get(Value::from("symbol")), true.into());
             j += 1;
         };
-        let mut symbol_keys: Value = Object::keys(symbols.clone());
+        let mut symbol_keys: Value = symbols.clone().keys();
         let mut i: usize = 0;
         while i < symbol_keys.len() {
             let mut symbol: Value = symbol_keys.get(i.into());
@@ -806,20 +815,20 @@ pub trait Exmo : Exchange {
         //         }
         //     }
         //
-        let mut topic: Value = self.safe_string(message.clone(), Value::from("topic"));
+        let mut topic: Value = self.safe_string(message.clone(), Value::from("topic"), Value::Undefined);
         let mut parts: Value = topic.split(Value::from(":"));
-        let mut market_id: Value = self.safe_string(parts.clone(), Value::from(1));
+        let mut market_id: Value = self.safe_string(parts.clone(), Value::from(1), Value::Undefined);
         let mut symbol: Value = self.safe_symbol(market_id.clone(), Value::Undefined, Value::Undefined, Value::Undefined);
         let mut order_book: Value = self.safe_value(message.clone(), Value::from("data"), Value::new_object());
         let mut message_hash: Value = Value::from("orderbook:") + symbol.clone();
-        let mut timestamp: Value = self.safe_integer(message.clone(), Value::from("ts"));
+        let mut timestamp: Value = self.safe_integer(message.clone(), Value::from("ts"), Value::Undefined);
         if !self.get("orderbooks".into()).contains_key(symbol.clone()) {
             self.get("orderbooks".into()).set(symbol.clone(), self.order_book(Value::new_object(), Value::Undefined));
         };
         let mut orderbook: Value = self.get("orderbooks".into()).get(symbol.clone());
-        let mut event: Value = self.safe_string(message.clone(), Value::from("event"));
+        let mut event: Value = self.safe_string(message.clone(), Value::from("event"), Value::Undefined);
         if event.clone() == Value::from("snapshot") {
-            let mut snapshot: Value = self.parse_order_book(order_book.clone(), symbol.clone(), timestamp.clone(), Value::from("bid"), Value::from("ask"), Value::Undefined, Value::Undefined, Value::Undefined);
+            let mut snapshot: Value = self.parse_order_book(order_book.clone(), symbol.clone(), timestamp.clone(), Value::from("bid"), Value::from("ask"));
             orderbook.reset(snapshot.clone());
         } else {
             let mut asks: Value = self.safe_list(order_book.clone(), Value::from("ask"), Value::new_array());
@@ -834,7 +843,7 @@ pub trait Exmo : Exchange {
     }
 
     fn handle_delta(&mut self, mut bookside: Value, mut delta: Value) -> Value {
-        let mut bid_ask: Value = self.parse_bid_ask(delta.clone(), Value::from(0), Value::from(1), Value::Undefined);
+        let mut bid_ask: Value = self.parse_bid_ask(delta.clone(), Value::from(0), Value::from(1));
         bookside.store_array(bid_ask.clone());
         Value::Undefined
     }
@@ -928,11 +937,11 @@ pub trait Exmo : Exchange {
         //     ]
         // }
         //
-        let mut topic: Value = self.safe_string(message.clone(), Value::from("topic"));
+        let mut topic: Value = self.safe_string(message.clone(), Value::from("topic"), Value::Undefined);
         let mut parts: Value = topic.split(Value::from("/"));
-        let mut r#type: Value = self.safe_string(parts.clone(), Value::from(0));
+        let mut r#type: Value = self.safe_string(parts.clone(), Value::from(0), Value::Undefined);
         let mut message_hash: Value = Value::from("orders:") + r#type.clone();
-        let mut event: Value = self.safe_string(message.clone(), Value::from("event"));
+        let mut event: Value = self.safe_string(message.clone(), Value::from("event"), Value::Undefined);
         if self.get("orders".into()).is_nullish() {
             let mut limit: Value = self.safe_integer(self.get("options".into()), Value::from("ordersLimit"), Value::from(1000));
             self.set("orders".into(), ArrayCacheBySymbolById::new(limit));
@@ -953,7 +962,7 @@ pub trait Exmo : Exchange {
             symbols.set(order.get(Value::from("symbol")), true.into());
             j += 1;
         };
-        let mut symbol_keys: Value = Object::keys(symbols.clone());
+        let mut symbol_keys: Value = symbols.clone().keys();
         let mut i: usize = 0;
         while i < symbol_keys.len() {
             let mut symbol: Value = symbol_keys.get(i.into());
@@ -981,21 +990,21 @@ pub trait Exmo : Exchange {
         //     last_trade_quantity: '30'
         // }
         //
-        let mut id: Value = self.safe_string(order.clone(), Value::from("order_id"));
-        let mut timestamp: Value = self.safe_timestamp(order.clone(), Value::from("created"));
-        let mut order_type: Value = self.safe_string(order.clone(), Value::from("type"));
-        let mut side: Value = self.parse_side(order_type.clone());
-        let mut market_id: Value = self.safe_string(order.clone(), Value::from("pair"));
+        let mut id: Value = self.safe_string(order.clone(), Value::from("order_id"), Value::Undefined);
+        let mut timestamp: Value = self.safe_timestamp(order.clone(), Value::from("created"), Value::Undefined);
+        let mut order_type: Value = self.safe_string(order.clone(), Value::from("type"), Value::Undefined);
+        let mut side: Value = <Self as Exmo>::parse_side(self, order_type.clone());
+        let mut market_id: Value = self.safe_string(order.clone(), Value::from("pair"), Value::Undefined);
         market = self.safe_market(market_id.clone(), market.clone(), Value::Undefined, Value::Undefined);
         let mut symbol: Value = market.get(Value::from("symbol"));
-        let mut amount: Value = self.safe_string(order.clone(), Value::from("quantity"));
+        let mut amount: Value = self.safe_string(order.clone(), Value::from("quantity"), Value::Undefined);
         if amount.clone().is_nullish() {
             let mut amount_field: Value = if side.clone() == Value::from("buy") { Value::from("in_amount") } else { Value::from("out_amount") };
-            amount = self.safe_string(order.clone(), amount_field.clone());
+            amount = self.safe_string(order.clone(), amount_field.clone(), Value::Undefined);
         };
-        let mut price: Value = self.safe_string(order.clone(), Value::from("price"));
-        let mut client_order_id: Value = self.omit_zero(self.safe_string(order.clone(), Value::from("client_id")));
-        let mut trigger_price: Value = self.omit_zero(self.safe_string(order.clone(), Value::from("stop_price")));
+        let mut price: Value = self.safe_string(order.clone(), Value::from("price"), Value::Undefined);
+        let mut client_order_id: Value = self.omit_zero(self.safe_string(order.clone(), Value::from("client_id"), Value::Undefined));
+        let mut trigger_price: Value = self.omit_zero(self.safe_string(order.clone(), Value::from("stop_price"), Value::Undefined));
         let mut r#type: Value = Value::Undefined;
         if order_type.clone() != Value::from("buy") && order_type.clone() != Value::from("sell") {
             r#type = order_type.clone();
@@ -1011,7 +1020,7 @@ pub trait Exmo : Exchange {
             "datetime": self.iso8601(timestamp.clone()),
             "timestamp": timestamp,
             "lastTradeTimestamp": Value::Undefined,
-            "status": self.parse_status(self.safe_string(order.clone(), Value::from("status"))),
+            "status": <Self as Exmo>::parse_status(self, self.safe_string(order.clone(), Value::from("status"), Value::Undefined)),
             "symbol": symbol,
             "type": r#type,
             "timeInForce": Value::Undefined,
@@ -1021,9 +1030,9 @@ pub trait Exmo : Exchange {
             "stopPrice": trigger_price,
             "triggerPrice": trigger_price,
             "cost": Value::Undefined,
-            "amount": self.safe_string(order.clone(), Value::from("original_quantity")),
+            "amount": self.safe_string(order.clone(), Value::from("original_quantity"), Value::Undefined),
             "filled": Value::Undefined,
-            "remaining": self.safe_string(order.clone(), Value::from("quantity")),
+            "remaining": self.safe_string(order.clone(), Value::from("quantity"), Value::Undefined),
             "average": Value::Undefined,
             "trades": trades,
             "fee": Value::Undefined,
@@ -1032,10 +1041,10 @@ pub trait Exmo : Exchange {
     }
 
     fn parse_ws_trade(&self, mut trade: Value, mut market: Value) -> Value {
-        let mut id: Value = self.safe_string(trade.clone(), Value::from("order_id"));
-        let mut order_type: Value = self.safe_string(trade.clone(), Value::from("type"));
-        let mut side: Value = self.parse_side(order_type.clone());
-        let mut market_id: Value = self.safe_string(trade.clone(), Value::from("pair"));
+        let mut id: Value = self.safe_string(trade.clone(), Value::from("order_id"), Value::Undefined);
+        let mut order_type: Value = self.safe_string(trade.clone(), Value::from("type"), Value::Undefined);
+        let mut side: Value = <Self as Exmo>::parse_side(self, order_type.clone());
+        let mut market_id: Value = self.safe_string(trade.clone(), Value::from("pair"), Value::Undefined);
         market = self.safe_market(market_id.clone(), market.clone(), Value::Undefined, Value::Undefined);
         let mut symbol: Value = market.get(Value::from("symbol"));
         let mut r#type: Value = Value::Undefined;
@@ -1043,13 +1052,13 @@ pub trait Exmo : Exchange {
             r#type = order_type.clone();
         };
         return self.safe_trade(Value::Json(normalize(&Value::Json(json!({
-            "id": self.safe_string(trade.clone(), Value::from("last_trade_id")),
+            "id": self.safe_string(trade.clone(), Value::from("last_trade_id"), Value::Undefined),
             "symbol": symbol,
             "order": id,
             "type": r#type,
             "side": side,
-            "price": self.safe_string(trade.clone(), Value::from("last_trade_price")),
-            "amount": self.safe_string(trade.clone(), Value::from("last_trade_quantity")),
+            "price": self.safe_string(trade.clone(), Value::from("last_trade_price"), Value::Undefined),
+            "amount": self.safe_string(trade.clone(), Value::from("last_trade_quantity"), Value::Undefined),
             "cost": Value::Undefined,
             "fee": Value::Undefined
         }))).unwrap()), market.clone());
@@ -1071,22 +1080,22 @@ pub trait Exmo : Exchange {
         //     "id": 1,
         //     "topic": "spot/ticker:BTC_USDT"
         // }
-        let mut event: Value = self.safe_string(message.clone(), Value::from("event"));
+        let mut event: Value = self.safe_string(message.clone(), Value::from("event"), Value::Undefined);
         let mut events: Value = Value::Json(normalize(&Value::Json(json!({
             "logged_in": self.get("handleAuthenticationMessage".into()),
             "info": self.get("handleInfo".into()),
             "subscribed": self.get("handleSubscribed".into())
         }))).unwrap());
-        let mut event_handler: Value = self.safe_value(events.clone(), event.clone());
+        let mut event_handler: Value = self.safe_value(events.clone(), event.clone(), Value::Undefined);
         if event_handler.clone().is_nonnullish() {
             event_handler.call(self, client.clone(), message.clone());
             return Value::Undefined;
         };
         if event.clone() == Value::from("update") || event.clone() == Value::from("snapshot") {
-            let mut topic: Value = self.safe_string(message.clone(), Value::from("topic"));
+            let mut topic: Value = self.safe_string(message.clone(), Value::from("topic"), Value::Undefined);
             if topic.clone().is_nonnullish() {
                 let mut parts: Value = topic.split(Value::from(":"));
-                let mut channel: Value = self.safe_string(parts.clone(), Value::from(0));
+                let mut channel: Value = self.safe_string(parts.clone(), Value::from(0), Value::Undefined);
                 let mut handlers: Value = Value::Json(normalize(&Value::Json(json!({
                     "spot/ticker": self.get("handleTicker".into()),
                     "spot/wallet": self.get("handleBalance".into()),
@@ -1100,7 +1109,7 @@ pub trait Exmo : Exchange {
                     "spot/user_trades": self.get("handleMyTrades".into()),
                     "margin/user_trades": self.get("handleMyTrades".into())
                 }))).unwrap());
-                let mut handler: Value = self.safe_value(handlers.clone(), channel.clone());
+                let mut handler: Value = self.safe_value(handlers.clone(), channel.clone(), Value::Undefined);
                 if handler.clone().is_nonnullish() {
                     handler.call(self, client.clone(), message.clone());
                     return Value::Undefined;
@@ -1156,7 +1165,7 @@ pub trait Exmo : Exchange {
         let (mut r#type, mut query) = shift_2(self.handle_market_type_and_params(Value::from("authenticate"), Value::Undefined, params.clone(), Value::Undefined));
         let mut url: Value = self.get("urls".into()).get(Value::from("api")).get(Value::from("ws")).get(r#type.clone());
         let mut client: Value = self.client(url.clone());
-        let mut future: Value = self.safe_value(client.get(subscriptions.clone()), message_hash.clone());
+        let mut future: Value = self.safe_value(client.get(subscriptions.clone()), message_hash.clone(), Value::Undefined);
         if future.clone().is_nullish() {
             let mut time: Value = self.milliseconds();
             self.check_required_credentials(Value::Undefined);
@@ -1269,8 +1278,8 @@ impl ValueTrait for ExmoImpl {
     fn push(&mut self, value: Value) { self.0.push(value) }
     fn split(&self, separator: Value) -> Value { self.0.split(separator) }
     fn contains_key(&self, key: Value) -> bool { self.0.contains_key(key) }
-    fn keys(&self) -> Vec<Value> { self.0.keys() }
-    fn values(&self) -> Vec<Value> { self.0.values() }
+    fn keys(&self) -> Value { self.0.keys() }
+    fn values(&self) -> Value { self.0.values() }
     fn to_array(&self, x: Value) -> Value { self.0.to_array(x) }
     fn index_of(&self, x: Value) -> Value { self.0.index_of(x) }
     fn join(&self, glue: Value) -> Value { self.0.join(glue) }

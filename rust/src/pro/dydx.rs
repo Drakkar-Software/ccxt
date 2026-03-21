@@ -11,7 +11,16 @@ use async_trait::async_trait;
 use std::str::FromStr;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, JSON, Array, Object, Math, parse_int, shift_2, extend_2, normalize};
+use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, BoolExt, JSON, Array, Object, Math, Promise, parse_int, shift_2, extend_2, normalize};
+// Crypto hash identifiers
+fn sha256() -> Value { Value::from("sha256") }
+fn sha384() -> Value { Value::from("sha384") }
+fn sha512() -> Value { Value::from("sha512") }
+fn md5() -> Value { Value::from("md5") }
+fn ed25519() -> Value { Value::from("ed25519") }
+fn rsa(msg: Value, secret: Value, _hash: Value) -> Value { msg }
+fn eddsa(msg: Value, secret: Value, _curve: Value) -> Value { msg }
+fn secp256k1() -> Value { Value::from("secp256k1") }
 
 use crate::exchange::{PRECISE_BASE, TRUNCATE, ROUND, ROUND_UP, ROUND_DOWN};
 use crate::exchange::{DECIMAL_PLACES, SIGNIFICANT_DIGITS, TICK_SIZE, NO_PADDING, PAD_WITH_ZERO};
@@ -446,12 +455,12 @@ pub trait Dydx : Exchange {
         //     }
         // }
         //
-        let mut market_id: Value = self.safe_string(message.clone(), Value::from("id"));
+        let mut market_id: Value = self.safe_string(message.clone(), Value::from("id"), Value::Undefined);
         let mut market: Value = self.safe_market(market_id.clone(), Value::Undefined, Value::Undefined, Value::Undefined);
         let mut symbol: Value = market.get(Value::from("symbol"));
         let mut content: Value = self.safe_dict(message.clone(), Value::from("contents"), Value::Undefined);
         let mut raw_trades: Value = self.safe_list(content.clone(), Value::from("trades"), Value::new_array());
-        let mut stored: Value = self.safe_value(self.get("trades".into()), symbol.clone());
+        let mut stored: Value = self.safe_value(self.get("trades".into()), symbol.clone(), Value::Undefined);
         if stored.clone().is_nullish() {
             let mut limit: Value = self.safe_integer(self.get("options".into()), Value::from("tradesLimit"), Value::from(1000));
             stored = ArrayCache::new(limit);
@@ -481,19 +490,19 @@ pub trait Dydx : Exchange {
         //     "createdAtHeight": "45487244"
         // }
         //
-        let mut timestamp: Value = self.parse8601(self.safe_string(trade.clone(), Value::from("createdAt")));
+        let mut timestamp: Value = self.parse8601(self.safe_string(trade.clone(), Value::from("createdAt"), Value::Undefined));
         return self.safe_trade(Value::Json(normalize(&Value::Json(json!({
-            "id": self.safe_string(trade.clone(), Value::from("id")),
+            "id": self.safe_string(trade.clone(), Value::from("id"), Value::Undefined),
             "info": trade,
             "timestamp": timestamp,
             "datetime": self.iso8601(timestamp.clone()),
-            "symbol": self.safe_string(market.clone(), Value::from("symbol")),
+            "symbol": self.safe_string(market.clone(), Value::from("symbol"), Value::Undefined),
             "order": Value::Undefined,
-            "type": self.safe_string_lower(trade.clone(), Value::from("type")),
-            "side": self.safe_string_lower(trade.clone(), Value::from("side")),
+            "type": self.safe_string_lower(trade.clone(), Value::from("type"), Value::Undefined),
+            "side": self.safe_string_lower(trade.clone(), Value::from("side"), Value::Undefined),
             "takerOrMaker": Value::Undefined,
-            "price": self.safe_string(trade.clone(), Value::from("price")),
-            "amount": self.safe_string(trade.clone(), Value::from("size")),
+            "price": self.safe_string(trade.clone(), Value::from("price"), Value::Undefined),
+            "amount": self.safe_string(trade.clone(), Value::from("size"), Value::Undefined),
             "cost": Value::Undefined,
             "fee": Value::Undefined
         }))).unwrap()), market.clone());
@@ -552,11 +561,11 @@ pub trait Dydx : Exchange {
         //     }
         // }
         //
-        let mut market_id: Value = self.safe_string(message.clone(), Value::from("id"));
+        let mut market_id: Value = self.safe_string(message.clone(), Value::from("id"), Value::Undefined);
         let mut market: Value = self.safe_market(market_id.clone(), Value::Undefined, Value::Undefined, Value::Undefined);
         let mut symbol: Value = market.get(Value::from("symbol"));
         let mut content: Value = self.safe_dict(message.clone(), Value::from("contents"), Value::Undefined);
-        let mut orderbook: Value = self.safe_value(self.get("orderbooks".into()), symbol.clone());
+        let mut orderbook: Value = self.safe_value(self.get("orderbooks".into()), symbol.clone(), Value::Undefined);
         if orderbook.clone().is_nullish() {
             orderbook = self.order_book(Value::Undefined, Value::Undefined);
         };
@@ -565,7 +574,7 @@ pub trait Dydx : Exchange {
         let mut bids: Value = self.safe_list(content.clone(), Value::from("bids"), Value::new_array());
         self.handle_deltas(orderbook.get(Value::from("asks")), asks.clone());
         self.handle_deltas(orderbook.get(Value::from("bids")), bids.clone());
-        orderbook.set("nonce".into(), self.safe_integer(message.clone(), Value::from("message_id")));
+        orderbook.set("nonce".into(), self.safe_integer(message.clone(), Value::from("message_id"), Value::Undefined));
         let mut message_hash: Value = Value::from("orderbook:") + symbol.clone();
         self.get("orderbooks".into()).set(symbol.clone(), orderbook.clone());
         client.resolve(orderbook.clone(), message_hash.clone());
@@ -574,11 +583,11 @@ pub trait Dydx : Exchange {
 
     fn handle_delta(&mut self, mut bookside: Value, mut delta: Value) -> Value {
         if Array::is_array(delta.clone()).is_truthy() {
-            let mut price: Value = self.safe_float(delta.clone(), Value::from(0));
-            let mut amount: Value = self.safe_float(delta.clone(), Value::from(1));
+            let mut price: Value = self.safe_float(delta.clone(), Value::from(0), Value::Undefined);
+            let mut amount: Value = self.safe_float(delta.clone(), Value::from(1), Value::Undefined);
             bookside.store(price.clone(), amount.clone());
         } else {
-            let mut bid_ask: Value = self.parse_bid_ask(delta.clone(), Value::from("price"), Value::from("size"), Value::Undefined);
+            let mut bid_ask: Value = self.parse_bid_ask(delta.clone(), Value::from("price"), Value::from("size"));
             bookside.store_array(bid_ask.clone());
         };
         Value::Undefined
@@ -672,11 +681,11 @@ pub trait Dydx : Exchange {
         //     }
         // }
         //
-        let mut id: Value = self.safe_string(message.clone(), Value::from("id"));
+        let mut id: Value = self.safe_string(message.clone(), Value::from("id"), Value::Undefined);
         let mut part: Value = id.split(Value::from("/"));
-        let mut interval: Value = self.safe_string(part.clone(), Value::from(1));
+        let mut interval: Value = self.safe_string(part.clone(), Value::from(1), Value::Undefined);
         let mut timeframe: Value = self.find_timeframe(interval.clone(), Value::Undefined);
-        let mut market_id: Value = self.safe_string(part.clone(), Value::from(0));
+        let mut market_id: Value = self.safe_string(part.clone(), Value::from(0), Value::Undefined);
         let mut market: Value = self.safe_market(market_id.clone(), Value::Undefined, Value::Undefined, Value::Undefined);
         let mut symbol: Value = market.get(Value::from("symbol"));
         let mut content: Value = self.safe_dict(message.clone(), Value::from("contents"), Value::Undefined);
@@ -685,7 +694,7 @@ pub trait Dydx : Exchange {
         let mut ohlcv: Value = self.safe_dict(candles.clone(), Value::from(0), content.clone());
         let mut parsed: Value = self.parse_ohlcv(ohlcv.clone(), market.clone());
         self.get("ohlcvs".into()).set(symbol.clone(), self.safe_value(self.get("ohlcvs".into()), symbol.clone(), Value::new_object()));
-        let mut stored: Value = self.safe_value(self.get("ohlcvs".into()).get(symbol.clone()), timeframe.clone());
+        let mut stored: Value = self.safe_value(self.get("ohlcvs".into()).get(symbol.clone()), timeframe.clone(), Value::Undefined);
         if stored.clone().is_nullish() {
             let mut limit: Value = self.safe_integer(self.get("options".into()), Value::from("OHLCVLimit"), Value::from(1000));
             stored = ArrayCacheByTimestamp::new(limit);
@@ -705,7 +714,7 @@ pub trait Dydx : Exchange {
         //     "message_id": 4
         // }
         //
-                let mut msg: Value = self.safe_string(message.clone(), Value::from("message"));
+                let mut msg: Value = self.safe_string(message.clone(), Value::from("message"), Value::Undefined);
         panic!(r###"ExchangeError::new(self.get("id".into()) + Value::from(" ") + msg.clone())"###);
         // catch block omitted (no exception support in Value runtime)
 ;
@@ -713,19 +722,19 @@ pub trait Dydx : Exchange {
     }
 
     fn handle_message(&mut self, mut client: Value, mut message: Value) -> Value {
-        let mut r#type: Value = self.safe_string(message.clone(), Value::from("type"));
+        let mut r#type: Value = self.safe_string(message.clone(), Value::from("type"), Value::Undefined);
         if r#type.clone() == Value::from("error") {
             <Self as Dydx>::handle_error_message(self, client.clone(), message.clone());
             return Value::Undefined;
         };
         if r#type.clone().is_nonnullish() {
-            let mut topic: Value = self.safe_string(message.clone(), Value::from("channel"));
+            let mut topic: Value = self.safe_string(message.clone(), Value::from("channel"), Value::Undefined);
             let mut methods: Value = Value::Json(normalize(&Value::Json(json!({
                 "v4_trades": self.get("handleTrades".into()),
                 "v4_orderbook": self.get("handleOrderBook".into()),
                 "v4_candles": self.get("handleOHLCV".into())
             }))).unwrap());
-            let mut method: Value = self.safe_value(methods.clone(), topic.clone());
+            let mut method: Value = self.safe_value(methods.clone(), topic.clone(), Value::Undefined);
             if method.clone().is_nonnullish() {
                 method.call(self, client.clone(), message.clone());
             };
@@ -828,8 +837,8 @@ impl ValueTrait for DydxImpl {
     fn push(&mut self, value: Value) { self.0.push(value) }
     fn split(&self, separator: Value) -> Value { self.0.split(separator) }
     fn contains_key(&self, key: Value) -> bool { self.0.contains_key(key) }
-    fn keys(&self) -> Vec<Value> { self.0.keys() }
-    fn values(&self) -> Vec<Value> { self.0.values() }
+    fn keys(&self) -> Value { self.0.keys() }
+    fn values(&self) -> Value { self.0.values() }
     fn to_array(&self, x: Value) -> Value { self.0.to_array(x) }
     fn index_of(&self, x: Value) -> Value { self.0.index_of(x) }
     fn join(&self, glue: Value) -> Value { self.0.join(glue) }

@@ -11,7 +11,16 @@ use async_trait::async_trait;
 use std::str::FromStr;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, JSON, Array, Object, Math, parse_int, shift_2, extend_2, normalize};
+use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, BoolExt, JSON, Array, Object, Math, Promise, parse_int, shift_2, extend_2, normalize};
+// Crypto hash identifiers
+fn sha256() -> Value { Value::from("sha256") }
+fn sha384() -> Value { Value::from("sha384") }
+fn sha512() -> Value { Value::from("sha512") }
+fn md5() -> Value { Value::from("md5") }
+fn ed25519() -> Value { Value::from("ed25519") }
+fn rsa(msg: Value, secret: Value, _hash: Value) -> Value { msg }
+fn eddsa(msg: Value, secret: Value, _curve: Value) -> Value { msg }
+fn secp256k1() -> Value { Value::from("secp256k1") }
 
 use crate::exchange::{PRECISE_BASE, TRUNCATE, ROUND, ROUND_UP, ROUND_DOWN};
 use crate::exchange::{DECIMAL_PLACES, SIGNIFICANT_DIGITS, TICK_SIZE, NO_PADDING, PAD_WITH_ZERO};
@@ -632,7 +641,7 @@ pub trait Cryptocom : Exchange {
         //     "code": 0
         // }
                 client.send(Value::Json(normalize(&Value::Json(json!({
-            "id": self.safe_integer(message.clone(), Value::from("id")),
+            "id": self.safe_integer(message.clone(), Value::from("id"), Value::Undefined),
             "method": "public/respond-heartbeat"
         }))).unwrap())).await;
         // catch block omitted (no exception support in Value runtime)
@@ -659,7 +668,7 @@ pub trait Cryptocom : Exchange {
         if !limit.is_truthy() {
             limit = Value::from(50);
         };
-        let mut topic_params: Value = self.safe_value(params.clone(), Value::from("params"));
+        let mut topic_params: Value = self.safe_value(params.clone(), Value::from("params"), Value::Undefined);
         if topic_params.clone().is_nullish() {
             params.set("params".into(), Value::new_object());
         };
@@ -697,7 +706,7 @@ pub trait Cryptocom : Exchange {
         let mut sub_message_hashes: Value = Value::new_array();
         let mut message_hashes: Value = Value::new_array();
         let mut limit: Value = self.safe_integer(params.clone(), Value::from("limit"), Value::from(50));
-        let mut topic_params: Value = self.safe_value(params.clone(), Value::from("params"));
+        let mut topic_params: Value = self.safe_value(params.clone(), Value::from("params"), Value::Undefined);
         if topic_params.clone().is_nullish() {
             params.set("params".into(), Value::new_object());
         };
@@ -724,13 +733,13 @@ pub trait Cryptocom : Exchange {
             topics.push(current_topic.clone());
             i += 1;
         };
-        return <Self as Cryptocom>::un_watch_public_multiple(self, Value::from("orderbook"), symbols.clone(), message_hashes.clone(), sub_message_hashes.clone(), topics.clone(), params.clone(), Value::Undefined).await;
+        return <Self as Cryptocom>::un_watch_public_multiple(self, Value::from("orderbook"), symbols.clone(), message_hashes.clone(), sub_message_hashes.clone(), topics.clone(), params.clone()).await;
     }
 
     fn handle_delta(&mut self, mut bookside: Value, mut delta: Value) -> Value {
-        let mut price: Value = self.safe_float(delta.clone(), Value::from(0));
-        let mut amount: Value = self.safe_float(delta.clone(), Value::from(1));
-        let mut count: Value = self.safe_integer(delta.clone(), Value::from(2));
+        let mut price: Value = self.safe_float(delta.clone(), Value::from(0), Value::Undefined);
+        let mut amount: Value = self.safe_float(delta.clone(), Value::from(1), Value::Undefined);
+        let mut count: Value = self.safe_integer(delta.clone(), Value::from(2), Value::Undefined);
         bookside.store_array(Value::Json(serde_json::Value::Array(vec![price.clone().into(), amount.clone().into(), count.clone().into()])));
         Value::Undefined
     }
@@ -800,19 +809,19 @@ pub trait Cryptocom : Exchange {
         //        ]
         //    }
         //
-        let mut market_id: Value = self.safe_string(message.clone(), Value::from("instrument_name"));
+        let mut market_id: Value = self.safe_string(message.clone(), Value::from("instrument_name"), Value::Undefined);
         let mut market: Value = self.safe_market(market_id.clone(), Value::Undefined, Value::Undefined, Value::Undefined);
         let mut symbol: Value = market.get(Value::from("symbol"));
-        let mut data: Value = self.safe_value(message.clone(), Value::from("data"));
-        data = self.safe_value(data.clone(), Value::from(0));
-        let mut timestamp: Value = self.safe_integer(data.clone(), Value::from("t"));
+        let mut data: Value = self.safe_value(message.clone(), Value::from("data"), Value::Undefined);
+        data = self.safe_value(data.clone(), Value::from(0), Value::Undefined);
+        let mut timestamp: Value = self.safe_integer(data.clone(), Value::from("t"), Value::Undefined);
         if !self.get("orderbooks".into()).contains_key(symbol.clone()) {
-            let mut limit: Value = self.safe_integer(message.clone(), Value::from("depth"));
+            let mut limit: Value = self.safe_integer(message.clone(), Value::from("depth"), Value::Undefined);
             self.get("orderbooks".into()).set(symbol.clone(), self.counted_order_book(Value::new_object(), limit.clone()));
         };
         let mut orderbook: Value = self.get("orderbooks".into()).get(symbol.clone());
-        let mut channel: Value = self.safe_string(message.clone(), Value::from("channel"));
-        let mut nonce: Value = self.safe_integer_2(data.clone(), Value::from("u"), Value::from("s"));
+        let mut channel: Value = self.safe_string(message.clone(), Value::from("channel"), Value::Undefined);
+        let mut nonce: Value = self.safe_integer_2(data.clone(), Value::from("u"), Value::from("s"), Value::Undefined);
         let mut books: Value = data.clone();
         if channel.clone() == Value::from("book") {
             // snapshot
@@ -823,7 +832,7 @@ pub trait Cryptocom : Exchange {
             orderbook.set("nonce".into(), nonce.clone());
         } else {
             books = self.safe_value(data.clone(), Value::from("update"), Value::new_object());
-            let mut previous_nonce: Value = self.safe_integer(data.clone(), Value::from("pu"));
+            let mut previous_nonce: Value = self.safe_integer(data.clone(), Value::from("pu"), Value::Undefined);
             let mut current_nonce: Value = orderbook.get(Value::from("nonce"));
             if current_nonce.clone() != previous_nonce.clone() {
                 let mut checksum: Value = self.handle_option(Value::from("watchOrderBook"), Value::from("checksum"), true.into());
@@ -866,8 +875,8 @@ pub trait Cryptocom : Exchange {
         };
         let mut trades: Value = <Self as Cryptocom>::watch_public_multiple(self, topics.clone(), topics.clone(), params.clone()).await;
         if self.get("newUpdates".into()).is_truthy() {
-            let mut first: Value = self.safe_value(trades.clone(), Value::from(0));
-            let mut trade_symbol: Value = self.safe_string(first.clone(), Value::from("symbol"));
+            let mut first: Value = self.safe_value(trades.clone(), Value::from(0), Value::Undefined);
+            let mut trade_symbol: Value = self.safe_string(first.clone(), Value::from("symbol"), Value::Undefined);
             limit = trades.get_limit(trade_symbol.clone(), limit.clone());
         };
         return self.filter_by_since_limit(trades.clone(), since.clone(), limit.clone(), Value::from("timestamp"), true.into());
@@ -888,7 +897,7 @@ pub trait Cryptocom : Exchange {
             topics.push(current_topic.clone());
             i += 1;
         };
-        return <Self as Cryptocom>::un_watch_public_multiple(self, Value::from("trades"), symbols.clone(), message_hashes.clone(), topics.clone(), topics.clone(), params.clone(), Value::Undefined).await;
+        return <Self as Cryptocom>::un_watch_public_multiple(self, Value::from("trades"), symbols.clone(), message_hashes.clone(), topics.clone(), topics.clone(), params.clone()).await;
     }
 
     fn handle_trades(&mut self, mut client: Value, mut message: Value) -> Value {
@@ -914,12 +923,12 @@ pub trait Cryptocom : Exchange {
         //       ]
         // }
         //
-        let mut channel: Value = self.safe_string(message.clone(), Value::from("channel"));
-        let mut market_id: Value = self.safe_string(message.clone(), Value::from("instrument_name"));
-        let mut symbol_specific_message_hash: Value = self.safe_string(message.clone(), Value::from("subscription"));
+        let mut channel: Value = self.safe_string(message.clone(), Value::from("channel"), Value::Undefined);
+        let mut market_id: Value = self.safe_string(message.clone(), Value::from("instrument_name"), Value::Undefined);
+        let mut symbol_specific_message_hash: Value = self.safe_string(message.clone(), Value::from("subscription"), Value::Undefined);
         let mut market: Value = self.safe_market(market_id.clone(), Value::Undefined, Value::Undefined, Value::Undefined);
         let mut symbol: Value = market.get(Value::from("symbol"));
-        let mut stored: Value = self.safe_value(self.get("trades".into()), symbol.clone());
+        let mut stored: Value = self.safe_value(self.get("trades".into()), symbol.clone(), Value::Undefined);
         if stored.clone().is_nullish() {
             let mut limit: Value = self.safe_integer(self.get("options".into()), Value::from("tradesLimit"), Value::from(1000));
             stored = ArrayCache::new(limit);
@@ -973,7 +982,7 @@ pub trait Cryptocom : Exchange {
         let mut market: Value = self.market(symbol.clone());
         let mut sub_message_hash: Value = Value::from("ticker") + Value::from(".") + market.get(Value::from("id"));
         let mut message_hash: Value = Value::from("unsubscribe:ticker:") + market.get(Value::from("symbol"));
-        return <Self as Cryptocom>::un_watch_public_multiple(self, Value::from("ticker"), Value::Json(serde_json::Value::Array(vec![market.get(Value::from("symbol")).into()])), Value::Json(serde_json::Value::Array(vec![message_hash.clone().into()])), Value::Json(serde_json::Value::Array(vec![sub_message_hash.clone().into()])), Value::Json(serde_json::Value::Array(vec![sub_message_hash.clone().into()])), params.clone(), Value::Undefined).await;
+        return <Self as Cryptocom>::un_watch_public_multiple(self, Value::from("ticker"), Value::Json(serde_json::Value::Array(vec![market.get(Value::from("symbol")).into()])), Value::Json(serde_json::Value::Array(vec![message_hash.clone().into()])), Value::Json(serde_json::Value::Array(vec![sub_message_hash.clone().into()])), Value::Json(serde_json::Value::Array(vec![sub_message_hash.clone().into()])), params.clone()).await;
     }
 
     async fn watch_tickers(&mut self, mut symbols: Value, mut params: Value) -> Value {
@@ -1021,7 +1030,7 @@ pub trait Cryptocom : Exchange {
             message_hashes.push(Value::from("unsubscribe:ticker:") + symbol.clone());
             i += 1;
         };
-        return <Self as Cryptocom>::un_watch_public_multiple(self, Value::from("ticker"), symbols.clone(), message_hashes.clone(), sub_message_hashes.clone(), sub_message_hashes.clone(), params.clone(), Value::Undefined).await;
+        return <Self as Cryptocom>::un_watch_public_multiple(self, Value::from("ticker"), symbols.clone(), message_hashes.clone(), sub_message_hashes.clone(), sub_message_hashes.clone(), params.clone()).await;
     }
 
     fn handle_ticker(&mut self, mut client: Value, mut message: Value) -> Value {
@@ -1050,8 +1059,8 @@ pub trait Cryptocom : Exchange {
         //     }
         //
         <Self as Cryptocom>::handle_bid_ask(self, client.clone(), message.clone());
-        let mut message_hash: Value = self.safe_string(message.clone(), Value::from("subscription"));
-        let mut market_id: Value = self.safe_string(message.clone(), Value::from("instrument_name"));
+        let mut message_hash: Value = self.safe_string(message.clone(), Value::from("subscription"), Value::Undefined);
+        let mut market_id: Value = self.safe_string(message.clone(), Value::from("instrument_name"), Value::Undefined);
         let mut market: Value = self.safe_market(market_id.clone(), Value::Undefined, Value::Undefined, Value::Undefined);
         let mut data: Value = self.safe_value(message.clone(), Value::from("data"), Value::new_array());
         let mut i: usize = 0;
@@ -1084,11 +1093,11 @@ pub trait Cryptocom : Exchange {
         //       "t": 1726069647560
         //     }
         //
-        let mut timestamp: Value = self.safe_integer(ticker.clone(), Value::from("t"));
-        let mut market_id: Value = self.safe_string(ticker.clone(), Value::from("i"));
+        let mut timestamp: Value = self.safe_integer(ticker.clone(), Value::from("t"), Value::Undefined);
+        let mut market_id: Value = self.safe_string(ticker.clone(), Value::from("i"), Value::Undefined);
         market = self.safe_market(market_id.clone(), market.clone(), Value::from("_"), Value::Undefined);
-        let mut quote: Value = self.safe_string(market.clone(), Value::from("quote"));
-        let mut last: Value = self.safe_string(ticker.clone(), Value::from("a"));
+        let mut quote: Value = self.safe_string(market.clone(), Value::from("quote"), Value::Undefined);
+        let mut last: Value = self.safe_string(ticker.clone(), Value::from("a"), Value::Undefined);
         return self.safe_ticker(Value::Json(normalize(&Value::Json(json!({
             "symbol": market.get(Value::from("symbol")),
             "timestamp": timestamp,
@@ -1105,10 +1114,10 @@ pub trait Cryptocom : Exchange {
             "last": last,
             "previousClose": Value::Undefined,
             "change": Value::Undefined,
-            "percentage": self.safe_string(ticker.clone(), Value::from("c")),
+            "percentage": self.safe_string(ticker.clone(), Value::from("c"), Value::Undefined),
             "average": Value::Undefined,
-            "baseVolume": self.safe_string(ticker.clone(), Value::from("v")),
-            "quoteVolume": if quote.clone() == Value::from("USD") { self.safe_string(ticker.clone(), Value::from("vv")) } else { Value::Undefined },
+            "baseVolume": self.safe_string(ticker.clone(), Value::from("v"), Value::Undefined),
+            "quoteVolume": if quote.clone() == Value::from("USD") { self.safe_string(ticker.clone(), Value::from("vv"), Value::Undefined) } else { Value::Undefined },
             "info": ticker
         }))).unwrap()), market.clone());
     }
@@ -1148,7 +1157,7 @@ pub trait Cryptocom : Exchange {
     fn handle_bid_ask(&mut self, mut client: Value, mut message: Value) -> Value {
         let mut data: Value = self.safe_list(message.clone(), Value::from("data"), Value::new_array());
         let mut ticker: Value = self.safe_dict(data.clone(), Value::from(0), Value::new_object());
-        let mut parsed_ticker: Value = <Self as Cryptocom>::parse_ws_bid_ask(self, ticker.clone(), Value::Undefined);
+        let mut parsed_ticker: Value = <Self as Cryptocom>::parse_ws_bid_ask(self, ticker.clone());
         let mut symbol: Value = parsed_ticker.get(Value::from("symbol"));
         self.get("bidsasks".into()).set(symbol.clone(), parsed_ticker.clone());
         let mut message_hash: Value = Value::from("bidask.") + symbol.clone();
@@ -1157,18 +1166,18 @@ pub trait Cryptocom : Exchange {
     }
 
     fn parse_ws_bid_ask(&self, mut ticker: Value, mut market: Value) -> Value {
-        let mut market_id: Value = self.safe_string(ticker.clone(), Value::from("i"));
+        let mut market_id: Value = self.safe_string(ticker.clone(), Value::from("i"), Value::Undefined);
         market = self.safe_market(market_id.clone(), market.clone(), Value::Undefined, Value::Undefined);
-        let mut symbol: Value = self.safe_string(market.clone(), Value::from("symbol"));
-        let mut timestamp: Value = self.safe_integer(ticker.clone(), Value::from("t"));
+        let mut symbol: Value = self.safe_string(market.clone(), Value::from("symbol"), Value::Undefined);
+        let mut timestamp: Value = self.safe_integer(ticker.clone(), Value::from("t"), Value::Undefined);
         return self.safe_ticker(Value::Json(normalize(&Value::Json(json!({
             "symbol": symbol,
             "timestamp": timestamp,
             "datetime": self.iso8601(timestamp.clone()),
-            "ask": self.safe_string(ticker.clone(), Value::from("k")),
-            "askVolume": self.safe_string(ticker.clone(), Value::from("ks")),
-            "bid": self.safe_string(ticker.clone(), Value::from("b")),
-            "bidVolume": self.safe_string(ticker.clone(), Value::from("bs")),
+            "ask": self.safe_string(ticker.clone(), Value::from("k"), Value::Undefined),
+            "askVolume": self.safe_string(ticker.clone(), Value::from("ks"), Value::Undefined),
+            "bid": self.safe_string(ticker.clone(), Value::from("b"), Value::Undefined),
+            "bidVolume": self.safe_string(ticker.clone(), Value::from("bs"), Value::Undefined),
             "info": ticker
         }))).unwrap()), market.clone());
     }
@@ -1214,20 +1223,20 @@ pub trait Cryptocom : Exchange {
         //       "data": [ [Object] ]
         //   }
         //
-        let mut message_hash: Value = self.safe_string(message.clone(), Value::from("subscription"));
-        let mut market_id: Value = self.safe_string(message.clone(), Value::from("instrument_name"));
+        let mut message_hash: Value = self.safe_string(message.clone(), Value::from("subscription"), Value::Undefined);
+        let mut market_id: Value = self.safe_string(message.clone(), Value::from("instrument_name"), Value::Undefined);
         let mut market: Value = self.safe_market(market_id.clone(), Value::Undefined, Value::Undefined, Value::Undefined);
         let mut symbol: Value = market.get(Value::from("symbol"));
-        let mut interval: Value = self.safe_string(message.clone(), Value::from("interval"));
+        let mut interval: Value = self.safe_string(message.clone(), Value::from("interval"), Value::Undefined);
         let mut timeframe: Value = self.find_timeframe(interval.clone(), Value::Undefined);
         self.get("ohlcvs".into()).set(symbol.clone(), self.safe_value(self.get("ohlcvs".into()), symbol.clone(), Value::new_object()));
-        let mut stored: Value = self.safe_value(self.get("ohlcvs".into()).get(symbol.clone()), timeframe.clone());
+        let mut stored: Value = self.safe_value(self.get("ohlcvs".into()).get(symbol.clone()), timeframe.clone(), Value::Undefined);
         if stored.clone().is_nullish() {
             let mut limit: Value = self.safe_integer(self.get("options".into()), Value::from("OHLCVLimit"), Value::from(1000));
             stored = ArrayCacheByTimestamp::new(limit);
             self.get("ohlcvs".into()).get(symbol.clone()).set(timeframe.clone(), stored.clone());
         };
-        let mut data: Value = self.safe_value(message.clone(), Value::from("data"));
+        let mut data: Value = self.safe_value(message.clone(), Value::from("data"), Value::Undefined);
         let mut i: usize = 0;
         while i < data.len() {
             let mut tick: Value = data.get(i.into());
@@ -1287,8 +1296,8 @@ pub trait Cryptocom : Exchange {
         //        }
         //    }
         //
-        let mut channel: Value = self.safe_string(message.clone(), Value::from("channel"));
-        let mut symbol_specific_message_hash: Value = self.safe_string(message.clone(), Value::from("subscription"));
+        let mut channel: Value = self.safe_string(message.clone(), Value::from("channel"), Value::Undefined);
+        let mut symbol_specific_message_hash: Value = self.safe_string(message.clone(), Value::from("subscription"), Value::Undefined);
         let mut orders: Value = self.safe_value(message.clone(), Value::from("data"), Value::new_array());
         let mut orders_length: usize = orders.len();
         if orders_length.clone() > Value::from(0) {
@@ -1315,7 +1324,7 @@ pub trait Cryptocom : Exchange {
     async fn watch_positions(&mut self, mut symbols: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        <Self as Cryptocom>::authenticate(self, Value::Undefined).await;
+        <Self as Cryptocom>::authenticate(self).await;
         let mut url: Value = self.get("urls".into()).get(Value::from("api")).get(Value::from("ws")).get(Value::from("private"));
         let mut id: Value = self.nonce();
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
@@ -1331,7 +1340,7 @@ pub trait Cryptocom : Exchange {
             message_hash = Value::from("::") + symbols.join(Value::from(","));
         };
         let mut client: Value = self.client(url.clone());
-        <Self as Cryptocom>::set_positions_cache(self, client.clone(), symbols.clone(), Value::Undefined);
+        <Self as Cryptocom>::set_positions_cache(self, client.clone(), symbols.clone());
         let mut fetch_positions_snapshot: Value = self.handle_option(Value::from("watchPositions"), Value::from("fetchPositionsSnapshot"), true.into());
         let mut await_positions_snapshot: Value = self.handle_option(Value::from("watchPositions"), Value::from("awaitPositionsSnapshot"), true.into());
         if fetch_positions_snapshot.is_truthy() && await_positions_snapshot.is_truthy() && self.get("positions".into()).is_nullish() {
@@ -1493,24 +1502,24 @@ pub trait Cryptocom : Exchange {
         //         }
         //     }
         //
-        let mut message_hash: Value = self.safe_string(message.clone(), Value::from("subscription"));
+        let mut message_hash: Value = self.safe_string(message.clone(), Value::from("subscription"), Value::Undefined);
         let mut data: Value = self.safe_value(message.clone(), Value::from("data"), Value::new_array());
         let mut position_balances: Value = self.safe_value(data.get(Value::from(0)), Value::from("position_balances"), Value::new_array());
         self.get("balance".into()).set("info".into(), data.clone());
         let mut i: usize = 0;
         while i < position_balances.len() {
             let mut balance: Value = position_balances.get(i.into());
-            let mut currency_id: Value = self.safe_string(balance.clone(), Value::from("instrument_name"));
+            let mut currency_id: Value = self.safe_string(balance.clone(), Value::from("instrument_name"), Value::Undefined);
             let mut code: Value = self.safe_currency_code(currency_id.clone(), Value::Undefined);
             let mut account: Value = self.account();
-            account.set("total".into(), self.safe_string(balance.clone(), Value::from("quantity")));
-            account.set("used".into(), self.safe_string(balance.clone(), Value::from("reserved_qty")));
+            account.set("total".into(), self.safe_string(balance.clone(), Value::from("quantity"), Value::Undefined));
+            account.set("used".into(), self.safe_string(balance.clone(), Value::from("reserved_qty"), Value::Undefined));
             self.get("balance".into()).set(code.clone(), account.clone());
             self.set("balance".into(), self.safe_balance(self.get("balance".into())));
             i += 1;
         };
         client.resolve(self.get("balance".into()), message_hash.clone());
-        let mut message_hash_request: Value = self.safe_string(message.clone(), Value::from("id"));
+        let mut message_hash_request: Value = self.safe_string(message.clone(), Value::from("id"), Value::Undefined);
         client.resolve(self.get("balance".into()), message_hash_request.clone());
         Value::Undefined
     }
@@ -1518,7 +1527,7 @@ pub trait Cryptocom : Exchange {
     async fn create_order_ws(&mut self, mut symbol: Value, mut r#type: Value, mut side: Value, mut amount: Value, mut price: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        params = self.create_order_request(symbol.clone(), r#type.clone(), side.clone(), amount.clone(), price.clone(), params.clone());
+        params = <Self as Cryptocom>::create_order_request(self, symbol.clone(), r#type.clone(), side.clone(), amount.clone(), price.clone(), params.clone());
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
             "method": "private/create-order",
             "params": params
@@ -1530,7 +1539,7 @@ pub trait Cryptocom : Exchange {
     async fn edit_order_ws(&mut self, mut id: Value, mut symbol: Value, mut r#type: Value, mut side: Value, mut amount: Value, mut price: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        params = self.edit_order_request(id.clone(), symbol.clone(), amount.clone(), price.clone(), params.clone());
+        params = <Self as Cryptocom>::edit_order_request(self, id.clone(), symbol.clone(), amount.clone(), price.clone(), params.clone());
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
             "method": "private/amend-order",
             "params": params
@@ -1551,7 +1560,7 @@ pub trait Cryptocom : Exchange {
         //        }
         //    }
         //
-        let mut message_hash: Value = self.safe_string(message.clone(), Value::from("id"));
+        let mut message_hash: Value = self.safe_string(message.clone(), Value::from("id"), Value::Undefined);
         let mut raw_order: Value = self.safe_value(message.clone(), Value::from("result"), Value::new_object());
         let mut order: Value = self.parse_order(raw_order.clone(), Value::Undefined);
         client.resolve(order.clone(), message_hash.clone());
@@ -1596,7 +1605,7 @@ pub trait Cryptocom : Exchange {
         //        "code": 0
         //    }
         //
-        let mut message_hash: Value = self.safe_string(message.clone(), Value::from("id"));
+        let mut message_hash: Value = self.safe_string(message.clone(), Value::from("id"), Value::Undefined);
         client.resolve(message.clone(), message_hash.clone());
         Value::Undefined
     }
@@ -1657,7 +1666,7 @@ pub trait Cryptocom : Exchange {
 
     async fn watch_private_request(&mut self, mut nonce: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
-        <Self as Cryptocom>::authenticate(self, Value::Undefined).await;
+        <Self as Cryptocom>::authenticate(self).await;
         let mut url: Value = self.get("urls".into()).get(Value::from("api")).get(Value::from("ws")).get(Value::from("private"));
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
             "id": nonce,
@@ -1669,7 +1678,7 @@ pub trait Cryptocom : Exchange {
 
     async fn watch_private_subscribe(&mut self, mut message_hash: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
-        <Self as Cryptocom>::authenticate(self, Value::Undefined).await;
+        <Self as Cryptocom>::authenticate(self).await;
         let mut url: Value = self.get("urls".into()).get(Value::from("api")).get(Value::from("ws")).get(Value::from("private"));
         let mut id: Value = self.nonce();
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
@@ -1692,12 +1701,12 @@ pub trait Cryptocom : Exchange {
         //        "message": "invalid channel {"channels":["trade.BTCUSD-PERP"]}"
         //    }
         //
-        let mut id: Value = self.safe_string(message.clone(), Value::from("id"));
-        let mut error_code: Value = self.safe_string(message.clone(), Value::from("code"));
+        let mut id: Value = self.safe_string(message.clone(), Value::from("id"), Value::Undefined);
+        let mut error_code: Value = self.safe_string(message.clone(), Value::from("code"), Value::Undefined);
                 if error_code.is_truthy() && error_code.clone() != Value::from("0") {
             let mut feedback: Value = self.get("id".into()) + Value::from(" ") + self.json(message.clone());
             self.throw_exactly_matched_exception(self.get("exceptions".into()).get(Value::from("exact")), error_code.clone(), feedback.clone());
-            let mut message_string: Value = self.safe_value(message.clone(), Value::from("message"));
+            let mut message_string: Value = self.safe_value(message.clone(), Value::from("message"), Value::Undefined);
             if message_string.clone().is_nonnullish() {
                 self.throw_broadly_matched_exception(self.get("exceptions".into()).get(Value::from("broad")), message_string.clone(), feedback.clone());
             };
@@ -1721,17 +1730,17 @@ pub trait Cryptocom : Exchange {
             "user.balance": self.get("handleBalance".into()),
             "user.position_balance": self.get("handlePositions".into())
         }))).unwrap());
-        let mut result: Value = self.safe_value_2(message.clone(), Value::from("result"), Value::from("info"));
-        let mut channel: Value = self.safe_string(result.clone(), Value::from("channel"));
+        let mut result: Value = self.safe_value_2(message.clone(), Value::from("result"), Value::from("info"), Value::Undefined);
+        let mut channel: Value = self.safe_string(result.clone(), Value::from("channel"), Value::Undefined);
         if channel.clone().is_nonnullish() && channel.index_of(Value::from("user.trade")) > Value::from(1).neg() {
             // channel might be user.trade.BTC_USDT
             <Self as Cryptocom>::handle_trades(self, client.clone(), result.clone());
         };
         if channel.clone().is_nonnullish() && channel.starts_with(Value::from("user.order")).is_truthy() {
             // channel might be user.order.BTC_USDT
-            <Self as Cryptocom>::handle_orders(self, client.clone(), result.clone(), Value::Undefined);
+            <Self as Cryptocom>::handle_orders(self, client.clone(), result.clone());
         };
-        let mut method: Value = self.safe_value(methods.clone(), channel.clone());
+        let mut method: Value = self.safe_value(methods.clone(), channel.clone(), Value::Undefined);
         if method.clone().is_nonnullish() {
             method.call(self, client.clone(), result.clone());
         };
@@ -1775,7 +1784,7 @@ pub trait Cryptocom : Exchange {
         if <Self as Cryptocom>::handle_error_message(self, client.clone(), message.clone()).is_truthy() {
             return Value::Undefined;
         };
-        let mut method: Value = self.safe_string(message.clone(), Value::from("method"));
+        let mut method: Value = self.safe_string(message.clone(), Value::from("method"), Value::Undefined);
         let mut methods: Value = Value::Json(normalize(&Value::Json(json!({
             "": self.get("handlePing".into()),
             "public/heartbeat": self.get("handlePing".into()),
@@ -1788,7 +1797,7 @@ pub trait Cryptocom : Exchange {
             "subscribe": self.get("handleSubscribe".into()),
             "unsubscribe": self.get("handleUnsubscribe".into())
         }))).unwrap());
-        let mut call_method: Value = self.safe_value(methods.clone(), method.clone());
+        let mut call_method: Value = self.safe_value(methods.clone(), method.clone(), Value::Undefined);
         if call_method.clone().is_nonnullish() {
             call_method.call(self, client.clone(), message.clone());
         };
@@ -1802,12 +1811,12 @@ pub trait Cryptocom : Exchange {
         let mut client: Value = self.client(url.clone());
         let mut message_hash: Value = Value::from("authenticated");
         let mut future: Value = client.reusable_future(message_hash.clone());
-        let mut authenticated: Value = self.safe_value(client.get(subscriptions.clone()), message_hash.clone());
+        let mut authenticated: Value = self.safe_value(client.get(subscriptions.clone()), message_hash.clone(), Value::Undefined);
         if authenticated.clone().is_nullish() {
             let mut method: Value = Value::from("public/auth");
             let mut nonce: Value = self.nonce().to_string();
             let mut auth: Value = method.clone() + nonce.clone() + self.get("apiKey".into()) + nonce.clone();
-            let mut signature: Value = self.hmac(self.encode(auth.clone()), self.encode(self.get("secret".into())), sha256.clone());
+            let mut signature: Value = self.hmac(self.encode(auth.clone()), self.encode(self.get("secret".into())), sha256.clone(), Value::Undefined);
             let mut request: Value = Value::Json(normalize(&Value::Json(json!({
                 "id": nonce,
                 "nonce": nonce,
@@ -1830,14 +1839,14 @@ pub trait Cryptocom : Exchange {
         //
         //  { id: 1648132625434, method: "public/auth", code: 0 }
         //
-        let mut future: Value = self.safe_value(client.get(futures.clone()), Value::from("authenticated"));
+        let mut future: Value = self.safe_value(client.get(futures.clone()), Value::from("authenticated"), Value::Undefined);
         future.resolve(true.into());
         Value::Undefined
     }
 
     fn handle_unsubscribe(&mut self, mut client: Value, mut message: Value) -> Value {
-        let mut id: Value = self.safe_string(message.clone(), Value::from("id"));
-        let mut keys: Value = Object::keys(client.get(subscriptions.clone()));
+        let mut id: Value = self.safe_string(message.clone(), Value::from("id"), Value::Undefined);
+        let mut keys: Value = client.get(subscriptions.clone()).keys();
         let mut i: usize = 0;
         while i < keys.len() {
             let mut message_hash: Value = keys.get(i.into());
@@ -1847,7 +1856,7 @@ pub trait Cryptocom : Exchange {
             // the previous iteration can have deleted the messageHash from the subscriptions
             if message_hash.starts_with(Value::from("unsubscribe")).is_truthy() {
                 let mut subscription: Value = client.get(subscriptions.clone()).get(message_hash.clone());
-                let mut sub_id: Value = self.safe_string(subscription.clone(), Value::from("id"));
+                let mut sub_id: Value = self.safe_string(subscription.clone(), Value::from("id"), Value::Undefined);
                 if id.clone() != sub_id.clone() {
                     continue;
                 };
@@ -2037,8 +2046,8 @@ impl ValueTrait for CryptocomImpl {
     fn push(&mut self, value: Value) { self.0.push(value) }
     fn split(&self, separator: Value) -> Value { self.0.split(separator) }
     fn contains_key(&self, key: Value) -> bool { self.0.contains_key(key) }
-    fn keys(&self) -> Vec<Value> { self.0.keys() }
-    fn values(&self) -> Vec<Value> { self.0.values() }
+    fn keys(&self) -> Value { self.0.keys() }
+    fn values(&self) -> Value { self.0.values() }
     fn to_array(&self, x: Value) -> Value { self.0.to_array(x) }
     fn index_of(&self, x: Value) -> Value { self.0.index_of(x) }
     fn join(&self, glue: Value) -> Value { self.0.join(glue) }

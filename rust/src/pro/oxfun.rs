@@ -11,7 +11,16 @@ use async_trait::async_trait;
 use std::str::FromStr;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, JSON, Array, Object, Math, parse_int, shift_2, extend_2, normalize};
+use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, BoolExt, JSON, Array, Object, Math, Promise, parse_int, shift_2, extend_2, normalize};
+// Crypto hash identifiers
+fn sha256() -> Value { Value::from("sha256") }
+fn sha384() -> Value { Value::from("sha384") }
+fn sha512() -> Value { Value::from("sha512") }
+fn md5() -> Value { Value::from("md5") }
+fn ed25519() -> Value { Value::from("ed25519") }
+fn rsa(msg: Value, secret: Value, _hash: Value) -> Value { msg }
+fn eddsa(msg: Value, secret: Value, _curve: Value) -> Value { msg }
+fn secp256k1() -> Value { Value::from("secp256k1") }
 
 use crate::exchange::{PRECISE_BASE, TRUNCATE, ROUND, ROUND_UP, ROUND_DOWN};
 use crate::exchange::{DECIMAL_PLACES, SIGNIFICANT_DIGITS, TICK_SIZE, NO_PADDING, PAD_WITH_ZERO};
@@ -456,7 +465,7 @@ pub trait Oxfun : Exchange {
         let mut trades: Value = <Self as Oxfun>::subscribe_multiple(self, message_hashes.clone(), args.clone(), params.clone()).await;
         if self.get("newUpdates".into()).is_truthy() {
             let mut first: Value = self.safe_dict(trades.clone(), Value::from(0), Value::new_object());
-            let mut trade_symbol: Value = self.safe_string(first.clone(), Value::from("symbol"));
+            let mut trade_symbol: Value = self.safe_string(first.clone(), Value::from("symbol"), Value::Undefined);
             limit = trades.get_limit(trade_symbol.clone(), limit.clone());
         };
         return self.filter_by_since_limit(trades.clone(), since.clone(), limit.clone(), Value::from("timestamp"), true.into());
@@ -484,7 +493,7 @@ pub trait Oxfun : Exchange {
         while i < data.len() {
             let mut trade: Value = self.safe_dict(data.clone(), Value::from(i), Value::new_object());
             let mut parsed_trade: Value = <Self as Oxfun>::parse_ws_trade(self, trade.clone(), Value::Undefined);
-            let mut symbol: Value = self.safe_string(parsed_trade.clone(), Value::from("symbol"));
+            let mut symbol: Value = self.safe_string(parsed_trade.clone(), Value::from("symbol"), Value::Undefined);
             let mut message_hash: Value = Value::from("trades:") + symbol.clone();
             if !self.get("trades".into()).contains_key(symbol.clone()) {
                 let mut trades_limit: Value = self.safe_integer(self.get("options".into()), Value::from("tradesLimit"), Value::from(1000));
@@ -510,19 +519,19 @@ pub trait Oxfun : Exchange {
         //         timestamp: '1716124156643'
         //     }
         //
-        let mut market_id: Value = self.safe_string(trade.clone(), Value::from("marketCode"));
+        let mut market_id: Value = self.safe_string(trade.clone(), Value::from("marketCode"), Value::Undefined);
         market = self.safe_market(market_id.clone(), market.clone(), Value::Undefined, Value::Undefined);
-        let mut timestamp: Value = self.safe_integer(trade.clone(), Value::from("timestamp"));
+        let mut timestamp: Value = self.safe_integer(trade.clone(), Value::from("timestamp"), Value::Undefined);
         return self.safe_trade(Value::Json(normalize(&Value::Json(json!({
             "info": trade,
             "timestamp": timestamp,
             "datetime": self.iso8601(timestamp.clone()),
             "symbol": market.get(Value::from("symbol")),
-            "id": self.safe_string(trade.clone(), Value::from("tradeId")),
+            "id": self.safe_string(trade.clone(), Value::from("tradeId"), Value::Undefined),
             "order": Value::Undefined,
             "type": Value::Undefined,
-            "takerOrMaker": self.safe_string_lower(trade.clone(), Value::from("matchType")),
-            "side": self.safe_string_lower(trade.clone(), Value::from("side")),
+            "takerOrMaker": self.safe_string_lower(trade.clone(), Value::from("matchType"), Value::Undefined),
+            "side": self.safe_string_lower(trade.clone(), Value::from("side"), Value::Undefined),
             "price": self.safe_number(trade.clone(), Value::from("price"), Value::Undefined),
             "amount": self.safe_number(trade.clone(), Value::from("quantity"), Value::Undefined),
             "cost": Value::Undefined,
@@ -602,13 +611,13 @@ pub trait Oxfun : Exchange {
         //         ]
         //     }
         //
-        let mut table: Value = self.safe_string(message.clone(), Value::from("table"));
+        let mut table: Value = self.safe_string(message.clone(), Value::from("table"), Value::Undefined);
         let mut parts: Value = table.split(Value::from("candles"));
         let mut timeframe_id: Value = self.safe_string(parts.clone(), Value::from(1), Value::from(""));
         let mut timeframe: Value = self.find_timeframe(timeframe_id.clone(), Value::Undefined);
         let mut message_data: Value = self.safe_list(message.clone(), Value::from("data"), Value::new_array());
         let mut data: Value = self.safe_dict(message_data.clone(), Value::from(0), Value::new_object());
-        let mut market_id: Value = self.safe_string(data.clone(), Value::from("marketCode"));
+        let mut market_id: Value = self.safe_string(data.clone(), Value::from("marketCode"), Value::Undefined);
         let mut market: Value = self.safe_market(market_id.clone(), Value::Undefined, Value::Undefined, Value::Undefined);
         let mut symbol: Value = self.safe_symbol(market_id.clone(), market.clone(), Value::Undefined, Value::Undefined);
         if !self.get("ohlcvs".into()).contains_key(symbol.clone()) {
@@ -644,7 +653,7 @@ pub trait Oxfun : Exchange {
         //         "5.3"            //volume in Contracts
         //     ]
         //
-        return Value::Json(serde_json::Value::Array(vec![self.safe_integer(ohlcv.clone(), Value::from(0)).into(), self.safe_number(ohlcv.clone(), Value::from(1), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from(2), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from(3), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from(4), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from(6), Value::Undefined).into()]));
+        return Value::Json(serde_json::Value::Array(vec![self.safe_integer(ohlcv.clone(), Value::from(0), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from(1), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from(2), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from(3), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from(4), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from(6), Value::Undefined).into()]));
     }
 
     async fn watch_order_book(&mut self, mut symbol: Value, mut limit: Value, mut params: Value) -> Value {
@@ -658,7 +667,7 @@ pub trait Oxfun : Exchange {
         symbols = self.market_symbols(symbols.clone(), Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined);
         let mut channel: Value = Value::from("depth");
         let mut options: Value = self.safe_dict(self.get("options".into()), Value::from("watchOrderBook"), Value::new_object());
-        let mut default_channel: Value = self.safe_string(options.clone(), Value::from("channel"));
+        let mut default_channel: Value = self.safe_string(options.clone(), Value::from("channel"), Value::Undefined);
         if default_channel.clone().is_nonnullish() {
             channel = default_channel.clone();
         } else if limit.clone().is_nonnullish() {
@@ -708,17 +717,17 @@ pub trait Oxfun : Exchange {
         //     }
         //
         let mut data: Value = self.safe_dict(message.clone(), Value::from("data"), Value::new_object());
-        let mut market_id: Value = self.safe_string(data.clone(), Value::from("marketCode"));
+        let mut market_id: Value = self.safe_string(data.clone(), Value::from("marketCode"), Value::Undefined);
         let mut symbol: Value = self.safe_symbol(market_id.clone(), Value::Undefined, Value::Undefined, Value::Undefined);
-        let mut timestamp: Value = self.safe_integer(data.clone(), Value::from("timestamp"));
+        let mut timestamp: Value = self.safe_integer(data.clone(), Value::from("timestamp"), Value::Undefined);
         let mut message_hash: Value = Value::from("orderbook:") + symbol.clone();
         if !self.get("orderbooks".into()).contains_key(symbol.clone()) {
             self.get("orderbooks".into()).set(symbol.clone(), self.order_book(Value::new_object(), Value::Undefined));
         };
         let mut orderbook: Value = self.get("orderbooks".into()).get(symbol.clone());
-        let mut snapshot: Value = self.parse_order_book(data.clone(), symbol.clone(), timestamp.clone(), Value::from("asks"), Value::from("bids"), Value::Undefined, Value::Undefined, Value::Undefined);
+        let mut snapshot: Value = self.parse_order_book(data.clone(), symbol.clone(), timestamp.clone(), Value::from("asks"), Value::from("bids"));
         orderbook.reset(snapshot.clone());
-        orderbook.set("nonce".into(), self.safe_integer(data.clone(), Value::from("seqNum")));
+        orderbook.set("nonce".into(), self.safe_integer(data.clone(), Value::from("seqNum"), Value::Undefined));
         self.get("orderbooks".into()).set(symbol.clone(), orderbook.clone());
         client.resolve(orderbook.clone(), message_hash.clone());
         Value::Undefined
@@ -727,7 +736,7 @@ pub trait Oxfun : Exchange {
     async fn watch_ticker(&mut self, mut symbol: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         let mut ticker: Value = <Self as Oxfun>::watch_tickers(self, Value::Json(serde_json::Value::Array(vec![symbol.clone().into()])), params.clone()).await;
-        return self.safe_value(ticker.clone(), symbol.clone());
+        return self.safe_value(ticker.clone(), symbol.clone(), Value::Undefined);
     }
 
     async fn watch_tickers(&mut self, mut symbols: Value, mut params: Value) -> Value {
@@ -841,7 +850,7 @@ pub trait Oxfun : Exchange {
         //     }
         //
         let mut data: Value = self.safe_dict(message.clone(), Value::from("data"), Value::new_object());
-        let mut parsed_ticker: Value = <Self as Oxfun>::parse_ws_bid_ask(self, data.clone(), Value::Undefined);
+        let mut parsed_ticker: Value = <Self as Oxfun>::parse_ws_bid_ask(self, data.clone());
         let mut symbol: Value = parsed_ticker.get(Value::from("symbol"));
         self.get("bidsasks".into()).set(symbol.clone(), parsed_ticker.clone());
         let mut message_hash: Value = Value::from("bidask:") + symbol.clone();
@@ -850,10 +859,10 @@ pub trait Oxfun : Exchange {
     }
 
     fn parse_ws_bid_ask(&self, mut ticker: Value, mut market: Value) -> Value {
-        let mut market_id: Value = self.safe_string(ticker.clone(), Value::from("marketCode"));
+        let mut market_id: Value = self.safe_string(ticker.clone(), Value::from("marketCode"), Value::Undefined);
         market = self.safe_market(market_id.clone(), market.clone(), Value::Undefined, Value::Undefined);
-        let mut symbol: Value = self.safe_string(market.clone(), Value::from("symbol"));
-        let mut timestamp: Value = self.safe_integer(ticker.clone(), Value::from("timestamp"));
+        let mut symbol: Value = self.safe_string(market.clone(), Value::from("symbol"), Value::Undefined);
+        let mut timestamp: Value = self.safe_integer(ticker.clone(), Value::from("timestamp"), Value::Undefined);
         let mut ask: Value = self.safe_list(ticker.clone(), Value::from("ask"), Value::new_array());
         let mut bid: Value = self.safe_list(ticker.clone(), Value::from("bid"), Value::new_array());
         return self.safe_ticker(Value::Json(normalize(&Value::Json(json!({
@@ -871,7 +880,7 @@ pub trait Oxfun : Exchange {
     async fn watch_balance(&mut self, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        <Self as Oxfun>::authenticate(self, Value::Undefined);
+        <Self as Oxfun>::authenticate(self);
         let mut args: Value = Value::from("balance:all");
         let mut message_hash: Value = Value::from("balance");
         let mut url: Value = self.get("urls".into()).get(Value::from("api")).get(Value::from("ws"));
@@ -903,22 +912,22 @@ pub trait Oxfun : Exchange {
         //     }
         //
         let mut balances: Value = self.safe_list(message.clone(), Value::from("data"), Value::Undefined);
-        let mut timestamp: Value = self.safe_integer(message.clone(), Value::from("timestamp"));
+        let mut timestamp: Value = self.safe_integer(message.clone(), Value::from("timestamp"), Value::Undefined);
         self.get("balance".into()).set("info".into(), message.clone());
         self.get("balance".into()).set("timestamp".into(), timestamp.clone());
         self.get("balance".into()).set("datetime".into(), self.iso8601(timestamp.clone()));
         let mut i: usize = 0;
         while i < balances.len() {
             let mut balance: Value = self.safe_dict(balances.clone(), Value::from(i), Value::new_object());
-            let mut currency_id: Value = self.safe_string(balance.clone(), Value::from("instrumentId"));
+            let mut currency_id: Value = self.safe_string(balance.clone(), Value::from("instrumentId"), Value::Undefined);
             let mut code: Value = self.safe_currency_code(currency_id.clone(), Value::Undefined);
             if !self.get("balance".into()).contains_key(code.clone()) {
                 self.get("balance".into()).set(code.clone(), self.account());
             };
             let mut account: Value = self.get("balance".into()).get(code.clone());
-            account.set("total".into(), self.safe_string(balance.clone(), Value::from("total")));
-            account.set("used".into(), self.safe_string(balance.clone(), Value::from("reserved")));
-            account.set("free".into(), self.safe_string(balance.clone(), Value::from("available")));
+            account.set("total".into(), self.safe_string(balance.clone(), Value::from("total"), Value::Undefined));
+            account.set("used".into(), self.safe_string(balance.clone(), Value::from("reserved"), Value::Undefined));
+            account.set("free".into(), self.safe_string(balance.clone(), Value::from("available"), Value::Undefined));
             self.get("balance".into()).set(code.clone(), account.clone());
             i += 1;
         };
@@ -930,7 +939,7 @@ pub trait Oxfun : Exchange {
     async fn watch_positions(&mut self, mut symbols: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        <Self as Oxfun>::authenticate(self, Value::Undefined).await;
+        <Self as Oxfun>::authenticate(self).await;
         let mut all_symbols: Value = (symbols.clone().is_nullish()).into();
         let mut sym: Value = symbols.clone();
         let mut args: Value = Value::new_array();
@@ -986,7 +995,7 @@ pub trait Oxfun : Exchange {
         let mut i: usize = 0;
         while i < data.len() {
             let mut raw_position: Value = self.safe_dict(data.clone(), Value::from(i), Value::new_object());
-            let mut position: Value = <Self as Oxfun>::parse_ws_position(self, raw_position.clone(), Value::Undefined);
+            let mut position: Value = <Self as Oxfun>::parse_ws_position(self, raw_position.clone());
             let mut symbol: Value = position.get(Value::from("symbol"));
             let mut message_hash: Value = Value::from("positions:") + symbol.clone();
             cache.append(position.clone());
@@ -1010,7 +1019,7 @@ pub trait Oxfun : Exchange {
         //         "leverage": "0" // Currently always reports 0
         //     }
         //
-        let mut market_id: Value = self.safe_string(position.clone(), Value::from("instrumentId"));
+        let mut market_id: Value = self.safe_string(position.clone(), Value::from("instrumentId"), Value::Undefined);
         market = self.safe_market(market_id.clone(), market.clone(), Value::Undefined, Value::Undefined);
         return self.safe_position(Value::Json(normalize(&Value::Json(json!({
             "info": position,
@@ -1031,7 +1040,7 @@ pub trait Oxfun : Exchange {
             "hedged": Value::Undefined,
             "timestamp": Value::Undefined,
             "datetime": Value::Undefined,
-            "lastUpdateTimestamp": self.safe_integer(position.clone(), Value::from("lastUpdated")),
+            "lastUpdateTimestamp": self.safe_integer(position.clone(), Value::from("lastUpdated"), Value::Undefined),
             "maintenanceMargin": Value::Undefined,
             "maintenanceMarginPercentage": Value::Undefined,
             "collateral": Value::Undefined,
@@ -1047,7 +1056,7 @@ pub trait Oxfun : Exchange {
     async fn watch_orders(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        <Self as Oxfun>::authenticate(self, Value::Undefined).await;
+        <Self as Oxfun>::authenticate(self).await;
         let mut message_hash: Value = Value::from("orders");
         let mut args: Value = Value::from("order:");
         let mut market: Value = self.safe_market(symbol.clone(), Value::Undefined, Value::Undefined, Value::Undefined);
@@ -1118,15 +1127,15 @@ pub trait Oxfun : Exchange {
     async fn create_order_ws(&mut self, mut symbol: Value, mut r#type: Value, mut side: Value, mut amount: Value, mut price: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        <Self as Oxfun>::authenticate(self, Value::Undefined).await;
+        <Self as Oxfun>::authenticate(self).await;
         let mut message_hash: Value = self.nonce().to_string();
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
             "op": "placeorder",
             "tag": message_hash
         }))).unwrap());
         params = self.omit(params.clone(), Value::from("tag"));
-        let mut order_request: Value = self.create_order_request(symbol.clone(), r#type.clone(), side.clone(), amount.clone(), price.clone(), params.clone());
-        let mut timestamp: Value = self.safe_integer(order_request.clone(), Value::from("timestamp"));
+        let mut order_request: Value = <Self as Oxfun>::create_order_request(self, symbol.clone(), r#type.clone(), side.clone(), amount.clone(), price.clone(), params.clone());
+        let mut timestamp: Value = self.safe_integer(order_request.clone(), Value::from("timestamp"), Value::Undefined);
         if timestamp.clone().is_nullish() {
             order_request.set("timestamp".into(), self.milliseconds());
         };
@@ -1138,18 +1147,18 @@ pub trait Oxfun : Exchange {
     async fn edit_order_ws(&mut self, mut id: Value, mut symbol: Value, mut r#type: Value, mut side: Value, mut amount: Value, mut price: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        <Self as Oxfun>::authenticate(self, Value::Undefined).await;
+        <Self as Oxfun>::authenticate(self).await;
         let mut message_hash: Value = self.nonce().to_string();
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
             "op": "modifyorder",
             "tag": message_hash
         }))).unwrap());
         params = self.omit(params.clone(), Value::from("tag"));
-        let mut order_request: Value = self.create_order_request(symbol.clone(), r#type.clone(), side.clone(), amount.clone(), price.clone(), params.clone());
+        let mut order_request: Value = <Self as Oxfun>::create_order_request(self, symbol.clone(), r#type.clone(), side.clone(), amount.clone(), price.clone(), params.clone());
         order_request = extend_2(order_request.clone(), Value::Json(normalize(&Value::Json(json!({
             "orderId": id
         }))).unwrap()));
-        let mut timestamp: Value = self.safe_integer(order_request.clone(), Value::from("timestamp"));
+        let mut timestamp: Value = self.safe_integer(order_request.clone(), Value::from("timestamp"), Value::Undefined);
         if timestamp.clone().is_nullish() {
             order_request.set("timestamp".into(), self.milliseconds());
         };
@@ -1188,13 +1197,13 @@ pub trait Oxfun : Exchange {
         //         "timestamp": "1716932877381"
         //     }
         //
-        let mut message_hash: Value = self.safe_string(message.clone(), Value::from("tag"));
+        let mut message_hash: Value = self.safe_string(message.clone(), Value::from("tag"), Value::Undefined);
         let mut submitted: Value = self.safe_bool(message.clone(), Value::from("submitted"), Value::Undefined);
         // filter out partial errors
         if !submitted.is_truthy() {
-            let mut method: Value = self.safe_string(message.clone(), Value::from("event"));
+            let mut method: Value = self.safe_string(message.clone(), Value::from("event"), Value::Undefined);
             let mut string_msg: Value = self.json(message.clone());
-            let mut code: Value = self.safe_integer(message.clone(), Value::from("code"));
+            let mut code: Value = self.safe_integer(message.clone(), Value::from("code"), Value::Undefined);
             self.handle_errors(code.clone(), Value::from(""), client.get(url.clone()), method.clone(), Value::new_object(), string_msg.clone(), message.clone(), Value::new_object(), Value::new_object());
         };
         let mut data: Value = self.safe_value(message.clone(), Value::from("data"), Value::new_object());
@@ -1209,7 +1218,7 @@ pub trait Oxfun : Exchange {
             panic!(r###"ArgumentsRequired::new(self.get("id".into()) + Value::from(" cancelOrderWs() requires a symbol argument"))"###);
         };
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        <Self as Oxfun>::authenticate(self, Value::Undefined).await;
+        <Self as Oxfun>::authenticate(self).await;
         let mut message_hash: Value = self.nonce().to_string();
         let mut data: Value = Value::Json(normalize(&Value::Json(json!({
             "marketCode": self.market_id(symbol.clone()),
@@ -1234,7 +1243,7 @@ pub trait Oxfun : Exchange {
             panic!(r###"ArgumentsRequired::new(self.get("id".into()) + Value::from(" cancelOrdersWs() requires a symbol argument"))"###);
         };
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        <Self as Oxfun>::authenticate(self, Value::Undefined).await;
+        <Self as Oxfun>::authenticate(self).await;
         let mut message_hash: Value = self.nonce().to_string();
         let mut market_id: Value = self.market_id(symbol.clone());
         let mut data_array: Value = Value::new_array();
@@ -1313,9 +1322,9 @@ pub trait Oxfun : Exchange {
             <Self as Oxfun>::handle_pong(self, client.clone(), message.clone());
             return Value::Undefined;
         };
-        let mut table: Value = self.safe_string(message.clone(), Value::from("table"));
+        let mut table: Value = self.safe_string(message.clone(), Value::from("table"), Value::Undefined);
         let mut data: Value = self.safe_list(message.clone(), Value::from("data"), Value::new_array());
-        let mut event: Value = self.safe_string(message.clone(), Value::from("event"));
+        let mut event: Value = self.safe_string(message.clone(), Value::from("event"), Value::Undefined);
         if table.clone().is_nonnullish() && data.clone().is_nonnullish() {
             if table.clone() == Value::from("trade") {
                 <Self as Oxfun>::handle_trades(self, client.clone(), message.clone());
@@ -1423,8 +1432,8 @@ impl ValueTrait for OxfunImpl {
     fn push(&mut self, value: Value) { self.0.push(value) }
     fn split(&self, separator: Value) -> Value { self.0.split(separator) }
     fn contains_key(&self, key: Value) -> bool { self.0.contains_key(key) }
-    fn keys(&self) -> Vec<Value> { self.0.keys() }
-    fn values(&self) -> Vec<Value> { self.0.values() }
+    fn keys(&self) -> Value { self.0.keys() }
+    fn values(&self) -> Value { self.0.values() }
     fn to_array(&self, x: Value) -> Value { self.0.to_array(x) }
     fn index_of(&self, x: Value) -> Value { self.0.index_of(x) }
     fn join(&self, glue: Value) -> Value { self.0.join(glue) }

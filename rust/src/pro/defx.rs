@@ -11,7 +11,16 @@ use async_trait::async_trait;
 use std::str::FromStr;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, JSON, Array, Object, Math, parse_int, shift_2, extend_2, normalize};
+use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, BoolExt, JSON, Array, Object, Math, Promise, parse_int, shift_2, extend_2, normalize};
+// Crypto hash identifiers
+fn sha256() -> Value { Value::from("sha256") }
+fn sha384() -> Value { Value::from("sha384") }
+fn sha512() -> Value { Value::from("sha512") }
+fn md5() -> Value { Value::from("md5") }
+fn ed25519() -> Value { Value::from("ed25519") }
+fn rsa(msg: Value, secret: Value, _hash: Value) -> Value { msg }
+fn eddsa(msg: Value, secret: Value, _curve: Value) -> Value { msg }
+fn secp256k1() -> Value { Value::from("secp256k1") }
 
 use crate::exchange::{PRECISE_BASE, TRUNCATE, ROUND, ROUND_UP, ROUND_DOWN};
 use crate::exchange::{DECIMAL_PLACES, SIGNIFICANT_DIGITS, TICK_SIZE, NO_PADDING, PAD_WITH_ZERO};
@@ -471,9 +480,9 @@ pub trait Defx : Exchange {
         let mut i: usize = 0;
         while i < symbols_and_timeframes.len() {
             let mut symbol_and_timeframe: Value = symbols_and_timeframes.get(i.into());
-            let mut market_id: Value = self.safe_string(symbol_and_timeframe.clone(), Value::from(0));
+            let mut market_id: Value = self.safe_string(symbol_and_timeframe.clone(), Value::from(0), Value::Undefined);
             let mut market: Value = self.market(market_id.clone());
-            let mut tf: Value = self.safe_string(symbol_and_timeframe.clone(), Value::from(1));
+            let mut tf: Value = self.safe_string(symbol_and_timeframe.clone(), Value::from(1), Value::Undefined);
             let mut interval: Value = self.safe_string(self.get("timeframes".into()), tf.clone(), tf.clone());
             topics.push(Value::from("symbol:") + market.get(Value::from("id")) + Value::from(":ohlc:") + interval.clone());
             message_hashes.push(Value::from("candles:") + interval.clone() + Value::from(":") + market.get(Value::from("symbol")));
@@ -499,9 +508,9 @@ pub trait Defx : Exchange {
         let mut i: usize = 0;
         while i < symbols_and_timeframes.len() {
             let mut symbol_and_timeframe: Value = symbols_and_timeframes.get(i.into());
-            let mut market_id: Value = self.safe_string(symbol_and_timeframe.clone(), Value::from(0));
+            let mut market_id: Value = self.safe_string(symbol_and_timeframe.clone(), Value::from(0), Value::Undefined);
             let mut market: Value = self.market(market_id.clone());
-            let mut tf: Value = self.safe_string(symbol_and_timeframe.clone(), Value::from(1));
+            let mut tf: Value = self.safe_string(symbol_and_timeframe.clone(), Value::from(1), Value::Undefined);
             let mut interval: Value = self.safe_string(self.get("timeframes".into()), tf.clone(), tf.clone());
             topics.push(Value::from("symbol:") + market.get(Value::from("id")) + Value::from(":ohlc:") + interval.clone());
             message_hashes.push(Value::from("candles:") + interval.clone() + Value::from(":") + market.get(Value::from("symbol")));
@@ -535,10 +544,10 @@ pub trait Defx : Exchange {
         // }
         //
         let mut data: Value = self.safe_dict(message.clone(), Value::from("data"), Value::new_object());
-        let mut market_id: Value = self.safe_string(data.clone(), Value::from("symbol"));
+        let mut market_id: Value = self.safe_string(data.clone(), Value::from("symbol"), Value::Undefined);
         let mut market: Value = self.market(market_id.clone());
         let mut symbol: Value = market.get(Value::from("symbol"));
-        let mut timeframe: Value = self.safe_string(data.clone(), Value::from("window"));
+        let mut timeframe: Value = self.safe_string(data.clone(), Value::from("window"), Value::Undefined);
         if !self.get("ohlcvs".into()).contains_key(symbol.clone()) {
             self.get("ohlcvs".into()).set(symbol.clone(), Value::new_object());
         };
@@ -638,7 +647,7 @@ pub trait Defx : Exchange {
         let mut data: Value = self.safe_dict(message.clone(), Value::from("data"), Value::new_object());
         let mut parsed_ticker: Value = self.parse_ticker(data.clone(), Value::Undefined);
         let mut symbol: Value = parsed_ticker.get(Value::from("symbol"));
-        let mut timestamp: Value = self.safe_integer(message.clone(), Value::from("timestamp"));
+        let mut timestamp: Value = self.safe_integer(message.clone(), Value::from("timestamp"), Value::Undefined);
         parsed_ticker.set("timestamp".into(), timestamp.clone());
         parsed_ticker.set("datetime".into(), self.iso8601(timestamp.clone()));
         self.get("tickers".into()).set(symbol.clone(), parsed_ticker.clone());
@@ -667,9 +676,9 @@ pub trait Defx : Exchange {
 
     fn handle_bid_ask(&mut self, mut client: Value, mut message: Value) -> Value {
         let mut data: Value = self.safe_dict(message.clone(), Value::from("data"), Value::new_object());
-        let mut parsed_ticker: Value = <Self as Defx>::parse_ws_bid_ask(self, data.clone(), Value::Undefined);
+        let mut parsed_ticker: Value = <Self as Defx>::parse_ws_bid_ask(self, data.clone());
         let mut symbol: Value = parsed_ticker.get(Value::from("symbol"));
-        let mut timestamp: Value = self.safe_integer(message.clone(), Value::from("timestamp"));
+        let mut timestamp: Value = self.safe_integer(message.clone(), Value::from("timestamp"), Value::Undefined);
         parsed_ticker.set("timestamp".into(), timestamp.clone());
         parsed_ticker.set("datetime".into(), self.iso8601(timestamp.clone()));
         self.get("bidsasks".into()).set(symbol.clone(), parsed_ticker.clone());
@@ -679,17 +688,17 @@ pub trait Defx : Exchange {
     }
 
     fn parse_ws_bid_ask(&self, mut ticker: Value, mut market: Value) -> Value {
-        let mut market_id: Value = self.safe_string(ticker.clone(), Value::from("symbol"));
+        let mut market_id: Value = self.safe_string(ticker.clone(), Value::from("symbol"), Value::Undefined);
         market = self.safe_market(market_id.clone(), market.clone(), Value::Undefined, Value::Undefined);
-        let mut symbol: Value = self.safe_string(market.clone(), Value::from("symbol"));
+        let mut symbol: Value = self.safe_string(market.clone(), Value::from("symbol"), Value::Undefined);
         return self.safe_ticker(Value::Json(normalize(&Value::Json(json!({
             "symbol": symbol,
             "timestamp": Value::Undefined,
             "datetime": Value::Undefined,
-            "ask": self.safe_string(ticker.clone(), Value::from("bestAskPrice")),
-            "askVolume": self.safe_string(ticker.clone(), Value::from("bestAskQty")),
-            "bid": self.safe_string(ticker.clone(), Value::from("bestBidPrice")),
-            "bidVolume": self.safe_string(ticker.clone(), Value::from("bestBidQty")),
+            "ask": self.safe_string(ticker.clone(), Value::from("bestAskPrice"), Value::Undefined),
+            "askVolume": self.safe_string(ticker.clone(), Value::from("bestAskQty"), Value::Undefined),
+            "bid": self.safe_string(ticker.clone(), Value::from("bestBidPrice"), Value::Undefined),
+            "bidVolume": self.safe_string(ticker.clone(), Value::from("bestBidQty"), Value::Undefined),
             "info": ticker
         }))).unwrap()), market.clone());
     }
@@ -724,8 +733,8 @@ pub trait Defx : Exchange {
         };
         let mut trades: Value = <Self as Defx>::watch_public(self, topics.clone(), message_hashes.clone(), params.clone()).await;
         if self.get("newUpdates".into()).is_truthy() {
-            let mut first: Value = self.safe_value(trades.clone(), Value::from(0));
-            let mut trade_symbol: Value = self.safe_string(first.clone(), Value::from("symbol"));
+            let mut first: Value = self.safe_value(trades.clone(), Value::from(0), Value::Undefined);
+            let mut trade_symbol: Value = self.safe_string(first.clone(), Value::from("symbol"), Value::Undefined);
             limit = trades.get_limit(trade_symbol.clone(), limit.clone());
         };
         return self.filter_by_since_limit(trades.clone(), since.clone(), limit.clone(), Value::from("timestamp"), true.into());
@@ -863,11 +872,11 @@ pub trait Defx : Exchange {
         // }
         //
         let mut data: Value = self.safe_dict(message.clone(), Value::from("data"), Value::new_object());
-        let mut market_id: Value = self.safe_string(data.clone(), Value::from("symbol"));
+        let mut market_id: Value = self.safe_string(data.clone(), Value::from("symbol"), Value::Undefined);
         let mut market: Value = self.market(market_id.clone());
         let mut symbol: Value = market.get(Value::from("symbol"));
-        let mut timestamp: Value = self.safe_integer(data.clone(), Value::from("timestamp"));
-        let mut snapshot: Value = self.parse_order_book(data.clone(), symbol.clone(), timestamp.clone(), Value::from("bids"), Value::from("asks"), Value::from("price"), Value::from("qty"), Value::Undefined);
+        let mut timestamp: Value = self.safe_integer(data.clone(), Value::from("timestamp"), Value::Undefined);
+        let mut snapshot: Value = self.parse_order_book(data.clone(), symbol.clone(), timestamp.clone(), Value::from("bids"), Value::from("asks"));
         if !self.get("orderbooks".into()).contains_key(symbol.clone()) {
             let mut ob: Value = self.order_book(snapshot.clone(), Value::Undefined);
             self.get("orderbooks".into()).set(symbol.clone(), ob.clone());
@@ -881,14 +890,14 @@ pub trait Defx : Exchange {
 
     async fn keep_alive_listen_key(&mut self, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
-        let mut listen_key: Value = self.safe_string(self.get("options".into()), Value::from("listenKey"));
+        let mut listen_key: Value = self.safe_string(self.get("options".into()), Value::from("listenKey"), Value::Undefined);
         if listen_key.clone().is_nullish() {
             // A network error happened: we can't renew a listen key that does not exist.
             return Value::Undefined;
         };
-                self.v1_private_put_api_users_socket_listen_keys_listen_key(Value::Json(normalize(&Value::Json(json!({
+                self.dispatch("v1PrivatePutApiUsersSocketListenKeysListenKey".into(), Value::Json(normalize(&Value::Json(json!({
             "listenKey": listen_key
-        }))).unwrap())).await;
+        }))).unwrap()), Value::Undefined).await;
         // catch block omitted (no exception support in Value runtime)
 ;
         // extend the expiry
@@ -905,8 +914,8 @@ pub trait Defx : Exchange {
         let mut listen_key_refresh_rate: Value = self.safe_integer(self.get("options".into()), Value::from("listenKeyRefreshRate"), Value::from(3540000));
         // 1 hour
         if time.clone() - last_authenticated_time.clone() > listen_key_refresh_rate.clone() {
-            let mut response: Value = self.v1_private_post_api_users_socket_listen_keys().await;
-            self.get("options".into()).set("listenKey".into(), self.safe_string(response.clone(), Value::from("listenKey")));
+            let mut response: Value = self.dispatch("v1PrivatePostApiUsersSocketListenKeys".into(), Value::Undefined, Value::Undefined).await;
+            self.get("options".into()).set("listenKey".into(), self.safe_string(response.clone(), Value::from("listenKey"), Value::Undefined));
             self.get("options".into()).set("lastAuthenticatedTime".into(), time.clone());
             self.delay(listen_key_refresh_rate.clone(), self.get("keepAliveListenKey".into()), params.clone());
         };
@@ -916,7 +925,7 @@ pub trait Defx : Exchange {
     async fn watch_balance(&mut self, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        <Self as Defx>::authenticate(self, Value::Undefined).await;
+        <Self as Defx>::authenticate(self).await;
         let mut base_url: Value = self.get("urls".into()).get(Value::from("api")).get(Value::from("ws")).get(Value::from("private"));
         let mut message_hash: Value = Value::from("WALLET_BALANCE_UPDATE");
         let mut url: Value = base_url.clone() + Value::from("?listenKey=") + self.get("options".into()).get(Value::from("listenKey"));
@@ -933,19 +942,19 @@ pub trait Defx : Exchange {
         //     }
         // }
         //
-        let mut message_hash: Value = self.safe_string(message.clone(), Value::from("event"));
+        let mut message_hash: Value = self.safe_string(message.clone(), Value::from("event"), Value::Undefined);
         let mut data: Value = self.safe_dict(message.clone(), Value::from("data"), Value::new_array());
-        let mut timestamp: Value = self.safe_integer(message.clone(), Value::from("timestamp"));
+        let mut timestamp: Value = self.safe_integer(message.clone(), Value::from("timestamp"), Value::Undefined);
         if self.get("balance".into()).is_nullish() {
             self.set("balance".into(), Value::new_object());
         };
         self.get("balance".into()).set("info".into(), data.clone());
         self.get("balance".into()).set("timestamp".into(), timestamp.clone());
         self.get("balance".into()).set("datetime".into(), self.iso8601(timestamp.clone()));
-        let mut currency_id: Value = self.safe_string(data.clone(), Value::from("asset"));
+        let mut currency_id: Value = self.safe_string(data.clone(), Value::from("asset"), Value::Undefined);
         let mut code: Value = self.safe_currency_code(currency_id.clone(), Value::Undefined);
         let mut account: Value = if self.get("balance".into()).contains_key(code.clone()) { self.get("balance".into()).get(code.clone()) } else { self.account() };
-        account.set("free".into(), self.safe_string(data.clone(), Value::from("balance")));
+        account.set("free".into(), self.safe_string(data.clone(), Value::from("balance"), Value::Undefined));
         self.get("balance".into()).set(code.clone(), account.clone());
         self.set("balance".into(), self.safe_balance(self.get("balance".into())));
         client.resolve(self.get("balance".into()), message_hash.clone());
@@ -955,7 +964,7 @@ pub trait Defx : Exchange {
     async fn watch_orders(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        <Self as Defx>::authenticate(self, Value::Undefined).await;
+        <Self as Defx>::authenticate(self).await;
         let mut base_url: Value = self.get("urls".into()).get(Value::from("api")).get(Value::from("ws")).get(Value::from("private"));
         let mut message_hash: Value = Value::from("orders");
         if symbol.clone().is_nonnullish() {
@@ -1021,7 +1030,7 @@ pub trait Defx : Exchange {
     async fn watch_positions(&mut self, mut symbols: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        <Self as Defx>::authenticate(self, Value::Undefined).await;
+        <Self as Defx>::authenticate(self).await;
         symbols = self.market_symbols(symbols.clone(), Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined);
         let mut base_url: Value = self.get("urls".into()).get(Value::from("api")).get(Value::from("ws")).get(Value::from("private"));
         let mut channel: Value = Value::from("positions");
@@ -1071,7 +1080,7 @@ pub trait Defx : Exchange {
         };
         let mut cache: Value = self.get("positions".into());
         let mut parsed_position: Value = self.parse_position(data.clone(), Value::Undefined);
-        let mut timestamp: Value = self.safe_integer(message.clone(), Value::from("timestamp"));
+        let mut timestamp: Value = self.safe_integer(message.clone(), Value::from("timestamp"), Value::Undefined);
         parsed_position.set("timestamp".into(), timestamp.clone());
         parsed_position.set("datetime".into(), self.iso8601(timestamp.clone()));
         cache.append(parsed_position.clone());
@@ -1082,12 +1091,12 @@ pub trait Defx : Exchange {
     }
 
     fn handle_message(&mut self, mut client: Value, mut message: Value) -> Value {
-        let mut error: Value = self.safe_string(message.clone(), Value::from("code"));
+        let mut error: Value = self.safe_string(message.clone(), Value::from("code"), Value::Undefined);
         if error.clone().is_nonnullish() {
-            let mut error_msg: Value = self.safe_string(message.clone(), Value::from("msg"));
+            let mut error_msg: Value = self.safe_string(message.clone(), Value::from("msg"), Value::Undefined);
             panic!(r###"ExchangeError::new(self.get("id".into()) + Value::from(" ") + error_msg.clone())"###);
         };
-        let mut event: Value = self.safe_string(message.clone(), Value::from("event"));
+        let mut event: Value = self.safe_string(message.clone(), Value::from("event"), Value::Undefined);
         if event.clone().is_nonnullish() {
             let mut methods: Value = Value::Json(normalize(&Value::Json(json!({
                 "ohlc": self.get("handleOHLCV".into()),
@@ -1098,7 +1107,7 @@ pub trait Defx : Exchange {
                 "ORDER_UPDATE": self.get("handleOrder".into()),
                 "POSITION_UPDATE": self.get("handlePositions".into())
             }))).unwrap());
-            let mut exac_method: Value = self.safe_value(methods.clone(), event.clone());
+            let mut exac_method: Value = self.safe_value(methods.clone(), event.clone(), Value::Undefined);
             if exac_method.clone().is_nonnullish() {
                 exac_method.call(self, client.clone(), message.clone());
             };
@@ -1211,8 +1220,8 @@ impl ValueTrait for DefxImpl {
     fn push(&mut self, value: Value) { self.0.push(value) }
     fn split(&self, separator: Value) -> Value { self.0.split(separator) }
     fn contains_key(&self, key: Value) -> bool { self.0.contains_key(key) }
-    fn keys(&self) -> Vec<Value> { self.0.keys() }
-    fn values(&self) -> Vec<Value> { self.0.values() }
+    fn keys(&self) -> Value { self.0.keys() }
+    fn values(&self) -> Value { self.0.values() }
     fn to_array(&self, x: Value) -> Value { self.0.to_array(x) }
     fn index_of(&self, x: Value) -> Value { self.0.index_of(x) }
     fn join(&self, glue: Value) -> Value { self.0.join(glue) }

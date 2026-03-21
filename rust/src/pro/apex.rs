@@ -11,7 +11,16 @@ use async_trait::async_trait;
 use std::str::FromStr;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, JSON, Array, Object, Math, parse_int, shift_2, extend_2, normalize};
+use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, BoolExt, JSON, Array, Object, Math, Promise, parse_int, shift_2, extend_2, normalize};
+// Crypto hash identifiers
+fn sha256() -> Value { Value::from("sha256") }
+fn sha384() -> Value { Value::from("sha384") }
+fn sha512() -> Value { Value::from("sha512") }
+fn md5() -> Value { Value::from("md5") }
+fn ed25519() -> Value { Value::from("ed25519") }
+fn rsa(msg: Value, secret: Value, _hash: Value) -> Value { msg }
+fn eddsa(msg: Value, secret: Value, _curve: Value) -> Value { msg }
+fn secp256k1() -> Value { Value::from("secp256k1") }
 
 use crate::exchange::{PRECISE_BASE, TRUNCATE, ROUND, ROUND_UP, ROUND_DOWN};
 use crate::exchange::{DECIMAL_PLACES, SIGNIFICANT_DIGITS, TICK_SIZE, NO_PADDING, PAD_WITH_ZERO};
@@ -382,8 +391,8 @@ pub trait Apex : Exchange {
         };
         let mut trades: Value = <Self as Apex>::watch_topics(self, url.clone(), message_hashes.clone(), topics.clone(), params.clone()).await;
         if self.get("newUpdates".into()).is_truthy() {
-            let mut first: Value = self.safe_value(trades.clone(), Value::from(0));
-            let mut trade_symbol: Value = self.safe_string(first.clone(), Value::from("symbol"));
+            let mut first: Value = self.safe_value(trades.clone(), Value::from(0), Value::Undefined);
+            let mut trade_symbol: Value = self.safe_string(first.clone(), Value::from("symbol"), Value::Undefined);
             limit = trades.get_limit(trade_symbol.clone(), limit.clone());
         };
         return self.filter_by_since_limit(trades.clone(), since.clone(), limit.clone(), Value::from("timestamp"), true.into());
@@ -411,13 +420,13 @@ pub trait Apex : Exchange {
         //     }
         //
         let mut data: Value = self.safe_value(message.clone(), Value::from("data"), Value::new_object());
-        let mut topic: Value = self.safe_string(message.clone(), Value::from("topic"));
+        let mut topic: Value = self.safe_string(message.clone(), Value::from("topic"), Value::Undefined);
         let mut trades: Value = data.clone();
         let mut parts: Value = topic.split(Value::from("."));
-        let mut market_id: Value = self.safe_string(parts.clone(), Value::from(2));
+        let mut market_id: Value = self.safe_string(parts.clone(), Value::from(2), Value::Undefined);
         let mut market: Value = self.safe_market(market_id.clone(), Value::Undefined, Value::Undefined, Value::Undefined);
         let mut symbol: Value = market.get(Value::from("symbol"));
-        let mut stored: Value = self.safe_value(self.get("trades".into()), symbol.clone());
+        let mut stored: Value = self.safe_value(self.get("trades".into()), symbol.clone(), Value::Undefined);
         if stored.clone().is_nullish() {
             let mut limit: Value = self.safe_integer(self.get("options".into()), Value::from("tradesLimit"), Value::from(1000));
             stored = ArrayCache::new(limit);
@@ -450,14 +459,14 @@ pub trait Apex : Exchange {
         //         "BT": false
         //     }
         //
-        let mut id: Value = self.safe_string_n(trade.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("i").into(), Value::from("id").into(), Value::from("v").into()])));
-        let mut market_id: Value = self.safe_string_n(trade.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("s").into(), Value::from("symbol").into()])));
+        let mut id: Value = self.safe_string_n(trade.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("i").into(), Value::from("id").into(), Value::from("v").into()])), Value::Undefined);
+        let mut market_id: Value = self.safe_string_n(trade.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("s").into(), Value::from("symbol").into()])), Value::Undefined);
         market = self.safe_market(market_id.clone(), market.clone(), Value::Undefined, Value::Undefined);
         let mut symbol: Value = market.get(Value::from("symbol"));
-        let mut timestamp: Value = self.safe_integer_n(trade.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("t").into(), Value::from("T").into(), Value::from("createdAt").into()])));
-        let mut side: Value = self.safe_string_lower_n(trade.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("S").into(), Value::from("side").into()])));
-        let mut price: Value = self.safe_string_n(trade.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("p").into(), Value::from("price").into()])));
-        let mut amount: Value = self.safe_string_n(trade.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("q").into(), Value::from("v").into(), Value::from("size").into()])));
+        let mut timestamp: Value = self.safe_integer_n(trade.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("t").into(), Value::from("T").into(), Value::from("createdAt").into()])), Value::Undefined);
+        let mut side: Value = self.safe_string_lower_n(trade.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("S").into(), Value::from("side").into()])), Value::Undefined);
+        let mut price: Value = self.safe_string_n(trade.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("p").into(), Value::from("price").into()])), Value::Undefined);
+        let mut amount: Value = self.safe_string_n(trade.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("q").into(), Value::from("v").into(), Value::from("size").into()])), Value::Undefined);
         return self.safe_trade(Value::Json(normalize(&Value::Json(json!({
             "id": id,
             "info": trade,
@@ -553,10 +562,10 @@ pub trait Apex : Exchange {
         //         }
         //     }
         //
-        let mut r#type: Value = self.safe_string(message.clone(), Value::from("type"));
+        let mut r#type: Value = self.safe_string(message.clone(), Value::from("type"), Value::Undefined);
         let mut is_snapshot: Value = (r#type.clone() == Value::from("snapshot")).into();
         let mut data: Value = self.safe_dict(message.clone(), Value::from("data"), Value::new_object());
-        let mut market_id: Value = self.safe_string(data.clone(), Value::from("s"));
+        let mut market_id: Value = self.safe_string(data.clone(), Value::from("s"), Value::Undefined);
         let mut market: Value = self.safe_market(market_id.clone(), Value::Undefined, Value::Undefined, Value::Undefined);
         let mut symbol: Value = market.get(Value::from("symbol"));
         let mut timestamp: Value = self.safe_integer_product(message.clone(), Value::from("ts"), Value::from(0.001));
@@ -565,7 +574,7 @@ pub trait Apex : Exchange {
         };
         let mut orderbook: Value = self.get("orderbooks".into()).get(symbol.clone());
         if is_snapshot.is_truthy() {
-            let mut snapshot: Value = self.parse_order_book(data.clone(), symbol.clone(), timestamp.clone(), Value::from("b"), Value::from("a"), Value::Undefined, Value::Undefined, Value::Undefined);
+            let mut snapshot: Value = self.parse_order_book(data.clone(), symbol.clone(), timestamp.clone(), Value::from("b"), Value::from("a"));
             orderbook.reset(snapshot.clone());
         } else {
             let mut asks: Value = self.safe_list(data.clone(), Value::from("a"), Value::new_array());
@@ -582,7 +591,7 @@ pub trait Apex : Exchange {
     }
 
     fn handle_delta(&mut self, mut bookside: Value, mut delta: Value) -> Value {
-        let mut bid_ask: Value = self.parse_bid_ask(delta.clone(), Value::from(0), Value::from(1), Value::Undefined);
+        let mut bid_ask: Value = self.parse_bid_ask(delta.clone(), Value::from(0), Value::from(1));
         bookside.store_array(bid_ask.clone());
         Value::Undefined
     }
@@ -669,7 +678,7 @@ pub trait Apex : Exchange {
         } else if update_type.clone() == Value::from("delta") {
             let mut topic_parts: Value = topic.split(Value::from("."));
             let mut topic_length: usize = topic_parts.len();
-            let mut market_id: Value = self.safe_string(topic_parts.clone(), topic_length.clone() - Value::from(1));
+            let mut market_id: Value = self.safe_string(topic_parts.clone(), topic_length.clone() - Value::from(1), Value::Undefined);
             let mut market: Value = self.safe_market(market_id.clone(), Value::Undefined, Value::Undefined, Value::Undefined);
             symbol = market.get(Value::from("symbol"));
             let mut ticker: Value = self.safe_dict(self.get("tickers".into()), symbol.clone(), Value::new_object());
@@ -704,7 +713,7 @@ pub trait Apex : Exchange {
         let mut i: usize = 0;
         while i < symbols_and_timeframes.len() {
             let mut data: Value = symbols_and_timeframes.get(i.into());
-            let mut symbol_string: Value = self.safe_string(data.clone(), Value::from(0));
+            let mut symbol_string: Value = self.safe_string(data.clone(), Value::from(0), Value::Undefined);
             let mut market: Value = self.market(symbol_string.clone());
             symbol_string = market.get(Value::from("id2"));
             let mut unfied_timeframe: Value = self.safe_string(data.clone(), Value::from(1), Value::from("1"));
@@ -745,12 +754,12 @@ pub trait Apex : Exchange {
         //     }
         //
         let mut data: Value = self.safe_value(message.clone(), Value::from("data"), Value::new_object());
-        let mut topic: Value = self.safe_string(message.clone(), Value::from("topic"));
+        let mut topic: Value = self.safe_string(message.clone(), Value::from("topic"), Value::Undefined);
         let mut topic_parts: Value = topic.split(Value::from("."));
         let mut topic_length: usize = topic_parts.len();
-        let mut timeframe_id: Value = self.safe_string(topic_parts.clone(), Value::from(1));
+        let mut timeframe_id: Value = self.safe_string(topic_parts.clone(), Value::from(1), Value::Undefined);
         let mut timeframe: Value = self.find_timeframe(timeframe_id.clone(), Value::Undefined);
-        let mut market_id: Value = self.safe_string(topic_parts.clone(), topic_length.clone() - Value::from(1));
+        let mut market_id: Value = self.safe_string(topic_parts.clone(), topic_length.clone() - Value::from(1), Value::Undefined);
         let mut is_spot: Value = (client.get(url.clone()).index_of(Value::from("spot")) > Value::from(1).neg()).into();
         let mut market_type: Value = if is_spot.is_truthy() { Value::from("spot") } else { Value::from("contract") };
         let mut market: Value = self.safe_market(market_id.clone(), Value::Undefined, Value::Undefined, market_type.clone());
@@ -791,7 +800,7 @@ pub trait Apex : Exchange {
         //         "timestamp": 1670363219614
         //     }
         //
-        return Value::Json(serde_json::Value::Array(vec![self.safe_integer(ohlcv.clone(), Value::from("start")).into(), self.safe_number(ohlcv.clone(), Value::from("open"), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from("high"), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from("low"), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from("close"), Value::Undefined).into(), self.safe_number_2(ohlcv.clone(), Value::from("volume"), Value::from("turnover"), Value::Undefined).into()]));
+        return Value::Json(serde_json::Value::Array(vec![self.safe_integer(ohlcv.clone(), Value::from("start"), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from("open"), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from("high"), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from("low"), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from("close"), Value::Undefined).into(), self.safe_number_2(ohlcv.clone(), Value::from("volume"), Value::from("turnover"), Value::Undefined).into()]));
     }
 
     async fn watch_my_trades(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
@@ -804,7 +813,7 @@ pub trait Apex : Exchange {
         };
         let mut time_stamp: Value = self.milliseconds().to_string();
         let mut url: Value = self.get("urls".into()).get(Value::from("api")).get(Value::from("ws")).get(Value::from("private")) + Value::from("&timestamp=") + time_stamp.clone();
-        <Self as Apex>::authenticate(self, url.clone(), Value::Undefined).await;
+        <Self as Apex>::authenticate(self, url.clone()).await;
         let mut trades: Value = <Self as Apex>::watch_topics(self, url.clone(), Value::Json(serde_json::Value::Array(vec![message_hash.clone().into()])), Value::Json(serde_json::Value::Array(vec![Value::from("myTrades").into()])), params.clone()).await;
         if self.get("newUpdates".into()).is_truthy() {
             limit = trades.get_limit(symbol.clone(), limit.clone());
@@ -824,7 +833,7 @@ pub trait Apex : Exchange {
         let mut url: Value = self.get("urls".into()).get(Value::from("api")).get(Value::from("ws")).get(Value::from("private")) + Value::from("&timestamp=") + time_stamp.clone();
         message_hash = Value::from("positions") + message_hash.clone();
         let mut client: Value = self.client(url.clone());
-        <Self as Apex>::authenticate(self, url.clone(), Value::Undefined).await;
+        <Self as Apex>::authenticate(self, url.clone()).await;
         <Self as Apex>::set_positions_cache(self, client.clone(), symbols.clone());
         let mut cache: Value = self.get("positions".into());
         if cache.clone().is_nullish() {
@@ -849,7 +858,7 @@ pub trait Apex : Exchange {
         };
         let mut time_stamp: Value = self.milliseconds().to_string();
         let mut url: Value = self.get("urls".into()).get(Value::from("api")).get(Value::from("ws")).get(Value::from("private")) + Value::from("&timestamp=") + time_stamp.clone();
-        <Self as Apex>::authenticate(self, url.clone(), Value::Undefined).await;
+        <Self as Apex>::authenticate(self, url.clone()).await;
         let mut topics: Value = Value::Json(serde_json::Value::Array(vec![Value::from("orders").into()]));
         let mut orders: Value = <Self as Apex>::watch_topics(self, url.clone(), Value::Json(serde_json::Value::Array(vec![message_hash.clone().into()])), topics.clone(), params.clone()).await;
         if self.get("newUpdates".into()).is_truthy() {
@@ -892,7 +901,7 @@ pub trait Apex : Exchange {
             trades.append(parsed.clone());
             i += 1;
         };
-        let mut keys: Value = Object::keys(symbols.clone());
+        let mut keys: Value = symbols.clone().keys();
         let mut i: usize = 0;
         while i < keys.len() {
             let mut current_message_hash: Value = Value::from("myTrades:") + keys.get(i.into());
@@ -950,7 +959,7 @@ pub trait Apex : Exchange {
             orders.append(parsed.clone());
             i += 1;
         };
-        let mut symbols_array: Value = Object::keys(symbols.clone());
+        let mut symbols_array: Value = symbols.clone().keys();
         let mut i: usize = 0;
         while i < symbols_array.len() {
             let mut current_message_hash: Value = Value::from("orders:") + symbols_array.get(i.into());
@@ -1032,7 +1041,7 @@ pub trait Apex : Exchange {
         while i < lists.len() {
             let mut raw_position: Value = lists.get(i.into());
             let mut position: Value = self.parse_position(raw_position.clone(), Value::Undefined);
-            let mut side: Value = self.safe_string(position.clone(), Value::from("side"));
+            let mut side: Value = self.safe_string(position.clone(), Value::from("side"), Value::Undefined);
             // hacky solution to handle closing positions
             // without crashing, we should handle this properly later
             new_positions.push(position.clone());
@@ -1078,7 +1087,7 @@ pub trait Apex : Exchange {
         let mut message_hash: Value = Value::from("authenticated");
         let mut client: Value = self.client(url.clone());
         let mut future: Value = client.reusable_future(message_hash.clone());
-        let mut authenticated: Value = self.safe_value(client.get(subscriptions.clone()), message_hash.clone());
+        let mut authenticated: Value = self.safe_value(client.get(subscriptions.clone()), message_hash.clone(), Value::Undefined);
         if authenticated.clone().is_nullish() {
             // auth sign
             let mut request: Value = Value::Json(normalize(&Value::Json(json!({
@@ -1093,7 +1102,7 @@ pub trait Apex : Exchange {
             }))).unwrap());
             let mut message: Value = Value::Json(normalize(&Value::Json(json!({
                 "op": "login",
-                "args": Value::Json(serde_json::Value::Array(vec![JSON.into()::stringify(request.clone()).into()]))
+                "args": Value::Json(serde_json::Value::Array(vec![request.clone().to_string().into()]))
             }))).unwrap());
             self.watch(url.clone(), message_hash.clone(), message.clone(), message_hash.clone(), Value::Undefined);
         };
@@ -1144,19 +1153,19 @@ pub trait Apex : Exchange {
         //       "connId":"cojifin88smerbj9t560-406"
         //   }
         //
-        let mut code: Value = self.safe_string_n(message.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("code").into(), Value::from("ret_code").into(), Value::from("retCode").into()])));
+        let mut code: Value = self.safe_string_n(message.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("code").into(), Value::from("ret_code").into(), Value::from("retCode").into()])), Value::Undefined);
                 if code.clone().is_nonnullish() && code.clone() != Value::from("0") {
             let mut feedback: Value = self.get("id".into()) + Value::from(" ") + self.json(message.clone());
             self.throw_exactly_matched_exception(self.get("exceptions".into()).get(Value::from("exact")), code.clone(), feedback.clone());
-            let mut msg: Value = self.safe_string_2(message.clone(), Value::from("retMsg"), Value::from("ret_msg"));
+            let mut msg: Value = self.safe_string_2(message.clone(), Value::from("retMsg"), Value::from("ret_msg"), Value::Undefined);
             self.throw_broadly_matched_exception(self.get("exceptions".into()).get(Value::from("broad")), msg.clone(), feedback.clone());
             panic!(r###"ExchangeError::new(feedback)"###);
         };
-        let mut success: Value = self.safe_value(message.clone(), Value::from("success"));
+        let mut success: Value = self.safe_value(message.clone(), Value::from("success"), Value::Undefined);
         if success.clone().is_nonnullish() && !success.is_truthy() {
-            let mut ret_msg: Value = self.safe_string(message.clone(), Value::from("ret_msg"));
+            let mut ret_msg: Value = self.safe_string(message.clone(), Value::from("ret_msg"), Value::Undefined);
             let mut request: Value = self.safe_value(message.clone(), Value::from("request"), Value::new_object());
-            let mut op: Value = self.safe_string(request.clone(), Value::from("op"));
+            let mut op: Value = self.safe_string(request.clone(), Value::from("op"), Value::Undefined);
             if op.clone() == Value::from("auth") {
                 panic!(r###"AuthenticationError::new(Value::from("Authentication failed: ") + ret_msg.clone())"###);
             } else {
@@ -1188,12 +1197,12 @@ pub trait Apex : Exchange {
             "auth": self.get("handleAuthenticate".into()),
             "ping": self.get("handlePing".into())
         }))).unwrap());
-        let mut exac_method: Value = self.safe_value(methods.clone(), topic.clone());
+        let mut exac_method: Value = self.safe_value(methods.clone(), topic.clone(), Value::Undefined);
         if exac_method.clone().is_nonnullish() {
             exac_method.call(self, client.clone(), message.clone());
             return Value::Undefined;
         };
-        let mut keys: Value = Object::keys(methods.clone());
+        let mut keys: Value = methods.clone().keys();
         let mut i: usize = 0;
         while i < keys.len() {
             let mut key: Value = keys.get(i.into());
@@ -1205,7 +1214,7 @@ pub trait Apex : Exchange {
             i += 1;
         };
         // unified auth acknowledgement
-        let mut r#type: Value = self.safe_string(message.clone(), Value::from("type"));
+        let mut r#type: Value = self.safe_string(message.clone(), Value::from("type"), Value::Undefined);
         if r#type.clone() == Value::from("AUTH_RESP") {
             <Self as Apex>::handle_authenticate(self, client.clone(), message.clone());
         };
@@ -1281,11 +1290,11 @@ pub trait Apex : Exchange {
         //        "conn_id": "ce3dpomvha7dha97tvp0-2xh"
         //    }
         //
-        let mut success: Value = self.safe_value(message.clone(), Value::from("success"));
-        let mut code: Value = self.safe_integer(message.clone(), Value::from("retCode"));
+        let mut success: Value = self.safe_value(message.clone(), Value::from("success"), Value::Undefined);
+        let mut code: Value = self.safe_integer(message.clone(), Value::from("retCode"), Value::Undefined);
         let mut message_hash: Value = Value::from("authenticated");
         if success.is_truthy() || code.clone() == Value::from(0) {
-            let mut future: Value = self.safe_value(client.get(futures.clone()), message_hash.clone());
+            let mut future: Value = self.safe_value(client.get(futures.clone()), message_hash.clone(), Value::Undefined);
             future.resolve(true.into());
         } else {
             let mut error: Value = AuthenticationError::new(self.get("id".into()) + Value::from(" ") + self.json(message.clone()));
@@ -1383,8 +1392,8 @@ impl ValueTrait for ApexImpl {
     fn push(&mut self, value: Value) { self.0.push(value) }
     fn split(&self, separator: Value) -> Value { self.0.split(separator) }
     fn contains_key(&self, key: Value) -> bool { self.0.contains_key(key) }
-    fn keys(&self) -> Vec<Value> { self.0.keys() }
-    fn values(&self) -> Vec<Value> { self.0.values() }
+    fn keys(&self) -> Value { self.0.keys() }
+    fn values(&self) -> Value { self.0.values() }
     fn to_array(&self, x: Value) -> Value { self.0.to_array(x) }
     fn index_of(&self, x: Value) -> Value { self.0.index_of(x) }
     fn join(&self, glue: Value) -> Value { self.0.join(glue) }

@@ -11,7 +11,16 @@ use async_trait::async_trait;
 use std::str::FromStr;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, JSON, Array, Object, Math, parse_int, shift_2, extend_2, normalize};
+use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, BoolExt, JSON, Array, Object, Math, Promise, parse_int, shift_2, extend_2, normalize};
+// Crypto hash identifiers
+fn sha256() -> Value { Value::from("sha256") }
+fn sha384() -> Value { Value::from("sha384") }
+fn sha512() -> Value { Value::from("sha512") }
+fn md5() -> Value { Value::from("md5") }
+fn ed25519() -> Value { Value::from("ed25519") }
+fn rsa(msg: Value, secret: Value, _hash: Value) -> Value { msg }
+fn eddsa(msg: Value, secret: Value, _curve: Value) -> Value { msg }
+fn secp256k1() -> Value { Value::from("secp256k1") }
 
 use crate::exchange::{PRECISE_BASE, TRUNCATE, ROUND, ROUND_UP, ROUND_DOWN};
 use crate::exchange::{DECIMAL_PLACES, SIGNIFICANT_DIGITS, TICK_SIZE, NO_PADDING, PAD_WITH_ZERO};
@@ -554,9 +563,9 @@ pub trait Coincatch : Exchange {
     }
 
     fn get_market_from_arg(&mut self, mut entry: Value) -> Value {
-        let mut inst_id: Value = self.safe_string(entry.clone(), Value::from("instId"));
-        let mut inst_type: Value = self.safe_string(entry.clone(), Value::from("instType"));
-        let mut base_and_quote: Value = self.parse_spot_market_id(inst_id.clone());
+        let mut inst_id: Value = self.safe_string(entry.clone(), Value::from("instId"), Value::Undefined);
+        let mut inst_type: Value = self.safe_string(entry.clone(), Value::from("instType"), Value::Undefined);
+        let mut base_and_quote: Value = <Self as Coincatch>::parse_spot_market_id(self, inst_id.clone());
         let mut base_id: Value = base_and_quote.get(Value::from("baseId"));
         let mut quote_id: Value = base_and_quote.get(Value::from("quoteId"));
         let mut suffix: Value = Value::from("_SPBL");
@@ -569,7 +578,7 @@ pub trait Coincatch : Exchange {
             };
         };
         let mut market_id: Value = self.safe_currency_code(base_id.clone(), Value::Undefined) + self.safe_currency_code(quote_id.clone(), Value::Undefined) + suffix.clone();
-        return self.safe_market_custom(market_id.clone());
+        return <Self as Coincatch>::safe_market_custom(self, market_id.clone(), Value::Undefined, Value::Undefined);
     }
 
     async fn authenticate(&mut self, mut params: Value) -> Value {
@@ -579,7 +588,7 @@ pub trait Coincatch : Exchange {
         let mut client: Value = self.client(url.clone());
         let mut message_hash: Value = Value::from("authenticated");
         let mut future: Value = client.reusable_future(message_hash.clone());
-        let mut authenticated: Value = self.safe_value(client.get(subscriptions.clone()), message_hash.clone());
+        let mut authenticated: Value = self.safe_value(client.get(subscriptions.clone()), message_hash.clone(), Value::Undefined);
         if authenticated.clone().is_nullish() {
             let mut timestamp: Value = self.seconds().to_string();
             let mut auth: Value = timestamp.clone() + Value::from("GET") + Value::from("/user/verify");
@@ -624,7 +633,7 @@ pub trait Coincatch : Exchange {
 
     async fn watch_private(&mut self, mut message_hash: Value, mut subscribe_hash: Value, mut args: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
-        <Self as Coincatch>::authenticate(self, Value::Undefined).await;
+        <Self as Coincatch>::authenticate(self).await;
         let mut url: Value = self.get("urls".into()).get(Value::from("api")).get(Value::from("ws")).get(Value::from("private"));
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
             "op": "subscribe",
@@ -636,7 +645,7 @@ pub trait Coincatch : Exchange {
 
     async fn watch_private_multiple(&mut self, mut message_hashes: Value, mut subscribe_hashes: Value, mut args: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
-        <Self as Coincatch>::authenticate(self, Value::Undefined).await;
+        <Self as Coincatch>::authenticate(self).await;
         let mut url: Value = self.get("urls".into()).get(Value::from("api")).get(Value::from("ws")).get(Value::from("private"));
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
             "op": "subscribe",
@@ -651,7 +660,7 @@ pub trait Coincatch : Exchange {
         //  { event: "login", code: 0 }
         //
         let mut message_hash: Value = Value::from("authenticated");
-        let mut future: Value = self.safe_value(client.get(futures.clone()), message_hash.clone());
+        let mut future: Value = self.safe_value(client.get(futures.clone()), message_hash.clone(), Value::Undefined);
         future.resolve(true.into());
         Value::Undefined
     }
@@ -800,7 +809,7 @@ pub trait Coincatch : Exchange {
         let mut market_id: Value = market.get(Value::from("id"));
         let mut hash: Value = Value::from("ticker:");
         if market_id.index_of(Value::from("_DMCBL")) >= Value::from(0) {
-            market = <Self as Coincatch>::handle_dmcbl_market_by_message_hashes(self, market.clone(), hash.clone(), client.clone(), Value::Undefined);
+            market = <Self as Coincatch>::handle_dmcbl_market_by_message_hashes(self, market.clone(), hash.clone(), client.clone());
         };
         let mut data: Value = self.safe_list(message.clone(), Value::from("data"), Value::new_array());
         let mut ticker: Value = <Self as Coincatch>::parse_ws_ticker(self, self.safe_dict(data.clone(), Value::from(0), Value::new_object()), market.clone());
@@ -858,30 +867,30 @@ pub trait Coincatch : Exchange {
         //         askSz: '49.6'
         //     }
         //
-        let mut last: Value = self.safe_string(ticker.clone(), Value::from("last"));
-        let mut timestamp: Value = self.safe_integer_2(ticker.clone(), Value::from("ts"), Value::from("systemTime"));
+        let mut last: Value = self.safe_string(ticker.clone(), Value::from("last"), Value::Undefined);
+        let mut timestamp: Value = self.safe_integer_2(ticker.clone(), Value::from("ts"), Value::from("systemTime"), Value::Undefined);
         return self.safe_ticker(Value::Json(normalize(&Value::Json(json!({
             "symbol": market.get(Value::from("symbol")),
             "timestamp": timestamp,
             "datetime": self.iso8601(timestamp.clone()),
-            "high": self.safe_string(ticker.clone(), Value::from("high24h")),
-            "low": self.safe_string(ticker.clone(), Value::from("low24h")),
-            "bid": self.safe_string(ticker.clone(), Value::from("bestBid")),
-            "bidVolume": self.safe_string(ticker.clone(), Value::from("bidSz")),
-            "ask": self.safe_string(ticker.clone(), Value::from("bestAsk")),
-            "askVolume": self.safe_string(ticker.clone(), Value::from("askSz")),
+            "high": self.safe_string(ticker.clone(), Value::from("high24h"), Value::Undefined),
+            "low": self.safe_string(ticker.clone(), Value::from("low24h"), Value::Undefined),
+            "bid": self.safe_string(ticker.clone(), Value::from("bestBid"), Value::Undefined),
+            "bidVolume": self.safe_string(ticker.clone(), Value::from("bidSz"), Value::Undefined),
+            "ask": self.safe_string(ticker.clone(), Value::from("bestAsk"), Value::Undefined),
+            "askVolume": self.safe_string(ticker.clone(), Value::from("askSz"), Value::Undefined),
             "vwap": Value::Undefined,
-            "open": self.safe_string_2(ticker.clone(), Value::from("open24h"), Value::from("openUtc")),
+            "open": self.safe_string_2(ticker.clone(), Value::from("open24h"), Value::from("openUtc"), Value::Undefined),
             "close": last,
             "last": last,
             "previousClose": Value::Undefined,
             "change": Value::Undefined,
-            "percentage": Precise::string_mul(self.safe_string(ticker.clone(), Value::from("chgUTC")), Value::from("100")),
+            "percentage": Precise::string_mul(self.safe_string(ticker.clone(), Value::from("chgUTC"), Value::Undefined), Value::from("100")),
             "average": Value::Undefined,
             "baseVolume": self.safe_number(ticker.clone(), Value::from("baseVolume"), Value::Undefined),
             "quoteVolume": self.safe_number(ticker.clone(), Value::from("quoteVolume"), Value::Undefined),
-            "indexPrice": self.safe_string(ticker.clone(), Value::from("indexPrice")),
-            "markPrice": self.safe_string(ticker.clone(), Value::from("markPrice")),
+            "indexPrice": self.safe_string(ticker.clone(), Value::from("indexPrice"), Value::Undefined),
+            "markPrice": self.safe_string(ticker.clone(), Value::from("markPrice"), Value::Undefined),
             "info": ticker
         }))).unwrap()), market.clone());
     }
@@ -892,7 +901,7 @@ pub trait Coincatch : Exchange {
         self.load_markets(Value::Undefined, Value::Undefined).await;
         let mut market: Value = self.market(symbol.clone());
         let mut timeframes: Value = self.get("options".into()).get(Value::from("timeframesForWs"));
-        let mut channel: Value = Value::from("candle") + self.safe_string(timeframes.clone(), timeframe.clone());
+        let mut channel: Value = Value::from("candle") + self.safe_string(timeframes.clone(), timeframe.clone(), Value::Undefined);
         let (mut inst_type, mut inst_id) = shift_2(<Self as Coincatch>::get_public_inst_type_and_id(self, market.clone()));
         let mut args: Value = Value::Json(normalize(&Value::Json(json!({
             "instType": inst_type,
@@ -912,7 +921,7 @@ pub trait Coincatch : Exchange {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
         let mut timeframes: Value = self.get("options".into()).get(Value::from("timeframesForWs"));
-        let mut interval: Value = self.safe_string(timeframes.clone(), timeframe.clone());
+        let mut interval: Value = self.safe_string(timeframes.clone(), timeframe.clone(), Value::Undefined);
         let mut channel: Value = Value::from("candle") + interval.clone();
         return <Self as Coincatch>::un_watch_channel(self, symbol.clone(), channel.clone(), Value::from("ohlcv:") + interval.clone(), params.clone()).await;
     }
@@ -940,7 +949,7 @@ pub trait Coincatch : Exchange {
         let mut market_id: Value = market.get(Value::from("id"));
         let mut hash: Value = Value::from("ohlcv:");
         let mut data: Value = self.safe_list(message.clone(), Value::from("data"), Value::new_array());
-        let mut channel: Value = self.safe_string(arg.clone(), Value::from("channel"));
+        let mut channel: Value = self.safe_string(arg.clone(), Value::from("channel"), Value::Undefined);
         let mut kline_type: Value = channel.slice(Value::from(6));
         let mut timeframe: Value = self.find_timeframe(kline_type.clone(), Value::Undefined);
         if market_id.index_of(Value::from("_DMCBL")) >= Value::from(0) {
@@ -978,7 +987,7 @@ pub trait Coincatch : Exchange {
         //         '86.0551'
         //     ]
         //
-        return Value::Json(serde_json::Value::Array(vec![self.safe_integer(ohlcv.clone(), Value::from(0)).into(), self.safe_number(ohlcv.clone(), Value::from(1), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from(2), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from(3), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from(4), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from(5), Value::Undefined).into()]));
+        return Value::Json(serde_json::Value::Array(vec![self.safe_integer(ohlcv.clone(), Value::from(0), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from(1), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from(2), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from(3), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from(4), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from(5), Value::Undefined).into()]));
     }
 
     async fn watch_order_book(&mut self, mut symbol: Value, mut limit: Value, mut params: Value) -> Value {
@@ -990,7 +999,7 @@ pub trait Coincatch : Exchange {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
         let mut channel: Value = Value::from("books");
-        let mut limit: Value = self.safe_integer(params.clone(), Value::from("limit"));
+        let mut limit: Value = self.safe_integer(params.clone(), Value::from("limit"), Value::Undefined);
         if limit.clone() == Value::from(5) || limit.clone() == Value::from(15) {
             params = self.omit(params.clone(), Value::from("limit"));
             channel = channel +  limit.to_string();
@@ -1044,14 +1053,14 @@ pub trait Coincatch : Exchange {
         let mut market_id: Value = market.get(Value::from("id"));
         let mut hash: Value = Value::from("books:");
         if market_id.index_of(Value::from("_DMCBL")) >= Value::from(0) {
-            market = <Self as Coincatch>::handle_dmcbl_market_by_message_hashes(self, market.clone(), hash.clone(), client.clone(), Value::Undefined);
+            market = <Self as Coincatch>::handle_dmcbl_market_by_message_hashes(self, market.clone(), hash.clone(), client.clone());
         };
         let mut symbol: Value = market.get(Value::from("symbol"));
-        let mut channel: Value = self.safe_string(arg.clone(), Value::from("channel"));
+        let mut channel: Value = self.safe_string(arg.clone(), Value::from("channel"), Value::Undefined);
         let mut message_hash: Value = hash.clone() + symbol.clone();
         let mut data: Value = self.safe_list(message.clone(), Value::from("data"), Value::new_array());
         let mut raw_order_book: Value = self.safe_dict(data.clone(), Value::from(0), Value::Undefined);
-        let mut timestamp: Value = self.safe_integer(raw_order_book.clone(), Value::from("ts"));
+        let mut timestamp: Value = self.safe_integer(raw_order_book.clone(), Value::from("ts"), Value::Undefined);
         let mut incremental_book: Value = channel.clone();
         if incremental_book.is_truthy() {
             if !self.get("orderbooks".into()).contains_key(symbol.clone()) {
@@ -1067,7 +1076,7 @@ pub trait Coincatch : Exchange {
             stored_order_book.set("timestamp".into(), timestamp.clone());
             stored_order_book.set("datetime".into(), self.iso8601(timestamp.clone()));
             let mut checksum: Value = self.safe_bool(self.get("options".into()), Value::from("checksum"), true.into());
-            let mut is_snapshot: Value = (self.safe_string(message.clone(), Value::from("action")) == Value::from("snapshot")).into();
+            let mut is_snapshot: Value = (self.safe_string(message.clone(), Value::from("action"), Value::Undefined) == Value::from("snapshot")).into();
             if !is_snapshot.is_truthy() && checksum.is_truthy() {
                 let mut stored_asks: Value = stored_order_book.get(Value::from("asks"));
                 let mut stored_bids: Value = stored_order_book.get(Value::from("bids"));
@@ -1088,7 +1097,7 @@ pub trait Coincatch : Exchange {
                 };
                 let mut payload: Value = payload_array.join(Value::from(":"));
                 let mut calculated_checksum: Value = self.crc32(payload.clone(), true.into());
-                let mut response_checksum: Value = self.safe_integer(raw_order_book.clone(), Value::from("checksum"));
+                let mut response_checksum: Value = self.safe_integer(raw_order_book.clone(), Value::from("checksum"), Value::Undefined);
                 if calculated_checksum.clone() != response_checksum.clone() {
                     self.spawn(self.get("handleCheckSumError".into()), client.clone(), symbol.clone(), message_hash.clone());
                     return Value::Undefined;
@@ -1096,7 +1105,7 @@ pub trait Coincatch : Exchange {
             };
         } else {
             let mut orderbook: Value = self.order_book(Value::new_object(), Value::Undefined);
-            let mut parsed_orderbook: Value = self.parse_order_book(raw_order_book.clone(), symbol.clone(), timestamp.clone(), Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined);
+            let mut parsed_orderbook: Value = self.parse_order_book(raw_order_book.clone(), symbol.clone(), timestamp.clone(), Value::Undefined, Value::Undefined);
             orderbook.reset(parsed_orderbook.clone());
             self.get("orderbooks".into()).set(symbol.clone(), orderbook.clone());
         };
@@ -1112,7 +1121,7 @@ pub trait Coincatch : Exchange {
     }
 
     fn handle_delta(&mut self, mut bookside: Value, mut delta: Value) -> Value {
-        let mut bid_ask: Value = self.parse_bid_ask(delta.clone(), Value::from(0), Value::from(1), Value::Undefined);
+        let mut bid_ask: Value = self.parse_bid_ask(delta.clone(), Value::from(0), Value::from(1));
         bid_ask.push(delta.clone());
         bookside.store_array(bid_ask.clone());
         Value::Undefined
@@ -1159,7 +1168,7 @@ pub trait Coincatch : Exchange {
         let mut trades: Value = <Self as Coincatch>::watch_public_multiple(self, message_hashes.clone(), message_hashes.clone(), topics.clone(), params.clone()).await;
         if self.get("newUpdates".into()).is_truthy() {
             let mut first: Value = self.safe_dict(trades.clone(), Value::from(0), Value::Undefined);
-            let mut trade_symbol: Value = self.safe_string(first.clone(), Value::from("symbol"));
+            let mut trade_symbol: Value = self.safe_string(first.clone(), Value::from("symbol"), Value::Undefined);
             limit = trades.get_limit(trade_symbol.clone(), limit.clone());
         };
         return self.filter_by_since_limit(trades.clone(), since.clone(), limit.clone(), Value::from("timestamp"), true.into());
@@ -1185,7 +1194,7 @@ pub trait Coincatch : Exchange {
         let mut market_id: Value = market.get(Value::from("id"));
         let mut hash: Value = Value::from("trade:");
         if market_id.index_of(Value::from("_DMCBL")) >= Value::from(0) {
-            market = <Self as Coincatch>::handle_dmcbl_market_by_message_hashes(self, market.clone(), hash.clone(), client.clone(), Value::Undefined);
+            market = <Self as Coincatch>::handle_dmcbl_market_by_message_hashes(self, market.clone(), hash.clone(), client.clone());
         };
         let mut symbol: Value = market.get(Value::from("symbol"));
         if !self.get("trades".into()).contains_key(symbol.clone()) {
@@ -1195,7 +1204,7 @@ pub trait Coincatch : Exchange {
         let mut stored: Value = self.get("trades".into()).get(symbol.clone());
         let mut data: Value = self.safe_list(message.clone(), Value::from("data"), Value::new_array());
         if data.clone().is_nonnullish() {
-            data = self.sort_by(data.clone(), Value::from(0));
+            data = self.sort_by(data.clone(), Value::from(0), Value::Undefined, Value::Undefined);
             let mut i: usize = 0;
             while i < data.len() {
                 let mut trade: Value = self.safe_list(data.clone(), Value::from(i), Value::Undefined);
@@ -1218,15 +1227,15 @@ pub trait Coincatch : Exchange {
         //         'sell'
         //     ]
         //
-        let mut timestamp: Value = self.safe_integer(trade.clone(), Value::from(0));
+        let mut timestamp: Value = self.safe_integer(trade.clone(), Value::from(0), Value::Undefined);
         return self.safe_trade(Value::Json(normalize(&Value::Json(json!({
             "id": Value::Undefined,
             "timestamp": timestamp,
             "datetime": self.iso8601(timestamp.clone()),
             "symbol": market.get(Value::from("symbol")),
-            "side": self.safe_string_lower(trade.clone(), Value::from(3)),
-            "price": self.safe_string(trade.clone(), Value::from(1)),
-            "amount": self.safe_string(trade.clone(), Value::from(2)),
+            "side": self.safe_string_lower(trade.clone(), Value::from(3), Value::Undefined),
+            "price": self.safe_string(trade.clone(), Value::from(1), Value::Undefined),
+            "amount": self.safe_string(trade.clone(), Value::from(2), Value::Undefined),
             "cost": Value::Undefined,
             "takerOrMaker": Value::Undefined,
             "type": Value::Undefined,
@@ -1297,19 +1306,19 @@ pub trait Coincatch : Exchange {
         let mut i: usize = 0;
         while i < data.len() {
             let mut raw_balance: Value = data.get(i.into());
-            let mut currency_id: Value = self.safe_string_2(raw_balance.clone(), Value::from("coinName"), Value::from("marginCoin"));
+            let mut currency_id: Value = self.safe_string_2(raw_balance.clone(), Value::from("coinName"), Value::from("marginCoin"), Value::Undefined);
             let mut code: Value = self.safe_currency_code(currency_id.clone(), Value::Undefined);
             let mut account: Value = if self.get("balance".into()).contains_key(code.clone()) { self.get("balance".into()).get(code.clone()) } else { self.account() };
             let mut free_query: Value = if raw_balance.contains_key(Value::from("maxTransferOut")) { Value::from("maxTransferOut") } else { Value::from("available") };
-            account.set("free".into(), self.safe_string(raw_balance.clone(), free_query.clone()));
-            account.set("total".into(), self.safe_string(raw_balance.clone(), Value::from("equity")));
-            account.set("used".into(), self.safe_string(raw_balance.clone(), Value::from("frozen")));
+            account.set("free".into(), self.safe_string(raw_balance.clone(), free_query.clone(), Value::Undefined));
+            account.set("total".into(), self.safe_string(raw_balance.clone(), Value::from("equity"), Value::Undefined));
+            account.set("used".into(), self.safe_string(raw_balance.clone(), Value::from("frozen"), Value::Undefined));
             self.get("balance".into()).set(code.clone(), account.clone());
             i += 1;
         };
         self.set("balance".into(), self.safe_balance(self.get("balance".into())));
         let mut arg: Value = self.safe_dict(message.clone(), Value::from("arg"), Value::Undefined);
-        let mut inst_type: Value = self.safe_string_lower(arg.clone(), Value::from("instType"));
+        let mut inst_type: Value = self.safe_string_lower(arg.clone(), Value::from("instType"), Value::Undefined);
         let mut message_hash: Value = Value::from("balance:") + inst_type.clone();
         client.resolve(self.get("balance".into()), message_hash.clone());
         Value::Undefined
@@ -1434,8 +1443,8 @@ pub trait Coincatch : Exchange {
         //
         //
         let mut arg: Value = self.safe_dict(message.clone(), Value::from("arg"), Value::new_object());
-        let mut inst_type: Value = self.safe_string(arg.clone(), Value::from("instType"));
-        let mut arg_inst_id: Value = self.safe_string(arg.clone(), Value::from("instId"));
+        let mut inst_type: Value = self.safe_string(arg.clone(), Value::from("instType"), Value::Undefined);
+        let mut arg_inst_id: Value = self.safe_string(arg.clone(), Value::from("instId"), Value::Undefined);
         let mut market_type: Value = Value::Undefined;
         if inst_type.clone() == Value::from("spbl") {
             market_type = Value::from("spot");
@@ -1514,43 +1523,43 @@ pub trait Coincatch : Exchange {
         //         uTime: 1728653796976
         //     }
         //
-        let mut market_id: Value = self.safe_string(order.clone(), Value::from("instId"));
-        let mut settle_id: Value = self.safe_string(order.clone(), Value::from("tgtCcy"));
-        market = self.safe_market_custom(market_id.clone(), market.clone(), settle_id.clone());
-        let mut timestamp: Value = self.safe_integer(order.clone(), Value::from("cTime"));
+        let mut market_id: Value = self.safe_string(order.clone(), Value::from("instId"), Value::Undefined);
+        let mut settle_id: Value = self.safe_string(order.clone(), Value::from("tgtCcy"), Value::Undefined);
+        market = <Self as Coincatch>::safe_market_custom(self, market_id.clone(), market.clone(), settle_id.clone());
+        let mut timestamp: Value = self.safe_integer(order.clone(), Value::from("cTime"), Value::Undefined);
         let mut symbol: Value = market.get(Value::from("symbol"));
-        let mut raw_status: Value = self.safe_string(order.clone(), Value::from("status"));
+        let mut raw_status: Value = self.safe_string(order.clone(), Value::from("status"), Value::Undefined);
         let mut order_fee: Value = self.safe_list(order.clone(), Value::from("orderFee"), Value::new_array());
         let mut fee: Value = self.safe_dict(order_fee.clone(), Value::from(0), Value::Undefined);
-        let mut fee_cost: Value = Precise::string_mul(self.safe_string(fee.clone(), Value::from("fee")), Value::from("-1"));
-        let mut fee_currency: Value = self.safe_string(fee.clone(), Value::from("feeCcy"));
-        let mut price: Value = self.omit_zero(self.safe_string(order.clone(), Value::from("px")));
-        let mut price_avg: Value = self.omit_zero(self.safe_string(order.clone(), Value::from("avgPx")));
+        let mut fee_cost: Value = Precise::string_mul(self.safe_string(fee.clone(), Value::from("fee"), Value::Undefined), Value::from("-1"));
+        let mut fee_currency: Value = self.safe_string(fee.clone(), Value::from("feeCcy"), Value::Undefined);
+        let mut price: Value = self.omit_zero(self.safe_string(order.clone(), Value::from("px"), Value::Undefined));
+        let mut price_avg: Value = self.omit_zero(self.safe_string(order.clone(), Value::from("avgPx"), Value::Undefined));
         if price.clone().is_nullish() {
             price = price_avg.clone();
         };
-        let mut r#type: Value = self.safe_string_lower(order.clone(), Value::from("ordType"));
+        let mut r#type: Value = self.safe_string_lower(order.clone(), Value::from("ordType"), Value::Undefined);
         return self.safe_order(Value::Json(normalize(&Value::Json(json!({
-            "id": self.safe_string(order.clone(), Value::from("ordId")),
-            "clientOrderId": self.safe_string(order.clone(), Value::from("clOrdId")),
+            "id": self.safe_string(order.clone(), Value::from("ordId"), Value::Undefined),
+            "clientOrderId": self.safe_string(order.clone(), Value::from("clOrdId"), Value::Undefined),
             "timestamp": timestamp,
             "datetime": self.iso8601(timestamp.clone()),
             "lastTradeTimestamp": Value::Undefined,
-            "lastUpdateTimestamp": self.safe_integer(order.clone(), Value::from("uTime")),
-            "status": self.parse_order_status(raw_status.clone()),
+            "lastUpdateTimestamp": self.safe_integer(order.clone(), Value::from("uTime"), Value::Undefined),
+            "status": <Self as Coincatch>::parse_order_status(self, raw_status.clone()),
             "symbol": symbol,
             "type": r#type,
-            "timeInForce": self.parse_order_time_in_force(self.safe_string_lower(order.clone(), Value::from("force"))),
-            "side": self.safe_string_lower(order.clone(), Value::from("side")),
+            "timeInForce": <Self as Coincatch>::parse_order_time_in_force(self, self.safe_string_lower(order.clone(), Value::from("force"), Value::Undefined)),
+            "side": self.safe_string_lower(order.clone(), Value::from("side"), Value::Undefined),
             "price": price,
-            "average": self.safe_string(order.clone(), Value::from("avgPx")),
-            "amount": self.safe_string(order.clone(), Value::from("sz")),
-            "filled": self.safe_string(order.clone(), Value::from("accFillSz")),
+            "average": self.safe_string(order.clone(), Value::from("avgPx"), Value::Undefined),
+            "amount": self.safe_string(order.clone(), Value::from("sz"), Value::Undefined),
+            "filled": self.safe_string(order.clone(), Value::from("accFillSz"), Value::Undefined),
             "remaining": Value::Undefined,
             "triggerPrice": Value::Undefined,
             "takeProfitPrice": Value::Undefined,
             "stopLossPrice": Value::Undefined,
-            "cost": self.safe_string(order.clone(), Value::from("notional")),
+            "cost": self.safe_string(order.clone(), Value::from("notional"), Value::Undefined),
             "trades": Value::Undefined,
             "fee": Value::Json(normalize(&Value::Json(json!({
                 "currency": fee_currency,
@@ -1663,7 +1672,7 @@ pub trait Coincatch : Exchange {
         let mut i: usize = 0;
         while i < raw_positions.len() {
             let mut raw_position: Value = raw_positions.get(i.into());
-            let mut position: Value = <Self as Coincatch>::parse_ws_position(self, raw_position.clone(), Value::Undefined);
+            let mut position: Value = <Self as Coincatch>::parse_ws_position(self, raw_position.clone());
             symbols.push(position.get(Value::from("symbol")));
             new_positions.push(position.clone());
             cache.append(position.clone());
@@ -1722,23 +1731,23 @@ pub trait Coincatch : Exchange {
         //         autoMargin: 'off'
         //     }
         //
-        let mut market_id: Value = self.safe_string(position.clone(), Value::from("symbol"));
-        let mut settle_id: Value = self.safe_string(position.clone(), Value::from("marginCoin"));
-        market = self.safe_market_custom(market_id.clone(), market.clone(), settle_id.clone());
-        let mut timestamp: Value = self.safe_integer(position.clone(), Value::from("cTime"));
-        let mut margin_mode_id: Value = self.safe_string(position.clone(), Value::from("marginMode"));
+        let mut market_id: Value = self.safe_string(position.clone(), Value::from("symbol"), Value::Undefined);
+        let mut settle_id: Value = self.safe_string(position.clone(), Value::from("marginCoin"), Value::Undefined);
+        market = <Self as Coincatch>::safe_market_custom(self, market_id.clone(), market.clone(), settle_id.clone());
+        let mut timestamp: Value = self.safe_integer(position.clone(), Value::from("cTime"), Value::Undefined);
+        let mut margin_mode_id: Value = self.safe_string(position.clone(), Value::from("marginMode"), Value::Undefined);
         let mut margin_mode: Value = self.get_supported_mapping(margin_mode_id.clone(), Value::Json(normalize(&Value::Json(json!({
             "crossed": "cross",
             "isolated": "isolated"
         }))).unwrap()));
         let mut is_hedged: Value = Value::Undefined;
-        let mut hold_mode: Value = self.safe_string(position.clone(), Value::from("holdMode"));
+        let mut hold_mode: Value = self.safe_string(position.clone(), Value::from("holdMode"), Value::Undefined);
         if hold_mode.clone() == Value::from("double_hold") {
             is_hedged = true.into();
         } else if hold_mode.clone() == Value::from("single_hold") {
             is_hedged = false.into();
         };
-        let mut percentage_decimal: Value = self.safe_string(position.clone(), Value::from("uplRate"));
+        let mut percentage_decimal: Value = self.safe_string(position.clone(), Value::from("uplRate"), Value::Undefined);
         let mut percentage: Value = Precise::string_mul(percentage_decimal.clone(), Value::from("100"));
         let mut margin: Value = self.safe_number(position.clone(), Value::from("margin"), Value::Undefined);
         return self.safe_position(Value::Json(normalize(&Value::Json(json!({
@@ -1748,9 +1757,9 @@ pub trait Coincatch : Exchange {
             "datetime": self.iso8601(timestamp.clone()),
             "contracts": self.safe_number(position.clone(), Value::from("total"), Value::Undefined),
             "contractSize": Value::Undefined,
-            "side": self.safe_string_lower(position.clone(), Value::from("holdSide")),
+            "side": self.safe_string_lower(position.clone(), Value::from("holdSide"), Value::Undefined),
             "notional": margin,
-            "leverage": self.safe_integer(position.clone(), Value::from("leverage")),
+            "leverage": self.safe_integer(position.clone(), Value::from("leverage"), Value::Undefined),
             "unrealizedPnl": self.safe_number(position.clone(), Value::from("upl"), Value::Undefined),
             "realizedPnl": self.safe_number(position.clone(), Value::from("achievedProfits"), Value::Undefined),
             "collateral": Value::Undefined,
@@ -1764,7 +1773,7 @@ pub trait Coincatch : Exchange {
             "initialMargin": margin,
             "initialMarginPercentage": Value::Undefined,
             "marginRatio": self.safe_number(position.clone(), Value::from("marginRate"), Value::Undefined),
-            "lastUpdateTimestamp": self.safe_integer(position.clone(), Value::from("uTime")),
+            "lastUpdateTimestamp": self.safe_integer(position.clone(), Value::from("uTime"), Value::Undefined),
             "lastPrice": Value::Undefined,
             "stopLossPrice": Value::Undefined,
             "takeProfitPrice": Value::Undefined,
@@ -1777,9 +1786,9 @@ pub trait Coincatch : Exchange {
         //
         //    { event: "error", code: 30001, msg: "Channel does not exist" }
         //
-        let mut event: Value = self.safe_string(message.clone(), Value::from("event"));
+        let mut event: Value = self.safe_string(message.clone(), Value::from("event"), Value::Undefined);
                 if event.clone() == Value::from("error") {
-            let mut code: Value = self.safe_string(message.clone(), Value::from("code"));
+            let mut code: Value = self.safe_string(message.clone(), Value::from("code"), Value::Undefined);
             let mut feedback: Value = self.get("id".into()) + Value::from(" ") + self.json(message.clone());
             self.throw_exactly_matched_exception(self.get("exceptions".into()).get(Value::from("ws")).get(Value::from("exact")), code.clone(), feedback.clone());
             let mut msg: Value = self.safe_string(message.clone(), Value::from("msg"), Value::from(""));
@@ -1797,7 +1806,7 @@ pub trait Coincatch : Exchange {
         if <Self as Coincatch>::handle_error_message(self, client.clone(), message.clone()).is_truthy() {
             return Value::Undefined;
         };
-        let mut content: Value = self.safe_string(message.clone(), Value::from("message"));
+        let mut content: Value = self.safe_string(message.clone(), Value::from("message"), Value::Undefined);
         if content.clone() == Value::from("pong") {
             <Self as Coincatch>::handle_pong(self, client.clone(), message.clone());
             return Value::Undefined;
@@ -1806,7 +1815,7 @@ pub trait Coincatch : Exchange {
             <Self as Coincatch>::handle_pong(self, client.clone(), message.clone());
             return Value::Undefined;
         };
-        let mut event: Value = self.safe_string(message.clone(), Value::from("event"));
+        let mut event: Value = self.safe_string(message.clone(), Value::from("event"), Value::Undefined);
         if event.clone() == Value::from("login") {
             <Self as Coincatch>::handle_authenticate(self, client.clone(), message.clone());
             return Value::Undefined;
@@ -1820,7 +1829,7 @@ pub trait Coincatch : Exchange {
             return Value::Undefined;
         };
         let mut data: Value = self.safe_dict(message.clone(), Value::from("arg"), Value::new_object());
-        let mut channel: Value = self.safe_string(data.clone(), Value::from("channel"));
+        let mut channel: Value = self.safe_string(data.clone(), Value::from("channel"), Value::Undefined);
         if channel.clone() == Value::from("ticker") {
             <Self as Coincatch>::handle_ticker(self, client.clone(), message.clone());
         };
@@ -1866,7 +1875,7 @@ pub trait Coincatch : Exchange {
         let mut i: usize = 0;
         while i < args_list.len() {
             let mut arg: Value = args_list.get(i.into());
-            let mut channel: Value = self.safe_string(arg.clone(), Value::from("channel"));
+            let mut channel: Value = self.safe_string(arg.clone(), Value::from("channel"), Value::Undefined);
             if channel.clone() == Value::from("books") {
                 <Self as Coincatch>::handle_order_book_un_subscription(self, client.clone(), message.clone());
             } else if channel.clone() == Value::from("trade") {
@@ -1883,9 +1892,9 @@ pub trait Coincatch : Exchange {
 
     fn handle_order_book_un_subscription(&mut self, mut client: Value, mut message: Value) -> Value {
         let mut arg: Value = self.safe_dict(message.clone(), Value::from("arg"), Value::new_object());
-        let mut inst_type: Value = self.safe_string_lower(arg.clone(), Value::from("instType"));
+        let mut inst_type: Value = self.safe_string_lower(arg.clone(), Value::from("instType"), Value::Undefined);
         let mut r#type: Value = if inst_type.clone() == Value::from("sp") { Value::from("spot") } else { Value::from("swap") };
-        let mut inst_id: Value = self.safe_string(arg.clone(), Value::from("instId"));
+        let mut inst_id: Value = self.safe_string(arg.clone(), Value::from("instId"), Value::Undefined);
         let mut market: Value = self.safe_market(inst_id.clone(), Value::Undefined, Value::Undefined, r#type.clone());
         let mut symbol: Value = market.get(Value::from("symbol"));
         let mut message_hash: Value = Value::from("unsubscribe:orderbook:") + market.get(Value::from("symbol"));
@@ -1907,9 +1916,9 @@ pub trait Coincatch : Exchange {
 
     fn handle_trades_un_subscription(&mut self, mut client: Value, mut message: Value) -> Value {
         let mut arg: Value = self.safe_dict(message.clone(), Value::from("arg"), Value::new_object());
-        let mut inst_type: Value = self.safe_string_lower(arg.clone(), Value::from("instType"));
+        let mut inst_type: Value = self.safe_string_lower(arg.clone(), Value::from("instType"), Value::Undefined);
         let mut r#type: Value = if inst_type.clone() == Value::from("sp") { Value::from("spot") } else { Value::from("swap") };
-        let mut inst_id: Value = self.safe_string(arg.clone(), Value::from("instId"));
+        let mut inst_id: Value = self.safe_string(arg.clone(), Value::from("instId"), Value::Undefined);
         let mut market: Value = self.safe_market(inst_id.clone(), Value::Undefined, Value::Undefined, r#type.clone());
         let mut symbol: Value = market.get(Value::from("symbol"));
         let mut message_hash: Value = Value::from("unsubscribe:trade:") + market.get(Value::from("symbol"));
@@ -1931,9 +1940,9 @@ pub trait Coincatch : Exchange {
 
     fn handle_ticker_un_subscription(&mut self, mut client: Value, mut message: Value) -> Value {
         let mut arg: Value = self.safe_dict(message.clone(), Value::from("arg"), Value::new_object());
-        let mut inst_type: Value = self.safe_string_lower(arg.clone(), Value::from("instType"));
+        let mut inst_type: Value = self.safe_string_lower(arg.clone(), Value::from("instType"), Value::Undefined);
         let mut r#type: Value = if inst_type.clone() == Value::from("sp") { Value::from("spot") } else { Value::from("swap") };
-        let mut inst_id: Value = self.safe_string(arg.clone(), Value::from("instId"));
+        let mut inst_id: Value = self.safe_string(arg.clone(), Value::from("instId"), Value::Undefined);
         let mut market: Value = self.safe_market(inst_id.clone(), Value::Undefined, Value::Undefined, r#type.clone());
         let mut symbol: Value = market.get(Value::from("symbol"));
         let mut message_hash: Value = Value::from("unsubscribe:ticker:") + market.get(Value::from("symbol"));
@@ -1955,10 +1964,10 @@ pub trait Coincatch : Exchange {
 
     fn handle_ohlcv_un_subscription(&mut self, mut client: Value, mut message: Value) -> Value {
         let mut arg: Value = self.safe_dict(message.clone(), Value::from("arg"), Value::new_object());
-        let mut inst_type: Value = self.safe_string_lower(arg.clone(), Value::from("instType"));
+        let mut inst_type: Value = self.safe_string_lower(arg.clone(), Value::from("instType"), Value::Undefined);
         let mut r#type: Value = if inst_type.clone() == Value::from("sp") { Value::from("spot") } else { Value::from("swap") };
-        let mut inst_id: Value = self.safe_string(arg.clone(), Value::from("instId"));
-        let mut channel: Value = self.safe_string(arg.clone(), Value::from("channel"));
+        let mut inst_id: Value = self.safe_string(arg.clone(), Value::from("instId"), Value::Undefined);
+        let mut channel: Value = self.safe_string(arg.clone(), Value::from("channel"), Value::Undefined);
         let mut interval: Value = channel.replace(Value::from("candle"), Value::from(""));
         let mut timeframes: Value = self.safe_dict(self.get("options".into()), Value::from("timeframesForWs"), Value::Undefined);
         let mut timeframe: Value = self.find_timeframe(interval.clone(), timeframes.clone());
@@ -2106,8 +2115,8 @@ impl ValueTrait for CoincatchImpl {
     fn push(&mut self, value: Value) { self.0.push(value) }
     fn split(&self, separator: Value) -> Value { self.0.split(separator) }
     fn contains_key(&self, key: Value) -> bool { self.0.contains_key(key) }
-    fn keys(&self) -> Vec<Value> { self.0.keys() }
-    fn values(&self) -> Vec<Value> { self.0.values() }
+    fn keys(&self) -> Value { self.0.keys() }
+    fn values(&self) -> Value { self.0.values() }
     fn to_array(&self, x: Value) -> Value { self.0.to_array(x) }
     fn index_of(&self, x: Value) -> Value { self.0.index_of(x) }
     fn join(&self, glue: Value) -> Value { self.0.join(glue) }

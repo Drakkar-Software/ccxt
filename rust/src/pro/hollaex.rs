@@ -11,7 +11,16 @@ use async_trait::async_trait;
 use std::str::FromStr;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, JSON, Array, Object, Math, parse_int, shift_2, extend_2, normalize};
+use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, BoolExt, JSON, Array, Object, Math, Promise, parse_int, shift_2, extend_2, normalize};
+// Crypto hash identifiers
+fn sha256() -> Value { Value::from("sha256") }
+fn sha384() -> Value { Value::from("sha384") }
+fn sha512() -> Value { Value::from("sha512") }
+fn md5() -> Value { Value::from("md5") }
+fn ed25519() -> Value { Value::from("ed25519") }
+fn rsa(msg: Value, secret: Value, _hash: Value) -> Value { msg }
+fn eddsa(msg: Value, secret: Value, _curve: Value) -> Value { msg }
+fn secp256k1() -> Value { Value::from("secp256k1") }
 
 use crate::exchange::{PRECISE_BASE, TRUNCATE, ROUND, ROUND_UP, ROUND_DOWN};
 use crate::exchange::{DECIMAL_PLACES, SIGNIFICANT_DIGITS, TICK_SIZE, NO_PADDING, PAD_WITH_ZERO};
@@ -369,14 +378,14 @@ pub trait Hollaex : Exchange {
         //         "time":1649751425
         //     }
         //
-        let mut market_id: Value = self.safe_string(message.clone(), Value::from("symbol"));
-        let mut channel: Value = self.safe_string(message.clone(), Value::from("topic"));
+        let mut market_id: Value = self.safe_string(message.clone(), Value::from("symbol"), Value::Undefined);
+        let mut channel: Value = self.safe_string(message.clone(), Value::from("topic"), Value::Undefined);
         let mut market: Value = self.safe_market(market_id.clone(), Value::Undefined, Value::Undefined, Value::Undefined);
         let mut symbol: Value = market.get(Value::from("symbol"));
-        let mut data: Value = self.safe_value(message.clone(), Value::from("data"));
-        let mut timestamp: Value = self.safe_string(data.clone(), Value::from("timestamp"));
+        let mut data: Value = self.safe_value(message.clone(), Value::from("data"), Value::Undefined);
+        let mut timestamp: Value = self.safe_string(data.clone(), Value::from("timestamp"), Value::Undefined);
         let mut timestamp_ms: Value = self.parse8601(timestamp.clone());
-        let mut snapshot: Value = self.parse_order_book(data.clone(), symbol.clone(), timestamp_ms.clone(), Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined);
+        let mut snapshot: Value = self.parse_order_book(data.clone(), symbol.clone(), timestamp_ms.clone(), Value::Undefined, Value::Undefined);
         let mut orderbook: Value = Value::Undefined;
         if !self.get("orderbooks".into()).contains_key(symbol.clone()) {
             orderbook = self.order_book(snapshot.clone(), Value::Undefined);
@@ -419,11 +428,11 @@ pub trait Hollaex : Exchange {
         //         ]
         //     }
         //
-        let mut channel: Value = self.safe_string(message.clone(), Value::from("topic"));
-        let mut market_id: Value = self.safe_string(message.clone(), Value::from("symbol"));
+        let mut channel: Value = self.safe_string(message.clone(), Value::from("topic"), Value::Undefined);
+        let mut market_id: Value = self.safe_string(message.clone(), Value::from("symbol"), Value::Undefined);
         let mut market: Value = self.safe_market(market_id.clone(), Value::Undefined, Value::Undefined, Value::Undefined);
         let mut symbol: Value = market.get(Value::from("symbol"));
-        let mut stored: Value = self.safe_value(self.get("trades".into()), symbol.clone());
+        let mut stored: Value = self.safe_value(self.get("trades".into()), symbol.clone(), Value::Undefined);
         if stored.clone().is_nullish() {
             let mut limit: Value = self.safe_integer(self.get("options".into()), Value::from("tradesLimit"), Value::from(1000));
             stored = ArrayCache::new(limit);
@@ -482,8 +491,8 @@ pub trait Hollaex : Exchange {
         //     "time":1652434215
         // }
         //
-        let mut channel: Value = self.safe_string(message.clone(), Value::from("topic"));
-        let mut raw_trades: Value = self.safe_value(message.clone(), Value::from("data"));
+        let mut channel: Value = self.safe_string(message.clone(), Value::from("topic"), Value::Undefined);
+        let mut raw_trades: Value = self.safe_value(message.clone(), Value::from("data"), Value::Undefined);
         // usually the first message is an empty array
         // when the user does not have any trades yet
         let mut data_length: usize = raw_trades.len();
@@ -509,7 +518,7 @@ pub trait Hollaex : Exchange {
         };
         // non-symbol specific
         client.resolve(self.get("myTrades".into()), channel.clone());
-        let mut keys: Value = Object::keys(market_ids.clone());
+        let mut keys: Value = market_ids.clone().keys();
         let mut i: usize = 0;
         while i < keys.len() {
             let mut market_id: Value = keys.get(i.into());
@@ -595,7 +604,7 @@ pub trait Hollaex : Exchange {
         //        "time":1652430035
         //       }
         //
-        let mut channel: Value = self.safe_string(message.clone(), Value::from("topic"));
+        let mut channel: Value = self.safe_string(message.clone(), Value::from("topic"), Value::Undefined);
         let mut data: Value = self.safe_value(message.clone(), Value::from("data"), Value::new_object());
         // usually the first message is an empty array
         let mut data_length: usize = data.len();
@@ -627,7 +636,7 @@ pub trait Hollaex : Exchange {
         };
         // non-symbol specific
         client.resolve(self.get("orders".into()), channel.clone());
-        let mut keys: Value = Object::keys(market_ids.clone());
+        let mut keys: Value = market_ids.clone().keys();
         let mut i: usize = 0;
         while i < keys.len() {
             let mut market_id: Value = keys.get(i.into());
@@ -661,10 +670,10 @@ pub trait Hollaex : Exchange {
         //         "time": 1649687396
         //     }
         //
-        let mut message_hash: Value = self.safe_string(message.clone(), Value::from("topic"));
-        let mut data: Value = self.safe_value(message.clone(), Value::from("data"));
-        let mut keys: Value = Object::keys(data.clone());
-        let mut timestamp: Value = self.safe_timestamp(message.clone(), Value::from("time"));
+        let mut message_hash: Value = self.safe_string(message.clone(), Value::from("topic"), Value::Undefined);
+        let mut data: Value = self.safe_value(message.clone(), Value::from("data"), Value::Undefined);
+        let mut keys: Value = data.clone().keys();
+        let mut timestamp: Value = self.safe_timestamp(message.clone(), Value::from("time"), Value::Undefined);
         self.get("balance".into()).set("info".into(), data.clone());
         self.get("balance".into()).set("timestamp".into(), timestamp.clone());
         self.get("balance".into()).set("datetime".into(), self.iso8601(timestamp.clone()));
@@ -672,12 +681,12 @@ pub trait Hollaex : Exchange {
         while i < keys.len() {
             let mut key: Value = keys.get(i.into());
             let mut parts: Value = key.split(Value::from("_"));
-            let mut currency_id: Value = self.safe_string(parts.clone(), Value::from(0));
+            let mut currency_id: Value = self.safe_string(parts.clone(), Value::from(0), Value::Undefined);
             let mut code: Value = self.safe_currency_code(currency_id.clone(), Value::Undefined);
             let mut account: Value = if self.get("balance".into()).contains_key(code.clone()) { self.get("balance".into()).get(code.clone()) } else { self.account() };
-            let mut second: Value = self.safe_string(parts.clone(), Value::from(1));
+            let mut second: Value = self.safe_string(parts.clone(), Value::from(1), Value::Undefined);
             let mut free_or_total: Value = if second.clone() == Value::from("available") { Value::from("free") } else { Value::from("total") };
-            account.set(free_or_total.clone(), self.safe_string(data.clone(), key.clone()));
+            account.set(free_or_total.clone(), self.safe_string(data.clone(), key.clone(), Value::Undefined));
             self.get("balance".into()).set(code.clone(), account.clone());
             i += 1;
         };
@@ -700,9 +709,9 @@ pub trait Hollaex : Exchange {
     async fn watch_private(&mut self, mut message_hash: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.check_required_credentials(Value::Undefined);
-        let mut expires: Value = self.safe_string(self.get("options".into()), Value::from("ws-expires"));
+        let mut expires: Value = self.safe_string(self.get("options".into()), Value::from("ws-expires"), Value::Undefined);
         if expires.clone().is_nullish() {
-            let mut timeout: Value = parse_int(self.get("timeout".into()) / Value::from(1000).to_string());
+            let mut timeout: Value = parse_int(self.get("timeout".into()) / Value::from(1000).to_string(), Value::Undefined);
             expires = self.sum(self.seconds(), timeout.clone());
             expires = expires.to_string();
             // we need to memoize these values to avoid generating a new url on each method execution
@@ -711,7 +720,7 @@ pub trait Hollaex : Exchange {
         };
         let mut url: Value = self.get("urls".into()).get(Value::from("api")).get(Value::from("ws"));
         let mut auth: Value = Value::from("CONNECT") + Value::from("/stream") + expires.clone();
-        let mut signature: Value = self.hmac(self.encode(auth.clone()), self.encode(self.get("secret".into())), sha256.clone());
+        let mut signature: Value = self.hmac(self.encode(auth.clone()), self.encode(self.get("secret".into())), sha256.clone(), Value::Undefined);
         let mut auth_params: Value = Value::Json(normalize(&Value::Json(json!({
             "api-key": self.get("apiKey".into()),
             "api-signature": signature,
@@ -731,7 +740,7 @@ pub trait Hollaex : Exchange {
         //     { error: "Bearer or HMAC authentication required" }
         //     { error: "Error: wrong input" }
         //
-        let mut error: Value = self.safe_integer(message.clone(), Value::from("error"));
+        let mut error: Value = self.safe_integer(message.clone(), Value::from("error"), Value::Undefined);
                 if error.clone().is_nonnullish() {
             let mut feedback: Value = self.get("id".into()) + Value::from(" ") + self.json(message.clone());
             self.throw_exactly_matched_exception(self.get("exceptions".into()).get(Value::from("ws")).get(Value::from("exact")), error.clone(), feedback.clone());
@@ -830,7 +839,7 @@ pub trait Hollaex : Exchange {
         if !<Self as Hollaex>::handle_error_message(self, client.clone(), message.clone()).is_truthy() {
             return Value::Undefined;
         };
-        let mut content: Value = self.safe_string(message.clone(), Value::from("message"));
+        let mut content: Value = self.safe_string(message.clone(), Value::from("message"), Value::Undefined);
         if content.clone() == Value::from("pong") {
             <Self as Hollaex>::handle_pong(self, client.clone(), message.clone());
             return Value::Undefined;
@@ -842,8 +851,8 @@ pub trait Hollaex : Exchange {
             "wallet": self.get("handleBalance".into()),
             "usertrade": self.get("handleMyTrades".into())
         }))).unwrap());
-        let mut topic: Value = self.safe_value(message.clone(), Value::from("topic"));
-        let mut method: Value = self.safe_value(methods.clone(), topic.clone());
+        let mut topic: Value = self.safe_value(message.clone(), Value::from("topic"), Value::Undefined);
+        let mut method: Value = self.safe_value(methods.clone(), topic.clone(), Value::Undefined);
         if method.clone().is_nonnullish() {
             method.call(self, client.clone(), message.clone());
         };
@@ -944,8 +953,8 @@ impl ValueTrait for HollaexImpl {
     fn push(&mut self, value: Value) { self.0.push(value) }
     fn split(&self, separator: Value) -> Value { self.0.split(separator) }
     fn contains_key(&self, key: Value) -> bool { self.0.contains_key(key) }
-    fn keys(&self) -> Vec<Value> { self.0.keys() }
-    fn values(&self) -> Vec<Value> { self.0.values() }
+    fn keys(&self) -> Value { self.0.keys() }
+    fn values(&self) -> Value { self.0.values() }
     fn to_array(&self, x: Value) -> Value { self.0.to_array(x) }
     fn index_of(&self, x: Value) -> Value { self.0.index_of(x) }
     fn join(&self, glue: Value) -> Value { self.0.join(glue) }

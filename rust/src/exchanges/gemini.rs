@@ -11,7 +11,16 @@ use async_trait::async_trait;
 use std::str::FromStr;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, JSON, Array, Object, Math, parse_int, shift_2, extend_2, normalize};
+use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, BoolExt, JSON, Array, Object, Math, Promise, parse_int, shift_2, extend_2, normalize};
+// Crypto hash identifiers
+fn sha256() -> Value { Value::from("sha256") }
+fn sha384() -> Value { Value::from("sha384") }
+fn sha512() -> Value { Value::from("sha512") }
+fn md5() -> Value { Value::from("md5") }
+fn ed25519() -> Value { Value::from("ed25519") }
+fn rsa(msg: Value, secret: Value, _hash: Value) -> Value { msg }
+fn eddsa(msg: Value, secret: Value, _curve: Value) -> Value { msg }
+fn secp256k1() -> Value { Value::from("secp256k1") }
 
 use crate::exchange::{PRECISE_BASE, TRUNCATE, ROUND, ROUND_UP, ROUND_DOWN};
 use crate::exchange::{DECIMAL_PLACES, SIGNIFICANT_DIGITS, TICK_SIZE, NO_PADDING, PAD_WITH_ZERO};
@@ -417,12 +426,12 @@ pub trait Gemini : Exchange {
         let mut i: usize = 0;
         while i < currencies_array.len() {
             let mut currency: Value = currencies_array.get(i.into());
-            let mut id: Value = self.safe_string(currency.clone(), Value::from(0));
+            let mut id: Value = self.safe_string(currency.clone(), Value::from(0), Value::Undefined);
             let mut code: Value = self.safe_currency_code(id.clone(), Value::Undefined);
-            let mut r#type: Value = if self.safe_string(currency.clone(), Value::from(7)).is_truthy() { Value::from("fiat") } else { Value::from("crypto") };
-            let mut precision: Value = self.parse_number(self.parse_precision(self.safe_string(currency.clone(), Value::from(5))), Value::Undefined);
+            let mut r#type: Value = if self.safe_string(currency.clone(), Value::from(7), Value::Undefined).is_truthy() { Value::from("fiat") } else { Value::from("crypto") };
+            let mut precision: Value = self.parse_number(self.parse_precision(self.safe_string(currency.clone(), Value::from(5), Value::Undefined)), Value::Undefined);
             let mut networks: Value = Value::new_object();
-            let mut network_id: Value = self.safe_string(currency.clone(), Value::from(9));
+            let mut network_id: Value = self.safe_string(currency.clone(), Value::from(9), Value::Undefined);
             let mut network_code: Value = Value::Undefined;
             if network_id.clone().is_nonnullish() {
                 network_code = self.network_id_to_code(network_id.clone(), Value::Undefined);
@@ -451,7 +460,7 @@ pub trait Gemini : Exchange {
                 "info": currency,
                 "id": id,
                 "code": code,
-                "name": self.safe_string(currency.clone(), Value::from(1)),
+                "name": self.safe_string(currency.clone(), Value::from(1), Value::Undefined),
                 "active": Value::Undefined,
                 "deposit": Value::Undefined,
                 "withdraw": Value::Undefined,
@@ -475,20 +484,7 @@ pub trait Gemini : Exchange {
         return result.clone();
     }
 
-    async fn fetch_markets(&mut self, mut params: Value) -> Value {
-        params = params.or_default(Value::new_object());
-        let mut method: Value = self.safe_value(self.get("options".into()), Value::from("fetchMarketsMethod"), Value::from("fetch_markets_from_api"));
-        if method.clone() == Value::from("fetch_markets_from_web") {
-            let mut promises: Value = Value::new_array();
-            promises.push(<Self as Gemini>::fetch_markets_from_web(self, params.clone()));
-            // get usd markets
-            promises.push(<Self as Gemini>::fetch_usdt_markets(self, params.clone()));
-            // get usdt markets
-            let mut promises_result: Value = Promise::all(promises.clone()).await;
-            return self.array_concat(promises_result.get(Value::from(0)), promises_result.get(Value::from(1)));
-        };
-        return <Self as Gemini>::fetch_markets_from_api(self, params.clone()).await;
-    }
+    
 
     async fn fetch_markets_from_web(&mut self, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
@@ -628,7 +624,7 @@ pub trait Gemini : Exchange {
                 "symbol": market_id
             }))).unwrap());
             // don't use Promise.all here, for some reason the exchange can't handle it and crashes
-            let mut raw_response: Value = self.public_get_v1_symbols_details_symbol(extend_2(request.clone(), params.clone())).await;
+            let mut raw_response: Value = self.dispatch("publicGetV1SymbolsDetailsSymbol".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
             result.push(<Self as Gemini>::parse_market(self, raw_response.clone()));
             i += 1;
         };
@@ -637,7 +633,7 @@ pub trait Gemini : Exchange {
 
     async fn fetch_markets_from_api(&mut self, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
-        let mut market_ids_raw: Value = self.public_get_v1_symbols(params.clone()).await;
+        let mut market_ids_raw: Value = self.dispatch("publicGetV1Symbols".into(), params.clone(), Value::Undefined).await;
         //
         //     [
         //         "btcusd",
@@ -664,7 +660,7 @@ pub trait Gemini : Exchange {
                 let mut request: Value = Value::Json(normalize(&Value::Json(json!({
                     "symbol": market_id
                 }))).unwrap());
-                promises.push(self.public_get_v1_symbols_details_symbol(extend_2(request.clone(), params.clone())));
+                promises.push(self.dispatch("publicGetV1SymbolsDetailsSymbol".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await);
                 i += 1;
             };
             //
@@ -760,25 +756,25 @@ pub trait Gemini : Exchange {
         let mut is_string: Value = (response.typeof_() == Value::from("string")).into();
         let mut is_array: Value = Array::is_array(response.clone());
         if !is_string.is_truthy() && !is_array.is_truthy() {
-            market_id = self.safe_string_lower(response.clone(), Value::from("symbol"));
+            market_id = self.safe_string_lower(response.clone(), Value::from("symbol"), Value::Undefined);
             amount_precision = self.safe_number(response.clone(), Value::from("tick_size"), Value::Undefined);
             // right, exchange has an imperfect naming and this turns out to be an amount-precision
             tick_size = self.safe_number(response.clone(), Value::from("quote_increment"), Value::Undefined);
             // this is tick-size actually
             min_size = self.safe_number(response.clone(), Value::from("min_order_size"), Value::Undefined);
-            status = <Self as Gemini>::parse_market_active(self, self.safe_string(response.clone(), Value::from("status")));
-            base_id = self.safe_string(response.clone(), Value::from("base_currency"));
-            quote_id = self.safe_string(response.clone(), Value::from("quote_currency"));
-            settle_id = self.safe_string(response.clone(), Value::from("contract_price_currency"));
+            status = <Self as Gemini>::parse_market_active(self, self.safe_string(response.clone(), Value::from("status"), Value::Undefined));
+            base_id = self.safe_string(response.clone(), Value::from("base_currency"), Value::Undefined);
+            quote_id = self.safe_string(response.clone(), Value::from("quote_currency"), Value::Undefined);
+            settle_id = self.safe_string(response.clone(), Value::from("contract_price_currency"), Value::Undefined);
         } else {
             // if no detailed API was called, then parse either string or array
             if is_string.is_truthy() {
                 market_id = response.clone();
             } else {
-                market_id = self.safe_string_lower(response.clone(), Value::from(0));
-                tick_size = self.parse_number(self.parse_precision(self.safe_string(response.clone(), Value::from(1))), Value::Undefined);
+                market_id = self.safe_string_lower(response.clone(), Value::from(0), Value::Undefined);
+                tick_size = self.parse_number(self.parse_precision(self.safe_string(response.clone(), Value::from(1), Value::Undefined)), Value::Undefined);
                 // priceTickDecimalPlaces
-                amount_precision = self.parse_number(self.parse_precision(self.safe_string(response.clone(), Value::from(2))), Value::Undefined);
+                amount_precision = self.parse_number(self.parse_precision(self.safe_string(response.clone(), Value::from(2), Value::Undefined)), Value::Undefined);
                 // quantityTickDecimalPlaces
                 min_size = self.safe_number(response.clone(), Value::from(3), Value::Undefined);
             };
@@ -801,7 +797,7 @@ pub trait Gemini : Exchange {
                 while i < quote_currencies.len() {
                     let mut quote_currency: Value = quote_currencies.get(i.into());
                     if market_id_without_perp.ends_with(quote_currency.clone()).is_truthy() {
-                        let mut quote_length: Value = self.parse_to_int(Value::from(1).neg() * quote_currency.len().into());
+                        let mut quote_length: Value = self.parse_to_int(Value::from(1).neg() * quote_currency.len().into(), Value::Undefined);
                         base_id = market_id_without_perp.slice(Value::from(0), quote_length.clone());
                         quote_id = quote_currency.clone();
                         if is_perp.is_truthy() {
@@ -918,7 +914,7 @@ pub trait Gemini : Exchange {
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
             "symbol": market.get(Value::from("id"))
         }))).unwrap());
-        let mut response: Value = self.public_get_v1_pubticker_symbol(extend_2(request.clone(), params.clone())).await;
+        let mut response: Value = self.dispatch("publicGetV1PubtickerSymbol".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         //
         //     {
         //         "bid":"9117.95",
@@ -941,7 +937,7 @@ pub trait Gemini : Exchange {
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
             "symbol": market.get(Value::from("id"))
         }))).unwrap());
-        let mut response: Value = self.public_get_v2_ticker_symbol(extend_2(request.clone(), params.clone())).await;
+        let mut response: Value = self.dispatch("publicGetV2TickerSymbol".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         //
         //     {
         //         "symbol":"BTCUSD",
@@ -1043,9 +1039,9 @@ pub trait Gemini : Exchange {
         //     }
         //
         let mut volume: Value = self.safe_value(ticker.clone(), Value::from("volume"), Value::new_object());
-        let mut timestamp: Value = self.safe_integer(volume.clone(), Value::from("timestamp"));
+        let mut timestamp: Value = self.safe_integer(volume.clone(), Value::from("timestamp"), Value::Undefined);
         let mut symbol: Value = Value::Undefined;
-        let mut market_id: Value = self.safe_string_lower(ticker.clone(), Value::from("pair"));
+        let mut market_id: Value = self.safe_string_lower(ticker.clone(), Value::from("pair"), Value::Undefined);
         market = self.safe_market(market_id.clone(), market.clone(), Value::Undefined, Value::Undefined);
         let mut base_id: Value = Value::Undefined;
         let mut quote_id: Value = Value::Undefined;
@@ -1066,24 +1062,24 @@ pub trait Gemini : Exchange {
         };
         if symbol.clone().is_nullish() && market.clone().is_nonnullish() {
             symbol = market.get(Value::from("symbol"));
-            base_id = self.safe_string_upper(market.clone(), Value::from("baseId"));
-            quote_id = self.safe_string_upper(market.clone(), Value::from("quoteId"));
+            base_id = self.safe_string_upper(market.clone(), Value::from("baseId"), Value::Undefined);
+            quote_id = self.safe_string_upper(market.clone(), Value::from("quoteId"), Value::Undefined);
         };
-        let mut price: Value = self.safe_string(ticker.clone(), Value::from("price"));
+        let mut price: Value = self.safe_string(ticker.clone(), Value::from("price"), Value::Undefined);
         let mut last: Value = self.safe_string_2(ticker.clone(), Value::from("last"), Value::from("close"), price.clone());
-        let mut percentage: Value = self.safe_string(ticker.clone(), Value::from("percentChange24h"));
-        let mut open: Value = self.safe_string(ticker.clone(), Value::from("open"));
-        let mut base_volume: Value = self.safe_string(volume.clone(), base_id.clone());
-        let mut quote_volume: Value = self.safe_string(volume.clone(), quote_id.clone());
+        let mut percentage: Value = self.safe_string(ticker.clone(), Value::from("percentChange24h"), Value::Undefined);
+        let mut open: Value = self.safe_string(ticker.clone(), Value::from("open"), Value::Undefined);
+        let mut base_volume: Value = self.safe_string(volume.clone(), base_id.clone(), Value::Undefined);
+        let mut quote_volume: Value = self.safe_string(volume.clone(), quote_id.clone(), Value::Undefined);
         return self.safe_ticker(Value::Json(normalize(&Value::Json(json!({
             "symbol": symbol,
             "timestamp": timestamp,
             "datetime": self.iso8601(timestamp.clone()),
-            "high": self.safe_string(ticker.clone(), Value::from("high")),
-            "low": self.safe_string(ticker.clone(), Value::from("low")),
-            "bid": self.safe_string(ticker.clone(), Value::from("bid")),
+            "high": self.safe_string(ticker.clone(), Value::from("high"), Value::Undefined),
+            "low": self.safe_string(ticker.clone(), Value::from("low"), Value::Undefined),
+            "bid": self.safe_string(ticker.clone(), Value::from("bid"), Value::Undefined),
             "bidVolume": Value::Undefined,
-            "ask": self.safe_string(ticker.clone(), Value::from("ask")),
+            "ask": self.safe_string(ticker.clone(), Value::from("ask"), Value::Undefined),
             "askVolume": Value::Undefined,
             "vwap": Value::Undefined,
             "open": open,
@@ -1162,18 +1158,18 @@ pub trait Gemini : Exchange {
         //          "client_order_id":"1638891171610"
         //      }
         //
-        let mut timestamp: Value = self.safe_integer(trade.clone(), Value::from("timestampms"));
-        let mut id: Value = self.safe_string(trade.clone(), Value::from("tid"));
-        let mut order_id: Value = self.safe_string(trade.clone(), Value::from("order_id"));
-        let mut fee_currency_id: Value = self.safe_string(trade.clone(), Value::from("fee_currency"));
+        let mut timestamp: Value = self.safe_integer(trade.clone(), Value::from("timestampms"), Value::Undefined);
+        let mut id: Value = self.safe_string(trade.clone(), Value::from("tid"), Value::Undefined);
+        let mut order_id: Value = self.safe_string(trade.clone(), Value::from("order_id"), Value::Undefined);
+        let mut fee_currency_id: Value = self.safe_string(trade.clone(), Value::from("fee_currency"), Value::Undefined);
         let mut fee_currency_code: Value = self.safe_currency_code(fee_currency_id.clone(), Value::Undefined);
         let mut fee: Value = Value::Json(normalize(&Value::Json(json!({
-            "cost": self.safe_string(trade.clone(), Value::from("fee_amount")),
+            "cost": self.safe_string(trade.clone(), Value::from("fee_amount"), Value::Undefined),
             "currency": fee_currency_code
         }))).unwrap());
-        let mut price_string: Value = self.safe_string(trade.clone(), Value::from("price"));
-        let mut amount_string: Value = self.safe_string(trade.clone(), Value::from("amount"));
-        let mut side: Value = self.safe_string_lower(trade.clone(), Value::from("type"));
+        let mut price_string: Value = self.safe_string(trade.clone(), Value::from("price"), Value::Undefined);
+        let mut amount_string: Value = self.safe_string(trade.clone(), Value::from("amount"), Value::Undefined);
+        let mut side: Value = self.safe_string_lower(trade.clone(), Value::from("type"), Value::Undefined);
         let mut symbol: Value = self.safe_symbol(Value::Undefined, market.clone(), Value::Undefined, Value::Undefined);
         return self.safe_trade(Value::Json(normalize(&Value::Json(json!({
             "id": id,
@@ -1213,11 +1209,11 @@ pub trait Gemini : Exchange {
         let mut i: usize = 0;
         while i < response.len() {
             let mut balance: Value = response.get(i.into());
-            let mut currency_id: Value = self.safe_string(balance.clone(), Value::from("currency"));
+            let mut currency_id: Value = self.safe_string(balance.clone(), Value::from("currency"), Value::Undefined);
             let mut code: Value = self.safe_currency_code(currency_id.clone(), Value::Undefined);
             let mut account: Value = self.account();
-            account.set("free".into(), self.safe_string(balance.clone(), Value::from("available")));
-            account.set("total".into(), self.safe_string(balance.clone(), Value::from("amount")));
+            account.set("free".into(), self.safe_string(balance.clone(), Value::from("available"), Value::Undefined));
+            account.set("total".into(), self.safe_string(balance.clone(), Value::from("amount"), Value::Undefined));
             result.set(code.clone(), account.clone());
             i += 1;
         };
@@ -1227,7 +1223,7 @@ pub trait Gemini : Exchange {
     async fn fetch_trading_fees(&mut self, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        let mut response: Value = self.private_post_v1_notionalvolume(params.clone()).await;
+        let mut response: Value = self.dispatch("privatePostV1Notionalvolume".into(), params.clone(), Value::Undefined).await;
         //
         //      {
         //          "web_maker_fee_bps": 25,
@@ -1256,8 +1252,8 @@ pub trait Gemini : Exchange {
         //          ]
         //     }
         //
-        let mut maker_bps: Value = self.safe_string(response.clone(), Value::from("api_maker_fee_bps"));
-        let mut taker_bps: Value = self.safe_string(response.clone(), Value::from("api_taker_fee_bps"));
+        let mut maker_bps: Value = self.safe_string(response.clone(), Value::from("api_maker_fee_bps"), Value::Undefined);
+        let mut taker_bps: Value = self.safe_string(response.clone(), Value::from("api_taker_fee_bps"), Value::Undefined);
         let mut maker_string: Value = Precise::string_div(maker_bps.clone(), Value::from("10000"), Value::Undefined);
         let mut taker_string: Value = Precise::string_div(taker_bps.clone(), Value::from("10000"), Value::Undefined);
         let mut maker: Value = self.parse_number(maker_string.clone(), Value::Undefined);
@@ -1282,7 +1278,7 @@ pub trait Gemini : Exchange {
     async fn fetch_balance(&mut self, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        let mut response: Value = self.private_post_v1_balances(params.clone()).await;
+        let mut response: Value = self.dispatch("privatePostV1Balances".into(), params.clone(), Value::Undefined).await;
         return <Self as Gemini>::parse_balance(self, response.clone());
     }
 
@@ -1385,10 +1381,10 @@ pub trait Gemini : Exchange {
         //          "remaining_amount":"0.01"
         //      }
         //
-        let mut timestamp: Value = self.safe_integer(order.clone(), Value::from("timestampms"));
-        let mut amount: Value = self.safe_string(order.clone(), Value::from("original_amount"));
-        let mut remaining: Value = self.safe_string(order.clone(), Value::from("remaining_amount"));
-        let mut filled: Value = self.safe_string(order.clone(), Value::from("executed_amount"));
+        let mut timestamp: Value = self.safe_integer(order.clone(), Value::from("timestampms"), Value::Undefined);
+        let mut amount: Value = self.safe_string(order.clone(), Value::from("original_amount"), Value::Undefined);
+        let mut remaining: Value = self.safe_string(order.clone(), Value::from("remaining_amount"), Value::Undefined);
+        let mut filled: Value = self.safe_string(order.clone(), Value::from("executed_amount"), Value::Undefined);
         let mut status: Value = Value::from("closed");
         if order.get(Value::from("is_live")).is_truthy() {
             status = Value::from("open");
@@ -1396,9 +1392,9 @@ pub trait Gemini : Exchange {
         if order.get(Value::from("is_cancelled")).is_truthy() {
             status = Value::from("canceled");
         };
-        let mut price: Value = self.safe_string(order.clone(), Value::from("price"));
-        let mut average: Value = self.safe_string(order.clone(), Value::from("avg_execution_price"));
-        let mut r#type: Value = self.safe_string(order.clone(), Value::from("type"));
+        let mut price: Value = self.safe_string(order.clone(), Value::from("price"), Value::Undefined);
+        let mut average: Value = self.safe_string(order.clone(), Value::from("avg_execution_price"), Value::Undefined);
+        let mut r#type: Value = self.safe_string(order.clone(), Value::from("type"), Value::Undefined);
         if r#type.clone() == Value::from("exchange limit") {
             r#type = Value::from("limit");
         } else if r#type.clone() == Value::from("market buy") || r#type.clone() == Value::from("market sell") {
@@ -1407,13 +1403,13 @@ pub trait Gemini : Exchange {
             r#type = order.get(Value::from("type"));
         };
         let mut fee: Value = Value::Undefined;
-        let mut market_id: Value = self.safe_string(order.clone(), Value::from("symbol"));
+        let mut market_id: Value = self.safe_string(order.clone(), Value::from("symbol"), Value::Undefined);
         let mut symbol: Value = self.safe_symbol(market_id.clone(), market.clone(), Value::Undefined, Value::Undefined);
-        let mut id: Value = self.safe_string(order.clone(), Value::from("order_id"));
-        let mut side: Value = self.safe_string_lower(order.clone(), Value::from("side"));
-        let mut client_order_id: Value = self.safe_string(order.clone(), Value::from("client_order_id"));
+        let mut id: Value = self.safe_string(order.clone(), Value::from("order_id"), Value::Undefined);
+        let mut side: Value = self.safe_string_lower(order.clone(), Value::from("side"), Value::Undefined);
+        let mut client_order_id: Value = self.safe_string(order.clone(), Value::from("client_order_id"), Value::Undefined);
         let mut options_array: Value = self.safe_value(order.clone(), Value::from("options"), Value::new_array());
-        let mut option: Value = self.safe_string(options_array.clone(), Value::from(0));
+        let mut option: Value = self.safe_string(options_array.clone(), Value::from(0), Value::Undefined);
         let mut time_in_force: Value = Value::from("GTC");
         let mut post_only: Value = false.into();
         if option.clone().is_nonnullish() {
@@ -1457,7 +1453,7 @@ pub trait Gemini : Exchange {
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
             "order_id": id
         }))).unwrap());
-        let mut response: Value = self.private_post_v1_order_status(extend_2(request.clone(), params.clone())).await;
+        let mut response: Value = self.dispatch("privatePostV1OrderStatus".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         //
         //      {
         //          "order_id":"106028543717",
@@ -1487,7 +1483,7 @@ pub trait Gemini : Exchange {
     async fn fetch_open_orders(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        let mut response: Value = self.private_post_v1_orders(params.clone()).await;
+        let mut response: Value = self.dispatch("privatePostV1Orders".into(), params.clone(), Value::Undefined).await;
         //
         //      [
         //          {
@@ -1527,7 +1523,7 @@ pub trait Gemini : Exchange {
         if r#type.clone() != Value::from("limit") {
             panic!(r###"ExchangeError::new(self.get("id".into()) + Value::from(" createOrder() allows limit orders only"))"###);
         };
-        let mut client_order_id: Value = self.safe_string_2(params.clone(), Value::from("clientOrderId"), Value::from("client_order_id"));
+        let mut client_order_id: Value = self.safe_string_2(params.clone(), Value::from("clientOrderId"), Value::from("client_order_id"), Value::Undefined);
         params = self.omit(params.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("clientOrderId").into(), Value::from("client_order_id").into()])));
         if client_order_id.clone().is_nullish() {
             client_order_id = self.milliseconds().to_string();
@@ -1547,7 +1543,7 @@ pub trait Gemini : Exchange {
         // 'options': [], one of:  maker-or-cancel, immediate-or-cancel, fill-or-kill, auction-only, indication-of-interest
         r#type = self.safe_string(params.clone(), Value::from("type"), r#type.clone());
         params = self.omit(params.clone(), Value::from("type"));
-        let mut trigger_price: Value = self.safe_string_n(params.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("triggerPrice").into(), Value::from("stop_price").into(), Value::from("stopPrice").into()])));
+        let mut trigger_price: Value = self.safe_string_n(params.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("triggerPrice").into(), Value::from("stop_price").into(), Value::from("stopPrice").into()])), Value::Undefined);
         params = self.omit(params.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("triggerPrice").into(), Value::from("stop_price").into(), Value::from("stopPrice").into(), Value::from("type").into()])));
         if r#type.clone() == Value::from("stopLimit") {
             panic!(r###"ArgumentsRequired::new(self.get("id".into()) + Value::from(" createOrder() requires a triggerPrice parameter or a stop_price parameter for ") + r#type.clone() + Value::from(" orders"))"###);
@@ -1557,7 +1553,7 @@ pub trait Gemini : Exchange {
             request.set("type".into(), Value::from("exchange stop limit"));
         } else {
             // No options can be applied to stop-limit orders at this time.
-            let mut time_in_force: Value = self.safe_string(params.clone(), Value::from("timeInForce"));
+            let mut time_in_force: Value = self.safe_string(params.clone(), Value::from("timeInForce"), Value::Undefined);
             params = self.omit(params.clone(), Value::from("timeInForce"));
             if time_in_force.clone().is_nonnullish() {
                 if time_in_force.clone() == Value::from("IOC") || time_in_force.clone() == Value::from("immediate-or-cancel") {
@@ -1574,12 +1570,12 @@ pub trait Gemini : Exchange {
                 request.set("options".into(), Value::Json(serde_json::Value::Array(vec![Value::from("maker-or-cancel").into()])));
             };
             // allowing override for auction-only and indication-of-interest order options
-            let mut options: Value = self.safe_string(params.clone(), Value::from("options"));
+            let mut options: Value = self.safe_string(params.clone(), Value::from("options"), Value::Undefined);
             if options.clone().is_nonnullish() {
                 request.set("options".into(), Value::Json(serde_json::Value::Array(vec![options.clone().into()])));
             };
         };
-        let mut response: Value = self.private_post_v1_order_new(extend_2(request.clone(), params.clone())).await;
+        let mut response: Value = self.dispatch("privatePostV1OrderNew".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         //
         //      {
         //          "order_id":"106027397702",
@@ -1612,7 +1608,7 @@ pub trait Gemini : Exchange {
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
             "order_id": id
         }))).unwrap());
-        let mut response: Value = self.private_post_v1_order_cancel(extend_2(request.clone(), params.clone())).await;
+        let mut response: Value = self.dispatch("privatePostV1OrderCancel".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         //
         //      {
         //          "order_id":"106028543717",
@@ -1654,9 +1650,9 @@ pub trait Gemini : Exchange {
             request.set("limit_trades".into(), limit.clone());
         };
         if since.clone().is_nonnullish() {
-            request.set("timestamp".into(), self.parse_to_int(since.clone() / Value::from(1000)));
+            request.set("timestamp".into(), self.parse_to_int(since.clone() / Value::from(1000), Value::Undefined));
         };
-        let mut response: Value = self.private_post_v1_mytrades(extend_2(request.clone(), params.clone())).await;
+        let mut response: Value = self.dispatch("privatePostV1Mytrades".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         return self.parse_trades(response.clone(), market.clone(), since.clone(), limit.clone(), Value::Undefined);
     }
 
@@ -1671,7 +1667,7 @@ pub trait Gemini : Exchange {
             "amount": amount,
             "address": address
         }))).unwrap());
-        let mut response: Value = self.private_post_v1_withdraw_currency(extend_2(request.clone(), params.clone())).await;
+        let mut response: Value = self.dispatch("privatePostV1WithdrawCurrency".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         //
         //   for BTC
         //     {
@@ -1695,7 +1691,7 @@ pub trait Gemini : Exchange {
         //         "message":"Cryptocurrency withdrawal address whitelists are not enabled for account 24. Please contact support@gemini.com for information on setting up a withdrawal address whitelist."
         //     }
         //
-        let mut result: Value = self.safe_string(response.clone(), Value::from("result"));
+        let mut result: Value = self.safe_string(response.clone(), Value::from("result"), Value::Undefined);
         if result.clone() == Value::from("error") {
             panic!(r###"ExchangeError::new(self.get("id".into()) + Value::from(" withdraw() failed: ") + self.json(response.clone()))"###);
         };
@@ -1720,7 +1716,7 @@ pub trait Gemini : Exchange {
         if since.clone().is_nonnullish() {
             request.set("timestamp".into(), since.clone());
         };
-        let mut response: Value = self.private_post_v1_transfers(extend_2(request.clone(), params.clone())).await;
+        let mut response: Value = self.dispatch("privatePostV1Transfers".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         return self.parse_transactions(response.clone(), Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined);
     }
 
@@ -1743,13 +1739,13 @@ pub trait Gemini : Exchange {
         //         "txHash":"0x28267179f92926d85c5516bqc063b2631935573d8915258e95d9572eedcc8cc"
         //     }
         //
-        let mut timestamp: Value = self.safe_integer(transaction.clone(), Value::from("timestampms"));
-        let mut currency_id: Value = self.safe_string(transaction.clone(), Value::from("currency"));
+        let mut timestamp: Value = self.safe_integer(transaction.clone(), Value::from("timestampms"), Value::Undefined);
+        let mut currency_id: Value = self.safe_string(transaction.clone(), Value::from("currency"), Value::Undefined);
         let mut code: Value = self.safe_currency_code(currency_id.clone(), currency.clone());
-        let mut address: Value = self.safe_string(transaction.clone(), Value::from("destination"));
-        let mut r#type: Value = self.safe_string_lower(transaction.clone(), Value::from("type"));
+        let mut address: Value = self.safe_string(transaction.clone(), Value::from("destination"), Value::Undefined);
+        let mut r#type: Value = self.safe_string_lower(transaction.clone(), Value::from("type"), Value::Undefined);
         // if status field is available, then it's complete
-        let mut status_raw: Value = self.safe_string(transaction.clone(), Value::from("status"));
+        let mut status_raw: Value = self.safe_string(transaction.clone(), Value::from("status"), Value::Undefined);
         let mut fee: Value = Value::Undefined;
         let mut fee_amount: Value = self.safe_number(transaction.clone(), Value::from("feeAmount"), Value::Undefined);
         if fee_amount.clone().is_nonnullish() {
@@ -1760,8 +1756,8 @@ pub trait Gemini : Exchange {
         };
         return Value::Json(normalize(&Value::Json(json!({
             "info": transaction,
-            "id": self.safe_string_2(transaction.clone(), Value::from("eid"), Value::from("withdrawalId")),
-            "txid": self.safe_string(transaction.clone(), Value::from("txHash")),
+            "id": self.safe_string_2(transaction.clone(), Value::from("eid"), Value::from("withdrawalId"), Value::Undefined),
+            "txid": self.safe_string(transaction.clone(), Value::from("txHash"), Value::Undefined),
             "timestamp": timestamp,
             "datetime": self.iso8601(timestamp.clone()),
             "network": Value::Undefined,
@@ -1777,7 +1773,7 @@ pub trait Gemini : Exchange {
             "status": <Self as Gemini>::parse_transaction_status(self, status_raw.clone()),
             "updated": Value::Undefined,
             "internal": Value::Undefined,
-            "comment": self.safe_string(transaction.clone(), Value::from("message")),
+            "comment": self.safe_string(transaction.clone(), Value::from("message"), Value::Undefined),
             "fee": fee
         }))).unwrap());
     }
@@ -1790,7 +1786,7 @@ pub trait Gemini : Exchange {
         return self.safe_string(statuses.clone(), status.clone(), status.clone());
     }
 
-    fn parse_deposit_address(&self, mut deposit_address: Value, mut currency: Value) -> Value {
+    fn parse_deposit_address(&mut self, mut deposit_address: Value, mut currency: Value) -> Value {
         //
         //      {
         //          "address": "0xed6494Fe7c1E56d1bd6136e89268C51E32d9708B",
@@ -1798,7 +1794,7 @@ pub trait Gemini : Exchange {
         //          "addressVersion": "eV1"                                         }
         //      }
         //
-        let mut address: Value = self.safe_string(deposit_address.clone(), Value::from("address"));
+        let mut address: Value = self.safe_string(deposit_address.clone(), Value::from("address"), Value::Undefined);
         let mut code: Value = self.safe_currency_code(Value::Undefined, currency.clone());
         return Value::Json(normalize(&Value::Json(json!({
             "currency": code,
@@ -1815,8 +1811,8 @@ pub trait Gemini : Exchange {
         let mut grouped_by_network: Value = <Self as Gemini>::fetch_deposit_addresses_by_network(self, code.clone(), params.clone()).await;
         let mut network_code: Value = Value::Undefined;
         (network_code, params) = shift_2(self.handle_network_code_and_params(params.clone()));
-        let mut network_group: Value = self.index_by(self.safe_value(grouped_by_network.clone(), network_code.clone()), Value::from("currency"));
-        return self.safe_value(network_group.clone(), code.clone());
+        let mut network_group: Value = self.index_by(self.safe_value(grouped_by_network.clone(), network_code.clone(), Value::Undefined), Value::from("currency"));
+        return self.safe_value(network_group.clone(), code.clone(), Value::Undefined);
     }
 
     async fn fetch_deposit_addresses_by_network(&mut self, mut code: Value, mut params: Value) -> Value {
@@ -1833,7 +1829,7 @@ pub trait Gemini : Exchange {
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
             "network": network_id
         }))).unwrap());
-        let mut response: Value = self.private_post_v1_addresses_network(extend_2(request.clone(), params.clone())).await;
+        let mut response: Value = self.dispatch("privatePostV1AddressesNetwork".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         let mut results: Value = self.parse_deposit_addresses(response.clone(), Value::Json(serde_json::Value::Array(vec![code.clone().into()])), false.into(), Value::Json(normalize(&Value::Json(json!({
             "network": network_code,
             "currency": code
@@ -1841,78 +1837,9 @@ pub trait Gemini : Exchange {
         return self.group_by(results.clone(), Value::from("network"));
     }
 
-    fn sign(&mut self, mut path: Value, mut api: Value, mut method: Value, mut params: Value, mut headers: Value, mut body: Value) -> Value {
-        api = api.or_default(Value::from("public"));
-        method = method.or_default(Value::from("GET"));
-        params = params.or_default(Value::new_object());
-        let mut url: Value = Value::from("/") + self.implode_params(path.clone(), params.clone());
-        let mut query: Value = self.omit(params.clone(), self.extract_params(path.clone()));
-        if api.clone() == Value::from("private") {
-            self.check_required_credentials(Value::Undefined);
-            let mut api_key: Value = self.get("apiKey".into());
-            if apiKey.index_of(Value::from("account")) < Value::from(0) {
-                panic!(r###"AuthenticationError::new(self.get("id".into()) + Value::from(" sign() requires an account-key, master-keys are not-supported"))"###);
-            };
-            let mut nonce: Value = <Self as Gemini>::nonce(self).to_string();
-            let mut request: Value = extend_2(Value::Json(normalize(&Value::Json(json!({
-                "request": url,
-                "nonce": nonce
-            }))).unwrap()), query.clone());
-            let mut payload: Value = self.json(request.clone());
-            payload = self.string_to_base64(payload.clone());
-            let mut signature: Value = self.hmac(self.encode(payload.clone()), self.encode(self.get("secret".into())), sha384.clone());
-            headers = Value::Json(normalize(&Value::Json(json!({
-                "Content-Type": "text/plain",
-                "X-GEMINI-APIKEY": self.get("apiKey".into()),
-                "X-GEMINI-PAYLOAD": payload,
-                "X-GEMINI-SIGNATURE": signature
-            }))).unwrap());
-        } else {
-            if Object::keys(query.clone()).len() > 0 {
-                url = url +  Value::from("?") + self.urlencode(query.clone());
-            };
-        };
-        url = self.get("urls".into()).get(Value::from("api")).get(api.clone()) + url.clone();
-        if method.clone() == Value::from("POST") || method.clone() == Value::from("DELETE") {
-            body = self.json(query.clone());
-        };
-        return Value::Json(normalize(&Value::Json(json!({
-            "url": url,
-            "method": method,
-            "body": body,
-            "headers": headers
-        }))).unwrap());
-    }
+    
 
-    fn handle_errors(&mut self, mut http_code: Value, mut reason: Value, mut url: Value, mut method: Value, mut headers: Value, mut body: Value, mut response: Value, mut request_headers: Value, mut request_body: Value) -> Value {
-        if response.clone().is_nullish() {
-            if body.typeof_() == Value::from("string") {
-                let mut feedback: Value = self.get("id".into()) + Value::from(" ") + body.clone();
-                self.throw_broadly_matched_exception(self.get("exceptions".into()).get(Value::from("broad")), body.clone(), feedback.clone());
-            };
-            return Value::Undefined;
-        };
-        // fallback to default error handler
-        //
-        //     {
-        //         "result": "error",
-        //         "reason": "BadNonce",
-        //         "message": "Out-of-sequence nonce <1234> precedes previously used nonce <2345>"
-        //     }
-        //
-        let mut result: Value = self.safe_string(response.clone(), Value::from("result"));
-        if result.clone() == Value::from("error") {
-            let mut reason_inner: Value = self.safe_string(response.clone(), Value::from("reason"));
-            let mut message: Value = self.safe_string(response.clone(), Value::from("message"));
-            let mut feedback: Value = self.get("id".into()) + Value::from(" ") + message.clone();
-            self.throw_exactly_matched_exception(self.get("exceptions".into()).get(Value::from("exact")), reason_inner.clone(), feedback.clone());
-            self.throw_exactly_matched_exception(self.get("exceptions".into()).get(Value::from("exact")), message.clone(), feedback.clone());
-            self.throw_broadly_matched_exception(self.get("exceptions".into()).get(Value::from("broad")), message.clone(), feedback.clone());
-            panic!(r###"ExchangeError::new(feedback)"###);
-        };
-        // unknown message
-        return Value::Undefined;
-    }
+    
 
     async fn create_deposit_address(&mut self, mut code: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
@@ -1921,8 +1848,8 @@ pub trait Gemini : Exchange {
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
             "currency": currency.get(Value::from("id"))
         }))).unwrap());
-        let mut response: Value = self.private_post_v1_deposit_currency_new_address(extend_2(request.clone(), params.clone())).await;
-        let mut address: Value = self.safe_string(response.clone(), Value::from("address"));
+        let mut response: Value = self.dispatch("privatePostV1DepositCurrencyNewAddress".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
+        let mut address: Value = self.safe_string(response.clone(), Value::from("address"), Value::Undefined);
         self.check_address(address.clone());
         return Value::Json(normalize(&Value::Json(json!({
             "currency": code,
@@ -2064,8 +1991,8 @@ impl ValueTrait for GeminiImpl {
     fn push(&mut self, value: Value) { self.0.push(value) }
     fn split(&self, separator: Value) -> Value { self.0.split(separator) }
     fn contains_key(&self, key: Value) -> bool { self.0.contains_key(key) }
-    fn keys(&self) -> Vec<Value> { self.0.keys() }
-    fn values(&self) -> Vec<Value> { self.0.values() }
+    fn keys(&self) -> Value { self.0.keys() }
+    fn values(&self) -> Value { self.0.values() }
     fn to_array(&self, x: Value) -> Value { self.0.to_array(x) }
     fn index_of(&self, x: Value) -> Value { self.0.index_of(x) }
     fn join(&self, glue: Value) -> Value { self.0.join(glue) }

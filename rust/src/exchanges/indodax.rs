@@ -11,7 +11,16 @@ use async_trait::async_trait;
 use std::str::FromStr;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, JSON, Array, Object, Math, parse_int, shift_2, extend_2, normalize};
+use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, BoolExt, JSON, Array, Object, Math, Promise, parse_int, shift_2, extend_2, normalize};
+// Crypto hash identifiers
+fn sha256() -> Value { Value::from("sha256") }
+fn sha384() -> Value { Value::from("sha384") }
+fn sha512() -> Value { Value::from("sha512") }
+fn md5() -> Value { Value::from("md5") }
+fn ed25519() -> Value { Value::from("ed25519") }
+fn rsa(msg: Value, secret: Value, _hash: Value) -> Value { msg }
+fn eddsa(msg: Value, secret: Value, _curve: Value) -> Value { msg }
+fn secp256k1() -> Value { Value::from("secp256k1") }
 
 use crate::exchange::{PRECISE_BASE, TRUNCATE, ROUND, ROUND_UP, ROUND_DOWN};
 use crate::exchange::{DECIMAL_PLACES, SIGNIFICANT_DIGITS, TICK_SIZE, NO_PADDING, PAD_WITH_ZERO};
@@ -335,120 +344,26 @@ pub trait Indodax : Exchange {
     }
 
 
-    async fn fetch_markets(&mut self, mut params: Value) -> Value {
-        params = params.or_default(Value::new_object());
-        let mut response: Value = self.public_get_api_pairs(params.clone()).await;
-        //
-        //     [
-        //         {
-        //             "id": "btcidr",
-        //             "symbol": "BTCIDR",
-        //             "base_currency": "idr",
-        //             "traded_currency": "btc",
-        //             "traded_currency_unit": "BTC",
-        //             "description": "BTC/IDR",
-        //             "ticker_id": "btc_idr",
-        //             "volume_precision": 0,
-        //             "price_precision": 1000,
-        //             "price_round": 8,
-        //             "pricescale": 1000,
-        //             "trade_min_base_currency": 10000,
-        //             "trade_min_traded_currency": 0.00007457,
-        //             "has_memo": false,
-        //             "memo_name": false,
-        //             "has_payment_id": false,
-        //             "trade_fee_percent": 0.3,
-        //             "url_logo": "https://indodax.com/v2/logo/svg/color/btc.svg",
-        //             "url_logo_png": "https://indodax.com/v2/logo/png/color/btc.png",
-        //             "is_maintenance": 0
-        //         }
-        //     ]
-        //
-        let mut result: Value = Value::new_array();
-        let mut i: usize = 0;
-        while i < response.len() {
-            let mut market: Value = response.get(i.into());
-            let mut id: Value = self.safe_string(market.clone(), Value::from("id"));
-            let mut base_id: Value = self.safe_string(market.clone(), Value::from("traded_currency"));
-            let mut quote_id: Value = self.safe_string(market.clone(), Value::from("base_currency"));
-            let mut base: Value = self.safe_currency_code(base_id.clone(), Value::Undefined);
-            let mut quote: Value = self.safe_currency_code(quote_id.clone(), Value::Undefined);
-            let mut is_maintenance: Value = self.safe_integer(market.clone(), Value::from("is_maintenance"));
-            result.push(Value::Json(normalize(&Value::Json(json!({
-                "id": id,
-                "symbol": base.clone() + Value::from("/") + quote.clone(),
-                "base": base,
-                "quote": quote,
-                "settle": Value::Undefined,
-                "baseId": base_id,
-                "quoteId": quote_id,
-                "settleId": Value::Undefined,
-                "type": "spot",
-                "spot": true,
-                "margin": false,
-                "swap": false,
-                "future": false,
-                "option": false,
-                "active": if is_maintenance.is_truthy() { false.into() } else { true.into() },
-                "contract": false,
-                "linear": Value::Undefined,
-                "inverse": Value::Undefined,
-                "taker": self.safe_number(market.clone(), Value::from("trade_fee_percent"), Value::Undefined),
-                "contractSize": Value::Undefined,
-                "expiry": Value::Undefined,
-                "expiryDatetime": Value::Undefined,
-                "strike": Value::Undefined,
-                "optionType": Value::Undefined,
-                "percentage": true,
-                "precision": Value::Json(normalize(&Value::Json(json!({
-                    "amount": self.parse_number(Value::from("1e-8"), Value::Undefined),
-                    "price": self.parse_number(self.parse_precision(self.safe_string(market.clone(), Value::from("price_round"))), Value::Undefined),
-                    "cost": self.parse_number(self.parse_precision(self.safe_string(market.clone(), Value::from("volume_precision"))), Value::Undefined)
-                }))).unwrap()),
-                "limits": Value::Json(normalize(&Value::Json(json!({
-                    "leverage": Value::Json(normalize(&Value::Json(json!({
-                        "min": Value::Undefined,
-                        "max": Value::Undefined
-                    }))).unwrap()),
-                    "amount": Value::Json(normalize(&Value::Json(json!({
-                        "min": self.safe_number(market.clone(), Value::from("trade_min_traded_currency"), Value::Undefined),
-                        "max": Value::Undefined
-                    }))).unwrap()),
-                    "price": Value::Json(normalize(&Value::Json(json!({
-                        "min": self.safe_number(market.clone(), Value::from("trade_min_base_currency"), Value::Undefined),
-                        "max": Value::Undefined
-                    }))).unwrap()),
-                    "cost": Value::Json(normalize(&Value::Json(json!({
-                        "min": Value::Undefined,
-                        "max": Value::Undefined
-                    }))).unwrap())
-                }))).unwrap()),
-                "created": Value::Undefined,
-                "info": market
-            }))).unwrap()));
-            i += 1;
-        };
-        return result.clone();
-    }
+    
 
     fn parse_balance(&self, mut response: Value) -> Value {
         let mut balances: Value = self.safe_value(response.clone(), Value::from("return"), Value::new_object());
         let mut free: Value = self.safe_value(balances.clone(), Value::from("balance"), Value::new_object());
         let mut used: Value = self.safe_value(balances.clone(), Value::from("balance_hold"), Value::new_object());
-        let mut timestamp: Value = self.safe_timestamp(balances.clone(), Value::from("server_time"));
+        let mut timestamp: Value = self.safe_timestamp(balances.clone(), Value::from("server_time"), Value::Undefined);
         let mut result: Value = Value::Json(normalize(&Value::Json(json!({
             "info": response,
             "timestamp": timestamp,
             "datetime": self.iso8601(timestamp.clone())
         }))).unwrap());
-        let mut currency_ids: Value = Object::keys(free.clone());
+        let mut currency_ids: Value = free.clone().keys();
         let mut i: usize = 0;
         while i < currency_ids.len() {
             let mut currency_id: Value = currency_ids.get(i.into());
             let mut code: Value = self.safe_currency_code(currency_id.clone(), Value::Undefined);
             let mut account: Value = self.account();
-            account.set("free".into(), self.safe_string(free.clone(), currency_id.clone()));
-            account.set("used".into(), self.safe_string(used.clone(), currency_id.clone()));
+            account.set("free".into(), self.safe_string(free.clone(), currency_id.clone(), Value::Undefined));
+            account.set("used".into(), self.safe_string(used.clone(), currency_id.clone(), Value::Undefined));
             result.set(code.clone(), account.clone());
             i += 1;
         };
@@ -458,7 +373,7 @@ pub trait Indodax : Exchange {
     async fn fetch_balance(&mut self, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        let mut response: Value = self.private_post_get_info(params.clone()).await;
+        let mut response: Value = self.dispatch("privatePostGetInfo".into(), params.clone(), Value::Undefined).await;
         //
         //     {
         //         "success":1,
@@ -538,19 +453,19 @@ pub trait Indodax : Exchange {
         //     }
         //
         let mut symbol: Value = self.safe_symbol(Value::Undefined, market.clone(), Value::Undefined, Value::Undefined);
-        let mut timestamp: Value = self.safe_timestamp(ticker.clone(), Value::from("server_time"));
+        let mut timestamp: Value = self.safe_timestamp(ticker.clone(), Value::from("server_time"), Value::Undefined);
         let mut base_volume: Value = Value::from("vol_") + market.get(Value::from("baseId")).to_lower_case();
         let mut quote_volume: Value = Value::from("vol_") + market.get(Value::from("quoteId")).to_lower_case();
-        let mut last: Value = self.safe_string(ticker.clone(), Value::from("last"));
+        let mut last: Value = self.safe_string(ticker.clone(), Value::from("last"), Value::Undefined);
         return self.safe_ticker(Value::Json(normalize(&Value::Json(json!({
             "symbol": symbol,
             "timestamp": timestamp,
             "datetime": self.iso8601(timestamp.clone()),
-            "high": self.safe_string(ticker.clone(), Value::from("high")),
-            "low": self.safe_string(ticker.clone(), Value::from("low")),
-            "bid": self.safe_string(ticker.clone(), Value::from("buy")),
+            "high": self.safe_string(ticker.clone(), Value::from("high"), Value::Undefined),
+            "low": self.safe_string(ticker.clone(), Value::from("low"), Value::Undefined),
+            "bid": self.safe_string(ticker.clone(), Value::from("buy"), Value::Undefined),
             "bidVolume": Value::Undefined,
-            "ask": self.safe_string(ticker.clone(), Value::from("sell")),
+            "ask": self.safe_string(ticker.clone(), Value::from("sell"), Value::Undefined),
             "askVolume": Value::Undefined,
             "vwap": Value::Undefined,
             "open": Value::Undefined,
@@ -560,8 +475,8 @@ pub trait Indodax : Exchange {
             "change": Value::Undefined,
             "percentage": Value::Undefined,
             "average": Value::Undefined,
-            "baseVolume": self.safe_string(ticker.clone(), base_volume.clone()),
-            "quoteVolume": self.safe_string(ticker.clone(), quote_volume.clone()),
+            "baseVolume": self.safe_string(ticker.clone(), base_volume.clone(), Value::Undefined),
+            "quoteVolume": self.safe_string(ticker.clone(), quote_volume.clone(), Value::Undefined),
             "info": ticker
         }))).unwrap()), market.clone());
     }
@@ -627,19 +542,19 @@ pub trait Indodax : Exchange {
 
 
     fn parse_trade(&mut self, mut trade: Value, mut market: Value) -> Value {
-        let mut timestamp: Value = self.safe_timestamp(trade.clone(), Value::from("date"));
+        let mut timestamp: Value = self.safe_timestamp(trade.clone(), Value::from("date"), Value::Undefined);
         return self.safe_trade(Value::Json(normalize(&Value::Json(json!({
-            "id": self.safe_string(trade.clone(), Value::from("tid")),
+            "id": self.safe_string(trade.clone(), Value::from("tid"), Value::Undefined),
             "info": trade,
             "timestamp": timestamp,
             "datetime": self.iso8601(timestamp.clone()),
             "symbol": self.safe_symbol(Value::Undefined, market.clone(), Value::Undefined, Value::Undefined),
             "type": Value::Undefined,
-            "side": self.safe_string(trade.clone(), Value::from("type")),
+            "side": self.safe_string(trade.clone(), Value::from("type"), Value::Undefined),
             "order": Value::Undefined,
             "takerOrMaker": Value::Undefined,
-            "price": self.safe_string(trade.clone(), Value::from("price")),
-            "amount": self.safe_string(trade.clone(), Value::from("amount")),
+            "price": self.safe_string(trade.clone(), Value::from("price"), Value::Undefined),
+            "amount": self.safe_string(trade.clone(), Value::from("amount"), Value::Undefined),
             "cost": Value::Undefined,
             "fee": Value::Undefined
         }))).unwrap()), market.clone());
@@ -670,7 +585,7 @@ pub trait Indodax : Exchange {
         //         "Volume": "0"
         //     }
         //
-        return Value::Json(serde_json::Value::Array(vec![self.safe_timestamp(ohlcv.clone(), Value::from("Time")).into(), self.safe_number(ohlcv.clone(), Value::from("Open"), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from("High"), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from("Low"), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from("Close"), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from("Volume"), Value::Undefined).into()]));
+        return Value::Json(serde_json::Value::Array(vec![self.safe_timestamp(ohlcv.clone(), Value::from("Time"), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from("Open"), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from("High"), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from("Low"), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from("Close"), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from("Volume"), Value::Undefined).into()]));
     }
 
     async fn fetch_ohlcv(&mut self, mut symbol: Value, mut timeframe: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
@@ -766,10 +681,10 @@ pub trait Indodax : Exchange {
         let mut status: Value = <Self as Indodax>::parse_order_status(self, self.safe_string(order.clone(), Value::from("status"), Value::from("open")));
         let mut symbol: Value = Value::Undefined;
         let mut cost: Value = Value::Undefined;
-        let mut price: Value = self.safe_string(order.clone(), Value::from("price"));
+        let mut price: Value = self.safe_string(order.clone(), Value::from("price"), Value::Undefined);
         let mut amount: Value = Value::Undefined;
         let mut remaining: Value = Value::Undefined;
-        let mut market_id: Value = self.safe_string(order.clone(), Value::from("pair"));
+        let mut market_id: Value = self.safe_string(order.clone(), Value::from("pair"), Value::Undefined);
         market = self.safe_market(market_id.clone(), market.clone(), Value::Undefined, Value::Undefined);
         if market.clone().is_nonnullish() {
             symbol = market.get(Value::from("symbol"));
@@ -781,19 +696,19 @@ pub trait Indodax : Exchange {
             if market.get(Value::from("baseId")) == Value::from("idr") && order.contains_key(Value::from("remain_rp")) {
                 base_id = Value::from("rp");
             };
-            cost = self.safe_string(order.clone(), Value::from("order_") + quote_id.clone());
+            cost = self.safe_string(order.clone(), Value::from("order_") + quote_id.clone(), Value::Undefined);
             if !cost.is_truthy() {
-                amount = self.safe_string(order.clone(), Value::from("order_") + base_id.clone());
-                remaining = self.safe_string(order.clone(), Value::from("remain_") + base_id.clone());
+                amount = self.safe_string(order.clone(), Value::from("order_") + base_id.clone(), Value::Undefined);
+                remaining = self.safe_string(order.clone(), Value::from("remain_") + base_id.clone(), Value::Undefined);
             };
         };
-        let mut timestamp: Value = self.safe_integer(order.clone(), Value::from("submit_time"));
+        let mut timestamp: Value = self.safe_integer(order.clone(), Value::from("submit_time"), Value::Undefined);
         let mut fee: Value = Value::Undefined;
-        let mut id: Value = self.safe_string(order.clone(), Value::from("order_id"));
+        let mut id: Value = self.safe_string(order.clone(), Value::from("order_id"), Value::Undefined);
         return self.safe_order(Value::Json(normalize(&Value::Json(json!({
             "info": order,
             "id": id,
-            "clientOrderId": self.safe_string(order.clone(), Value::from("client_order_id")),
+            "clientOrderId": self.safe_string(order.clone(), Value::from("client_order_id"), Value::Undefined),
             "timestamp": timestamp,
             "datetime": self.iso8601(timestamp.clone()),
             "lastTradeTimestamp": Value::Undefined,
@@ -826,7 +741,7 @@ pub trait Indodax : Exchange {
             "pair": market.get(Value::from("id")),
             "order_id": id
         }))).unwrap());
-        let mut response: Value = self.private_post_get_order(extend_2(request.clone(), params.clone())).await;
+        let mut response: Value = self.dispatch("privatePostGetOrder".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         let mut orders: Value = response.get(Value::from("return"));
         let mut order: Value = <Self as Indodax>::parse_order(self, extend_2(Value::Json(normalize(&Value::Json(json!({
             "id": id
@@ -844,7 +759,7 @@ pub trait Indodax : Exchange {
             market = self.market(symbol.clone());
             request.set("pair".into(), market.get(Value::from("id")));
         };
-        let mut response: Value = self.private_post_open_orders(extend_2(request.clone(), params.clone())).await;
+        let mut response: Value = self.dispatch("privatePostOpenOrders".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         let mut raw_orders: Value = response.get(Value::from("return")).get(Value::from("orders"));
         // { success: 1, return: { orders: null }} if no orders
         if !raw_orders.is_truthy() {
@@ -855,7 +770,7 @@ pub trait Indodax : Exchange {
             return self.parse_orders(raw_orders.clone(), market.clone(), since.clone(), limit.clone(), Value::Undefined);
         };
         // { success: 1, return: { orders: { marketid: [ ... objects ] }}} if all orders are fetched
-        let mut market_ids: Value = Object::keys(raw_orders.clone());
+        let mut market_ids: Value = raw_orders.clone().keys();
         let mut exchange_orders: Value = Value::new_array();
         let mut i: usize = 0;
         while i < market_ids.len() {
@@ -879,7 +794,7 @@ pub trait Indodax : Exchange {
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
             "pair": market.get(Value::from("id"))
         }))).unwrap());
-        let mut response: Value = self.private_post_order_history(extend_2(request.clone(), params.clone())).await;
+        let mut response: Value = self.dispatch("privatePostOrderHistory".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         let mut orders: Value = self.parse_orders(response.get(Value::from("return")).get(Value::from("orders")), market.clone(), Value::Undefined, Value::Undefined, Value::Undefined);
         orders = self.filter_by(orders.clone(), Value::from("status"), Value::from("closed"));
         return self.filter_by_symbol_since_limit(orders.clone(), symbol.clone(), since.clone(), limit.clone(), Value::Undefined);
@@ -920,7 +835,7 @@ pub trait Indodax : Exchange {
             price_is_required = true.into();
             quantity_is_required = true.into();
             if side.clone() == Value::from("buy") {
-                request.set(market.get(Value::from("quoteId")), self.parse_to_numeric(Precise::string_mul(self.number_to_string(amount.clone()), self.number_to_string(price.clone()))));
+                request.set(market.get(Value::from("quoteId")), self.parse_to_numeric(Precise::string_mul(self.number_to_string(amount.clone()), self.number_to_string(price.clone())), Value::Undefined));
             };
         };
         if price_is_required.is_truthy() {
@@ -934,7 +849,7 @@ pub trait Indodax : Exchange {
         };
         let mut result: Value = self.dispatch("privatePostTrade".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         let mut data: Value = self.safe_value(result.clone(), Value::from("return"), Value::new_object());
-        let mut id: Value = self.safe_string(data.clone(), Value::from("order_id"));
+        let mut id: Value = self.safe_string(data.clone(), Value::from("order_id"), Value::Undefined);
         return self.safe_order(Value::Json(normalize(&Value::Json(json!({
             "info": result,
             "id": id
@@ -946,7 +861,7 @@ pub trait Indodax : Exchange {
         if symbol.clone().is_nullish() {
             panic!(r###"ArgumentsRequired::new(self.get("id".into()) + Value::from(" cancelOrder() requires a symbol argument"))"###);
         };
-        let mut side: Value = self.safe_value(params.clone(), Value::from("side"));
+        let mut side: Value = self.safe_value(params.clone(), Value::from("side"), Value::Undefined);
         if side.clone().is_nullish() {
             panic!(r###"ArgumentsRequired::new(self.get("id".into()) + Value::from(r#" cancelOrder() requires an extra "side" param"#))"###);
         };
@@ -957,7 +872,7 @@ pub trait Indodax : Exchange {
             "pair": market.get(Value::from("id")),
             "type": side
         }))).unwrap());
-        let mut response: Value = self.private_post_cancel_order(extend_2(request.clone(), params.clone())).await;
+        let mut response: Value = self.dispatch("privatePostCancelOrder".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         //
         //    {
         //        "success": 1,
@@ -988,7 +903,7 @@ pub trait Indodax : Exchange {
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
             "currency": currency.get(Value::from("id"))
         }))).unwrap());
-        let mut response: Value = self.private_post_withdraw_fee(extend_2(request.clone(), params.clone())).await;
+        let mut response: Value = self.dispatch("privatePostWithdrawFee".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         //
         //     {
         //         "success": 1,
@@ -1000,7 +915,7 @@ pub trait Indodax : Exchange {
         //     }
         //
         let mut data: Value = self.safe_value(response.clone(), Value::from("return"), Value::new_object());
-        let mut currency_id: Value = self.safe_string(data.clone(), Value::from("currency"));
+        let mut currency_id: Value = self.safe_string(data.clone(), Value::from("currency"), Value::Undefined);
         return Value::Json(normalize(&Value::Json(json!({
             "info": response,
             "rate": self.safe_number(data.clone(), Value::from("withdraw_fee"), Value::Undefined),
@@ -1017,7 +932,7 @@ pub trait Indodax : Exchange {
             request.set("start".into(), start_time.clone());
             request.set("end".into(), self.iso8601(self.milliseconds()).slice(Value::from(0), Value::from(10)));
         };
-        let mut response: Value = self.private_post_trans_history(extend_2(request.clone(), params.clone())).await;
+        let mut response: Value = self.dispatch("privatePostTransHistory".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         //
         //     {
         //         "success": 1,
@@ -1081,14 +996,14 @@ pub trait Indodax : Exchange {
         let mut transactions: Value = Value::new_array();
         let mut currency: Value = Value::Undefined;
         if code.clone().is_nullish() {
-            let mut keys: Value = Object::keys(withdraw.clone());
+            let mut keys: Value = withdraw.clone().keys();
             let mut i: usize = 0;
             while i < keys.len() {
                 let mut key: Value = keys.get(i.into());
                 transactions = self.array_concat(transactions.clone(), withdraw.get(key.clone()));
                 i += 1;
             };
-            keys = Object::keys(deposit.clone());
+            keys = deposit.clone().keys();
             let mut i: usize = 0;
             while i < keys.len() {
                 let mut key: Value = keys.get(i.into());
@@ -1126,7 +1041,7 @@ pub trait Indodax : Exchange {
         if tag.is_truthy() {
             request.set("withdraw_memo".into(), tag.clone());
         };
-        let mut response: Value = self.private_post_withdraw_coin(extend_2(request.clone(), params.clone())).await;
+        let mut response: Value = self.dispatch("privatePostWithdrawCoin".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         //
         //     {
         //         "success": 1,
@@ -1187,9 +1102,9 @@ pub trait Indodax : Exchange {
         //         "deposit_id": "3602369",
         //         "tx": "c816aeb35a5b42f389970325a32aff69bb6b2126784dcda8f23b9dd9570d6573"
         //     },
-        let mut status: Value = self.safe_string(transaction.clone(), Value::from("status"));
-        let mut timestamp: Value = self.safe_timestamp_2(transaction.clone(), Value::from("success_time"), Value::from("submit_time"));
-        let mut deposit_id: Value = self.safe_string(transaction.clone(), Value::from("deposit_id"));
+        let mut status: Value = self.safe_string(transaction.clone(), Value::from("status"), Value::Undefined);
+        let mut timestamp: Value = self.safe_timestamp_2(transaction.clone(), Value::from("success_time"), Value::from("submit_time"), Value::Undefined);
+        let mut deposit_id: Value = self.safe_string(transaction.clone(), Value::from("deposit_id"), Value::Undefined);
         let mut fee_cost: Value = self.safe_number(transaction.clone(), Value::from("fee"), Value::Undefined);
         let mut fee: Value = Value::Undefined;
         if fee_cost.clone().is_nonnullish() {
@@ -1200,13 +1115,13 @@ pub trait Indodax : Exchange {
             }))).unwrap());
         };
         return Value::Json(normalize(&Value::Json(json!({
-            "id": self.safe_string_2(transaction.clone(), Value::from("withdraw_id"), Value::from("deposit_id")),
-            "txid": self.safe_string_2(transaction.clone(), Value::from("txid"), Value::from("tx")),
+            "id": self.safe_string_2(transaction.clone(), Value::from("withdraw_id"), Value::from("deposit_id"), Value::Undefined),
+            "txid": self.safe_string_2(transaction.clone(), Value::from("txid"), Value::from("tx"), Value::Undefined),
             "timestamp": timestamp,
             "datetime": self.iso8601(timestamp.clone()),
             "network": Value::Undefined,
             "addressFrom": Value::Undefined,
-            "address": self.safe_string(transaction.clone(), Value::from("withdraw_address")),
+            "address": self.safe_string(transaction.clone(), Value::from("withdraw_address"), Value::Undefined),
             "addressTo": Value::Undefined,
             "amount": self.safe_number_n(transaction.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("amount").into(), Value::from("withdraw_amount").into(), Value::from("deposit_amount").into()])), Value::Undefined),
             "type": if deposit_id.clone().is_nullish() { Value::from("withdraw") } else { Value::from("deposit") },
@@ -1216,7 +1131,7 @@ pub trait Indodax : Exchange {
             "tagFrom": Value::Undefined,
             "tag": Value::Undefined,
             "tagTo": Value::Undefined,
-            "comment": self.safe_string(transaction.clone(), Value::from("withdraw_memo")),
+            "comment": self.safe_string(transaction.clone(), Value::from("withdraw_memo"), Value::Undefined),
             "internal": Value::Undefined,
             "fee": fee,
             "info": transaction
@@ -1233,7 +1148,7 @@ pub trait Indodax : Exchange {
     async fn fetch_deposit_addresses(&mut self, mut codes: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        let mut response: Value = self.private_post_get_info(params.clone()).await;
+        let mut response: Value = self.dispatch("privatePostGetInfo".into(), params.clone(), Value::Undefined).await;
         //
         //    {
         //        success: '1',
@@ -1272,7 +1187,7 @@ pub trait Indodax : Exchange {
         let mut data: Value = self.safe_dict(response.clone(), Value::from("return"), Value::Undefined);
         let mut addresses: Value = self.safe_dict(data.clone(), Value::from("address"), Value::new_object());
         let mut networks: Value = self.safe_dict(data.clone(), Value::from("network"), Value::new_object());
-        let mut address_keys: Value = Object::keys(addresses.clone());
+        let mut address_keys: Value = addresses.clone().keys();
         let mut result: Value = Value::Json(normalize(&Value::Json(json!({
             "info": data
         }))).unwrap());
@@ -1280,12 +1195,12 @@ pub trait Indodax : Exchange {
         while i < address_keys.len() {
             let mut market_id: Value = address_keys.get(i.into());
             let mut code: Value = self.safe_currency_code(market_id.clone(), Value::Undefined);
-            let mut address: Value = self.safe_string(addresses.clone(), market_id.clone());
+            let mut address: Value = self.safe_string(addresses.clone(), market_id.clone(), Value::Undefined);
             if address.clone().is_nonnullish() && codes.clone().is_nullish() || self.in_array(code.clone(), codes.clone()).is_truthy() {
                 self.check_address(address.clone());
                 let mut network: Value = Value::Undefined;
                 if networks.contains_key(market_id.clone()) {
-                    let mut network_id: Value = self.safe_string(networks.clone(), market_id.clone());
+                    let mut network_id: Value = self.safe_string(networks.clone(), market_id.clone(), Value::Undefined);
                     if network_id.index_of(Value::from(",")) >= Value::from(0) {
                         network = Value::new_array();
                         let mut network_ids: Value = network_id.split(Value::from(","));
@@ -1311,74 +1226,9 @@ pub trait Indodax : Exchange {
         return result.clone();
     }
 
-    fn sign(&mut self, mut path: Value, mut api: Value, mut method: Value, mut params: Value, mut headers: Value, mut body: Value) -> Value {
-        api = api.or_default(Value::from("public"));
-        method = method.or_default(Value::from("GET"));
-        params = params.or_default(Value::new_object());
-        let mut url: Value = self.get("urls".into()).get(Value::from("api")).get(api.clone());
-        if api.clone() == Value::from("public") {
-            let mut query: Value = self.omit(params.clone(), self.extract_params(path.clone()));
-            let mut request_path: Value = Value::from("/") + self.implode_params(path.clone(), params.clone());
-            url = url.clone() + request_path.clone();
-            if Object::keys(query.clone()).len() > 0 {
-                url = url +  Value::from("?") + self.urlencode_with_array_repeat(query.clone());
-            };
-        } else {
-            self.check_required_credentials(Value::Undefined);
-            body = self.urlencode(extend_2(Value::Json(normalize(&Value::Json(json!({
-                "method": path,
-                "timestamp": <Self as Indodax>::nonce(self),
-                "recvWindow": self.get("options".into()).get(Value::from("recvWindow"))
-            }))).unwrap()), params.clone()));
-            headers = Value::Json(normalize(&Value::Json(json!({
-                "Content-Type": "application/x-www-form-urlencoded",
-                "Key": self.get("apiKey".into()),
-                "Sign": self.hmac(self.encode(body.clone()), self.encode(self.get("secret".into())), sha512.clone())
-            }))).unwrap());
-        };
-        return Value::Json(normalize(&Value::Json(json!({
-            "url": url,
-            "method": method,
-            "body": body,
-            "headers": headers
-        }))).unwrap());
-    }
+    
 
-    fn handle_errors(&mut self, mut code: Value, mut reason: Value, mut url: Value, mut method: Value, mut headers: Value, mut body: Value, mut response: Value, mut request_headers: Value, mut request_body: Value) -> Value {
-        if response.clone().is_nullish() {
-            return Value::Undefined;
-        };
-        // { success: 0, error: "invalid order." }
-        // or
-        // [{ data, ... }, { ... }, ... ]
-        // {"success":"1","status":"approved","withdraw_currency":"strm","withdraw_address":"0x2b9A8cd5535D99b419aEfFBF1ae8D90a7eBdb24E","withdraw_amount":"2165.05767839","fee":"21.11000000","amount_after_fee":"2143.94767839","submit_time":"1730759489","withdraw_id":"strm-3423","txid":""}
-        if Array::is_array(response.clone()).is_truthy() {
-            return Value::Undefined;
-        };
-        // public endpoints may return []-arrays
-        let mut error: Value = self.safe_value(response.clone(), Value::from("error"), Value::from(""));
-        if !response.contains_key(Value::from("success")) && error.clone() == Value::from("") {
-            return Value::Undefined;
-        };
-        // no 'success' property on public responses
-        let mut status: Value = self.safe_string(response.clone(), Value::from("success"));
-        if status.clone() == Value::from("approved") {
-            return Value::Undefined;
-        };
-        if self.safe_integer(response.clone(), Value::from("success"), Value::from(0)) == Value::from(1) {
-            // { success: 1, return: { orders: [] }}
-            if !response.contains_key(Value::from("return")) {
-                panic!(r###"ExchangeError::new(self.get("id".into()) + Value::from(": malformed response: ") + self.json(response.clone()))"###);
-            } else {
-                return Value::Undefined;
-            };
-        };
-        let mut feedback: Value = self.get("id".into()) + Value::from(" ") + body.clone();
-        self.throw_exactly_matched_exception(self.get("exceptions".into()).get(Value::from("exact")), error.clone(), feedback.clone());
-        self.throw_broadly_matched_exception(self.get("exceptions".into()).get(Value::from("broad")), error.clone(), feedback.clone());
-        panic!(r###"ExchangeError::new(feedback)"###);
-        Value::Undefined
-    }
+    
 
     
     async fn dispatch(&mut self, method: Value, params: Value, context: Value) -> Value {
@@ -1443,8 +1293,8 @@ impl ValueTrait for IndodaxImpl {
     fn push(&mut self, value: Value) { self.0.push(value) }
     fn split(&self, separator: Value) -> Value { self.0.split(separator) }
     fn contains_key(&self, key: Value) -> bool { self.0.contains_key(key) }
-    fn keys(&self) -> Vec<Value> { self.0.keys() }
-    fn values(&self) -> Vec<Value> { self.0.values() }
+    fn keys(&self) -> Value { self.0.keys() }
+    fn values(&self) -> Value { self.0.values() }
     fn to_array(&self, x: Value) -> Value { self.0.to_array(x) }
     fn index_of(&self, x: Value) -> Value { self.0.index_of(x) }
     fn join(&self, glue: Value) -> Value { self.0.join(glue) }

@@ -11,7 +11,16 @@ use async_trait::async_trait;
 use std::str::FromStr;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, JSON, Array, Object, Math, parse_int, shift_2, extend_2, normalize};
+use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, BoolExt, JSON, Array, Object, Math, Promise, parse_int, shift_2, extend_2, normalize};
+// Crypto hash identifiers
+fn sha256() -> Value { Value::from("sha256") }
+fn sha384() -> Value { Value::from("sha384") }
+fn sha512() -> Value { Value::from("sha512") }
+fn md5() -> Value { Value::from("md5") }
+fn ed25519() -> Value { Value::from("ed25519") }
+fn rsa(msg: Value, secret: Value, _hash: Value) -> Value { msg }
+fn eddsa(msg: Value, secret: Value, _curve: Value) -> Value { msg }
+fn secp256k1() -> Value { Value::from("secp256k1") }
 
 use crate::exchange::{PRECISE_BASE, TRUNCATE, ROUND, ROUND_UP, ROUND_DOWN};
 use crate::exchange::{DECIMAL_PLACES, SIGNIFICANT_DIGITS, TICK_SIZE, NO_PADDING, PAD_WITH_ZERO};
@@ -709,7 +718,7 @@ pub trait Bitmex : Exchange {
         let mut i: usize = 0;
         while i < data.len() {
             let mut update: Value = data.get(i.into());
-            let mut market_id: Value = self.safe_string(update.clone(), Value::from("symbol"));
+            let mut market_id: Value = self.safe_string(update.clone(), Value::from("symbol"), Value::Undefined);
             let mut symbol: Value = self.safe_symbol(market_id.clone(), Value::Undefined, Value::Undefined, Value::Undefined);
             if !self.get("tickers".into()).contains_key(symbol.clone()) {
                 self.get("tickers".into()).set(symbol.clone(), self.parse_ticker(Value::new_object(), Value::Undefined));
@@ -805,7 +814,7 @@ pub trait Bitmex : Exchange {
         };
         client.resolve(new_liquidations.clone(), Value::from("liquidations"));
         let mut liquidations_by_symbol: Value = self.index_by(new_liquidations.clone(), Value::from("symbol"));
-        let mut symbols: Value = Object::keys(liquidations_by_symbol.clone());
+        let mut symbols: Value = liquidations_by_symbol.clone().keys();
         let mut i: usize = 0;
         while i < symbols.len() {
             let mut symbol: Value = symbols.get(i.into());
@@ -818,7 +827,7 @@ pub trait Bitmex : Exchange {
     async fn watch_balance(&mut self, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        <Self as Bitmex>::authenticate(self, Value::Undefined).await;
+        <Self as Bitmex>::authenticate(self).await;
         let mut message_hash: Value = Value::from("margin");
         let mut url: Value = self.get("urls".into()).get(Value::from("api")).get(Value::from("ws"));
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
@@ -927,10 +936,10 @@ pub trait Bitmex : Exchange {
         //         ]
         //     }
         //
-        let mut data: Value = self.safe_value(message.clone(), Value::from("data"));
+        let mut data: Value = self.safe_value(message.clone(), Value::from("data"), Value::Undefined);
         let mut balance: Value = self.parse_balance(data.clone());
         self.set("balance".into(), extend_2(self.get("balance".into()), balance.clone()));
-        let mut message_hash: Value = self.safe_string(message.clone(), Value::from("table"));
+        let mut message_hash: Value = self.safe_string(message.clone(), Value::from("table"), Value::Undefined);
         client.resolve(self.get("balance".into()), message_hash.clone());
         Value::Undefined
     }
@@ -998,7 +1007,7 @@ pub trait Bitmex : Exchange {
         let mut table: Value = Value::from("trade");
         let mut data: Value = self.safe_value(message.clone(), Value::from("data"), Value::new_array());
         let mut data_by_market_ids: Value = self.group_by(data.clone(), Value::from("symbol"));
-        let mut market_ids: Value = Object::keys(data_by_market_ids.clone());
+        let mut market_ids: Value = data_by_market_ids.clone().keys();
         let mut i: usize = 0;
         while i < market_ids.len() {
             let mut market_id: Value = market_ids.get(i.into());
@@ -1006,7 +1015,7 @@ pub trait Bitmex : Exchange {
             let mut symbol: Value = market.get(Value::from("symbol"));
             let mut message_hash: Value = table.clone() + Value::from(":") + symbol.clone();
             let mut trades: Value = self.parse_trades(data_by_market_ids.get(market_id.clone()), market.clone(), Value::Undefined, Value::Undefined, Value::Undefined);
-            let mut stored: Value = self.safe_value(self.get("trades".into()), symbol.clone());
+            let mut stored: Value = self.safe_value(self.get("trades".into()), symbol.clone(), Value::Undefined);
             if stored.clone().is_nullish() {
                 let mut limit: Value = self.safe_integer(self.get("options".into()), Value::from("tradesLimit"), Value::from(1000));
                 stored = ArrayCache::new(limit);
@@ -1034,12 +1043,12 @@ pub trait Bitmex : Exchange {
         let mut client: Value = self.client(url.clone());
         let mut message_hash: Value = Value::from("authenticated");
         let mut future: Value = client.reusable_future(message_hash.clone());
-        let mut authenticated: Value = self.safe_value(client.get(subscriptions.clone()), message_hash.clone());
+        let mut authenticated: Value = self.safe_value(client.get(subscriptions.clone()), message_hash.clone(), Value::Undefined);
         if authenticated.clone().is_nullish() {
             self.check_required_credentials(Value::Undefined);
             let mut timestamp: Value = self.milliseconds();
             let mut payload: Value = Value::from("GET") + Value::from("/realtime") + timestamp.to_string();
-            let mut signature: Value = self.hmac(self.encode(payload.clone()), self.encode(self.get("secret".into())), sha256.clone());
+            let mut signature: Value = self.hmac(self.encode(payload.clone()), self.encode(self.get("secret".into())), sha256.clone(), Value::Undefined);
             let mut request: Value = Value::Json(normalize(&Value::Json(json!({
                 "op": "authKeyExpires",
                 "args": Value::Json(serde_json::Value::Array(vec![self.get("apiKey".into()).into(), timestamp.clone().into(), signature.clone().into()]))
@@ -1055,7 +1064,7 @@ pub trait Bitmex : Exchange {
         let mut message_hash: Value = Value::from("authenticated");
         if authenticated.is_truthy() {
             // we resolve the future here permanently so authentication only happens once
-            let mut future: Value = self.safe_value(client.get(futures.clone()), message_hash.clone());
+            let mut future: Value = self.safe_value(client.get(futures.clone()), message_hash.clone(), Value::Undefined);
             future.resolve(true.into());
         } else {
             let mut error: Value = AuthenticationError::new(self.json(message.clone()));
@@ -1070,7 +1079,7 @@ pub trait Bitmex : Exchange {
     async fn watch_positions(&mut self, mut symbols: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        <Self as Bitmex>::authenticate(self, Value::Undefined).await;
+        <Self as Bitmex>::authenticate(self).await;
         let mut subscription_hash: Value = Value::from("position");
         let mut message_hash: Value = Value::from("positions");
         if !self.is_empty(symbols.clone()).is_truthy() {
@@ -1271,7 +1280,7 @@ pub trait Bitmex : Exchange {
     async fn watch_orders(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        <Self as Bitmex>::authenticate(self, Value::Undefined).await;
+        <Self as Bitmex>::authenticate(self).await;
         let mut name: Value = Value::from("order");
         let mut subscription_hash: Value = name.clone();
         let mut message_hash: Value = name.clone();
@@ -1455,8 +1464,8 @@ pub trait Bitmex : Exchange {
             let mut i: usize = 0;
             while i < data_length.clone().into() {
                 let mut current_order: Value = data.get(i.into());
-                let mut order_id: Value = self.safe_string(current_order.clone(), Value::from("orderID"));
-                let mut previous_order: Value = self.safe_value(stored.get(hashmap.clone()), order_id.clone());
+                let mut order_id: Value = self.safe_string(current_order.clone(), Value::from("orderID"), Value::Undefined);
+                let mut previous_order: Value = self.safe_value(stored.get(hashmap.clone()), order_id.clone(), Value::Undefined);
                 let mut raw_order: Value = current_order.clone();
                 if previous_order.clone().is_nonnullish() {
                     raw_order = extend_2(previous_order.get(Value::from("info")), current_order.clone());
@@ -1468,7 +1477,7 @@ pub trait Bitmex : Exchange {
                 i += 1;
             };
             client.resolve(self.get("orders".into()), message_hash.clone());
-            let mut keys: Value = Object::keys(symbols.clone());
+            let mut keys: Value = symbols.clone().keys();
             let mut i: usize = 0;
             while i < keys.len() {
                 let mut symbol: Value = keys.get(i.into());
@@ -1482,7 +1491,7 @@ pub trait Bitmex : Exchange {
     async fn watch_my_trades(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        <Self as Bitmex>::authenticate(self, Value::Undefined).await;
+        <Self as Bitmex>::authenticate(self).await;
         let mut name: Value = Value::from("execution");
         let mut subscription_hash: Value = name.clone();
         let mut message_hash: Value = name.clone();
@@ -1560,7 +1569,7 @@ pub trait Bitmex : Exchange {
         //         ]
         //     }
         //
-        let mut message_hash: Value = self.safe_string(message.clone(), Value::from("table"));
+        let mut message_hash: Value = self.safe_string(message.clone(), Value::from("table"), Value::Undefined);
         let mut data: Value = self.safe_value(message.clone(), Value::from("data"), Value::new_array());
         let mut data_by_exec_type: Value = self.group_by(data.clone(), Value::from("execType"));
         let mut raw_trades: Value = self.safe_value(data_by_exec_type.clone(), Value::from("Trade"), Value::new_array());
@@ -1583,7 +1592,7 @@ pub trait Bitmex : Exchange {
         if num_trades.clone() > Value::from(0) {
             client.resolve(stored.clone(), message_hash.clone());
         };
-        let mut keys: Value = Object::keys(symbols.clone());
+        let mut keys: Value = symbols.clone().keys();
         let mut i: usize = 0;
         while i < keys.len() {
             client.resolve(stored.clone(), message_hash.clone() + Value::from(":") + keys.get(i.into()));
@@ -1656,8 +1665,8 @@ pub trait Bitmex : Exchange {
         }))).unwrap());
         let mut trades: Value = self.watch_multiple(url.clone(), message_hashes.clone(), self.deep_extend_2(request.clone(), params.clone()), topics.clone(), Value::Undefined).await;
         if self.get("newUpdates".into()).is_truthy() {
-            let mut first: Value = self.safe_value(trades.clone(), Value::from(0));
-            let mut trade_symbol: Value = self.safe_string(first.clone(), Value::from("symbol"));
+            let mut first: Value = self.safe_value(trades.clone(), Value::from(0), Value::Undefined);
+            let mut trade_symbol: Value = self.safe_string(first.clone(), Value::from("symbol"), Value::Undefined);
             limit = trades.get_limit(trade_symbol.clone(), limit.clone());
         };
         return self.filter_by_since_limit(trades.clone(), since.clone(), limit.clone(), Value::from("timestamp"), true.into());
@@ -1749,7 +1758,7 @@ pub trait Bitmex : Exchange {
         //         ]
         //     }
         //
-        let mut table: Value = self.safe_string(message.clone(), Value::from("table"));
+        let mut table: Value = self.safe_string(message.clone(), Value::from("table"), Value::Undefined);
         let mut interval: Value = table.replace(Value::from("tradeBin"), Value::from(""));
         let mut timeframe: Value = self.find_timeframe(interval.clone(), Value::Undefined);
         let mut duration: Value = self.parse_timeframe(timeframe.clone());
@@ -1758,13 +1767,13 @@ pub trait Bitmex : Exchange {
         let mut i: usize = 0;
         while i < candles.len() {
             let mut candle: Value = candles.get(i.into());
-            let mut market_id: Value = self.safe_string(candle.clone(), Value::from("symbol"));
+            let mut market_id: Value = self.safe_string(candle.clone(), Value::from("symbol"), Value::Undefined);
             let mut market: Value = self.safe_market(market_id.clone(), Value::Undefined, Value::Undefined, Value::Undefined);
             let mut symbol: Value = market.get(Value::from("symbol"));
             let mut message_hash: Value = table.clone() + Value::from(":") + market.get(Value::from("id"));
-            let mut result: Value = Value::Json(serde_json::Value::Array(vec![self.parse8601(self.safe_string(candle.clone(), Value::from("timestamp"))) - duration.clone() * Value::from(1000).into(), Value::Undefined.into(), self.safe_float(candle.clone(), Value::from("high")).into(), self.safe_float(candle.clone(), Value::from("low")).into(), self.safe_float(candle.clone(), Value::from("close")).into(), self.safe_float(candle.clone(), Value::from("volume")).into()]));
+            let mut result: Value = Value::Json(serde_json::Value::Array(vec![self.parse8601(self.safe_string(candle.clone(), Value::from("timestamp"), Value::Undefined)) - duration.clone() * Value::from(1000).into(), Value::Undefined.into(), self.safe_float(candle.clone(), Value::from("high"), Value::Undefined).into(), self.safe_float(candle.clone(), Value::from("low"), Value::Undefined).into(), self.safe_float(candle.clone(), Value::from("close"), Value::Undefined).into(), self.safe_float(candle.clone(), Value::from("volume"), Value::Undefined).into()]));
             self.get("ohlcvs".into()).set(symbol.clone(), self.safe_value(self.get("ohlcvs".into()), symbol.clone(), Value::new_object()));
-            let mut stored: Value = self.safe_value(self.get("ohlcvs".into()).get(symbol.clone()), timeframe.clone());
+            let mut stored: Value = self.safe_value(self.get("ohlcvs".into()).get(symbol.clone()), timeframe.clone(), Value::Undefined);
             if stored.clone().is_nullish() {
                 let mut limit: Value = self.safe_integer(self.get("options".into()), Value::from("OHLCVLimit"), Value::from(1000));
                 stored = ArrayCacheByTimestamp::new(limit);
@@ -1774,7 +1783,7 @@ pub trait Bitmex : Exchange {
             results.set(message_hash.clone(), stored.clone());
             i += 1;
         };
-        let mut message_hashes: Value = Object::keys(results.clone());
+        let mut message_hashes: Value = results.clone().keys();
         let mut i: usize = 0;
         while i < message_hashes.len() {
             let mut message_hash: Value = message_hashes.get(i.into());
@@ -1842,8 +1851,8 @@ pub trait Bitmex : Exchange {
         //         ]
         //     }
         //
-        let mut action: Value = self.safe_string(message.clone(), Value::from("action"));
-        let mut table: Value = self.safe_string(message.clone(), Value::from("table"));
+        let mut action: Value = self.safe_string(message.clone(), Value::from("action"), Value::Undefined);
+        let mut table: Value = self.safe_string(message.clone(), Value::from("table"), Value::Undefined);
         if table.clone().is_nullish() {
             return Value::Undefined;
         };
@@ -1852,7 +1861,7 @@ pub trait Bitmex : Exchange {
         // if it's an initial snapshot
         if action.clone() == Value::from("partial") {
             let mut filter: Value = self.safe_dict(message.clone(), Value::from("filter"), Value::new_object());
-            let mut market_id: Value = self.safe_value(filter.clone(), Value::from("symbol"));
+            let mut market_id: Value = self.safe_value(filter.clone(), Value::from("symbol"), Value::Undefined);
             if market_id.clone().is_nullish() {
                 return Value::Undefined;
             };
@@ -1870,14 +1879,14 @@ pub trait Bitmex : Exchange {
             orderbook.set("symbol".into(), symbol.clone());
             let mut i: usize = 0;
             while i < data.len() {
-                let mut price: Value = self.safe_float(data.get(i.into()), Value::from("price"));
-                let mut size: Value = self.convert_from_raw_quantity(symbol.clone(), self.safe_string(data.get(i.into()), Value::from("size")));
-                let mut id: Value = self.safe_string(data.get(i.into()), Value::from("id"));
-                let mut side: Value = self.safe_string(data.get(i.into()), Value::from("side"));
+                let mut price: Value = self.safe_float(data.get(i.into()), Value::from("price"), Value::Undefined);
+                let mut size: Value = <Self as Bitmex>::convert_from_raw_quantity(self, symbol.clone(), self.safe_string(data.get(i.into()), Value::from("size"), Value::Undefined), Value::Undefined);
+                let mut id: Value = self.safe_string(data.get(i.into()), Value::from("id"), Value::Undefined);
+                let mut side: Value = self.safe_string(data.get(i.into()), Value::from("side"), Value::Undefined);
                 side = if side.clone() == Value::from("Buy") { Value::from("bids") } else { Value::from("asks") };
                 let mut bookside: Value = orderbook.get(side.clone());
                 bookside.store_array(Value::Json(serde_json::Value::Array(vec![price.clone().into(), size.clone().into(), id.clone().into()])));
-                let mut datetime: Value = self.safe_string(data.get(i.into()), Value::from("timestamp"));
+                let mut datetime: Value = self.safe_string(data.get(i.into()), Value::from("timestamp"), Value::Undefined);
                 orderbook.set("timestamp".into(), self.parse8601(datetime.clone()));
                 orderbook.set("datetime".into(), datetime.clone());
                 i += 1;
@@ -1888,7 +1897,7 @@ pub trait Bitmex : Exchange {
             let mut num_updates_by_market_id: Value = Value::new_object();
             let mut i: usize = 0;
             while i < data.len() {
-                let mut market_id: Value = self.safe_value(data.get(i.into()), Value::from("symbol"));
+                let mut market_id: Value = self.safe_value(data.get(i.into()), Value::from("symbol"), Value::Undefined);
                 if market_id.clone().is_nullish() {
                     return Value::Undefined;
                 };
@@ -1901,18 +1910,18 @@ pub trait Bitmex : Exchange {
                 let mut symbol: Value = market.get(Value::from("symbol"));
                 let mut orderbook: Value = self.get("orderbooks".into()).get(symbol.clone());
                 let mut price: Value = self.safe_number(data.get(i.into()), Value::from("price"), Value::Undefined);
-                let mut size: Value = if action.clone() == Value::from("delete") { Value::from(0) } else { self.convert_from_raw_quantity(symbol.clone(), self.safe_string(data.get(i.into()), Value::from("size"), Value::from("0"))) };
-                let mut id: Value = self.safe_string(data.get(i.into()), Value::from("id"));
-                let mut side: Value = self.safe_string(data.get(i.into()), Value::from("side"));
+                let mut size: Value = if action.clone() == Value::from("delete") { Value::from(0) } else { <Self as Bitmex>::convert_from_raw_quantity(self, symbol.clone(), self.safe_string(data.get(i.into()), Value::from("size"), Value::from("0")), Value::Undefined) };
+                let mut id: Value = self.safe_string(data.get(i.into()), Value::from("id"), Value::Undefined);
+                let mut side: Value = self.safe_string(data.get(i.into()), Value::from("side"), Value::Undefined);
                 side = if side.clone() == Value::from("Buy") { Value::from("bids") } else { Value::from("asks") };
                 let mut bookside: Value = orderbook.get(side.clone());
                 bookside.store_array(Value::Json(serde_json::Value::Array(vec![price.clone().into(), size.clone().into(), id.clone().into()])));
-                let mut datetime: Value = self.safe_string(data.get(i.into()), Value::from("timestamp"));
+                let mut datetime: Value = self.safe_string(data.get(i.into()), Value::from("timestamp"), Value::Undefined);
                 orderbook.set("timestamp".into(), self.parse8601(datetime.clone()));
                 orderbook.set("datetime".into(), datetime.clone());
                 i += 1;
             };
-            let mut market_ids: Value = Object::keys(num_updates_by_market_id.clone());
+            let mut market_ids: Value = num_updates_by_market_id.clone().keys();
             let mut i: usize = 0;
             while i < market_ids.len() {
                 let mut market_id: Value = market_ids.get(i.into());
@@ -1972,7 +1981,7 @@ pub trait Bitmex : Exchange {
         //
         //     { "error": "Rate limit exceeded, retry in 29 seconds." }
         //
-        let mut error: Value = self.safe_string(message.clone(), Value::from("error"));
+        let mut error: Value = self.safe_string(message.clone(), Value::from("error"), Value::Undefined);
         if error.clone().is_nonnullish() {
             let mut request: Value = self.safe_value(message.clone(), Value::from("request"), Value::new_object());
             let mut args: Value = self.safe_value(request.clone(), Value::from("args"), Value::new_array());
@@ -2031,7 +2040,7 @@ pub trait Bitmex : Exchange {
         //     }
         //
         if <Self as Bitmex>::handle_error_message(self, client.clone(), message.clone()).is_truthy() {
-            let mut table: Value = self.safe_string(message.clone(), Value::from("table"));
+            let mut table: Value = self.safe_string(message.clone(), Value::from("table"), Value::Undefined);
             let mut methods: Value = Value::Json(normalize(&Value::Json(json!({
                 "orderBookL2": self.get("handleOrderBook".into()),
                 "orderBookL2_25": self.get("handleOrderBook".into()),
@@ -2048,10 +2057,10 @@ pub trait Bitmex : Exchange {
                 "liquidation": self.get("handleLiquidation".into()),
                 "position": self.get("handlePositions".into())
             }))).unwrap());
-            let mut method: Value = self.safe_value(methods.clone(), table.clone());
+            let mut method: Value = self.safe_value(methods.clone(), table.clone(), Value::Undefined);
             if method.clone().is_nullish() {
                 let mut request: Value = self.safe_value(message.clone(), Value::from("request"), Value::new_object());
-                let mut op: Value = self.safe_value(request.clone(), Value::from("op"));
+                let mut op: Value = self.safe_value(request.clone(), Value::from("op"), Value::Undefined);
                 if op.clone() == Value::from("authKeyExpires") {
                     <Self as Bitmex>::handle_authentication_message(self, client.clone(), message.clone());
                 };
@@ -2196,8 +2205,8 @@ impl ValueTrait for BitmexImpl {
     fn push(&mut self, value: Value) { self.0.push(value) }
     fn split(&self, separator: Value) -> Value { self.0.split(separator) }
     fn contains_key(&self, key: Value) -> bool { self.0.contains_key(key) }
-    fn keys(&self) -> Vec<Value> { self.0.keys() }
-    fn values(&self) -> Vec<Value> { self.0.values() }
+    fn keys(&self) -> Value { self.0.keys() }
+    fn values(&self) -> Value { self.0.values() }
     fn to_array(&self, x: Value) -> Value { self.0.to_array(x) }
     fn index_of(&self, x: Value) -> Value { self.0.index_of(x) }
     fn join(&self, glue: Value) -> Value { self.0.join(glue) }

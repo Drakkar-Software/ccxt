@@ -11,7 +11,16 @@ use async_trait::async_trait;
 use std::str::FromStr;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, JSON, Array, Object, Math, parse_int, shift_2, extend_2, normalize};
+use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, BoolExt, JSON, Array, Object, Math, Promise, parse_int, shift_2, extend_2, normalize};
+// Crypto hash identifiers
+fn sha256() -> Value { Value::from("sha256") }
+fn sha384() -> Value { Value::from("sha384") }
+fn sha512() -> Value { Value::from("sha512") }
+fn md5() -> Value { Value::from("md5") }
+fn ed25519() -> Value { Value::from("ed25519") }
+fn rsa(msg: Value, secret: Value, _hash: Value) -> Value { msg }
+fn eddsa(msg: Value, secret: Value, _curve: Value) -> Value { msg }
+fn secp256k1() -> Value { Value::from("secp256k1") }
 
 use crate::exchange::{PRECISE_BASE, TRUNCATE, ROUND, ROUND_UP, ROUND_DOWN};
 use crate::exchange::{DECIMAL_PLACES, SIGNIFICANT_DIGITS, TICK_SIZE, NO_PADDING, PAD_WITH_ZERO};
@@ -592,8 +601,8 @@ pub trait Backpack : Exchange {
                 };
             } else if message_hash.index_of(Value::from("candles")) >= Value::from(0) {
                 let mut split_hashes: Value = message_hash.split(Value::from(":"));
-                let mut symbol: Value = self.safe_string(split_hashes.clone(), Value::from(2));
-                let mut timeframe: Value = self.safe_string(split_hashes.clone(), Value::from(3));
+                let mut symbol: Value = self.safe_string(split_hashes.clone(), Value::from(2), Value::Undefined);
+                let mut timeframe: Value = self.safe_string(split_hashes.clone(), Value::from(3), Value::Undefined);
                 if self.get("ohlcvs".into()).contains_key(symbol.clone()) {
                     if self.get("ohlcvs".into()).get(symbol.clone()).contains_key(timeframe.clone()) {
                         self.get("ohlcvs".into()).get(symbol.clone()).get(timeframe.clone());
@@ -612,7 +621,7 @@ pub trait Backpack : Exchange {
             } else if message_hash.index_of(Value::from("orders")) >= Value::from(0) {
                 if message_hash.clone() == Value::from("unsubscribe:orders") {
                     let mut cache: Value = self.get("orders".into());
-                    let mut keys: Value = Object::keys(cache.clone());
+                    let mut keys: Value = cache.clone().keys();
                     let mut j: usize = 0;
                     while j < keys.len() {
                         let mut symbol: Value = keys.get(j.into());
@@ -628,7 +637,7 @@ pub trait Backpack : Exchange {
             } else if message_hash.index_of(Value::from("positions")) >= Value::from(0) {
                 if message_hash.clone() == Value::from("unsubscribe:positions") {
                     let mut cache: Value = self.get("positions".into());
-                    let mut keys: Value = Object::keys(cache.clone());
+                    let mut keys: Value = cache.clone().keys();
                     let mut j: usize = 0;
                     while j < keys.len() {
                         let mut symbol: Value = keys.get(j.into());
@@ -654,7 +663,7 @@ pub trait Backpack : Exchange {
         symbol = market.get(Value::from("symbol"));
         let mut topic: Value = Value::from("ticker") + Value::from(".") + market.get(Value::from("id"));
         let mut message_hash: Value = Value::from("ticker") + Value::from(":") + symbol.clone();
-        return <Self as Backpack>::watch_public(self, Value::Json(serde_json::Value::Array(vec![topic.clone().into()])), Value::Json(serde_json::Value::Array(vec![message_hash.clone().into()])), params.clone(), Value::Undefined).await;
+        return <Self as Backpack>::watch_public(self, Value::Json(serde_json::Value::Array(vec![topic.clone().into()])), Value::Json(serde_json::Value::Array(vec![message_hash.clone().into()])), params.clone()).await;
     }
 
     async fn un_watch_ticker(&mut self, mut symbol: Value, mut params: Value) -> Value {
@@ -676,7 +685,7 @@ pub trait Backpack : Exchange {
             topics.push(Value::from("ticker.") + market_id.clone());
             i += 1;
         };
-        <Self as Backpack>::watch_public(self, topics.clone(), message_hashes.clone(), params.clone(), Value::Undefined).await;
+        <Self as Backpack>::watch_public(self, topics.clone(), message_hashes.clone(), params.clone()).await;
         return self.filter_by_array(self.get("tickers".into()), Value::from("symbol"), symbols.clone(), Value::Undefined);
     }
 
@@ -716,7 +725,7 @@ pub trait Backpack : Exchange {
         //     }
         //
         let mut ticker: Value = self.safe_dict(message.clone(), Value::from("data"), Value::new_object());
-        let mut market_id: Value = self.safe_string(ticker.clone(), Value::from("s"));
+        let mut market_id: Value = self.safe_string(ticker.clone(), Value::from("s"), Value::Undefined);
         let mut market: Value = self.safe_market(market_id.clone(), Value::Undefined, Value::Undefined, Value::Undefined);
         let mut symbol: Value = self.safe_symbol(market_id.clone(), market.clone(), Value::Undefined, Value::Undefined);
         let mut parsed_ticker: Value = <Self as Backpack>::parse_ws_ticker(self, ticker.clone(), market.clone());
@@ -741,13 +750,13 @@ pub trait Backpack : Exchange {
         //         v: '5542.3911'
         //     }
         //
-        let mut microseconds: Value = self.safe_integer(ticker.clone(), Value::from("E"));
-        let mut timestamp: Value = self.parse_to_int(microseconds.clone() / Value::from(1000));
-        let mut market_id: Value = self.safe_string(ticker.clone(), Value::from("s"));
+        let mut microseconds: Value = self.safe_integer(ticker.clone(), Value::from("E"), Value::Undefined);
+        let mut timestamp: Value = self.parse_to_int(microseconds.clone() / Value::from(1000), Value::Undefined);
+        let mut market_id: Value = self.safe_string(ticker.clone(), Value::from("s"), Value::Undefined);
         market = self.safe_market(market_id.clone(), market.clone(), Value::Undefined, Value::Undefined);
         let mut symbol: Value = self.safe_symbol(market_id.clone(), market.clone(), Value::Undefined, Value::Undefined);
-        let mut last: Value = self.safe_string(ticker.clone(), Value::from("c"));
-        let mut open: Value = self.safe_string(ticker.clone(), Value::from("o"));
+        let mut last: Value = self.safe_string(ticker.clone(), Value::from("c"), Value::Undefined);
+        let mut open: Value = self.safe_string(ticker.clone(), Value::from("o"), Value::Undefined);
         return self.safe_ticker(Value::Json(normalize(&Value::Json(json!({
             "symbol": symbol,
             "timestamp": timestamp,
@@ -766,8 +775,8 @@ pub trait Backpack : Exchange {
             "change": Value::Undefined,
             "percentage": Value::Undefined,
             "average": Value::Undefined,
-            "baseVolume": self.safe_string(ticker.clone(), Value::from("v")),
-            "quoteVolume": self.safe_string(ticker.clone(), Value::from("V")),
+            "baseVolume": self.safe_string(ticker.clone(), Value::from("v"), Value::Undefined),
+            "quoteVolume": self.safe_string(ticker.clone(), Value::from("V"), Value::Undefined),
             "info": ticker
         }))).unwrap()), market.clone());
     }
@@ -786,7 +795,7 @@ pub trait Backpack : Exchange {
             message_hashes.push(Value::from("bidask:") + symbol.clone());
             i += 1;
         };
-        <Self as Backpack>::watch_public(self, topics.clone(), message_hashes.clone(), params.clone(), Value::Undefined).await;
+        <Self as Backpack>::watch_public(self, topics.clone(), message_hashes.clone(), params.clone()).await;
         return self.filter_by_array(self.get("bidsasks".into()), Value::from("symbol"), symbols.clone(), Value::Undefined);
     }
 
@@ -824,7 +833,7 @@ pub trait Backpack : Exchange {
         //         stream: 'bookTicker.ETH_USDC'
         //     }
         let mut data: Value = self.safe_dict(message.clone(), Value::from("data"), Value::new_object());
-        let mut market_id: Value = self.safe_string(data.clone(), Value::from("s"));
+        let mut market_id: Value = self.safe_string(data.clone(), Value::from("s"), Value::Undefined);
         let mut market: Value = self.safe_market(market_id.clone(), Value::Undefined, Value::Undefined, Value::Undefined);
         let mut symbol: Value = self.safe_symbol(market_id.clone(), market.clone(), Value::Undefined, Value::Undefined);
         let mut parsed_bid_ask: Value = <Self as Backpack>::parse_ws_bid_ask(self, data.clone(), market.clone());
@@ -848,15 +857,15 @@ pub trait Backpack : Exchange {
         //         u: 1328288557
         //     }
         //
-        let mut market_id: Value = self.safe_string(ticker.clone(), Value::from("s"));
+        let mut market_id: Value = self.safe_string(ticker.clone(), Value::from("s"), Value::Undefined);
         market = self.safe_market(market_id.clone(), market.clone(), Value::Undefined, Value::Undefined);
-        let mut symbol: Value = self.safe_string(market.clone(), Value::from("symbol"));
-        let mut microseconds: Value = self.safe_integer(ticker.clone(), Value::from("E"));
-        let mut timestamp: Value = self.parse_to_int(microseconds.clone() / Value::from(1000));
-        let mut ask: Value = self.safe_string(ticker.clone(), Value::from("a"));
-        let mut ask_volume: Value = self.safe_string(ticker.clone(), Value::from("A"));
-        let mut bid: Value = self.safe_string(ticker.clone(), Value::from("b"));
-        let mut bid_volume: Value = self.safe_string(ticker.clone(), Value::from("B"));
+        let mut symbol: Value = self.safe_string(market.clone(), Value::from("symbol"), Value::Undefined);
+        let mut microseconds: Value = self.safe_integer(ticker.clone(), Value::from("E"), Value::Undefined);
+        let mut timestamp: Value = self.parse_to_int(microseconds.clone() / Value::from(1000), Value::Undefined);
+        let mut ask: Value = self.safe_string(ticker.clone(), Value::from("a"), Value::Undefined);
+        let mut ask_volume: Value = self.safe_string(ticker.clone(), Value::from("A"), Value::Undefined);
+        let mut bid: Value = self.safe_string(ticker.clone(), Value::from("b"), Value::Undefined);
+        let mut bid_volume: Value = self.safe_string(ticker.clone(), Value::from("B"), Value::Undefined);
         return self.safe_ticker(Value::Json(normalize(&Value::Json(json!({
             "symbol": symbol,
             "timestamp": timestamp,
@@ -894,15 +903,15 @@ pub trait Backpack : Exchange {
         let mut i: usize = 0;
         while i < symbols_and_timeframes.len() {
             let mut symbol_and_timeframe: Value = symbols_and_timeframes.get(i.into());
-            let mut market_id: Value = self.safe_string(symbol_and_timeframe.clone(), Value::from(0));
+            let mut market_id: Value = self.safe_string(symbol_and_timeframe.clone(), Value::from(0), Value::Undefined);
             let mut market: Value = self.market(market_id.clone());
-            let mut tf: Value = self.safe_string(symbol_and_timeframe.clone(), Value::from(1));
+            let mut tf: Value = self.safe_string(symbol_and_timeframe.clone(), Value::from(1), Value::Undefined);
             let mut interval: Value = self.safe_string(self.get("timeframes".into()), tf.clone(), tf.clone());
             topics.push(Value::from("kline.") + interval.clone() + Value::from(".") + market.get(Value::from("id")));
             message_hashes.push(Value::from("candles:") + market.get(Value::from("symbol")) + Value::from(":") + interval.clone());
             i += 1;
         };
-        let (mut symbol, mut timeframe, mut candles) = shift_3(<Self as Backpack>::watch_public(self, topics.clone(), message_hashes.clone(), params.clone(), Value::Undefined).await);
+        let (mut symbol, mut timeframe, mut candles) = shift_3(<Self as Backpack>::watch_public(self, topics.clone(), message_hashes.clone(), params.clone()).await);
         if self.get("newUpdates".into()).is_truthy() {
             limit = candles.get_limit(symbol.clone(), limit.clone());
         };
@@ -922,9 +931,9 @@ pub trait Backpack : Exchange {
         let mut i: usize = 0;
         while i < symbols_and_timeframes.len() {
             let mut symbol_and_timeframe: Value = symbols_and_timeframes.get(i.into());
-            let mut market_id: Value = self.safe_string(symbol_and_timeframe.clone(), Value::from(0));
+            let mut market_id: Value = self.safe_string(symbol_and_timeframe.clone(), Value::from(0), Value::Undefined);
             let mut market: Value = self.market(market_id.clone());
-            let mut tf: Value = self.safe_string(symbol_and_timeframe.clone(), Value::from(1));
+            let mut tf: Value = self.safe_string(symbol_and_timeframe.clone(), Value::from(1), Value::Undefined);
             let mut interval: Value = self.safe_string(self.get("timeframes".into()), tf.clone(), tf.clone());
             topics.push(Value::from("kline.") + interval.clone() + Value::from(".") + market.get(Value::from("id")));
             message_hashes.push(Value::from("unsubscribe:candles:") + market.get(Value::from("symbol")) + Value::from(":") + interval.clone());
@@ -954,12 +963,12 @@ pub trait Backpack : Exchange {
         //     }
         //
         let mut data: Value = self.safe_dict(message.clone(), Value::from("data"), Value::new_object());
-        let mut market_id: Value = self.safe_string(data.clone(), Value::from("s"));
+        let mut market_id: Value = self.safe_string(data.clone(), Value::from("s"), Value::Undefined);
         let mut market: Value = self.market(market_id.clone());
         let mut symbol: Value = market.get(Value::from("symbol"));
-        let mut stream: Value = self.safe_string(message.clone(), Value::from("stream"));
+        let mut stream: Value = self.safe_string(message.clone(), Value::from("stream"), Value::Undefined);
         let mut parts: Value = stream.split(Value::from("."));
-        let mut timeframe: Value = self.safe_string(parts.clone(), Value::from(1));
+        let mut timeframe: Value = self.safe_string(parts.clone(), Value::from(1), Value::Undefined);
         if !self.get("ohlcvs".into()).contains_key(symbol.clone()) {
             self.get("ohlcvs".into()).set(symbol.clone(), Value::new_object());
         };
@@ -993,7 +1002,7 @@ pub trait Backpack : Exchange {
         //         v: '62.2621000'
         //     },
         //
-        return Value::Json(serde_json::Value::Array(vec![self.parse8601(self.safe_string(ohlcv.clone(), Value::from("T"))).into(), self.safe_number(ohlcv.clone(), Value::from("o"), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from("h"), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from("l"), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from("c"), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from("v"), Value::Undefined).into()]));
+        return Value::Json(serde_json::Value::Array(vec![self.parse8601(self.safe_string(ohlcv.clone(), Value::from("T"), Value::Undefined)).into(), self.safe_number(ohlcv.clone(), Value::from("o"), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from("h"), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from("l"), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from("c"), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from("v"), Value::Undefined).into()]));
     }
 
     async fn watch_trades(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
@@ -1024,14 +1033,14 @@ pub trait Backpack : Exchange {
             message_hashes.push(Value::from("trades:") + symbol.clone());
             i += 1;
         };
-        let mut trades: Value = <Self as Backpack>::watch_public(self, topics.clone(), message_hashes.clone(), params.clone(), Value::Undefined).await;
+        let mut trades: Value = <Self as Backpack>::watch_public(self, topics.clone(), message_hashes.clone(), params.clone()).await;
         if self.get("newUpdates".into()).is_truthy() {
-            let mut first: Value = self.safe_value(trades.clone(), Value::from(0));
-            let mut trade_symbol: Value = self.safe_string(first.clone(), Value::from("symbol"));
+            let mut first: Value = self.safe_value(trades.clone(), Value::from(0), Value::Undefined);
+            let mut trade_symbol: Value = self.safe_string(first.clone(), Value::from("symbol"), Value::Undefined);
             limit = trades.get_limit(trade_symbol.clone(), limit.clone());
         };
         let mut result: Value = self.filter_by_since_limit(trades.clone(), since.clone(), limit.clone(), Value::from("timestamp"), true.into());
-        return self.sort_by(result.clone(), Value::from("timestamp"));
+        return self.sort_by(result.clone(), Value::from("timestamp"), Value::Undefined, Value::Undefined);
     }
 
     async fn un_watch_trades_for_symbols(&mut self, mut symbols: Value, mut params: Value) -> Value {
@@ -1074,7 +1083,7 @@ pub trait Backpack : Exchange {
         //     }
         //
         let mut data: Value = self.safe_dict(message.clone(), Value::from("data"), Value::new_object());
-        let mut market_id: Value = self.safe_string(data.clone(), Value::from("s"));
+        let mut market_id: Value = self.safe_string(data.clone(), Value::from("s"), Value::Undefined);
         let mut market: Value = self.market(market_id.clone());
         let mut symbol: Value = market.get(Value::from("symbol"));
         if !self.get("trades".into()).contains_key(symbol.clone()) {
@@ -1106,21 +1115,21 @@ pub trait Backpack : Exchange {
         //         t: 10782547
         //     }
         //
-        let mut microseconds: Value = self.safe_integer(trade.clone(), Value::from("E"));
-        let mut timestamp: Value = self.parse_to_int(microseconds.clone() / Value::from(1000));
-        let mut id: Value = self.safe_string(trade.clone(), Value::from("t"));
-        let mut market_id: Value = self.safe_string(trade.clone(), Value::from("s"));
+        let mut microseconds: Value = self.safe_integer(trade.clone(), Value::from("E"), Value::Undefined);
+        let mut timestamp: Value = self.parse_to_int(microseconds.clone() / Value::from(1000), Value::Undefined);
+        let mut id: Value = self.safe_string(trade.clone(), Value::from("t"), Value::Undefined);
+        let mut market_id: Value = self.safe_string(trade.clone(), Value::from("s"), Value::Undefined);
         market = self.safe_market(market_id.clone(), market.clone(), Value::Undefined, Value::Undefined);
         let mut is_maker: Value = self.safe_bool(trade.clone(), Value::from("m"), Value::Undefined);
         let mut side: Value = if is_maker.is_truthy() { Value::from("sell") } else { Value::from("buy") };
         let mut taker_or_maker: Value = if is_maker.is_truthy() { Value::from("maker") } else { Value::from("taker") };
-        let mut price: Value = self.safe_string(trade.clone(), Value::from("p"));
-        let mut amount: Value = self.safe_string(trade.clone(), Value::from("q"));
+        let mut price: Value = self.safe_string(trade.clone(), Value::from("p"), Value::Undefined);
+        let mut amount: Value = self.safe_string(trade.clone(), Value::from("q"), Value::Undefined);
         let mut order_id: Value = Value::Undefined;
         if side.clone() == Value::from("buy") {
-            order_id = self.safe_string(trade.clone(), Value::from("b"));
+            order_id = self.safe_string(trade.clone(), Value::from("b"), Value::Undefined);
         } else {
-            order_id = self.safe_string(trade.clone(), Value::from("a"));
+            order_id = self.safe_string(trade.clone(), Value::from("a"), Value::Undefined);
         };
         return self.safe_trade(Value::Json(normalize(&Value::Json(json!({
             "info": trade,
@@ -1163,7 +1172,7 @@ pub trait Backpack : Exchange {
             topics.push(topic.clone());
             i += 1;
         };
-        let mut orderbook: Value = <Self as Backpack>::watch_public(self, topics.clone(), message_hashes.clone(), params.clone(), Value::Undefined).await;
+        let mut orderbook: Value = <Self as Backpack>::watch_public(self, topics.clone(), message_hashes.clone(), params.clone()).await;
         return orderbook.limit();
     }
 
@@ -1211,14 +1220,14 @@ pub trait Backpack : Exchange {
         //     }
         //
         let mut data: Value = self.safe_dict(message.clone(), Value::from("data"), Value::new_object());
-        let mut market_id: Value = self.safe_string(data.clone(), Value::from("s"));
+        let mut market_id: Value = self.safe_string(data.clone(), Value::from("s"), Value::Undefined);
         let mut symbol: Value = self.safe_symbol(market_id.clone(), Value::Undefined, Value::Undefined, Value::Undefined);
         if !self.get("orderbooks".into()).contains_key(symbol.clone()) {
             self.get("orderbooks".into()).set(symbol.clone(), self.order_book(Value::Undefined, Value::Undefined));
         };
         let mut stored_order_book: Value = self.get("orderbooks".into()).get(symbol.clone());
-        let mut nonce: Value = self.safe_integer(stored_order_book.clone(), Value::from("nonce"));
-        let mut delta_nonce: Value = self.safe_integer(data.clone(), Value::from("u"));
+        let mut nonce: Value = self.safe_integer(stored_order_book.clone(), Value::from("nonce"), Value::Undefined);
+        let mut delta_nonce: Value = self.safe_integer(data.clone(), Value::from("u"), Value::Undefined);
         let mut message_hash: Value = Value::from("orderbook:") + symbol.clone();
         if nonce.clone().is_nullish() {
             let mut cache_length: usize = stored_order_book.get(cache.clone()).len();
@@ -1239,10 +1248,10 @@ pub trait Backpack : Exchange {
     }
 
     fn handle_delta(&mut self, mut orderbook: Value, mut delta: Value) -> Value {
-        let mut timestamp: Value = self.parse_to_int(self.safe_integer(delta.clone(), Value::from("T")) / Value::from(1000));
+        let mut timestamp: Value = self.parse_to_int(self.safe_integer(delta.clone(), Value::from("T"), Value::Undefined) / Value::from(1000), Value::Undefined);
         orderbook.set("timestamp".into(), timestamp.clone());
         orderbook.set("datetime".into(), self.iso8601(timestamp.clone()));
-        orderbook.set("nonce".into(), self.safe_integer(delta.clone(), Value::from("u")));
+        orderbook.set("nonce".into(), self.safe_integer(delta.clone(), Value::from("u"), Value::Undefined));
         let mut bids: Value = self.safe_list(delta.clone(), Value::from("b"), Value::new_array());
         let mut asks: Value = self.safe_list(delta.clone(), Value::from("a"), Value::new_array());
         let mut stored_bids: Value = orderbook.get(Value::from("bids"));
@@ -1255,7 +1264,7 @@ pub trait Backpack : Exchange {
     fn handle_bid_asks(&mut self, mut book_side: Value, mut bid_asks: Value) -> Value {
         let mut i: usize = 0;
         while i < bid_asks.len() {
-            let mut bid_ask: Value = self.parse_bid_ask(bid_asks.get(i.into()), Value::Undefined, Value::Undefined, Value::Undefined);
+            let mut bid_ask: Value = self.parse_bid_ask(bid_asks.get(i.into()), Value::Undefined, Value::Undefined);
             book_side.store_array(bid_ask.clone());
             i += 1;
         };
@@ -1266,16 +1275,16 @@ pub trait Backpack : Exchange {
         //
         // {"E":"1759338824897386","T":"1759338824895616","U":1662976171,"a":[],"b":[["117357.0","0.00000"]],"e":"depth","s":"BTC_USDC_PERP","u":1662976171}
         let mut first_delta: Value = self.safe_dict(cache.clone(), Value::from(0), Value::Undefined);
-        let mut nonce: Value = self.safe_integer(orderbook.clone(), Value::from("nonce"));
-        let mut first_delta_start: Value = self.safe_integer(first_delta.clone(), Value::from("U"));
+        let mut nonce: Value = self.safe_integer(orderbook.clone(), Value::from("nonce"), Value::Undefined);
+        let mut first_delta_start: Value = self.safe_integer(first_delta.clone(), Value::from("U"), Value::Undefined);
         if nonce.clone() < first_delta_start.clone() - Value::from(1) {
             return Value::from(1).neg();
         };
         let mut i: usize = 0;
         while i < cache.len() {
             let mut delta: Value = cache.get(i.into());
-            let mut delta_start: Value = self.safe_integer(delta.clone(), Value::from("U"));
-            let mut delta_end: Value = self.safe_integer(delta.clone(), Value::from("u"));
+            let mut delta_start: Value = self.safe_integer(delta.clone(), Value::from("U"), Value::Undefined);
+            let mut delta_end: Value = self.safe_integer(delta.clone(), Value::from("u"), Value::Undefined);
             if nonce.clone() >= delta_start.clone() - Value::from(1) && nonce.clone() < delta_end.clone() {
                 return Value::from(i);
             };
@@ -1298,7 +1307,7 @@ pub trait Backpack : Exchange {
             topic = Value::from("account.orderUpdate.") + market.get(Value::from("id"));
             message_hash = Value::from("orders:") + symbol.clone();
         };
-        let mut orders: Value = <Self as Backpack>::watch_private(self, Value::Json(serde_json::Value::Array(vec![topic.clone().into()])), Value::Json(serde_json::Value::Array(vec![message_hash.clone().into()])), params.clone(), Value::Undefined).await;
+        let mut orders: Value = <Self as Backpack>::watch_private(self, Value::Json(serde_json::Value::Array(vec![topic.clone().into()])), Value::Json(serde_json::Value::Array(vec![message_hash.clone().into()])), params.clone()).await;
         if self.get("newUpdates".into()).is_truthy() {
             limit = orders.get_limit(symbol.clone(), limit.clone());
         };
@@ -1349,7 +1358,7 @@ pub trait Backpack : Exchange {
         //
         let mut message_hash: Value = Value::from("orders");
         let mut data: Value = self.safe_dict(message.clone(), Value::from("data"), Value::new_object());
-        let mut market_id: Value = self.safe_string(data.clone(), Value::from("s"));
+        let mut market_id: Value = self.safe_string(data.clone(), Value::from("s"), Value::Undefined);
         let mut market: Value = self.safe_market(market_id.clone(), Value::Undefined, Value::Undefined, Value::Undefined);
         let mut symbol: Value = market.get(Value::from("symbol"));
         let mut parsed: Value = <Self as Backpack>::parse_ws_order(self, data.clone(), market.clone());
@@ -1393,24 +1402,24 @@ pub trait Backpack : Exchange {
         //         z: '0.0010'
         //     },
         //
-        let mut id: Value = self.safe_string(order.clone(), Value::from("i"));
-        let mut client_order_id: Value = self.safe_string(order.clone(), Value::from("c"));
-        let mut microseconds: Value = self.safe_integer(order.clone(), Value::from("E"));
-        let mut timestamp: Value = self.parse_to_int(microseconds.clone() / Value::from(1000));
-        let mut status: Value = <Self as Backpack>::parse_ws_order_status(self, self.safe_string(order.clone(), Value::from("X")), market.clone());
-        let mut market_id: Value = self.safe_string(order.clone(), Value::from("s"));
+        let mut id: Value = self.safe_string(order.clone(), Value::from("i"), Value::Undefined);
+        let mut client_order_id: Value = self.safe_string(order.clone(), Value::from("c"), Value::Undefined);
+        let mut microseconds: Value = self.safe_integer(order.clone(), Value::from("E"), Value::Undefined);
+        let mut timestamp: Value = self.parse_to_int(microseconds.clone() / Value::from(1000), Value::Undefined);
+        let mut status: Value = <Self as Backpack>::parse_ws_order_status(self, self.safe_string(order.clone(), Value::from("X"), Value::Undefined), market.clone());
+        let mut market_id: Value = self.safe_string(order.clone(), Value::from("s"), Value::Undefined);
         market = self.safe_market(market_id.clone(), market.clone(), Value::Undefined, Value::Undefined);
         let mut symbol: Value = market.get(Value::from("symbol"));
-        let mut r#type: Value = self.safe_string_lower(order.clone(), Value::from("o"));
-        let mut time_in_force: Value = self.safe_string(order.clone(), Value::from("f"));
-        let mut side: Value = <Self as Backpack>::parse_ws_order_side(self, self.safe_string(order.clone(), Value::from("S")));
-        let mut price: Value = self.safe_string(order.clone(), Value::from("p"));
+        let mut r#type: Value = self.safe_string_lower(order.clone(), Value::from("o"), Value::Undefined);
+        let mut time_in_force: Value = self.safe_string(order.clone(), Value::from("f"), Value::Undefined);
+        let mut side: Value = <Self as Backpack>::parse_ws_order_side(self, self.safe_string(order.clone(), Value::from("S"), Value::Undefined));
+        let mut price: Value = self.safe_string(order.clone(), Value::from("p"), Value::Undefined);
         let mut trigger_price: Value = self.safe_number(order.clone(), Value::from("P"), Value::Undefined);
-        let mut amount: Value = self.safe_string(order.clone(), Value::from("q"));
-        let mut cost: Value = self.safe_string(order.clone(), Value::from("Z"));
-        let mut filled: Value = self.safe_string(order.clone(), Value::from("l"));
+        let mut amount: Value = self.safe_string(order.clone(), Value::from("q"), Value::Undefined);
+        let mut cost: Value = self.safe_string(order.clone(), Value::from("Z"), Value::Undefined);
+        let mut filled: Value = self.safe_string(order.clone(), Value::from("l"), Value::Undefined);
         let mut fee: Value = Value::Undefined;
-        let mut fee_currency: Value = self.safe_string(order.clone(), Value::from("N"));
+        let mut fee_currency: Value = self.safe_string(order.clone(), Value::from("N"), Value::Undefined);
         if fee_currency.clone().is_nonnullish() {
             fee = Value::Json(normalize(&Value::Json(json!({
                 "currency": fee_currency,
@@ -1481,7 +1490,7 @@ pub trait Backpack : Exchange {
             message_hashes.push(Value::from("positions"));
             topics.push(Value::from("account.positionUpdate"));
         };
-        let mut positions: Value = <Self as Backpack>::watch_private(self, topics.clone(), message_hashes.clone(), params.clone(), Value::Undefined).await;
+        let mut positions: Value = <Self as Backpack>::watch_private(self, topics.clone(), message_hashes.clone(), params.clone()).await;
         if self.get("newUpdates".into()).is_truthy() {
             return positions.clone();
         };
@@ -1539,9 +1548,9 @@ pub trait Backpack : Exchange {
             self.set("positions".into(), ArrayCacheBySymbolById::new());
         };
         let mut cache: Value = self.get("positions".into());
-        let mut parsed_position: Value = <Self as Backpack>::parse_ws_position(self, data.clone(), Value::Undefined);
-        let mut microseconds: Value = self.safe_integer(data.clone(), Value::from("E"));
-        let mut timestamp: Value = self.parse_to_int(microseconds.clone() / Value::from(1000));
+        let mut parsed_position: Value = <Self as Backpack>::parse_ws_position(self, data.clone());
+        let mut microseconds: Value = self.safe_integer(data.clone(), Value::from("E"), Value::Undefined);
+        let mut timestamp: Value = self.parse_to_int(microseconds.clone() / Value::from(1000), Value::Undefined);
         parsed_position.set("timestamp".into(), timestamp.clone());
         parsed_position.set("datetime".into(), self.iso8601(timestamp.clone()));
         cache.append(parsed_position.clone());
@@ -1572,17 +1581,17 @@ pub trait Backpack : Exchange {
         //         s: 'ETH_USDC_PERP'
         //     }
         //
-        let mut id: Value = self.safe_string(position.clone(), Value::from("i"));
-        let mut market_id: Value = self.safe_string(position.clone(), Value::from("s"));
+        let mut id: Value = self.safe_string(position.clone(), Value::from("i"), Value::Undefined);
+        let mut market_id: Value = self.safe_string(position.clone(), Value::from("s"), Value::Undefined);
         market = self.safe_market(market_id.clone(), market.clone(), Value::Undefined, Value::Undefined);
         let mut symbol: Value = market.get(Value::from("symbol"));
-        let mut notional: Value = self.safe_string(position.clone(), Value::from("n"));
-        let mut liquidation_price: Value = self.safe_string(position.clone(), Value::from("l"));
-        let mut entry_price: Value = self.safe_string(position.clone(), Value::from("b"));
-        let mut realized_pnl: Value = self.safe_string(position.clone(), Value::from("p"));
-        let mut unrealised_pnl: Value = self.safe_string(position.clone(), Value::from("P"));
-        let mut contracts: Value = self.safe_string(position.clone(), Value::from("Q"));
-        let mut mark_price: Value = self.safe_string(position.clone(), Value::from("M"));
+        let mut notional: Value = self.safe_string(position.clone(), Value::from("n"), Value::Undefined);
+        let mut liquidation_price: Value = self.safe_string(position.clone(), Value::from("l"), Value::Undefined);
+        let mut entry_price: Value = self.safe_string(position.clone(), Value::from("b"), Value::Undefined);
+        let mut realized_pnl: Value = self.safe_string(position.clone(), Value::from("p"), Value::Undefined);
+        let mut unrealised_pnl: Value = self.safe_string(position.clone(), Value::from("P"), Value::Undefined);
+        let mut contracts: Value = self.safe_string(position.clone(), Value::from("Q"), Value::Undefined);
+        let mut mark_price: Value = self.safe_string(position.clone(), Value::from("M"), Value::Undefined);
         let mut net_quantity: Value = self.safe_number(position.clone(), Value::from("q"), Value::Undefined);
         let mut hedged: Value = false.into();
         let mut side: Value = Value::from("long");
@@ -1593,8 +1602,8 @@ pub trait Backpack : Exchange {
             hedged = Value::Undefined;
             side = Value::Undefined;
         };
-        let mut microseconds: Value = self.safe_integer(position.clone(), Value::from("E"));
-        let mut timestamp: Value = self.parse_to_int(microseconds.clone() / Value::from(1000));
+        let mut microseconds: Value = self.safe_integer(position.clone(), Value::from("E"), Value::Undefined);
+        let mut timestamp: Value = self.parse_to_int(microseconds.clone() / Value::from(1000), Value::Undefined);
         let mut maintenance_margin_percentage: Value = self.safe_number(position.clone(), Value::from("m"), Value::Undefined);
         let mut initial_margin_percentage: Value = self.safe_number(position.clone(), Value::from("f"), Value::Undefined);
         return self.safe_position(Value::Json(normalize(&Value::Json(json!({
@@ -1630,7 +1639,7 @@ pub trait Backpack : Exchange {
             return Value::Undefined;
         };
         let mut data: Value = self.safe_dict(message.clone(), Value::from("data"), Value::Undefined);
-        let mut event: Value = self.safe_string(data.clone(), Value::from("e"));
+        let mut event: Value = self.safe_string(data.clone(), Value::from("e"), Value::Undefined);
         if event.clone() == Value::from("ticker") {
             <Self as Backpack>::handle_ticker(self, client.clone(), message.clone());
         } else if event.clone() == Value::from("bookTicker") {
@@ -1660,9 +1669,9 @@ pub trait Backpack : Exchange {
         //     }
         //
         let mut error: Value = self.safe_dict(message.clone(), Value::from("error"), Value::new_object());
-        let mut code: Value = self.safe_integer(error.clone(), Value::from("code"));
+        let mut code: Value = self.safe_integer(error.clone(), Value::from("code"), Value::Undefined);
                 if code.clone().is_nonnullish() {
-            let mut msg: Value = self.safe_string(error.clone(), Value::from("message"));
+            let mut msg: Value = self.safe_string(error.clone(), Value::from("message"), Value::Undefined);
             panic!(r###"ExchangeError::new(self.get("id".into()) + Value::from(" ") + msg.clone())"###);
         };
         return true.into();
@@ -1767,8 +1776,8 @@ impl ValueTrait for BackpackImpl {
     fn push(&mut self, value: Value) { self.0.push(value) }
     fn split(&self, separator: Value) -> Value { self.0.split(separator) }
     fn contains_key(&self, key: Value) -> bool { self.0.contains_key(key) }
-    fn keys(&self) -> Vec<Value> { self.0.keys() }
-    fn values(&self) -> Vec<Value> { self.0.values() }
+    fn keys(&self) -> Value { self.0.keys() }
+    fn values(&self) -> Value { self.0.values() }
     fn to_array(&self, x: Value) -> Value { self.0.to_array(x) }
     fn index_of(&self, x: Value) -> Value { self.0.index_of(x) }
     fn join(&self, glue: Value) -> Value { self.0.join(glue) }

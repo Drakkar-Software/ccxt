@@ -11,7 +11,16 @@ use async_trait::async_trait;
 use std::str::FromStr;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, JSON, Array, Object, Math, parse_int, shift_2, extend_2, normalize};
+use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, BoolExt, JSON, Array, Object, Math, Promise, parse_int, shift_2, extend_2, normalize};
+// Crypto hash identifiers
+fn sha256() -> Value { Value::from("sha256") }
+fn sha384() -> Value { Value::from("sha384") }
+fn sha512() -> Value { Value::from("sha512") }
+fn md5() -> Value { Value::from("md5") }
+fn ed25519() -> Value { Value::from("ed25519") }
+fn rsa(msg: Value, secret: Value, _hash: Value) -> Value { msg }
+fn eddsa(msg: Value, secret: Value, _curve: Value) -> Value { msg }
+fn secp256k1() -> Value { Value::from("secp256k1") }
 
 use crate::exchange::{PRECISE_BASE, TRUNCATE, ROUND, ROUND_UP, ROUND_DOWN};
 use crate::exchange::{DECIMAL_PLACES, SIGNIFICANT_DIGITS, TICK_SIZE, NO_PADDING, PAD_WITH_ZERO};
@@ -412,19 +421,19 @@ pub trait Cex : Exchange {
         let mut result: Value = Value::Json(normalize(&Value::Json(json!({
             "info": data
         }))).unwrap());
-        let mut currency_ids: Value = Object::keys(free_balance.clone());
+        let mut currency_ids: Value = free_balance.clone().keys();
         let mut i: usize = 0;
         while i < currency_ids.len() {
             let mut currency_id: Value = currency_ids.get(i.into());
             let mut account: Value = self.account();
-            account.set("free".into(), self.safe_string(free_balance.clone(), currency_id.clone()));
-            account.set("used".into(), self.safe_string(used_balance.clone(), currency_id.clone()));
+            account.set("free".into(), self.safe_string(free_balance.clone(), currency_id.clone(), Value::Undefined));
+            account.set("used".into(), self.safe_string(used_balance.clone(), currency_id.clone(), Value::Undefined));
             let mut code: Value = self.safe_currency_code(currency_id.clone(), Value::Undefined);
             result.set(code.clone(), account.clone());
             i += 1;
         };
         self.set("balance".into(), self.safe_balance(result.clone()));
-        let mut message_hash: Value = self.safe_string(message.clone(), Value::from("oid"));
+        let mut message_hash: Value = self.safe_string(message.clone(), Value::from("oid"), Value::Undefined);
         client.resolve(self.get("balance".into()), message_hash.clone());
         Value::Undefined
     }
@@ -439,9 +448,9 @@ pub trait Cex : Exchange {
         let mut subscription_hash: Value = Value::from("old:") + symbol.clone();
         self.get("options".into()).set("currentWatchTradeSymbol".into(), symbol.clone());
         // exchange supports only 1 symbol for this watchTrades channel
-        let mut client: Value = self.safe_value(self.get("clients".into()), url.clone());
+        let mut client: Value = self.safe_value(self.get("clients".into()), url.clone(), Value::Undefined);
         if client.clone().is_nonnullish() {
-            let mut subscription_keys: Value = Object::keys(client.get(subscriptions.clone()));
+            let mut subscription_keys: Value = client.get(subscriptions.clone()).keys();
             let mut i: usize = 0;
             while i < subscription_keys.len() {
                 let mut subscription_key: Value = subscription_keys.get(i.into());
@@ -485,7 +494,7 @@ pub trait Cex : Exchange {
         let mut data: Value = self.safe_list(message.clone(), Value::from("data"), Value::new_array());
         let mut limit: Value = self.safe_integer(self.get("options".into()), Value::from("tradesLimit"), Value::from(1000));
         let mut stored: Value = ArrayCache::new(limit);
-        let mut symbol: Value = self.safe_string(self.get("options".into()), Value::from("currentWatchTradeSymbol"));
+        let mut symbol: Value = self.safe_string(self.get("options".into()), Value::from("currentWatchTradeSymbol"), Value::Undefined);
         if symbol.clone().is_nullish() {
             return Value::Undefined;
         };
@@ -516,17 +525,17 @@ pub trait Cex : Exchange {
         if !Array::is_array(trade.clone()).is_truthy() {
             trade = trade.split(Value::from(":"));
         };
-        let mut side: Value = self.safe_string(trade.clone(), Value::from(0));
-        let mut timestamp: Value = self.safe_integer(trade.clone(), Value::from(1));
-        let mut amount: Value = self.safe_string(trade.clone(), Value::from(2));
-        let mut price: Value = self.safe_string(trade.clone(), Value::from(3));
-        let mut id: Value = self.safe_string(trade.clone(), Value::from(4));
+        let mut side: Value = self.safe_string(trade.clone(), Value::from(0), Value::Undefined);
+        let mut timestamp: Value = self.safe_integer(trade.clone(), Value::from(1), Value::Undefined);
+        let mut amount: Value = self.safe_string(trade.clone(), Value::from(2), Value::Undefined);
+        let mut price: Value = self.safe_string(trade.clone(), Value::from(3), Value::Undefined);
+        let mut id: Value = self.safe_string(trade.clone(), Value::from(4), Value::Undefined);
         return self.safe_trade(Value::Json(normalize(&Value::Json(json!({
             "info": trade,
             "id": id,
             "timestamp": timestamp,
             "datetime": self.iso8601(timestamp.clone()),
-            "symbol": self.safe_string(market.clone(), Value::from("symbol")),
+            "symbol": self.safe_string(market.clone(), Value::from("symbol"), Value::Undefined),
             "type": Value::Undefined,
             "side": side,
             "order": Value::Undefined,
@@ -555,7 +564,7 @@ pub trait Cex : Exchange {
         while i < data_length.clone().into() {
             let mut index: Value = data_length.clone() - Value::from(1) - Value::from(i);
             let mut raw_trade: Value = data.get(index.clone());
-            let mut parsed: Value = <Self as Cex>::parse_ws_old_trade(self, raw_trade.clone(), Value::Undefined);
+            let mut parsed: Value = <Self as Cex>::parse_ws_old_trade(self, raw_trade.clone());
             stored.append(parsed.clone());
             i += 1;
         };
@@ -580,7 +589,7 @@ pub trait Cex : Exchange {
         }))).unwrap());
         let mut subscription_hash: Value = Value::from("tickers");
         if method.clone() == Value::from("private") {
-            <Self as Cex>::authenticate(self, Value::Undefined).await;
+            <Self as Cex>::authenticate(self).await;
             message = Value::Json(normalize(&Value::Json(json!({
                 "e": "ticker",
                 "data": Value::Json(serde_json::Value::Array(vec![market.get(Value::from("baseId")).into(), market.get(Value::from("quoteId")).into()])),
@@ -644,7 +653,7 @@ pub trait Cex : Exchange {
         //     }
         //
         let mut data: Value = self.safe_value(message.clone(), Value::from("data"), Value::new_object());
-        let mut ticker: Value = <Self as Cex>::parse_ws_ticker(self, data.clone(), Value::Undefined);
+        let mut ticker: Value = <Self as Cex>::parse_ws_ticker(self, data.clone());
         let mut symbol: Value = ticker.get(Value::from("symbol"));
         if symbol.clone().is_nullish() {
             return Value::Undefined;
@@ -653,7 +662,7 @@ pub trait Cex : Exchange {
         let mut message_hash: Value = Value::from("ticker:") + symbol.clone();
         client.resolve(ticker.clone(), message_hash.clone());
         client.resolve(ticker.clone(), Value::from("tickers"));
-        message_hash = self.safe_string(message.clone(), Value::from("oid"));
+        message_hash = self.safe_string(message.clone(), Value::from("oid"), Value::Undefined);
         if message_hash.clone().is_nonnullish() {
             client.resolve(ticker.clone(), message_hash.clone());
         };
@@ -685,18 +694,18 @@ pub trait Cex : Exchange {
         //        "pair": ["BTC", "USDT"]
         //    }
         let mut pair: Value = self.safe_value(ticker.clone(), Value::from("pair"), Value::new_array());
-        let mut base_id: Value = self.safe_string(ticker.clone(), Value::from("symbol1"));
+        let mut base_id: Value = self.safe_string(ticker.clone(), Value::from("symbol1"), Value::Undefined);
         if base_id.clone().is_nullish() {
-            base_id = self.safe_string(pair.clone(), Value::from(0));
+            base_id = self.safe_string(pair.clone(), Value::from(0), Value::Undefined);
         };
-        let mut quote_id: Value = self.safe_string(ticker.clone(), Value::from("symbol2"));
+        let mut quote_id: Value = self.safe_string(ticker.clone(), Value::from("symbol2"), Value::Undefined);
         if quote_id.clone().is_nullish() {
-            quote_id = self.safe_string(pair.clone(), Value::from(1));
+            quote_id = self.safe_string(pair.clone(), Value::from(1), Value::Undefined);
         };
         let mut base: Value = self.safe_currency_code(base_id.clone(), Value::Undefined);
         let mut quote: Value = self.safe_currency_code(quote_id.clone(), Value::Undefined);
         let mut symbol: Value = base.clone() + Value::from("/") + quote.clone();
-        let mut timestamp: Value = self.safe_integer(ticker.clone(), Value::from("timestamp"));
+        let mut timestamp: Value = self.safe_integer(ticker.clone(), Value::from("timestamp"), Value::Undefined);
         if timestamp.clone().is_nonnullish() {
             timestamp = timestamp.clone() * Value::from(1000);
         };
@@ -704,22 +713,22 @@ pub trait Cex : Exchange {
             "symbol": symbol,
             "timestamp": timestamp,
             "datetime": self.iso8601(timestamp.clone()),
-            "high": self.safe_string(ticker.clone(), Value::from("high")),
-            "low": self.safe_string(ticker.clone(), Value::from("low")),
-            "bid": self.safe_string(ticker.clone(), Value::from("bid")),
+            "high": self.safe_string(ticker.clone(), Value::from("high"), Value::Undefined),
+            "low": self.safe_string(ticker.clone(), Value::from("low"), Value::Undefined),
+            "bid": self.safe_string(ticker.clone(), Value::from("bid"), Value::Undefined),
             "bidVolume": Value::Undefined,
-            "ask": self.safe_string(ticker.clone(), Value::from("ask")),
+            "ask": self.safe_string(ticker.clone(), Value::from("ask"), Value::Undefined),
             "askVolume": Value::Undefined,
             "vwap": Value::Undefined,
-            "open": self.safe_string(ticker.clone(), Value::from("open24")),
+            "open": self.safe_string(ticker.clone(), Value::from("open24"), Value::Undefined),
             "close": Value::Undefined,
-            "last": self.safe_string_2(ticker.clone(), Value::from("price"), Value::from("last")),
+            "last": self.safe_string_2(ticker.clone(), Value::from("price"), Value::from("last"), Value::Undefined),
             "previousClose": Value::Undefined,
-            "change": self.safe_string(ticker.clone(), Value::from("priceChange")),
-            "percentage": self.safe_string(ticker.clone(), Value::from("priceChangePercentage")),
+            "change": self.safe_string(ticker.clone(), Value::from("priceChange"), Value::Undefined),
+            "percentage": self.safe_string(ticker.clone(), Value::from("priceChangePercentage"), Value::Undefined),
             "average": Value::Undefined,
             "baseVolume": Value::Undefined,
-            "quoteVolume": self.safe_string(ticker.clone(), Value::from("volume")),
+            "quoteVolume": self.safe_string(ticker.clone(), Value::from("volume"), Value::Undefined),
             "info": ticker
         }))).unwrap()), market.clone());
     }
@@ -727,7 +736,7 @@ pub trait Cex : Exchange {
     async fn fetch_balance_ws(&mut self, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        <Self as Cex>::authenticate(self, Value::Undefined).await;
+        <Self as Cex>::authenticate(self).await;
         let mut url: Value = self.get("urls".into()).get(Value::from("api")).get(Value::from("ws"));
         let mut message_hash: Value = <Self as Cex>::request_id(self);
         let mut request: Value = extend_2(Value::Json(normalize(&Value::Json(json!({
@@ -787,8 +796,8 @@ pub trait Cex : Exchange {
     }
 
     fn handle_transaction(&mut self, mut client: Value, mut message: Value) -> Value {
-        let mut data: Value = self.safe_value(message.clone(), Value::from("data"));
-        let mut symbol2: Value = self.safe_string(data.clone(), Value::from("symbol2"));
+        let mut data: Value = self.safe_value(message.clone(), Value::from("data"), Value::Undefined);
+        let mut symbol2: Value = self.safe_string(data.clone(), Value::from("symbol2"), Value::Undefined);
         if symbol2.clone().is_nullish() {
             return Value::Undefined;
         };
@@ -878,23 +887,23 @@ pub trait Cex : Exchange {
         //     }
         // Note symbol and symbol2 are inverse on sell and ammount is in symbol currency.
         //
-        let mut side: Value = self.safe_string(trade.clone(), Value::from("type"));
-        let mut price: Value = self.safe_string(trade.clone(), Value::from("price"));
-        let mut datetime: Value = self.safe_string(trade.clone(), Value::from("time"));
-        let mut base_id: Value = self.safe_string(trade.clone(), Value::from("symbol"));
-        let mut quote_id: Value = self.safe_string(trade.clone(), Value::from("symbol2"));
+        let mut side: Value = self.safe_string(trade.clone(), Value::from("type"), Value::Undefined);
+        let mut price: Value = self.safe_string(trade.clone(), Value::from("price"), Value::Undefined);
+        let mut datetime: Value = self.safe_string(trade.clone(), Value::from("time"), Value::Undefined);
+        let mut base_id: Value = self.safe_string(trade.clone(), Value::from("symbol"), Value::Undefined);
+        let mut quote_id: Value = self.safe_string(trade.clone(), Value::from("symbol2"), Value::Undefined);
         let mut base: Value = self.safe_currency_code(base_id.clone(), Value::Undefined);
         let mut quote: Value = self.safe_currency_code(quote_id.clone(), Value::Undefined);
         let mut symbol: Value = base.clone() + Value::from("/") + quote.clone();
-        let mut amount: Value = self.safe_string(trade.clone(), Value::from("amount"));
+        let mut amount: Value = self.safe_string(trade.clone(), Value::from("amount"), Value::Undefined);
         if side.clone() == Value::from("sell") {
             symbol = quote.clone() + Value::from("/") + base.clone();
             amount = Precise::string_div(amount.clone(), price.clone(), Value::Undefined);
         };
         // due to rounding errors amount in not exact to trade
         let mut parsed_trade: Value = Value::Json(normalize(&Value::Json(json!({
-            "id": self.safe_string(trade.clone(), Value::from("id")),
-            "order": self.safe_string(trade.clone(), Value::from("order")),
+            "id": self.safe_string(trade.clone(), Value::from("id"), Value::Undefined),
+            "order": self.safe_string(trade.clone(), Value::from("order"), Value::Undefined),
             "info": trade,
             "timestamp": self.parse8601(datetime.clone()),
             "datetime": datetime,
@@ -907,7 +916,7 @@ pub trait Cex : Exchange {
             "amount": amount,
             "fee": Value::Undefined
         }))).unwrap());
-        let mut fee: Value = self.safe_string(trade.clone(), Value::from("fee_amount"));
+        let mut fee: Value = self.safe_string(trade.clone(), Value::from("fee_amount"), Value::Undefined);
         if fee.clone().is_nonnullish() {
             parsed_trade.set("fee".into(), Value::Json(normalize(&Value::Json(json!({
                 "cost": fee,
@@ -988,15 +997,15 @@ pub trait Cex : Exchange {
         //     }
         //
         let mut data: Value = self.safe_value(message.clone(), Value::from("data"), Value::new_object());
-        let mut is_transaction: Value = (self.safe_string(message.clone(), Value::from("e")) == Value::from("tx")).into();
-        let mut order_id: Value = self.safe_string_2(data.clone(), Value::from("id"), Value::from("order"));
-        let mut remains: Value = self.safe_string(data.clone(), Value::from("remains"));
-        let mut base_id: Value = self.safe_string(data.clone(), Value::from("symbol"));
-        let mut quote_id: Value = self.safe_string(data.clone(), Value::from("symbol2"));
-        let mut pair: Value = self.safe_value(data.clone(), Value::from("pair"));
+        let mut is_transaction: Value = (self.safe_string(message.clone(), Value::from("e"), Value::Undefined) == Value::from("tx")).into();
+        let mut order_id: Value = self.safe_string_2(data.clone(), Value::from("id"), Value::from("order"), Value::Undefined);
+        let mut remains: Value = self.safe_string(data.clone(), Value::from("remains"), Value::Undefined);
+        let mut base_id: Value = self.safe_string(data.clone(), Value::from("symbol"), Value::Undefined);
+        let mut quote_id: Value = self.safe_string(data.clone(), Value::from("symbol2"), Value::Undefined);
+        let mut pair: Value = self.safe_value(data.clone(), Value::from("pair"), Value::Undefined);
         if pair.clone().is_nonnullish() {
-            base_id = self.safe_string(pair.clone(), Value::from("symbol1"));
-            quote_id = self.safe_string(pair.clone(), Value::from("symbol2"));
+            base_id = self.safe_string(pair.clone(), Value::from("symbol1"), Value::Undefined);
+            quote_id = self.safe_string(pair.clone(), Value::from("symbol2"), Value::Undefined);
         };
         let mut base: Value = self.safe_currency_code(base_id.clone(), Value::Undefined);
         let mut quote: Value = self.safe_currency_code(quote_id.clone(), Value::Undefined);
@@ -1009,7 +1018,7 @@ pub trait Cex : Exchange {
         };
         let mut stored_orders: Value = self.get("orders".into());
         let mut orders_by_symbol: Value = self.safe_value(stored_orders.get(hashmap.clone()), symbol.clone(), Value::new_object());
-        let mut order: Value = self.safe_value(orders_by_symbol.clone(), order_id.clone());
+        let mut order: Value = self.safe_value(orders_by_symbol.clone(), order_id.clone(), Value::Undefined);
         if order.clone().is_nullish() {
             order = <Self as Cex>::parse_ws_order_update(self, data.clone(), market.clone());
         };
@@ -1029,7 +1038,7 @@ pub trait Cex : Exchange {
                 "rate": Value::Undefined
             }))).unwrap()));
         };
-        let mut timestamp: Value = self.safe_integer(data.clone(), Value::from("time"));
+        let mut timestamp: Value = self.safe_integer(data.clone(), Value::from("time"), Value::Undefined);
         order.set("timestamp".into(), timestamp.clone());
         order.set("datetime".into(), self.iso8601(timestamp.clone()));
         order = self.safe_order(order.clone(), Value::Undefined);
@@ -1076,22 +1085,22 @@ pub trait Cex : Exchange {
         //           "id": "59425993020"
         //       }
         //
-        let mut is_transaction: Value = (self.safe_value(order.clone(), Value::from("d")).is_nonnullish()).into();
-        let mut remains_precision: Value = self.safe_string(order.clone(), Value::from("remains"));
+        let mut is_transaction: Value = (self.safe_value(order.clone(), Value::from("d"), Value::Undefined).is_nonnullish()).into();
+        let mut remains_precision: Value = self.safe_string(order.clone(), Value::from("remains"), Value::Undefined);
         let mut remaining: Value = Value::Undefined;
         if remains_precision.clone().is_nonnullish() {
             remaining = <Self as Cex>::currency_from_precision(self, market.get(Value::from("base")), remains_precision.clone());
         };
-        let mut amount: Value = self.safe_string(order.clone(), Value::from("amount"));
+        let mut amount: Value = self.safe_string(order.clone(), Value::from("amount"), Value::Undefined);
         if !is_transaction.is_truthy() {
             <Self as Cex>::currency_from_precision(self, market.get(Value::from("base")), amount.clone());
         };
-        let mut base_id: Value = self.safe_string(order.clone(), Value::from("symbol"));
-        let mut quote_id: Value = self.safe_string(order.clone(), Value::from("symbol2"));
-        let mut pair: Value = self.safe_value(order.clone(), Value::from("pair"));
+        let mut base_id: Value = self.safe_string(order.clone(), Value::from("symbol"), Value::Undefined);
+        let mut quote_id: Value = self.safe_string(order.clone(), Value::from("symbol2"), Value::Undefined);
+        let mut pair: Value = self.safe_value(order.clone(), Value::from("pair"), Value::Undefined);
         if pair.clone().is_nonnullish() {
-            base_id = self.safe_string(order.clone(), Value::from("symbol1"));
-            quote_id = self.safe_string(order.clone(), Value::from("symbol2"));
+            base_id = self.safe_string(order.clone(), Value::from("symbol1"), Value::Undefined);
+            quote_id = self.safe_string(order.clone(), Value::from("symbol2"), Value::Undefined);
         };
         let mut base: Value = self.safe_currency_code(base_id.clone(), Value::Undefined);
         let mut quote: Value = self.safe_currency_code(quote_id.clone(), Value::Undefined);
@@ -1113,7 +1122,7 @@ pub trait Cex : Exchange {
             status = Value::from("closed");
         };
         let mut parsed_order: Value = Value::Json(normalize(&Value::Json(json!({
-            "id": self.safe_string_2(order.clone(), Value::from("id"), Value::from("order")),
+            "id": self.safe_string_2(order.clone(), Value::from("id"), Value::from("order"), Value::Undefined),
             "clientOrderId": Value::Undefined,
             "info": order,
             "timestamp": timestamp,
@@ -1124,7 +1133,7 @@ pub trait Cex : Exchange {
             "type": Value::Undefined,
             "timeInForce": Value::Undefined,
             "postOnly": Value::Undefined,
-            "side": self.safe_string(order.clone(), Value::from("type")),
+            "side": self.safe_string(order.clone(), Value::from("type"), Value::Undefined),
             "price": self.safe_number(order.clone(), Value::from("price"), Value::Undefined),
             "stopPrice": Value::Undefined,
             "triggerPrice": Value::Undefined,
@@ -1177,7 +1186,7 @@ pub trait Cex : Exchange {
         //         "ok": "ok"
         //     }
         //
-        let mut symbol: Value = self.safe_string(message.clone(), Value::from("oid"));
+        let mut symbol: Value = self.safe_string(message.clone(), Value::from("oid"), Value::Undefined);
         // symbol is set as requestId in watchOrders
         let mut raw_orders: Value = self.safe_value(message.clone(), Value::from("data"), Value::new_array());
         let mut my_orders: Value = self.get("orders".into());
@@ -1206,7 +1215,7 @@ pub trait Cex : Exchange {
     async fn watch_order_book(&mut self, mut symbol: Value, mut limit: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        <Self as Cex>::authenticate(self, Value::Undefined).await;
+        <Self as Cex>::authenticate(self).await;
         let mut market: Value = self.market(symbol.clone());
         symbol = market.get(Value::from("symbol"));
         let mut url: Value = self.get("urls".into()).get(Value::from("api")).get(Value::from("ws"));
@@ -1250,13 +1259,13 @@ pub trait Cex : Exchange {
         //     }
         //
         let mut data: Value = self.safe_value(message.clone(), Value::from("data"), Value::new_object());
-        let mut pair: Value = self.safe_string(data.clone(), Value::from("pair"));
+        let mut pair: Value = self.safe_string(data.clone(), Value::from("pair"), Value::Undefined);
         let mut symbol: Value = <Self as Cex>::pair_to_symbol(self, pair.clone());
         let mut message_hash: Value = Value::from("orderbook:") + symbol.clone();
-        let mut timestamp: Value = self.safe_integer_2(data.clone(), Value::from("timestamp_ms"), Value::from("timestamp"));
-        let mut incremental_id: Value = self.safe_integer(data.clone(), Value::from("id"));
+        let mut timestamp: Value = self.safe_integer_2(data.clone(), Value::from("timestamp_ms"), Value::from("timestamp"), Value::Undefined);
+        let mut incremental_id: Value = self.safe_integer(data.clone(), Value::from("id"), Value::Undefined);
         let mut orderbook: Value = self.order_book(Value::new_object(), Value::Undefined);
-        let mut snapshot: Value = self.parse_order_book(data.clone(), symbol.clone(), timestamp.clone(), Value::from("bids"), Value::from("asks"), Value::Undefined, Value::Undefined, Value::Undefined);
+        let mut snapshot: Value = self.parse_order_book(data.clone(), symbol.clone(), timestamp.clone(), Value::from("bids"), Value::from("asks"));
         snapshot.set("nonce".into(), incremental_id.clone());
         orderbook.reset(snapshot.clone());
         self.get("options".into()).get(Value::from("orderbook")).set(symbol.clone(), Value::Json(normalize(&Value::Json(json!({
@@ -1269,8 +1278,8 @@ pub trait Cex : Exchange {
 
     fn pair_to_symbol(&mut self, mut pair: Value) -> Value {
         let mut parts: Value = pair.split(Value::from(":"));
-        let mut base_id: Value = self.safe_string(parts.clone(), Value::from(0));
-        let mut quote_id: Value = self.safe_string(parts.clone(), Value::from(1));
+        let mut base_id: Value = self.safe_string(parts.clone(), Value::from(0), Value::Undefined);
+        let mut quote_id: Value = self.safe_string(parts.clone(), Value::from(1), Value::Undefined);
         let mut base: Value = self.safe_currency_code(base_id.clone(), Value::Undefined);
         let mut quote: Value = self.safe_currency_code(quote_id.clone(), Value::Undefined);
         let mut symbol: Value = base.clone() + Value::from("/") + quote.clone();
@@ -1293,17 +1302,17 @@ pub trait Cex : Exchange {
         //     }
         //
         let mut data: Value = self.safe_value(message.clone(), Value::from("data"), Value::new_object());
-        let mut incremental_id: Value = self.safe_integer(data.clone(), Value::from("id"));
+        let mut incremental_id: Value = self.safe_integer(data.clone(), Value::from("id"), Value::Undefined);
         let mut pair: Value = self.safe_string(data.clone(), Value::from("pair"), Value::from(""));
         let mut symbol: Value = <Self as Cex>::pair_to_symbol(self, pair.clone());
-        let mut stored_order_book: Value = self.safe_value(self.get("orderbooks".into()), symbol.clone());
+        let mut stored_order_book: Value = self.safe_value(self.get("orderbooks".into()), symbol.clone(), Value::Undefined);
         let mut message_hash: Value = Value::from("orderbook:") + symbol.clone();
         if incremental_id.clone() != stored_order_book.get(Value::from("nonce")) + Value::from(1) {
             client.get(subscriptions.clone()).get(message_hash.clone());
             client.reject(self.get("id".into()) + Value::from(" watchOrderBook() skipped a message"), message_hash.clone());
             return Value::Undefined;
         };
-        let mut timestamp: Value = self.safe_integer(data.clone(), Value::from("time"));
+        let mut timestamp: Value = self.safe_integer(data.clone(), Value::from("time"), Value::Undefined);
         let mut asks: Value = self.safe_value(data.clone(), Value::from("asks"), Value::new_array());
         let mut bids: Value = self.safe_value(data.clone(), Value::from("bids"), Value::new_array());
         <Self as Cex>::handle_deltas(self, stored_order_book.get(Value::from("asks")), asks.clone());
@@ -1316,7 +1325,7 @@ pub trait Cex : Exchange {
     }
 
     fn handle_delta(&mut self, mut bookside: Value, mut delta: Value) -> Value {
-        let mut bid_ask: Value = self.parse_bid_ask(delta.clone(), Value::from(0), Value::from(1), Value::Undefined);
+        let mut bid_ask: Value = self.parse_bid_ask(delta.clone(), Value::from(0), Value::from(1));
         bookside.store_array(bid_ask.clone());
         Value::Undefined
     }
@@ -1368,10 +1377,10 @@ pub trait Cex : Exchange {
         //         "pair": "BTC:USDT"
         //     }
         //
-        let mut pair: Value = self.safe_string(message.clone(), Value::from("pair"));
+        let mut pair: Value = self.safe_string(message.clone(), Value::from("pair"), Value::Undefined);
         let mut parts: Value = pair.split(Value::from(":"));
-        let mut base_id: Value = self.safe_string(parts.clone(), Value::from(0));
-        let mut quote_id: Value = self.safe_string(parts.clone(), Value::from(1));
+        let mut base_id: Value = self.safe_string(parts.clone(), Value::from(0), Value::Undefined);
+        let mut quote_id: Value = self.safe_string(parts.clone(), Value::from(1), Value::Undefined);
         let mut base: Value = self.safe_currency_code(base_id.clone(), Value::Undefined);
         let mut quote: Value = self.safe_currency_code(quote_id.clone(), Value::Undefined);
         let mut symbol: Value = base.clone() + Value::from("/") + quote.clone();
@@ -1380,7 +1389,7 @@ pub trait Cex : Exchange {
         let mut data: Value = self.safe_value(message.clone(), Value::from("data"), Value::new_array());
         let mut limit: Value = self.safe_integer(self.get("options".into()), Value::from("OHLCVLimit"), Value::from(1000));
         let mut stored: Value = ArrayCacheByTimestamp::new(limit);
-        let mut sorted: Value = self.sort_by(data.clone(), Value::from(0));
+        let mut sorted: Value = self.sort_by(data.clone(), Value::from(0), Value::Undefined, Value::Undefined);
         let mut i: usize = 0;
         while i < sorted.len() {
             stored.append(self.parse_ohlcv(sorted.get(i.into()), market.clone()));
@@ -1422,11 +1431,11 @@ pub trait Cex : Exchange {
         //     }
         //
         let mut data: Value = self.safe_value(message.clone(), Value::from("data"), Value::new_object());
-        let mut pair: Value = self.safe_string(data.clone(), Value::from("pair"));
+        let mut pair: Value = self.safe_string(data.clone(), Value::from("pair"), Value::Undefined);
         let mut symbol: Value = <Self as Cex>::pair_to_symbol(self, pair.clone());
         let mut message_hash: Value = Value::from("ohlcv:") + symbol.clone();
-        let mut ohlcv: Value = Value::Json(serde_json::Value::Array(vec![self.safe_timestamp(data.clone(), Value::from("time")).into(), self.safe_number(data.clone(), Value::from("o"), Value::Undefined).into(), self.safe_number(data.clone(), Value::from("h"), Value::Undefined).into(), self.safe_number(data.clone(), Value::from("l"), Value::Undefined).into(), self.safe_number(data.clone(), Value::from("c"), Value::Undefined).into(), self.safe_number(data.clone(), Value::from("v"), Value::Undefined).into()]));
-        let mut stored: Value = self.safe_value(self.get("ohlcvs".into()), symbol.clone());
+        let mut ohlcv: Value = Value::Json(serde_json::Value::Array(vec![self.safe_timestamp(data.clone(), Value::from("time"), Value::Undefined).into(), self.safe_number(data.clone(), Value::from("o"), Value::Undefined).into(), self.safe_number(data.clone(), Value::from("h"), Value::Undefined).into(), self.safe_number(data.clone(), Value::from("l"), Value::Undefined).into(), self.safe_number(data.clone(), Value::from("c"), Value::Undefined).into(), self.safe_number(data.clone(), Value::from("v"), Value::Undefined).into()]));
+        let mut stored: Value = self.safe_value(self.get("ohlcvs".into()), symbol.clone(), Value::Undefined);
         stored.append(ohlcv.clone());
         client.resolve(stored.clone(), message_hash.clone());
         Value::Undefined
@@ -1443,14 +1452,14 @@ pub trait Cex : Exchange {
         //     }
         //
         let mut data: Value = self.safe_value(message.clone(), Value::from("data"), Value::new_array());
-        let mut pair: Value = self.safe_string(message.clone(), Value::from("pair"));
+        let mut pair: Value = self.safe_string(message.clone(), Value::from("pair"), Value::Undefined);
         let mut symbol: Value = <Self as Cex>::pair_to_symbol(self, pair.clone());
         let mut message_hash: Value = Value::from("ohlcv:") + symbol.clone();
         // const stored = this.safeValue (this.ohlcvs, symbol);
         let mut stored: Value = self.get("ohlcvs".into()).get(symbol.clone()).get(Value::from("unknown"));
         let mut i: usize = 0;
         while i < data.len() {
-            let mut ohlcv: Value = Value::Json(serde_json::Value::Array(vec![self.safe_timestamp(data.get(i.into()), Value::from(0)).into(), self.safe_number(data.get(i.into()), Value::from(1), Value::Undefined).into(), self.safe_number(data.get(i.into()), Value::from(2), Value::Undefined).into(), self.safe_number(data.get(i.into()), Value::from(3), Value::Undefined).into(), self.safe_number(data.get(i.into()), Value::from(4), Value::Undefined).into(), self.safe_number(data.get(i.into()), Value::from(5), Value::Undefined).into()]));
+            let mut ohlcv: Value = Value::Json(serde_json::Value::Array(vec![self.safe_timestamp(data.get(i.into()), Value::from(0), Value::Undefined).into(), self.safe_number(data.get(i.into()), Value::from(1), Value::Undefined).into(), self.safe_number(data.get(i.into()), Value::from(2), Value::Undefined).into(), self.safe_number(data.get(i.into()), Value::from(3), Value::Undefined).into(), self.safe_number(data.get(i.into()), Value::from(4), Value::Undefined).into(), self.safe_number(data.get(i.into()), Value::from(5), Value::Undefined).into()]));
             stored.append(ohlcv.clone());
             i += 1;
         };
@@ -1464,7 +1473,7 @@ pub trait Cex : Exchange {
     async fn fetch_order_ws(&mut self, mut id: Value, mut symbol: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        <Self as Cex>::authenticate(self, Value::Undefined).await;
+        <Self as Cex>::authenticate(self).await;
         let mut market: Value = Value::Undefined;
         if symbol.clone().is_nonnullish() {
             market = self.market(symbol.clone());
@@ -1489,7 +1498,7 @@ pub trait Cex : Exchange {
             panic!(r###"ArgumentsRequired::new(self.get("id".into()) + Value::from(" fetchOpenOrdersWs requires a symbol."))"###);
         };
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        <Self as Cex>::authenticate(self, Value::Undefined).await;
+        <Self as Cex>::authenticate(self).await;
         let mut market: Value = self.market(symbol.clone());
         let mut url: Value = self.get("urls".into()).get(Value::from("api")).get(Value::from("ws"));
         let mut message_hash: Value = <Self as Cex>::request_id(self);
@@ -1511,7 +1520,7 @@ pub trait Cex : Exchange {
             panic!(r###"BadRequest::new(self.get("id".into()) + Value::from(" createOrderWs requires a price argument"))"###);
         };
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        <Self as Cex>::authenticate(self, Value::Undefined).await;
+        <Self as Cex>::authenticate(self).await;
         let mut market: Value = self.market(symbol.clone());
         let mut url: Value = self.get("urls".into()).get(Value::from("api")).get(Value::from("ws"));
         let mut message_hash: Value = <Self as Cex>::request_id(self);
@@ -1539,7 +1548,7 @@ pub trait Cex : Exchange {
             panic!(r###"ArgumentsRequired::new(self.get("id".into()) + Value::from(" editOrder() requires a price argument"))"###);
         };
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        <Self as Cex>::authenticate(self, Value::Undefined).await;
+        <Self as Cex>::authenticate(self).await;
         let mut market: Value = self.market(symbol.clone());
         let mut data: Value = extend_2(Value::Json(normalize(&Value::Json(json!({
             "pair": Value::Json(serde_json::Value::Array(vec![market.get(Value::from("baseId")).into(), market.get(Value::from("quoteId")).into()])),
@@ -1562,7 +1571,7 @@ pub trait Cex : Exchange {
     async fn cancel_order_ws(&mut self, mut id: Value, mut symbol: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        <Self as Cex>::authenticate(self, Value::Undefined).await;
+        <Self as Cex>::authenticate(self).await;
         let mut market: Value = Value::Undefined;
         if symbol.clone().is_nonnullish() {
             market = self.market(symbol.clone());
@@ -1587,7 +1596,7 @@ pub trait Cex : Exchange {
             panic!(r###"BadRequest::new(self.get("id".into()) + Value::from(" cancelOrderWs does not allow filtering by symbol"))"###);
         };
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        <Self as Cex>::authenticate(self, Value::Undefined).await;
+        <Self as Cex>::authenticate(self).await;
         let mut message_hash: Value = <Self as Cex>::request_id(self);
         let mut data: Value = extend_2(Value::Json(normalize(&Value::Json(json!({
             "cancel-orders": ids
@@ -1609,7 +1618,7 @@ pub trait Cex : Exchange {
         //        "placed-cancelled": []
         //    }
         //
-        let mut canceled_orders: Value = self.safe_value(response.clone(), Value::from("cancel-orders"));
+        let mut canceled_orders: Value = self.safe_value(response.clone(), Value::from("cancel-orders"), Value::Undefined);
         return self.parse_orders(canceled_orders.clone(), Value::Undefined, Value::Undefined, Value::Undefined, params.clone());
     }
 
@@ -1631,8 +1640,8 @@ pub trait Cex : Exchange {
         //    "ok": "ok"
         //    }
         //
-        let mut data: Value = self.safe_value(message.clone(), Value::from("data"));
-        let mut message_hash: Value = self.safe_string(message.clone(), Value::from("oid"));
+        let mut data: Value = self.safe_value(message.clone(), Value::from("data"), Value::Undefined);
+        let mut message_hash: Value = self.safe_string(message.clone(), Value::from("oid"), Value::Undefined);
         client.resolve(data.clone(), message_hash.clone());
         Value::Undefined
     }
@@ -1656,7 +1665,7 @@ pub trait Cex : Exchange {
         //     }
         //
                 let mut data: Value = self.safe_value(message.clone(), Value::from("data"), Value::new_object());
-        let mut error: Value = self.safe_string(data.clone(), Value::from("error"));
+        let mut error: Value = self.safe_string(data.clone(), Value::from("error"), Value::Undefined);
         let mut event: Value = self.safe_string(message.clone(), Value::from("e"), Value::from(""));
         let mut feedback: Value = self.get("id".into()) + Value::from(" ") + event.clone() + Value::from(" ") + error.clone();
         self.throw_exactly_matched_exception(self.get("exceptions".into()).get(Value::from("exact")), error.clone(), feedback.clone());
@@ -1668,12 +1677,12 @@ pub trait Cex : Exchange {
     }
 
     fn handle_message(&mut self, mut client: Value, mut message: Value) -> Value {
-        let mut ok: Value = self.safe_string(message.clone(), Value::from("ok"));
+        let mut ok: Value = self.safe_string(message.clone(), Value::from("ok"), Value::Undefined);
         if ok.clone() == Value::from("error") {
             <Self as Cex>::handle_error_message(self, client.clone(), message.clone());
             return Value::Undefined;
         };
-        let mut event: Value = self.safe_string(message.clone(), Value::from("e"));
+        let mut event: Value = self.safe_string(message.clone(), Value::from("e"), Value::Undefined);
         let mut handlers: Value = Value::Json(normalize(&Value::Json(json!({
             "auth": self.get("handleAuthenticationMessage".into()),
             "connected": self.get("handleConnected".into()),
@@ -1697,7 +1706,7 @@ pub trait Cex : Exchange {
             "mass-cancel-place-orders": self.get("resolveData".into()),
             "get-order": self.get("resolveData".into())
         }))).unwrap());
-        let mut handler: Value = self.safe_value(handlers.clone(), event.clone());
+        let mut handler: Value = self.safe_value(handlers.clone(), event.clone(), Value::Undefined);
         if handler.clone().is_nonnullish() {
             handler.call(self, client.clone(), message.clone());
         };
@@ -1715,7 +1724,7 @@ pub trait Cex : Exchange {
         //         "timestamp":1448034593
         //     }
         //
-        let mut future: Value = self.safe_value(client.get(futures.clone()), Value::from("authenticated"));
+        let mut future: Value = self.safe_value(client.get(futures.clone()), Value::from("authenticated"), Value::Undefined);
         if future.clone().is_nonnullish() {
             future.resolve(true.into());
         };
@@ -1728,12 +1737,12 @@ pub trait Cex : Exchange {
         let mut client: Value = self.client(url.clone());
         let mut message_hash: Value = Value::from("authenticated");
         let mut future: Value = client.reusable_future(Value::from("authenticated"));
-        let mut authenticated: Value = self.safe_value(client.get(subscriptions.clone()), message_hash.clone());
+        let mut authenticated: Value = self.safe_value(client.get(subscriptions.clone()), message_hash.clone(), Value::Undefined);
         if authenticated.clone().is_nullish() {
             self.check_required_credentials(Value::Undefined);
             let mut nonce: Value = self.seconds().to_string();
             let mut auth: Value = nonce.clone() + self.get("apiKey".into());
-            let mut signature: Value = self.hmac(self.encode(auth.clone()), self.encode(self.get("secret".into())), sha256.clone());
+            let mut signature: Value = self.hmac(self.encode(auth.clone()), self.encode(self.get("secret".into())), sha256.clone(), Value::Undefined);
             let mut request: Value = Value::Json(normalize(&Value::Json(json!({
                 "e": "auth",
                 "auth": Value::Json(normalize(&Value::Json(json!({
@@ -1816,8 +1825,8 @@ impl ValueTrait for CexImpl {
     fn push(&mut self, value: Value) { self.0.push(value) }
     fn split(&self, separator: Value) -> Value { self.0.split(separator) }
     fn contains_key(&self, key: Value) -> bool { self.0.contains_key(key) }
-    fn keys(&self) -> Vec<Value> { self.0.keys() }
-    fn values(&self) -> Vec<Value> { self.0.values() }
+    fn keys(&self) -> Value { self.0.keys() }
+    fn values(&self) -> Value { self.0.values() }
     fn to_array(&self, x: Value) -> Value { self.0.to_array(x) }
     fn index_of(&self, x: Value) -> Value { self.0.index_of(x) }
     fn join(&self, glue: Value) -> Value { self.0.join(glue) }

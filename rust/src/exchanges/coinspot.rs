@@ -11,7 +11,16 @@ use async_trait::async_trait;
 use std::str::FromStr;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, JSON, Array, Object, Math, parse_int, shift_2, extend_2, normalize};
+use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, BoolExt, JSON, Array, Object, Math, Promise, parse_int, shift_2, extend_2, normalize};
+// Crypto hash identifiers
+fn sha256() -> Value { Value::from("sha256") }
+fn sha384() -> Value { Value::from("sha384") }
+fn sha512() -> Value { Value::from("sha512") }
+fn md5() -> Value { Value::from("md5") }
+fn ed25519() -> Value { Value::from("ed25519") }
+fn rsa(msg: Value, secret: Value, _hash: Value) -> Value { msg }
+fn eddsa(msg: Value, secret: Value, _curve: Value) -> Value { msg }
+fn secp256k1() -> Value { Value::from("secp256k1") }
 
 use crate::exchange::{PRECISE_BASE, TRUNCATE, ROUND, ROUND_UP, ROUND_DOWN};
 use crate::exchange::{DECIMAL_PLACES, SIGNIFICANT_DIGITS, TICK_SIZE, NO_PADDING, PAD_WITH_ZERO};
@@ -581,32 +590,32 @@ pub trait Coinspot : Exchange {
         let mut result: Value = Value::Json(normalize(&Value::Json(json!({
             "info": response
         }))).unwrap());
-        let mut balances: Value = self.safe_value_2(response.clone(), Value::from("balance"), Value::from("balances"));
+        let mut balances: Value = self.safe_value_2(response.clone(), Value::from("balance"), Value::from("balances"), Value::Undefined);
         if Array::is_array(balances.clone()).is_truthy() {
             let mut i: usize = 0;
             while i < balances.len() {
                 let mut currencies: Value = balances.get(i.into());
-                let mut currency_ids: Value = Object::keys(currencies.clone());
+                let mut currency_ids: Value = currencies.clone().keys();
                 let mut j: usize = 0;
                 while j < currency_ids.len() {
                     let mut currency_id: Value = currency_ids.get(j.into());
                     let mut balance: Value = currencies.get(currency_id.clone());
                     let mut code: Value = self.safe_currency_code(currency_id.clone(), Value::Undefined);
                     let mut account: Value = self.account();
-                    account.set("total".into(), self.safe_string(balance.clone(), Value::from("balance")));
+                    account.set("total".into(), self.safe_string(balance.clone(), Value::from("balance"), Value::Undefined));
                     result.set(code.clone(), account.clone());
                     j += 1;
                 };
                 i += 1;
             };
         } else {
-            let mut currency_ids: Value = Object::keys(balances.clone());
+            let mut currency_ids: Value = balances.clone().keys();
             let mut i: usize = 0;
             while i < currency_ids.len() {
                 let mut currency_id: Value = currency_ids.get(i.into());
                 let mut code: Value = self.safe_currency_code(currency_id.clone(), Value::Undefined);
                 let mut account: Value = self.account();
-                account.set("total".into(), self.safe_string(balances.clone(), currency_id.clone()));
+                account.set("total".into(), self.safe_string(balances.clone(), currency_id.clone(), Value::Undefined));
                 result.set(code.clone(), account.clone());
                 i += 1;
             };
@@ -681,16 +690,16 @@ pub trait Coinspot : Exchange {
         //     }
         //
         let mut symbol: Value = self.safe_symbol(Value::Undefined, market.clone(), Value::Undefined, Value::Undefined);
-        let mut last: Value = self.safe_string(ticker.clone(), Value::from("last"));
+        let mut last: Value = self.safe_string(ticker.clone(), Value::from("last"), Value::Undefined);
         return self.safe_ticker(Value::Json(normalize(&Value::Json(json!({
             "symbol": symbol,
             "timestamp": Value::Undefined,
             "datetime": Value::Undefined,
             "high": Value::Undefined,
             "low": Value::Undefined,
-            "bid": self.safe_string(ticker.clone(), Value::from("bid")),
+            "bid": self.safe_string(ticker.clone(), Value::from("bid"), Value::Undefined),
             "bidVolume": Value::Undefined,
-            "ask": self.safe_string(ticker.clone(), Value::from("ask")),
+            "ask": self.safe_string(ticker.clone(), Value::from("ask"), Value::Undefined),
             "askVolume": Value::Undefined,
             "vwap": Value::Undefined,
             "open": Value::Undefined,
@@ -791,7 +800,7 @@ pub trait Coinspot : Exchange {
         if since.clone().is_nonnullish() {
             request.set("startdate".into(), self.yyyymmdd(since.clone()));
         };
-        let mut response: Value = self.private_post_ro_my_transactions(extend_2(request.clone(), params.clone())).await;
+        let mut response: Value = self.dispatch("privatePostRoMyTransactions".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         //  {
         //      "status": "ok",
         //      "buyorders": [
@@ -863,22 +872,22 @@ pub trait Coinspot : Exchange {
         let mut timestamp: Value = Value::Undefined;
         let mut price_string: Value = Value::Undefined;
         let mut fee: Value = Value::Undefined;
-        let mut aud_total: Value = self.safe_string(trade.clone(), Value::from("audtotal"));
+        let mut aud_total: Value = self.safe_string(trade.clone(), Value::from("audtotal"), Value::Undefined);
         let mut cost_string: Value = self.safe_string(trade.clone(), Value::from("total"), aud_total.clone());
-        let mut side: Value = self.safe_string(trade.clone(), Value::from("side"));
-        let mut amount_string: Value = self.safe_string(trade.clone(), Value::from("amount"));
-        let mut market_id: Value = self.safe_string(trade.clone(), Value::from("market"));
+        let mut side: Value = self.safe_string(trade.clone(), Value::from("side"), Value::Undefined);
+        let mut amount_string: Value = self.safe_string(trade.clone(), Value::from("amount"), Value::Undefined);
+        let mut market_id: Value = self.safe_string(trade.clone(), Value::from("market"), Value::Undefined);
         let mut symbol: Value = self.safe_symbol(market_id.clone(), market.clone(), Value::from("/"), Value::Undefined);
-        let mut solddate: Value = self.safe_integer(trade.clone(), Value::from("solddate"));
+        let mut solddate: Value = self.safe_integer(trade.clone(), Value::from("solddate"), Value::Undefined);
         if solddate.clone().is_nonnullish() {
-            price_string = self.safe_string(trade.clone(), Value::from("rate"));
+            price_string = self.safe_string(trade.clone(), Value::from("rate"), Value::Undefined);
             timestamp = solddate.clone();
         } else {
             price_string = Precise::string_div(cost_string.clone(), amount_string.clone(), Value::Undefined);
-            let mut created_string: Value = self.safe_string(trade.clone(), Value::from("created"));
+            let mut created_string: Value = self.safe_string(trade.clone(), Value::from("created"), Value::Undefined);
             timestamp = self.parse8601(created_string.clone());
-            let mut audfee_ex_gst: Value = self.safe_string(trade.clone(), Value::from("audfeeExGst"));
-            let mut aud_gst: Value = self.safe_string(trade.clone(), Value::from("audGst"));
+            let mut audfee_ex_gst: Value = self.safe_string(trade.clone(), Value::from("audfeeExGst"), Value::Undefined);
+            let mut aud_gst: Value = self.safe_string(trade.clone(), Value::from("audGst"), Value::Undefined);
             // The transaction fee which consumers pay is inclusive of GST by default
             let mut fee_cost: Value = Precise::string_add(audfee_ex_gst.clone(), aud_gst.clone());
             let mut fee_currency_id: Value = Value::from("AUD");
@@ -923,7 +932,7 @@ pub trait Coinspot : Exchange {
 
     async fn cancel_order(&mut self, mut id: Value, mut symbol: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
-        let mut side: Value = self.safe_string(params.clone(), Value::from("side"));
+        let mut side: Value = self.safe_string(params.clone(), Value::from("side"), Value::Undefined);
         if side.clone() != Value::from("buy") && side.clone() != Value::from("sell") {
             panic!(r###"ArgumentsRequired::new(self.get("id".into()) + Value::from(r#" cancelOrder() requires a side parameter, "buy" or "sell""#))"###);
         };
@@ -933,9 +942,9 @@ pub trait Coinspot : Exchange {
         }))).unwrap());
         let mut response: Value = Value::Undefined;
         if side.clone() == Value::from("buy") {
-            response = self.private_post_my_buy_cancel(extend_2(request.clone(), params.clone())).await;
+            response = self.dispatch("privatePostMyBuyCancel".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         } else {
-            response = self.private_post_my_sell_cancel(extend_2(request.clone(), params.clone())).await;
+            response = self.dispatch("privatePostMySellCancel".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         };
         //
         // status - ok, error
@@ -945,30 +954,7 @@ pub trait Coinspot : Exchange {
         }))).unwrap()), Value::Undefined);
     }
 
-    fn sign(&mut self, mut path: Value, mut api: Value, mut method: Value, mut params: Value, mut headers: Value, mut body: Value) -> Value {
-        api = api.or_default(Value::from("public"));
-        method = method.or_default(Value::from("GET"));
-        params = params.or_default(Value::new_object());
-        let mut url: Value = self.get("urls".into()).get(Value::from("api")).get(api.clone()) + Value::from("/") + path.clone();
-        if api.clone() == Value::from("private") {
-            self.check_required_credentials(Value::Undefined);
-            let mut nonce: Value = self.nonce();
-            body = self.json(extend_2(Value::Json(normalize(&Value::Json(json!({
-                "nonce": nonce
-            }))).unwrap()), params.clone()));
-            headers = Value::Json(normalize(&Value::Json(json!({
-                "Content-Type": "application/json",
-                "key": self.get("apiKey".into()),
-                "sign": self.hmac(self.encode(body.clone()), self.encode(self.get("secret".into())), sha512.clone())
-            }))).unwrap());
-        };
-        return Value::Json(normalize(&Value::Json(json!({
-            "url": url,
-            "method": method,
-            "body": body,
-            "headers": headers
-        }))).unwrap());
-    }
+    
 
     
     async fn dispatch(&mut self, method: Value, params: Value, context: Value) -> Value {
@@ -1035,8 +1021,8 @@ impl ValueTrait for CoinspotImpl {
     fn push(&mut self, value: Value) { self.0.push(value) }
     fn split(&self, separator: Value) -> Value { self.0.split(separator) }
     fn contains_key(&self, key: Value) -> bool { self.0.contains_key(key) }
-    fn keys(&self) -> Vec<Value> { self.0.keys() }
-    fn values(&self) -> Vec<Value> { self.0.values() }
+    fn keys(&self) -> Value { self.0.keys() }
+    fn values(&self) -> Value { self.0.values() }
     fn to_array(&self, x: Value) -> Value { self.0.to_array(x) }
     fn index_of(&self, x: Value) -> Value { self.0.index_of(x) }
     fn join(&self, glue: Value) -> Value { self.0.join(glue) }

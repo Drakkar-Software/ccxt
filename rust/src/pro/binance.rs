@@ -11,7 +11,16 @@ use async_trait::async_trait;
 use std::str::FromStr;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, JSON, Array, Object, Math, parse_int, shift_2, extend_2, normalize};
+use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, BoolExt, JSON, Array, Object, Math, Promise, parse_int, shift_2, extend_2, normalize};
+// Crypto hash identifiers
+fn sha256() -> Value { Value::from("sha256") }
+fn sha384() -> Value { Value::from("sha384") }
+fn sha512() -> Value { Value::from("sha512") }
+fn md5() -> Value { Value::from("md5") }
+fn ed25519() -> Value { Value::from("ed25519") }
+fn rsa(msg: Value, secret: Value, _hash: Value) -> Value { msg }
+fn eddsa(msg: Value, secret: Value, _curve: Value) -> Value { msg }
+fn secp256k1() -> Value { Value::from("secp256k1") }
 
 use crate::exchange::{PRECISE_BASE, TRUNCATE, ROUND, ROUND_UP, ROUND_DOWN};
 use crate::exchange::{DECIMAL_PLACES, SIGNIFICANT_DIGITS, TICK_SIZE, NO_PADDING, PAD_WITH_ZERO};
@@ -2422,17 +2431,17 @@ pub trait Binance : Exchange {
     fn stream(&mut self, mut r#type: Value, mut subscription_hash: Value, mut num_subscriptions: Value) -> Value {
         num_subscriptions = num_subscriptions.or_default(Value::from(1));
         let mut stream_by_subscriptions_hash: Value = self.safe_dict(self.get("options".into()), Value::from("streamBySubscriptionsHash"), self.create_safe_dictionary());
-        let mut stream: Value = self.safe_string(stream_by_subscriptions_hash.clone(), subscription_hash.clone());
+        let mut stream: Value = self.safe_string(stream_by_subscriptions_hash.clone(), subscription_hash.clone(), Value::Undefined);
         if stream.clone().is_nullish() {
             let mut stream_index: Value = self.safe_integer(self.get("options".into()), Value::from("streamIndex"), Value::from(1).neg());
-            let mut stream_limits: Value = self.safe_value(self.get("options".into()), Value::from("streamLimits"));
-            let mut stream_limit: Value = self.safe_integer(stream_limits.clone(), r#type.clone());
+            let mut stream_limits: Value = self.safe_value(self.get("options".into()), Value::from("streamLimits"), Value::Undefined);
+            let mut stream_limit: Value = self.safe_integer(stream_limits.clone(), r#type.clone(), Value::Undefined);
             stream_index = stream_index.clone() + Value::from(1);
             let mut normalized_index: Value = stream_index.clone() % stream_limit.clone();
             self.get("options".into()).set("streamIndex".into(), stream_index.clone());
             stream = self.number_to_string(normalized_index.clone());
             self.get("options".into()).get(Value::from("streamBySubscriptionsHash")).set(subscription_hash.clone(), stream.clone());
-            let mut subscriptions_by_streams: Value = self.safe_value(self.get("options".into()), Value::from("numSubscriptionsByStream"));
+            let mut subscriptions_by_streams: Value = self.safe_value(self.get("options".into()), Value::from("numSubscriptionsByStream"), Value::Undefined);
             if subscriptions_by_streams.clone().is_nullish() {
                 self.get("options".into()).set("numSubscriptionsByStream".into(), self.create_safe_dictionary());
             };
@@ -2480,9 +2489,9 @@ pub trait Binance : Exchange {
         };
         let mut sub_type: Value = Value::Undefined;
         (sub_type, params) = shift_2(self.handle_sub_type_and_params(Value::from("watchLiquidationsForSymbols"), first_market.clone(), params.clone(), Value::Undefined));
-        if self.is_linear(r#type.clone(), sub_type.clone()).is_truthy() {
+        if <Self as Binance>::is_linear(self, r#type.clone(), sub_type.clone()).is_truthy() {
             r#type = Value::from("future");
-        } else if self.is_inverse(r#type.clone(), sub_type.clone()).is_truthy() {
+        } else if <Self as Binance>::is_inverse(self, r#type.clone(), sub_type.clone()).is_truthy() {
             r#type = Value::from("delivery");
         };
         let mut num_subscriptions: usize = subscription_hashes.len();
@@ -2544,7 +2553,7 @@ pub trait Binance : Exchange {
         //    }
         //
         let mut raw_liquidation: Value = self.safe_value(message.clone(), Value::from("o"), Value::new_object());
-        let mut market_id: Value = self.safe_string(raw_liquidation.clone(), Value::from("s"));
+        let mut market_id: Value = self.safe_string(raw_liquidation.clone(), Value::from("s"), Value::Undefined);
         let mut market: Value = self.safe_market(market_id.clone(), Value::Undefined, Value::from(""), Value::from("contract"));
         let mut symbol: Value = market.get(Value::from("symbol"));
         let mut liquidation: Value = <Self as Binance>::parse_ws_liquidation(self, raw_liquidation.clone(), market.clone());
@@ -2633,16 +2642,16 @@ pub trait Binance : Exchange {
         //        "gtd":0                     // TIF GTD order auto cancel time
         //    }
         //
-        let mut market_id: Value = self.safe_string(liquidation.clone(), Value::from("s"));
+        let mut market_id: Value = self.safe_string(liquidation.clone(), Value::from("s"), Value::Undefined);
         market = self.safe_market(market_id.clone(), market.clone(), Value::Undefined, Value::from("swap"));
-        let mut timestamp: Value = self.safe_integer(liquidation.clone(), Value::from("T"));
+        let mut timestamp: Value = self.safe_integer(liquidation.clone(), Value::from("T"), Value::Undefined);
         return self.safe_liquidation(Value::Json(normalize(&Value::Json(json!({
             "info": liquidation,
             "symbol": self.safe_symbol(market_id.clone(), market.clone(), Value::Undefined, Value::Undefined),
             "contracts": self.safe_number(liquidation.clone(), Value::from("l"), Value::Undefined),
             "contractSize": self.safe_number(market.clone(), Value::from("contractSize"), Value::Undefined),
             "price": self.safe_number(liquidation.clone(), Value::from("ap"), Value::Undefined),
-            "side": self.safe_string_lower(liquidation.clone(), Value::from("S")),
+            "side": self.safe_string_lower(liquidation.clone(), Value::from("S"), Value::Undefined),
             "baseValue": Value::Undefined,
             "quoteValue": Value::Undefined,
             "timestamp": timestamp,
@@ -2673,9 +2682,9 @@ pub trait Binance : Exchange {
         (r#type, params) = shift_2(self.handle_market_type_and_params(Value::from("watchMyLiquidationsForSymbols"), market.clone(), params.clone(), Value::Undefined));
         let mut sub_type: Value = Value::Undefined;
         (sub_type, params) = shift_2(self.handle_sub_type_and_params(Value::from("watchMyLiquidationsForSymbols"), market.clone(), params.clone(), Value::Undefined));
-        if self.is_linear(r#type.clone(), sub_type.clone()).is_truthy() {
+        if <Self as Binance>::is_linear(self, r#type.clone(), sub_type.clone()).is_truthy() {
             r#type = Value::from("future");
-        } else if self.is_inverse(r#type.clone(), sub_type.clone()).is_truthy() {
+        } else if <Self as Binance>::is_inverse(self, r#type.clone(), sub_type.clone()).is_truthy() {
             r#type = Value::from("delivery");
         };
         <Self as Binance>::authenticate(self, params.clone()).await;
@@ -2733,11 +2742,11 @@ pub trait Binance : Exchange {
         //        "gtd":0                     // TIF GTD order auto cancel time
         //    }
         //
-        let mut order_type: Value = self.safe_string(message.clone(), Value::from("o"));
+        let mut order_type: Value = self.safe_string(message.clone(), Value::from("o"), Value::Undefined);
         if order_type.clone() != Value::from("LIQUIDATION") {
             return Value::Undefined;
         };
-        let mut market_id: Value = self.safe_string(message.clone(), Value::from("s"));
+        let mut market_id: Value = self.safe_string(message.clone(), Value::from("s"), Value::Undefined);
         let mut market: Value = self.safe_market(market_id.clone(), Value::Undefined, Value::Undefined, Value::from("swap"));
         let mut symbol: Value = self.safe_symbol(market_id.clone(), market.clone(), Value::Undefined, Value::Undefined);
         let mut liquidation: Value = <Self as Binance>::parse_ws_liquidation(self, message.clone(), market.clone());
@@ -2964,24 +2973,24 @@ pub trait Binance : Exchange {
         //        }
         //    }
         //
-        let mut message_hash: Value = self.safe_string(message.clone(), Value::from("id"));
+        let mut message_hash: Value = self.safe_string(message.clone(), Value::from("id"), Value::Undefined);
         let mut result: Value = self.safe_dict(message.clone(), Value::from("result"), Value::Undefined);
-        let mut timestamp: Value = self.safe_integer(result.clone(), Value::from("T"));
-        let mut orderbook: Value = self.parse_order_book(result.clone(), Value::Undefined, timestamp.clone(), Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined);
-        orderbook.set("nonce".into(), self.safe_integer_2(result.clone(), Value::from("lastUpdateId"), Value::from("u")));
+        let mut timestamp: Value = self.safe_integer(result.clone(), Value::from("T"), Value::Undefined);
+        let mut orderbook: Value = self.parse_order_book(result.clone(), Value::Undefined, timestamp.clone(), Value::Undefined, Value::Undefined);
+        orderbook.set("nonce".into(), self.safe_integer_2(result.clone(), Value::from("lastUpdateId"), Value::from("u"), Value::Undefined));
         client.resolve(orderbook.clone(), message_hash.clone());
         Value::Undefined
     }
 
     async fn fetch_order_book_snapshot(&mut self, mut client: Value, mut message: Value, mut subscription: Value) -> Value {
-        let mut symbol: Value = self.safe_string(subscription.clone(), Value::from("symbol"));
+        let mut symbol: Value = self.safe_string(subscription.clone(), Value::from("symbol"), Value::Undefined);
         let mut message_hash: Value = Value::from("orderbook::") + symbol.clone();
                 let mut default_limit: Value = self.safe_integer(self.get("options".into()), Value::from("watchOrderBookLimit"), Value::from(1000));
-        let mut r#type: Value = self.safe_value(subscription.clone(), Value::from("type"));
+        let mut r#type: Value = self.safe_value(subscription.clone(), Value::from("type"), Value::Undefined);
         let mut limit: Value = self.safe_integer(subscription.clone(), Value::from("limit"), default_limit.clone());
-        let mut params: Value = self.safe_value(subscription.clone(), Value::from("params"));
+        let mut params: Value = self.safe_value(subscription.clone(), Value::from("params"), Value::Undefined);
         let mut snapshot: Value = self.fetch_rest_order_book_safe(symbol.clone(), limit.clone(), params.clone()).await;
-        if self.safe_value(self.get("orderbooks".into()), symbol.clone()).is_nullish() {
+        if self.safe_value(self.get("orderbooks".into()), symbol.clone(), Value::Undefined).is_nullish() {
             // 3. Get a depth snapshot from https://www.binance.com/api/v1/depth?symbol=BNBBTC&limit=1000 .
             // todo: this is a synch blocking call - make it async
             // default 100, max 1000, valid limits 5, 10, 20, 50, 100, 500, 1000
@@ -2996,9 +3005,9 @@ pub trait Binance : Exchange {
         while i < messages.len() {
             // unroll the accumulated deltas
             let mut message_item: Value = messages.get(i.into());
-            let mut U: Value = self.safe_integer(message_item.clone(), Value::from("U"));
-            let mut u: Value = self.safe_integer(message_item.clone(), Value::from("u"));
-            let mut pu: Value = self.safe_integer(message_item.clone(), Value::from("pu"));
+            let mut U: Value = self.safe_integer(message_item.clone(), Value::from("U"), Value::Undefined);
+            let mut u: Value = self.safe_integer(message_item.clone(), Value::from("u"), Value::Undefined);
+            let mut pu: Value = self.safe_integer(message_item.clone(), Value::from("pu"), Value::Undefined);
             if r#type.clone() == Value::from("future") {
                 // 4. Drop any event where u is < lastUpdateId in the snapshot
                 if u.clone() < orderbook.get(Value::from("nonce")) {
@@ -3028,8 +3037,8 @@ pub trait Binance : Exchange {
     }
 
     fn handle_delta(&mut self, mut bookside: Value, mut delta: Value) -> Value {
-        let mut price: Value = self.safe_float(delta.clone(), Value::from(0));
-        let mut amount: Value = self.safe_float(delta.clone(), Value::from(1));
+        let mut price: Value = self.safe_float(delta.clone(), Value::from(0), Value::Undefined);
+        let mut amount: Value = self.safe_float(delta.clone(), Value::from(1), Value::Undefined);
         bookside.store(price.clone(), amount.clone());
         Value::Undefined
     }
@@ -3044,11 +3053,11 @@ pub trait Binance : Exchange {
     }
 
     fn handle_order_book_message(&mut self, mut client: Value, mut message: Value, mut orderbook: Value) -> Value {
-        let mut u: Value = self.safe_integer(message.clone(), Value::from("u"));
+        let mut u: Value = self.safe_integer(message.clone(), Value::from("u"), Value::Undefined);
         <Self as Binance>::handle_deltas(self, orderbook.get(Value::from("asks")), self.safe_value(message.clone(), Value::from("a"), Value::new_array()));
         <Self as Binance>::handle_deltas(self, orderbook.get(Value::from("bids")), self.safe_value(message.clone(), Value::from("b"), Value::new_array()));
         orderbook.set("nonce".into(), u.clone());
-        let mut timestamp: Value = self.safe_integer(message.clone(), Value::from("E"));
+        let mut timestamp: Value = self.safe_integer(message.clone(), Value::from("E"), Value::Undefined);
         orderbook.set("timestamp".into(), timestamp.clone());
         orderbook.set("datetime".into(), self.iso8601(timestamp.clone()));
         return orderbook.clone();
@@ -3075,7 +3084,7 @@ pub trait Binance : Exchange {
         //
         let mut is_spot: Value = <Self as Binance>::is_spot_url(self, client.clone());
         let mut market_type: Value = if is_spot.is_truthy() { Value::from("spot") } else { Value::from("swap") };
-        let mut market_id: Value = self.safe_string(message.clone(), Value::from("s"));
+        let mut market_id: Value = self.safe_string(message.clone(), Value::from("s"), Value::Undefined);
         let mut market: Value = self.safe_market(market_id.clone(), Value::Undefined, Value::Undefined, market_type.clone());
         let mut symbol: Value = market.get(Value::from("symbol"));
         let mut message_hash: Value = Value::from("orderbook::") + symbol.clone();
@@ -3091,19 +3100,19 @@ pub trait Binance : Exchange {
             return Value::Undefined;
         };
         let mut orderbook: Value = self.get("orderbooks".into()).get(symbol.clone());
-        let mut nonce: Value = self.safe_integer(orderbook.clone(), Value::from("nonce"));
+        let mut nonce: Value = self.safe_integer(orderbook.clone(), Value::from("nonce"), Value::Undefined);
         if nonce.clone().is_nullish() {
             // 2. Buffer the events you receive from the stream.
             orderbook.get(cache.clone()).push(message.clone());
         } else {
-                        let mut U: Value = self.safe_integer(message.clone(), Value::from("U"));
-            let mut u: Value = self.safe_integer(message.clone(), Value::from("u"));
-            let mut pu: Value = self.safe_integer(message.clone(), Value::from("pu"));
+                        let mut U: Value = self.safe_integer(message.clone(), Value::from("U"), Value::Undefined);
+            let mut u: Value = self.safe_integer(message.clone(), Value::from("u"), Value::Undefined);
+            let mut pu: Value = self.safe_integer(message.clone(), Value::from("pu"), Value::Undefined);
             if pu.clone().is_nullish() {
                 // spot
                 // 4. Drop any event where u is <= lastUpdateId in the snapshot
                 if u.clone() > orderbook.get(Value::from("nonce")) {
-                    let mut timestamp: Value = self.safe_integer(orderbook.clone(), Value::from("timestamp"));
+                    let mut timestamp: Value = self.safe_integer(orderbook.clone(), Value::from("timestamp"), Value::Undefined);
                     let mut conditional: Value = Value::Undefined;
                     if timestamp.clone().is_nullish() {
                         // 5. The first processed event should have U <= lastUpdateId+1 AND u >= lastUpdateId+1
@@ -3154,7 +3163,7 @@ pub trait Binance : Exchange {
     fn handle_order_book_subscription(&mut self, mut client: Value, mut message: Value, mut subscription: Value) -> Value {
         let mut default_limit: Value = self.safe_integer(self.get("options".into()), Value::from("watchOrderBookLimit"), Value::from(1000));
         // const messageHash = this.safeString (subscription, 'messageHash');
-        let mut symbol_of_subscription: Value = self.safe_string(subscription.clone(), Value::from("symbol"));
+        let mut symbol_of_subscription: Value = self.safe_string(subscription.clone(), Value::from("symbol"), Value::Undefined);
         // watchOrderBook
         let mut symbols: Value = self.safe_value(subscription.clone(), Value::from("symbols"), Value::Json(serde_json::Value::Array(vec![symbol_of_subscription.clone().into()])));
         // watchOrderBookForSymbols
@@ -3184,10 +3193,10 @@ pub trait Binance : Exchange {
         //         "id": 1574649734450
         //     }
         //
-        let mut id: Value = self.safe_string(message.clone(), Value::from("id"));
+        let mut id: Value = self.safe_string(message.clone(), Value::from("id"), Value::Undefined);
         let mut subscriptions_by_id: Value = self.index_by(client.get(subscriptions.clone()), Value::from("id"));
         let mut subscription: Value = self.safe_value(subscriptions_by_id.clone(), id.clone(), Value::new_object());
-        let mut method: Value = self.safe_value(subscription.clone(), Value::from("method"));
+        let mut method: Value = self.safe_value(subscription.clone(), Value::from("method"), Value::Undefined);
         if method.clone().is_nonnullish() {
             method.call(self, client.clone(), message.clone(), subscription.clone());
         };
@@ -3257,8 +3266,8 @@ pub trait Binance : Exchange {
         }))).unwrap());
         let mut trades: Value = self.watch_multiple(url.clone(), message_hashes.clone(), extend_2(request.clone(), query.clone()), message_hashes.clone(), subscribe.clone()).await;
         if self.get("newUpdates".into()).is_truthy() {
-            let mut first: Value = self.safe_value(trades.clone(), Value::from(0));
-            let mut trade_symbol: Value = self.safe_string(first.clone(), Value::from("symbol"));
+            let mut first: Value = self.safe_value(trades.clone(), Value::from(0), Value::Undefined);
+            let mut trade_symbol: Value = self.safe_string(first.clone(), Value::from("symbol"), Value::Undefined);
             limit = trades.get_limit(trade_symbol.clone(), limit.clone());
         };
         return self.filter_by_since_limit(trades.clone(), since.clone(), limit.clone(), Value::from("timestamp"), true.into());
@@ -3434,30 +3443,30 @@ pub trait Binance : Exchange {
         //         "ss": 0
         //     }
         //
-        let mut execution_type: Value = self.safe_string(trade.clone(), Value::from("x"));
+        let mut execution_type: Value = self.safe_string(trade.clone(), Value::from("x"), Value::Undefined);
         let mut is_trade_execution: Value = (execution_type.clone() == Value::from("TRADE")).into();
         if !is_trade_execution.is_truthy() {
             return self.parse_trade(trade.clone(), market.clone());
         };
-        let mut id: Value = self.safe_string_2(trade.clone(), Value::from("t"), Value::from("a"));
-        let mut timestamp: Value = self.safe_integer(trade.clone(), Value::from("T"));
-        let mut price: Value = self.safe_string_2(trade.clone(), Value::from("L"), Value::from("p"));
-        let mut amount: Value = self.safe_string(trade.clone(), Value::from("q"));
+        let mut id: Value = self.safe_string_2(trade.clone(), Value::from("t"), Value::from("a"), Value::Undefined);
+        let mut timestamp: Value = self.safe_integer(trade.clone(), Value::from("T"), Value::Undefined);
+        let mut price: Value = self.safe_string_2(trade.clone(), Value::from("L"), Value::from("p"), Value::Undefined);
+        let mut amount: Value = self.safe_string(trade.clone(), Value::from("q"), Value::Undefined);
         if is_trade_execution.is_truthy() {
             amount = self.safe_string(trade.clone(), Value::from("l"), amount.clone());
         };
-        let mut cost: Value = self.safe_string(trade.clone(), Value::from("Y"));
+        let mut cost: Value = self.safe_string(trade.clone(), Value::from("Y"), Value::Undefined);
         if cost.clone().is_nullish() {
             if price.clone().is_nonnullish() && amount.clone().is_nonnullish() {
                 cost = Precise::string_mul(price.clone(), amount.clone());
             };
         };
-        let mut market_id: Value = self.safe_string(trade.clone(), Value::from("s"));
+        let mut market_id: Value = self.safe_string(trade.clone(), Value::from("s"), Value::Undefined);
         let mut market_type: Value = if trade.contains_key(Value::from("ps")) { Value::from("contract") } else { Value::from("spot") };
         let mut symbol: Value = self.safe_symbol(market_id.clone(), Value::Undefined, Value::Undefined, market_type.clone());
-        let mut side: Value = self.safe_string_lower(trade.clone(), Value::from("S"));
+        let mut side: Value = self.safe_string_lower(trade.clone(), Value::from("S"), Value::Undefined);
         let mut taker_or_maker: Value = Value::Undefined;
-        let mut order_id: Value = self.safe_string(trade.clone(), Value::from("i"));
+        let mut order_id: Value = self.safe_string(trade.clone(), Value::from("i"), Value::Undefined);
         if trade.contains_key(Value::from("m")) {
             if side.clone().is_nullish() {
                 side = if trade.get(Value::from("m")).is_truthy() { Value::from("sell") } else { Value::from("buy") };
@@ -3466,16 +3475,16 @@ pub trait Binance : Exchange {
             taker_or_maker = if trade.get(Value::from("m")).is_truthy() { Value::from("maker") } else { Value::from("taker") };
         };
         let mut fee: Value = Value::Undefined;
-        let mut fee_cost: Value = self.safe_string(trade.clone(), Value::from("n"));
+        let mut fee_cost: Value = self.safe_string(trade.clone(), Value::from("n"), Value::Undefined);
         if fee_cost.clone().is_nonnullish() {
-            let mut fee_currency_id: Value = self.safe_string(trade.clone(), Value::from("N"));
+            let mut fee_currency_id: Value = self.safe_string(trade.clone(), Value::from("N"), Value::Undefined);
             let mut fee_currency_code: Value = self.safe_currency_code(fee_currency_id.clone(), Value::Undefined);
             fee = Value::Json(normalize(&Value::Json(json!({
                 "cost": fee_cost,
                 "currency": fee_currency_code
             }))).unwrap());
         };
-        let mut r#type: Value = self.safe_string_lower(trade.clone(), Value::from("o"));
+        let mut r#type: Value = self.safe_string_lower(trade.clone(), Value::from("o"), Value::Undefined);
         return self.safe_trade(Value::Json(normalize(&Value::Json(json!({
             "info": trade,
             "timestamp": timestamp,
@@ -3498,12 +3507,12 @@ pub trait Binance : Exchange {
         // each trade has a unique buyer and seller
         let mut is_spot: Value = <Self as Binance>::is_spot_url(self, client.clone());
         let mut market_type: Value = if is_spot.is_truthy() { Value::from("spot") } else { Value::from("contract") };
-        let mut market_id: Value = self.safe_string(message.clone(), Value::from("s"));
+        let mut market_id: Value = self.safe_string(message.clone(), Value::from("s"), Value::Undefined);
         let mut market: Value = self.safe_market(market_id.clone(), Value::Undefined, Value::Undefined, market_type.clone());
         let mut symbol: Value = market.get(Value::from("symbol"));
         let mut message_hash: Value = Value::from("trade::") + symbol.clone();
         let mut trade: Value = <Self as Binance>::parse_ws_trade(self, message.clone(), market.clone());
-        let mut trades_array: Value = self.safe_value(self.get("trades".into()), symbol.clone());
+        let mut trades_array: Value = self.safe_value(self.get("trades".into()), symbol.clone(), Value::Undefined);
         if trades_array.clone().is_nullish() {
             let mut limit: Value = self.safe_integer(self.get("options".into()), Value::from("tradesLimit"), Value::from(1000));
             trades_array = ArrayCache::new(limit);
@@ -3562,7 +3571,7 @@ pub trait Binance : Exchange {
             message_hashes.push(Value::from("ohlcv::") + market.get(Value::from("symbol")) + Value::from("::") + timeframe_string.clone());
             i += 1;
         };
-        let mut url: Value = self.get("urls".into()).get(Value::from("api")).get(Value::from("ws")).get(r#type.clone()) + Value::from("/") + <Self as Binance>::stream(self, r#type.clone(), Value::from("multipleOHLCV"), Value::Undefined);
+        let mut url: Value = self.get("urls".into()).get(Value::from("api")).get(Value::from("ws")).get(r#type.clone()) + Value::from("/") + <Self as Binance>::stream(self, r#type.clone(), Value::from("multipleOHLCV"));
         let mut request_id: Value = <Self as Binance>::request_id(self, url.clone());
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
             "method": "SUBSCRIBE",
@@ -3621,7 +3630,7 @@ pub trait Binance : Exchange {
             message_hashes.push(Value::from("unsubscribe::ohlcv::") + market.get(Value::from("symbol")) + Value::from("::") + timeframe_string.clone());
             i += 1;
         };
-        let mut url: Value = self.get("urls".into()).get(Value::from("api")).get(Value::from("ws")).get(r#type.clone()) + Value::from("/") + <Self as Binance>::stream(self, r#type.clone(), Value::from("multipleOHLCV"), Value::Undefined);
+        let mut url: Value = self.get("urls".into()).get(Value::from("api")).get(Value::from("ws")).get(r#type.clone()) + Value::from("/") + <Self as Binance>::stream(self, r#type.clone(), Value::from("multipleOHLCV"));
         let mut request_id: Value = <Self as Binance>::request_id(self, url.clone());
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
             "method": "UNSUBSCRIBE",
@@ -3678,28 +3687,28 @@ pub trait Binance : Exchange {
         //         }
         //     }
         //
-        let mut event: Value = self.safe_string(message.clone(), Value::from("e"));
+        let mut event: Value = self.safe_string(message.clone(), Value::from("e"), Value::Undefined);
         let mut event_map: Value = Value::Json(normalize(&Value::Json(json!({
             "indexPrice_kline": "indexPriceKline",
             "markPrice_kline": "markPriceKline"
         }))).unwrap());
         event = self.safe_string(event_map.clone(), event.clone(), event.clone());
-        let mut kline: Value = self.safe_value(message.clone(), Value::from("k"));
-        let mut market_id: Value = self.safe_string_2(kline.clone(), Value::from("s"), Value::from("ps"));
+        let mut kline: Value = self.safe_value(message.clone(), Value::from("k"), Value::Undefined);
+        let mut market_id: Value = self.safe_string_2(kline.clone(), Value::from("s"), Value::from("ps"), Value::Undefined);
         if event.clone() == Value::from("indexPriceKline") {
             // indexPriceKline doesn't have the _PERP suffix
-            market_id = self.safe_string(message.clone(), Value::from("ps"));
+            market_id = self.safe_string(message.clone(), Value::from("ps"), Value::Undefined);
         };
-        let mut interval: Value = self.safe_string(kline.clone(), Value::from("i"));
+        let mut interval: Value = self.safe_string(kline.clone(), Value::from("i"), Value::Undefined);
         // use a reverse lookup in a static map instead
         let mut unified_timeframe: Value = self.find_timeframe(interval.clone(), Value::Undefined);
-        let mut parsed: Value = Value::Json(serde_json::Value::Array(vec![self.safe_integer(kline.clone(), Value::from("t")).into(), self.safe_float(kline.clone(), Value::from("o")).into(), self.safe_float(kline.clone(), Value::from("h")).into(), self.safe_float(kline.clone(), Value::from("l")).into(), self.safe_float(kline.clone(), Value::from("c")).into(), self.safe_float(kline.clone(), Value::from("v")).into()]));
+        let mut parsed: Value = Value::Json(serde_json::Value::Array(vec![self.safe_integer(kline.clone(), Value::from("t"), Value::Undefined).into(), self.safe_float(kline.clone(), Value::from("o"), Value::Undefined).into(), self.safe_float(kline.clone(), Value::from("h"), Value::Undefined).into(), self.safe_float(kline.clone(), Value::from("l"), Value::Undefined).into(), self.safe_float(kline.clone(), Value::from("c"), Value::Undefined).into(), self.safe_float(kline.clone(), Value::from("v"), Value::Undefined).into()]));
         let mut is_spot: Value = <Self as Binance>::is_spot_url(self, client.clone());
         let mut market_type: Value = if is_spot.is_truthy() { Value::from("spot") } else { Value::from("contract") };
         let mut symbol: Value = self.safe_symbol(market_id.clone(), Value::Undefined, Value::Undefined, market_type.clone());
         let mut message_hash: Value = Value::from("ohlcv::") + symbol.clone() + Value::from("::") + unified_timeframe.clone();
         self.get("ohlcvs".into()).set(symbol.clone(), self.safe_value(self.get("ohlcvs".into()), symbol.clone(), Value::new_object()));
-        let mut stored: Value = self.safe_value(self.get("ohlcvs".into()).get(symbol.clone()), unified_timeframe.clone());
+        let mut stored: Value = self.safe_value(self.get("ohlcvs".into()).get(symbol.clone()), unified_timeframe.clone(), Value::Undefined);
         if stored.clone().is_nullish() {
             let mut limit: Value = self.safe_integer(self.get("options".into()), Value::from("OHLCVLimit"), Value::from(1000));
             stored = ArrayCacheByTimestamp::new(limit);
@@ -3762,7 +3771,7 @@ pub trait Binance : Exchange {
             "returnRateLimits": return_rate_limits,
             "interval": self.get("timeframes".into()).get(timeframe.clone())
         }))).unwrap());
-        let mut until: Value = self.safe_integer(params.clone(), Value::from("until"));
+        let mut until: Value = self.safe_integer(params.clone(), Value::from("until"), Value::Undefined);
         params = self.omit(params.clone(), Value::from("until"));
         if since.clone().is_nonnullish() {
             payload.set("startTime".into(), since.clone());
@@ -3819,7 +3828,7 @@ pub trait Binance : Exchange {
         let mut result: Value = self.safe_list(message.clone(), Value::from("result"), Value::Undefined);
         let mut parsed: Value = self.parse_ohlcvs(result.clone(), Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined);
         // use a reverse lookup in a static map instead
-        let mut message_hash: Value = self.safe_string(message.clone(), Value::from("id"));
+        let mut message_hash: Value = self.safe_string(message.clone(), Value::from("id"), Value::Undefined);
         client.resolve(parsed.clone(), message_hash.clone());
         Value::Undefined
     }
@@ -3851,7 +3860,7 @@ pub trait Binance : Exchange {
         // so it's impossible to watch both at the same time
         // refactor this to use different messageHashes
         (channel_name, params) = shift_2(self.handle_option_and_params(params.clone(), Value::from("watchMarkPrices"), Value::from("name"), Value::from("markPrice")));
-        let mut new_tickers: Value = <Self as Binance>::watch_multi_ticker_helper(self, Value::from("watchMarkPrices"), channel_name.clone(), symbols.clone(), params.clone(), Value::Undefined).await;
+        let mut new_tickers: Value = <Self as Binance>::watch_multi_ticker_helper(self, Value::from("watchMarkPrices"), channel_name.clone(), symbols.clone(), params.clone()).await;
         if self.get("newUpdates".into()).is_truthy() {
             return new_tickers.clone();
         };
@@ -3865,7 +3874,7 @@ pub trait Binance : Exchange {
         if channel_name.clone() == Value::from("bookTicker") {
             panic!(r###"BadRequest::new(self.get("id".into()) + Value::from(" deprecation notice - to subscribe for bids-asks, use watch_bids_asks() method instead"))"###);
         };
-        let mut new_tickers: Value = <Self as Binance>::watch_multi_ticker_helper(self, Value::from("watchTickers"), channel_name.clone(), symbols.clone(), params.clone(), Value::Undefined).await;
+        let mut new_tickers: Value = <Self as Binance>::watch_multi_ticker_helper(self, Value::from("watchTickers"), channel_name.clone(), symbols.clone(), params.clone()).await;
         if self.get("newUpdates".into()).is_truthy() {
             return new_tickers.clone();
         };
@@ -3904,7 +3913,7 @@ pub trait Binance : Exchange {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
         symbols = self.market_symbols(symbols.clone(), Value::Undefined, true.into(), false.into(), true.into());
-        let mut result: Value = <Self as Binance>::watch_multi_ticker_helper(self, Value::from("watchBidsAsks"), Value::from("bookTicker"), symbols.clone(), params.clone(), Value::Undefined).await;
+        let mut result: Value = <Self as Binance>::watch_multi_ticker_helper(self, Value::from("watchBidsAsks"), Value::from("bookTicker"), symbols.clone(), params.clone()).await;
         if self.get("newUpdates".into()).is_truthy() {
             return result.clone();
         };
@@ -3930,9 +3939,9 @@ pub trait Binance : Exchange {
         let mut sub_type: Value = Value::Undefined;
         (sub_type, params) = shift_2(self.handle_sub_type_and_params(method_name.clone(), first_market.clone(), params.clone(), Value::Undefined));
         let mut raw_market_type: Value = Value::Undefined;
-        if self.is_linear(market_type.clone(), sub_type.clone()).is_truthy() {
+        if <Self as Binance>::is_linear(self, market_type.clone(), sub_type.clone()).is_truthy() {
             raw_market_type = Value::from("future");
-        } else if self.is_inverse(market_type.clone(), sub_type.clone()).is_truthy() {
+        } else if <Self as Binance>::is_inverse(self, market_type.clone(), sub_type.clone()).is_truthy() {
             raw_market_type = Value::from("delivery");
         } else if market_type.clone() == Value::from("spot") {
             raw_market_type = market_type.clone();
@@ -3987,7 +3996,7 @@ pub trait Binance : Exchange {
         if symbols_defined.is_truthy() {
             stream_hash = channel_name.clone() + Value::from("::") + symbols.join(Value::from(","));
         };
-        let mut url: Value = self.get("urls".into()).get(Value::from("api")).get(Value::from("ws")).get(raw_market_type.clone()) + Value::from("/") + <Self as Binance>::stream(self, raw_market_type.clone(), stream_hash.clone(), Value::Undefined);
+        let mut url: Value = self.get("urls".into()).get(Value::from("api")).get(Value::from("ws")).get(raw_market_type.clone()) + Value::from("/") + <Self as Binance>::stream(self, raw_market_type.clone(), stream_hash.clone());
         let mut request_id: Value = <Self as Binance>::request_id(self, url.clone());
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
             "method": if is_unsubscribe.is_truthy() { Value::from("UNSUBSCRIBE") } else { Value::from("SUBSCRIBE") },
@@ -4094,7 +4103,7 @@ pub trait Binance : Exchange {
         //         "time":1589437530011,
         //      }
         //
-        let mut market_id: Value = self.safe_string_2(message.clone(), Value::from("s"), Value::from("symbol"));
+        let mut market_id: Value = self.safe_string_2(message.clone(), Value::from("s"), Value::from("symbol"), Value::Undefined);
         let mut symbol: Value = self.safe_symbol(market_id.clone(), Value::Undefined, Value::Undefined, market_type.clone());
         let mut event: Value = self.safe_string(message.clone(), Value::from("e"), Value::from("bookTicker"));
         if event.clone() == Value::from("24hrTicker") {
@@ -4104,43 +4113,43 @@ pub trait Binance : Exchange {
             // handle this separately because some fields clash with the ticker fields
             return self.safe_ticker(Value::Json(normalize(&Value::Json(json!({
                 "symbol": symbol,
-                "timestamp": self.safe_integer(message.clone(), Value::from("E")),
-                "datetime": self.iso8601(self.safe_integer(message.clone(), Value::from("E"))),
+                "timestamp": self.safe_integer(message.clone(), Value::from("E"), Value::Undefined),
+                "datetime": self.iso8601(self.safe_integer(message.clone(), Value::from("E"), Value::Undefined)),
                 "info": message,
-                "markPrice": self.safe_string(message.clone(), Value::from("p")),
-                "indexPrice": self.safe_string(message.clone(), Value::from("i"))
+                "markPrice": self.safe_string(message.clone(), Value::from("p"), Value::Undefined),
+                "indexPrice": self.safe_string(message.clone(), Value::from("i"), Value::Undefined)
             }))).unwrap()), Value::Undefined);
         };
         let mut timestamp: Value = Value::Undefined;
         if event.clone() == Value::from("bookTicker") {
             // take the event timestamp, if available, for spot tickers it is not
-            timestamp = self.safe_integer_2(message.clone(), Value::from("E"), Value::from("time"));
+            timestamp = self.safe_integer_2(message.clone(), Value::from("E"), Value::from("time"), Value::Undefined);
         } else {
             // take the timestamp of the closing price for candlestick streams
-            timestamp = self.safe_integer_n(message.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("C").into(), Value::from("E").into(), Value::from("time").into()])));
+            timestamp = self.safe_integer_n(message.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("C").into(), Value::from("E").into(), Value::from("time").into()])), Value::Undefined);
         };
         let mut market: Value = self.safe_market(market_id.clone(), Value::Undefined, Value::Undefined, market_type.clone());
-        let mut last: Value = self.safe_string_2(message.clone(), Value::from("c"), Value::from("price"));
+        let mut last: Value = self.safe_string_2(message.clone(), Value::from("c"), Value::from("price"), Value::Undefined);
         return self.safe_ticker(Value::Json(normalize(&Value::Json(json!({
             "symbol": symbol,
             "timestamp": timestamp,
             "datetime": self.iso8601(timestamp.clone()),
-            "high": self.safe_string(message.clone(), Value::from("h")),
-            "low": self.safe_string(message.clone(), Value::from("l")),
-            "bid": self.safe_string_2(message.clone(), Value::from("b"), Value::from("bidPrice")),
-            "bidVolume": self.safe_string_2(message.clone(), Value::from("B"), Value::from("bidQty")),
-            "ask": self.safe_string_2(message.clone(), Value::from("a"), Value::from("askPrice")),
-            "askVolume": self.safe_string_2(message.clone(), Value::from("A"), Value::from("askQty")),
-            "vwap": self.safe_string(message.clone(), Value::from("w")),
-            "open": self.safe_string(message.clone(), Value::from("o")),
+            "high": self.safe_string(message.clone(), Value::from("h"), Value::Undefined),
+            "low": self.safe_string(message.clone(), Value::from("l"), Value::Undefined),
+            "bid": self.safe_string_2(message.clone(), Value::from("b"), Value::from("bidPrice"), Value::Undefined),
+            "bidVolume": self.safe_string_2(message.clone(), Value::from("B"), Value::from("bidQty"), Value::Undefined),
+            "ask": self.safe_string_2(message.clone(), Value::from("a"), Value::from("askPrice"), Value::Undefined),
+            "askVolume": self.safe_string_2(message.clone(), Value::from("A"), Value::from("askQty"), Value::Undefined),
+            "vwap": self.safe_string(message.clone(), Value::from("w"), Value::Undefined),
+            "open": self.safe_string(message.clone(), Value::from("o"), Value::Undefined),
             "close": last,
             "last": last,
-            "previousClose": self.safe_string(message.clone(), Value::from("x")),
-            "change": self.safe_string(message.clone(), Value::from("p")),
-            "percentage": self.safe_string(message.clone(), Value::from("P")),
+            "previousClose": self.safe_string(message.clone(), Value::from("x"), Value::Undefined),
+            "change": self.safe_string(message.clone(), Value::from("p"), Value::Undefined),
+            "percentage": self.safe_string(message.clone(), Value::from("P"), Value::Undefined),
             "average": Value::Undefined,
-            "baseVolume": self.safe_string(message.clone(), Value::from("v")),
-            "quoteVolume": self.safe_string(message.clone(), Value::from("q")),
+            "baseVolume": self.safe_string(message.clone(), Value::from("v"), Value::Undefined),
+            "quoteVolume": self.safe_string(message.clone(), Value::from("q"), Value::Undefined),
             "info": message
         }))).unwrap()), market.clone());
     }
@@ -4172,7 +4181,7 @@ pub trait Binance : Exchange {
         //        }
         //    }
         //
-        let mut message_hash: Value = self.safe_string(message.clone(), Value::from("id"));
+        let mut message_hash: Value = self.safe_string(message.clone(), Value::from("id"), Value::Undefined);
         let mut result: Value = self.safe_value(message.clone(), Value::from("result"), Value::new_object());
         let mut ticker: Value = <Self as Binance>::parse_ws_ticker(self, result.clone(), Value::from("future"));
         client.resolve(ticker.clone(), message_hash.clone());
@@ -4260,7 +4269,7 @@ pub trait Binance : Exchange {
         let mut i: usize = 0;
         while i < raw_tickers.len() {
             let mut ticker: Value = raw_tickers.get(i.into());
-            let mut event: Value = self.safe_string(ticker.clone(), Value::from("e"));
+            let mut event: Value = self.safe_string(ticker.clone(), Value::from("e"), Value::Undefined);
             if is_bid_ask.is_truthy() {
                 event = Value::from("bookTicker");
             };
@@ -4294,11 +4303,11 @@ pub trait Binance : Exchange {
     fn sign_params(&mut self, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.check_required_credentials(Value::Undefined);
-        let mut default_recv_window: Value = self.safe_integer(self.get("options".into()), Value::from("recvWindow"));
+        let mut default_recv_window: Value = self.safe_integer(self.get("options".into()), Value::from("recvWindow"), Value::Undefined);
         if default_recv_window.clone().is_nonnullish() {
             params.set("recvWindow".into(), default_recv_window.clone());
         };
-        let mut recv_window: Value = self.safe_integer(params.clone(), Value::from("recvWindow"));
+        let mut recv_window: Value = self.safe_integer(params.clone(), Value::from("recvWindow"), Value::Undefined);
         if recv_window.clone().is_nonnullish() {
             params.set("recvWindow".into(), recv_window.clone());
         };
@@ -4316,7 +4325,7 @@ pub trait Binance : Exchange {
                 signature = eddsa(self.encode(query.clone()), self.get("secret".into()), ed25519.clone());
             };
         } else {
-            signature = self.hmac(self.encode(query.clone()), self.encode(self.get("secret".into())), sha256.clone());
+            signature = self.hmac(self.encode(query.clone()), self.encode(self.get("secret".into())), sha256.clone(), Value::Undefined);
         };
         extended_params.set("signature".into(), signature.clone());
         return extended_params.clone();
@@ -4327,7 +4336,7 @@ pub trait Binance : Exchange {
         let mut url: Value = self.get("urls".into()).get(Value::from("api")).get(Value::from("ws")).get(Value::from("ws-api")).get(market_type.clone());
         let mut client: Value = self.client(url.clone());
         let mut subscriptions: Value = client.get(subscriptions.clone());
-        let mut subscriptions_keys: Value = Object::keys(subscriptions.clone());
+        let mut subscriptions_keys: Value = subscriptions.clone().keys();
         let mut account_type: Value = <Self as Binance>::get_account_type_from_subscriptions(self, subscriptions_keys.clone());
         if account_type.clone() == market_type.clone() {
             return Value::Undefined;
@@ -4359,12 +4368,12 @@ pub trait Binance : Exchange {
         //     }
         //   }
         //
-        let mut message_hash: Value = self.safe_string(message.clone(), Value::from("id"));
+        let mut message_hash: Value = self.safe_string(message.clone(), Value::from("id"), Value::Undefined);
         let mut subscriptions: Value = client.get(subscriptions.clone());
-        let mut subscriptions_keys: Value = Object::keys(subscriptions.clone());
+        let mut subscriptions_keys: Value = subscriptions.clone().keys();
         let mut account_type: Value = <Self as Binance>::get_account_type_from_subscriptions(self, subscriptions_keys.clone());
         let mut result: Value = self.safe_dict(message.clone(), Value::from("result"), Value::new_object());
-        let mut subscription_id: Value = self.safe_integer(result.clone(), Value::from("subscriptionId"));
+        let mut subscription_id: Value = self.safe_integer(result.clone(), Value::from("subscriptionId"), Value::Undefined);
         if subscription_id.clone().is_nullish() {
             client.get(subscriptions.clone()).get(account_type.clone());
             client.reject(message.clone(), account_type.clone());
@@ -4382,9 +4391,9 @@ pub trait Binance : Exchange {
         (sub_type, params) = shift_2(self.handle_sub_type_and_params(Value::from("authenticate"), Value::Undefined, params.clone(), Value::Undefined));
         let mut is_portfolio_margin: Value = Value::Undefined;
         (is_portfolio_margin, params) = shift_2(self.handle_option_and_params_2(params.clone(), Value::from("authenticate"), Value::from("papi"), Value::from("portfolioMargin"), false.into()));
-        if self.is_linear(r#type.clone(), sub_type.clone()).is_truthy() {
+        if <Self as Binance>::is_linear(self, r#type.clone(), sub_type.clone()).is_truthy() {
             r#type = Value::from("future");
-        } else if self.is_inverse(r#type.clone(), sub_type.clone()).is_truthy() {
+        } else if <Self as Binance>::is_inverse(self, r#type.clone(), sub_type.clone()).is_truthy() {
             r#type = Value::from("delivery");
         };
         // For spot use WebSocket API signature subscription
@@ -4396,7 +4405,7 @@ pub trait Binance : Exchange {
         (margin_mode, params) = shift_2(self.handle_margin_mode_and_params(Value::from("authenticate"), params.clone(), Value::Undefined));
         let mut is_isolated_margin: Value = (margin_mode.clone() == Value::from("isolated")).into();
         let mut is_cross_margin: Value = (margin_mode.clone() == Value::from("cross") || margin_mode.clone().is_nullish()).into();
-        let mut symbol: Value = self.safe_string(params.clone(), Value::from("symbol"));
+        let mut symbol: Value = self.safe_string(params.clone(), Value::from("symbol"), Value::Undefined);
         params = self.omit(params.clone(), Value::from("symbol"));
         let mut options: Value = self.safe_value(self.get("options".into()), r#type.clone(), Value::new_object());
         let mut last_authenticated_time: Value = self.safe_integer(options.clone(), Value::from("lastAuthenticatedTime"), Value::from(0));
@@ -4405,16 +4414,16 @@ pub trait Binance : Exchange {
         if time.clone() - last_authenticated_time.clone() > delay.clone() {
             let mut response: Value = Value::Undefined;
             if is_portfolio_margin.is_truthy() {
-                response = self.papi_post_listen_key(params.clone()).await;
+                response = self.dispatch("papiPostListenKey".into(), params.clone(), Value::Undefined).await;
                 params = extend_2(params.clone(), Value::Json(normalize(&Value::Json(json!({
                     "portfolioMargin": true
                 }))).unwrap()));
             } else if r#type.clone() == Value::from("future") {
-                response = self.fapi_private_post_listen_key(params.clone()).await;
+                response = self.dispatch("fapiPrivatePostListenKey".into(), params.clone(), Value::Undefined).await;
             } else if r#type.clone() == Value::from("delivery") {
-                response = self.dapi_private_post_listen_key(params.clone()).await;
+                response = self.dispatch("dapiPrivatePostListenKey".into(), params.clone(), Value::Undefined).await;
             } else if r#type.clone() == Value::from("margin") && is_cross_margin.is_truthy() {
-                response = self.sapi_post_user_data_stream(params.clone()).await;
+                response = self.dispatch("sapiPostUserDataStream".into(), params.clone(), Value::Undefined).await;
             } else if is_isolated_margin.is_truthy() {
                 if symbol.clone().is_nullish() {
                     panic!(r###"ArgumentsRequired::new(self.get("id".into()) + Value::from(" authenticate() requires a symbol argument for isolated margin mode"))"###);
@@ -4423,12 +4432,12 @@ pub trait Binance : Exchange {
                 params = extend_2(params.clone(), Value::Json(normalize(&Value::Json(json!({
                     "symbol": market_id
                 }))).unwrap()));
-                response = self.sapi_post_user_data_stream_isolated(params.clone()).await;
+                response = self.dispatch("sapiPostUserDataStreamIsolated".into(), params.clone(), Value::Undefined).await;
             } else {
-                response = self.public_post_user_data_stream(params.clone()).await;
+                response = self.dispatch("publicPostUserDataStream".into(), params.clone(), Value::Undefined).await;
             };
             self.get("options".into()).set(r#type.clone(), extend_2(options.clone(), Value::Json(normalize(&Value::Json(json!({
-                "listenKey": self.safe_string(response.clone(), Value::from("listenKey")),
+                "listenKey": self.safe_string(response.clone(), Value::from("listenKey"), Value::Undefined),
                 "lastAuthenticatedTime": time
             }))).unwrap())));
             self.delay(listen_key_refresh_rate.clone(), self.get("keepAliveListenKey".into()), params.clone());
@@ -4445,37 +4454,37 @@ pub trait Binance : Exchange {
         (is_portfolio_margin, params) = shift_2(self.handle_option_and_params_2(params.clone(), Value::from("keepAliveListenKey"), Value::from("papi"), Value::from("portfolioMargin"), false.into()));
         let mut sub_type_info: Value = self.handle_sub_type_and_params(Value::from("keepAliveListenKey"), Value::Undefined, params.clone(), Value::Undefined);
         let mut sub_type: Value = sub_type_info.get(Value::from(0));
-        if self.is_linear(r#type.clone(), sub_type.clone()).is_truthy() {
+        if <Self as Binance>::is_linear(self, r#type.clone(), sub_type.clone()).is_truthy() {
             r#type = Value::from("future");
-        } else if self.is_inverse(r#type.clone(), sub_type.clone()).is_truthy() {
+        } else if <Self as Binance>::is_inverse(self, r#type.clone(), sub_type.clone()).is_truthy() {
             r#type = Value::from("delivery");
         };
         let mut options: Value = self.safe_value(self.get("options".into()), r#type.clone(), Value::new_object());
-        let mut listen_key: Value = self.safe_string(options.clone(), Value::from("listenKey"));
+        let mut listen_key: Value = self.safe_string(options.clone(), Value::from("listenKey"), Value::Undefined);
         if listen_key.clone().is_nullish() {
             // A network error happened: we can't renew a listen key that does not exist.
             return Value::Undefined;
         };
         let mut request: Value = Value::new_object();
-        let mut symbol: Value = self.safe_string(params.clone(), Value::from("symbol"));
+        let mut symbol: Value = self.safe_string(params.clone(), Value::from("symbol"), Value::Undefined);
         params = self.omit(params.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("type").into(), Value::from("symbol").into()])));
         let mut time: Value = self.milliseconds();
                 if is_portfolio_margin.is_truthy() {
-            self.papi_put_listen_key(extend_2(request.clone(), params.clone())).await;
+            self.dispatch("papiPutListenKey".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
             params = extend_2(params.clone(), Value::Json(normalize(&Value::Json(json!({
                 "portfolioMargin": true
             }))).unwrap()));
         } else if r#type.clone() == Value::from("future") {
-            self.fapi_private_put_listen_key(extend_2(request.clone(), params.clone())).await;
+            self.dispatch("fapiPrivatePutListenKey".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         } else if r#type.clone() == Value::from("delivery") {
-            self.dapi_private_put_listen_key(extend_2(request.clone(), params.clone())).await;
+            self.dispatch("dapiPrivatePutListenKey".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         } else {
             request.set("listenKey".into(), listen_key.clone());
             if r#type.clone() == Value::from("margin") {
                 request.set("symbol".into(), symbol.clone());
-                self.sapi_put_user_data_stream(extend_2(request.clone(), params.clone())).await;
+                self.dispatch("sapiPutUserDataStream".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
             } else {
-                self.public_put_user_data_stream(extend_2(request.clone(), params.clone())).await;
+                self.dispatch("publicPutUserDataStream".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
             };
         };
         // catch block omitted (no exception support in Value runtime)
@@ -4485,12 +4494,12 @@ pub trait Binance : Exchange {
             "lastAuthenticatedTime": time
         }))).unwrap())));
         // whether or not to schedule another listenKey keepAlive request
-        let mut clients: Value = Object::values(self.get("clients".into()));
+        let mut clients: Value = self.get("clients".into()).values();
         let mut listen_key_refresh_rate: Value = self.safe_integer(self.get("options".into()), Value::from("listenKeyRefreshRate"), Value::from(1200000));
         let mut i: usize = 0;
         while i < clients.len() {
             let mut client: Value = clients.get(i.into());
-            let mut subscription_keys: Value = Object::keys(client.get(subscriptions.clone()));
+            let mut subscription_keys: Value = client.get(subscriptions.clone()).keys();
             let mut j: usize = 0;
             while j < subscription_keys.len() {
                 let mut subscribe_type: Value = subscription_keys.get(j.into());
@@ -4510,7 +4519,7 @@ pub trait Binance : Exchange {
         if client.get(subscriptions.clone()).contains_key(r#type.clone()) && self.get("balance".into()).contains_key(r#type.clone()) {
             return Value::Undefined;
         };
-        let mut options: Value = self.safe_value(self.get("options".into()), Value::from("watchBalance"));
+        let mut options: Value = self.safe_value(self.get("options".into()), Value::from("watchBalance"), Value::Undefined);
         let mut fetch_balance_snapshot: Value = self.safe_bool(options.clone(), Value::from("fetchBalanceSnapshot"), false.into());
         if fetch_balance_snapshot.is_truthy() {
             let mut message_hash: Value = r#type.clone() + Value::from(":fetchBalanceSnapshot");
@@ -4573,7 +4582,7 @@ pub trait Binance : Exchange {
     fn handle_balance_ws(&mut self, mut client: Value, mut message: Value) -> Value {
         //
         //
-        let mut message_hash: Value = self.safe_string(message.clone(), Value::from("id"));
+        let mut message_hash: Value = self.safe_string(message.clone(), Value::from("id"), Value::Undefined);
         let mut raw_balance: Value = Value::Undefined;
         if Array::is_array(message.get(Value::from("result"))).is_truthy() {
             // account.balance
@@ -4583,7 +4592,7 @@ pub trait Binance : Exchange {
             let mut result: Value = self.safe_dict(message.clone(), Value::from("result"), Value::new_object());
             raw_balance = self.safe_list(result.clone(), Value::from("assets"), Value::new_array());
         };
-        let mut parsed_balances: Value = self.parse_balance_custom(raw_balance.clone());
+        let mut parsed_balances: Value = <Self as Binance>::parse_balance_custom(self, raw_balance.clone(), Value::Undefined, Value::Undefined, Value::Undefined);
         client.resolve(parsed_balances.clone(), message_hash.clone());
         Value::Undefined
     }
@@ -4635,9 +4644,9 @@ pub trait Binance : Exchange {
         //    }
         // swap
         //
-        let mut message_hash: Value = self.safe_string(message.clone(), Value::from("id"));
+        let mut message_hash: Value = self.safe_string(message.clone(), Value::from("id"), Value::Undefined);
         let mut result: Value = self.safe_dict(message.clone(), Value::from("result"), Value::new_object());
-        let mut parsed_balances: Value = self.parse_balance_custom(result.clone());
+        let mut parsed_balances: Value = <Self as Binance>::parse_balance_custom(self, result.clone(), Value::Undefined, Value::Undefined, Value::Undefined);
         client.resolve(parsed_balances.clone(), message_hash.clone());
         Value::Undefined
     }
@@ -4720,13 +4729,13 @@ pub trait Binance : Exchange {
         //    }
         //
         //
-        let mut message_hash: Value = self.safe_string(message.clone(), Value::from("id"));
+        let mut message_hash: Value = self.safe_string(message.clone(), Value::from("id"), Value::Undefined);
         let mut result: Value = self.safe_list(message.clone(), Value::from("result"), Value::new_array());
         let mut positions: Value = Value::new_array();
         let mut i: usize = 0;
         while i < result.len() {
-            let mut parsed: Value = self.parse_position_risk(result.get(i.into()));
-            let mut entry_price: Value = self.safe_string(parsed.clone(), Value::from("entryPrice"));
+            let mut parsed: Value = self.parse_position_risk(result.get(i.into()), Value::Undefined);
+            let mut entry_price: Value = self.safe_string(parsed.clone(), Value::from("entryPrice"), Value::Undefined);
             if entry_price.clone() != Value::from("0") && entry_price.clone() != Value::from("0.0") && entry_price.clone() != Value::from("0.00000000") {
                 positions.push(parsed.clone());
             };
@@ -4746,9 +4755,9 @@ pub trait Binance : Exchange {
         (sub_type, params) = shift_2(self.handle_sub_type_and_params(Value::from("watchBalance"), Value::Undefined, params.clone(), Value::Undefined));
         let mut is_portfolio_margin: Value = Value::Undefined;
         (is_portfolio_margin, params) = shift_2(self.handle_option_and_params_2(params.clone(), Value::from("watchBalance"), Value::from("papi"), Value::from("portfolioMargin"), false.into()));
-        if self.is_linear(r#type.clone(), sub_type.clone()).is_truthy() {
+        if <Self as Binance>::is_linear(self, r#type.clone(), sub_type.clone()).is_truthy() {
             r#type = Value::from("future");
-        } else if self.is_inverse(r#type.clone(), sub_type.clone()).is_truthy() {
+        } else if <Self as Binance>::is_inverse(self, r#type.clone(), sub_type.clone()).is_truthy() {
             r#type = Value::from("delivery");
         };
         let mut url: Value = Value::from("");
@@ -4846,19 +4855,19 @@ pub trait Binance : Exchange {
         // cw for cross wallet
         // each account is connected to a different endpoint
         let mut subscriptions: Value = client.get(subscriptions.clone());
-        let mut subscriptions_keys: Value = Object::keys(subscriptions.clone());
+        let mut subscriptions_keys: Value = subscriptions.clone().keys();
         let mut account_type: Value = <Self as Binance>::get_account_type_from_subscriptions(self, subscriptions_keys.clone());
         let mut message_hash: Value = account_type.clone() + Value::from(":balance");
         if self.get("balance".into()).get(account_type.clone()).is_nullish() {
             self.get("balance".into()).set(account_type.clone(), Value::new_object());
         };
         self.get("balance".into()).get(account_type.clone()).set("info".into(), message.clone());
-        let mut event: Value = self.safe_string(message.clone(), Value::from("e"));
+        let mut event: Value = self.safe_string(message.clone(), Value::from("e"), Value::Undefined);
         if event.clone() == Value::from("balanceUpdate") {
-            let mut currency_id: Value = self.safe_string(message.clone(), Value::from("a"));
+            let mut currency_id: Value = self.safe_string(message.clone(), Value::from("a"), Value::Undefined);
             let mut code: Value = self.safe_currency_code(currency_id.clone(), Value::Undefined);
             let mut account: Value = self.account();
-            let mut delta: Value = self.safe_string(message.clone(), Value::from("d"));
+            let mut delta: Value = self.safe_string(message.clone(), Value::from("d"), Value::Undefined);
             if self.get("balance".into()).get(account_type.clone()).contains_key(code.clone()) {
                 let mut previous_value: Value = self.get("balance".into()).get(account_type.clone()).get(code.clone()).get(Value::from("free"));
                 if previous_value.typeof_() != Value::from("string") {
@@ -4875,17 +4884,17 @@ pub trait Binance : Exchange {
             let mut i: usize = 0;
             while i < B.into().len() {
                 let mut entry: Value = B.into().get(i.into());
-                let mut currency_id: Value = self.safe_string(entry.clone(), Value::from("a"));
+                let mut currency_id: Value = self.safe_string(entry.clone(), Value::from("a"), Value::Undefined);
                 let mut code: Value = self.safe_currency_code(currency_id.clone(), Value::Undefined);
                 let mut account: Value = self.account();
-                account.set("free".into(), self.safe_string(entry.clone(), Value::from("f")));
-                account.set("used".into(), self.safe_string(entry.clone(), Value::from("l")));
-                account.set("total".into(), self.safe_string(entry.clone(), wallet.clone()));
+                account.set("free".into(), self.safe_string(entry.clone(), Value::from("f"), Value::Undefined));
+                account.set("used".into(), self.safe_string(entry.clone(), Value::from("l"), Value::Undefined));
+                account.set("total".into(), self.safe_string(entry.clone(), wallet.clone(), Value::Undefined));
                 self.get("balance".into()).get(account_type.clone()).set(code.clone(), account.clone());
                 i += 1;
             };
         };
-        let mut timestamp: Value = self.safe_integer(message.clone(), Value::from("E"));
+        let mut timestamp: Value = self.safe_integer(message.clone(), Value::from("E"), Value::Undefined);
         self.get("balance".into()).get(account_type.clone()).set("timestamp".into(), timestamp.clone());
         self.get("balance".into()).get(account_type.clone()).set("datetime".into(), self.iso8601(timestamp.clone()));
         self.get("balance".into()).set(account_type.clone(), self.safe_balance(self.get("balance".into()).get(account_type.clone())));
@@ -4913,9 +4922,9 @@ pub trait Binance : Exchange {
         (r#type, params) = shift_2(self.handle_market_type_and_params(method.clone(), market.clone(), params.clone(), Value::Undefined));
         let mut sub_type: Value = Value::Undefined;
         (sub_type, params) = shift_2(self.handle_sub_type_and_params(method.clone(), market.clone(), params.clone(), Value::Undefined));
-        if self.is_linear(r#type.clone(), sub_type.clone()).is_truthy() {
+        if <Self as Binance>::is_linear(self, r#type.clone(), sub_type.clone()).is_truthy() {
             r#type = Value::from("future");
-        } else if self.is_inverse(r#type.clone(), sub_type.clone()).is_truthy() {
+        } else if <Self as Binance>::is_inverse(self, r#type.clone(), sub_type.clone()).is_truthy() {
             r#type = Value::from("delivery");
         };
         return r#type.clone();
@@ -4933,18 +4942,18 @@ pub trait Binance : Exchange {
         let mut request_id: Value = <Self as Binance>::request_id(self, url.clone());
         let mut message_hash: Value = request_id.to_string();
         let mut sor: Value = self.safe_bool_2(params.clone(), Value::from("sor"), Value::from("SOR"), false.into());
-        params = self.omit(params.clone(), Value::from("sor"), Value::from("SOR"));
-        let mut trigger_price: Value = self.safe_string_2(params.clone(), Value::from("triggerPrice"), Value::from("stopPrice"));
+        params = self.omit(params.clone(), Value::from("sor"));
+        let mut trigger_price: Value = self.safe_string_2(params.clone(), Value::from("triggerPrice"), Value::from("stopPrice"), Value::Undefined);
         let mut stop_loss_price: Value = self.safe_string(params.clone(), Value::from("stopLossPrice"), trigger_price.clone());
-        let mut take_profit_price: Value = self.safe_string(params.clone(), Value::from("takeProfitPrice"));
-        let mut trailing_delta: Value = self.safe_string(params.clone(), Value::from("trailingDelta"));
-        let mut trailing_percent: Value = self.safe_string_n(params.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("trailingPercent").into(), Value::from("callbackRate").into(), Value::from("trailingDelta").into()])));
+        let mut take_profit_price: Value = self.safe_string(params.clone(), Value::from("takeProfitPrice"), Value::Undefined);
+        let mut trailing_delta: Value = self.safe_string(params.clone(), Value::from("trailingDelta"), Value::Undefined);
+        let mut trailing_percent: Value = self.safe_string_n(params.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("trailingPercent").into(), Value::from("callbackRate").into(), Value::from("trailingDelta").into()])), Value::Undefined);
         let mut is_trailing_percent_order: Value = (trailing_percent.clone().is_nonnullish()).into();
         let mut is_stop_loss: Value = (stop_loss_price.clone().is_nonnullish() || trailing_delta.clone().is_nonnullish()).into();
         let mut is_take_profit: Value = (take_profit_price.clone().is_nonnullish()).into();
         let mut is_trigger_order: Value = (trigger_price.clone().is_nonnullish()).into();
         let mut is_conditional: Value = (is_trigger_order.is_truthy() || is_trailing_percent_order.is_truthy() || is_stop_loss.is_truthy() || is_take_profit.is_truthy()).into();
-        let mut payload: Value = self.create_order_request(symbol.clone(), r#type.clone(), side.clone(), amount.clone(), price.clone(), params.clone());
+        let mut payload: Value = <Self as Binance>::create_order_request(self, symbol.clone(), r#type.clone(), side.clone(), amount.clone(), price.clone(), params.clone());
         let mut return_rate_limits: Value = false.into();
         (return_rate_limits, params) = shift_2(self.handle_option_and_params(params.clone(), Value::from("createOrderWs"), Value::from("returnRateLimits"), false.into()));
         payload.set("returnRateLimits".into(), return_rate_limits.clone());
@@ -5022,7 +5031,7 @@ pub trait Binance : Exchange {
         //        ]
         //    }
         //
-        let mut message_hash: Value = self.safe_string(message.clone(), Value::from("id"));
+        let mut message_hash: Value = self.safe_string(message.clone(), Value::from("id"), Value::Undefined);
         let mut result: Value = self.safe_dict(message.clone(), Value::from("result"), Value::new_object());
         let mut order: Value = self.parse_order(result.clone(), Value::Undefined);
         client.resolve(order.clone(), message_hash.clone());
@@ -5067,7 +5076,7 @@ pub trait Binance : Exchange {
         //        }]
         //    }
         //
-        let mut message_hash: Value = self.safe_string(message.clone(), Value::from("id"));
+        let mut message_hash: Value = self.safe_string(message.clone(), Value::from("id"), Value::Undefined);
         let mut result: Value = self.safe_list(message.clone(), Value::from("result"), Value::new_array());
         let mut orders: Value = self.parse_orders(result.clone(), Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined);
         client.resolve(orders.clone(), message_hash.clone());
@@ -5088,9 +5097,9 @@ pub trait Binance : Exchange {
         let mut is_swap: Value = (market_type.clone() == Value::from("future") || market_type.clone() == Value::from("delivery")).into();
         let mut payload: Value = Value::Undefined;
         if market_type.clone() == Value::from("spot") {
-            payload = self.edit_spot_order_request(id.clone(), symbol.clone(), r#type.clone(), side.clone(), amount.clone(), price.clone(), params.clone());
+            payload = <Self as Binance>::edit_spot_order_request(self, id.clone(), symbol.clone(), r#type.clone(), side.clone(), amount.clone(), price.clone(), params.clone());
         } else if is_swap.is_truthy() {
-            payload = self.edit_contract_order_request(id.clone(), symbol.clone(), r#type.clone(), side.clone(), amount.clone(), price.clone(), params.clone());
+            payload = <Self as Binance>::edit_contract_order_request(self, id.clone(), symbol.clone(), r#type.clone(), side.clone(), amount.clone(), price.clone(), params.clone());
         };
         let mut return_rate_limits: Value = false.into();
         (return_rate_limits, params) = shift_2(self.handle_option_and_params(params.clone(), Value::from("editOrderWs"), Value::from("returnRateLimits"), false.into()));
@@ -5205,7 +5214,7 @@ pub trait Binance : Exchange {
         //        }
         //    }
         //
-        let mut message_hash: Value = self.safe_string(message.clone(), Value::from("id"));
+        let mut message_hash: Value = self.safe_string(message.clone(), Value::from("id"), Value::Undefined);
         let mut result: Value = self.safe_dict(message.clone(), Value::from("result"), Value::new_object());
         let mut new_spot_order: Value = self.safe_dict(result.clone(), Value::from("newOrderResponse"), Value::Undefined);
         let mut order: Value = Value::Undefined;
@@ -5236,7 +5245,7 @@ pub trait Binance : Exchange {
             "returnRateLimits": return_rate_limits
         }))).unwrap());
         let mut is_conditional: Value = self.safe_bool_n(params.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("stop").into(), Value::from("trigger").into(), Value::from("conditional").into()])), Value::Undefined);
-        let mut client_order_id: Value = self.safe_string_n(params.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("clientAlgoId").into(), Value::from("origClientOrderId").into(), Value::from("clientOrderId").into()])));
+        let mut client_order_id: Value = self.safe_string_n(params.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("clientAlgoId").into(), Value::from("origClientOrderId").into(), Value::from("clientOrderId").into()])), Value::Undefined);
         let mut should_use_algo_order: Value = (market.get(Value::from("linear")).is_truthy() && market.get(Value::from("swap")).is_truthy() && is_conditional.is_truthy()).into();
         if client_order_id.clone().is_nonnullish() {
             if should_use_algo_order.is_truthy() {
@@ -5314,7 +5323,7 @@ pub trait Binance : Exchange {
             "symbol": self.market_id(symbol.clone()),
             "returnRateLimits": return_rate_limits
         }))).unwrap());
-        let mut client_order_id: Value = self.safe_string_2(params.clone(), Value::from("origClientOrderId"), Value::from("clientOrderId"));
+        let mut client_order_id: Value = self.safe_string_2(params.clone(), Value::from("origClientOrderId"), Value::from("clientOrderId"), Value::Undefined);
         if client_order_id.clone().is_nonnullish() {
             payload.set("origClientOrderId".into(), client_order_id.clone());
         } else {
@@ -5423,9 +5432,9 @@ pub trait Binance : Exchange {
         (r#type, params) = shift_2(self.handle_market_type_and_params(Value::from("watchOrders"), market.clone(), params.clone(), Value::Undefined));
         let mut sub_type: Value = Value::Undefined;
         (sub_type, params) = shift_2(self.handle_sub_type_and_params(Value::from("watchOrders"), market.clone(), params.clone(), Value::Undefined));
-        if self.is_linear(r#type.clone(), sub_type.clone()).is_truthy() {
+        if <Self as Binance>::is_linear(self, r#type.clone(), sub_type.clone()).is_truthy() {
             r#type = Value::from("future");
-        } else if self.is_inverse(r#type.clone(), sub_type.clone()).is_truthy() {
+        } else if <Self as Binance>::is_inverse(self, r#type.clone(), sub_type.clone()).is_truthy() {
             r#type = Value::from("delivery");
         };
         params = extend_2(params.clone(), Value::Json(normalize(&Value::Json(json!({
@@ -5572,12 +5581,12 @@ pub trait Binance : Exchange {
         //         "rm": "Reduce Only reject"           // algo order failed reason
         //     }
         //
-        let mut execution_type: Value = self.safe_string(order.clone(), Value::from("x"));
-        let mut market_id: Value = self.safe_string(order.clone(), Value::from("s"));
+        let mut execution_type: Value = self.safe_string(order.clone(), Value::from("x"), Value::Undefined);
+        let mut market_id: Value = self.safe_string(order.clone(), Value::from("s"), Value::Undefined);
         let mut market_type: Value = if order.contains_key(Value::from("ps")) { Value::from("contract") } else { Value::from("spot") };
         let mut symbol: Value = self.safe_symbol(market_id.clone(), Value::Undefined, Value::Undefined, market_type.clone());
-        let mut timestamp: Value = self.safe_integer(order.clone(), Value::from("O"));
-        let mut T: Value = self.safe_integer(order.clone(), Value::from("T"));
+        let mut timestamp: Value = self.safe_integer(order.clone(), Value::from("O"), Value::Undefined);
+        let mut T: Value = self.safe_integer(order.clone(), Value::from("T"), Value::Undefined);
         let mut last_trade_timestamp: Value = Value::Undefined;
         if execution_type.clone() == Value::from("NEW") || execution_type.clone() == Value::from("AMENDMENT") || execution_type.clone() == Value::from("CANCELED") {
             if timestamp.clone().is_nullish() {
@@ -5588,23 +5597,23 @@ pub trait Binance : Exchange {
         };
         let mut last_update_timestamp: Value = T.into();
         let mut fee: Value = Value::Undefined;
-        let mut fee_cost: Value = self.safe_string(order.clone(), Value::from("n"));
+        let mut fee_cost: Value = self.safe_string(order.clone(), Value::from("n"), Value::Undefined);
         if fee_cost.clone().is_nonnullish() && Precise::string_gt(fee_cost.clone(), Value::from("0")) {
-            let mut fee_currency_id: Value = self.safe_string(order.clone(), Value::from("N"));
+            let mut fee_currency_id: Value = self.safe_string(order.clone(), Value::from("N"), Value::Undefined);
             let mut fee_currency: Value = self.safe_currency_code(fee_currency_id.clone(), Value::Undefined);
             fee = Value::Json(normalize(&Value::Json(json!({
                 "cost": fee_cost,
                 "currency": fee_currency
             }))).unwrap());
         };
-        let mut raw_status: Value = self.safe_string(order.clone(), Value::from("X"));
-        let mut status: Value = self.parse_order_status(raw_status.clone());
-        let mut client_order_id: Value = self.safe_string_2(order.clone(), Value::from("C"), Value::from("caid"));
+        let mut raw_status: Value = self.safe_string(order.clone(), Value::from("X"), Value::Undefined);
+        let mut status: Value = <Self as Binance>::parse_order_status(self, raw_status.clone());
+        let mut client_order_id: Value = self.safe_string_2(order.clone(), Value::from("C"), Value::from("caid"), Value::Undefined);
         if client_order_id.clone().is_nullish() || client_order_id.len() == 0 {
-            client_order_id = self.safe_string(order.clone(), Value::from("c"));
+            client_order_id = self.safe_string(order.clone(), Value::from("c"), Value::Undefined);
         };
-        let mut stop_price: Value = self.safe_string_n(order.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("P").into(), Value::from("sp").into(), Value::from("tp").into()])));
-        let mut time_in_force: Value = self.safe_string(order.clone(), Value::from("f"));
+        let mut stop_price: Value = self.safe_string_n(order.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("P").into(), Value::from("sp").into(), Value::from("tp").into()])), Value::Undefined);
+        let mut time_in_force: Value = self.safe_string(order.clone(), Value::from("f"), Value::Undefined);
         if time_in_force.clone() == Value::from("GTX") {
             // GTX means "Good Till Crossing" and is an equivalent way of saying Post Only
             time_in_force = Value::from("PO");
@@ -5612,24 +5621,24 @@ pub trait Binance : Exchange {
         return self.safe_order(Value::Json(normalize(&Value::Json(json!({
             "info": order,
             "symbol": symbol,
-            "id": self.safe_string_2(order.clone(), Value::from("i"), Value::from("aid")),
+            "id": self.safe_string_2(order.clone(), Value::from("i"), Value::from("aid"), Value::Undefined),
             "clientOrderId": client_order_id,
             "timestamp": timestamp,
             "datetime": self.iso8601(timestamp.clone()),
             "lastTradeTimestamp": last_trade_timestamp,
             "lastUpdateTimestamp": last_update_timestamp,
-            "type": self.parse_order_type(self.safe_string_lower(order.clone(), Value::from("o"))),
+            "type": <Self as Binance>::parse_order_type(self, self.safe_string_lower(order.clone(), Value::from("o"), Value::Undefined)),
             "timeInForce": time_in_force,
             "postOnly": Value::Undefined,
             "reduceOnly": self.safe_bool(order.clone(), Value::from("R"), Value::Undefined),
-            "side": self.safe_string_lower(order.clone(), Value::from("S")),
-            "price": self.safe_string(order.clone(), Value::from("p")),
+            "side": self.safe_string_lower(order.clone(), Value::from("S"), Value::Undefined),
+            "price": self.safe_string(order.clone(), Value::from("p"), Value::Undefined),
             "stopPrice": stop_price,
             "triggerPrice": stop_price,
-            "amount": self.safe_string(order.clone(), Value::from("q")),
-            "cost": self.safe_string(order.clone(), Value::from("Z")),
-            "average": self.safe_string(order.clone(), Value::from("ap")),
-            "filled": self.safe_string(order.clone(), Value::from("z")),
+            "amount": self.safe_string(order.clone(), Value::from("q"), Value::Undefined),
+            "cost": self.safe_string(order.clone(), Value::from("Z"), Value::Undefined),
+            "average": self.safe_string(order.clone(), Value::from("ap"), Value::Undefined),
+            "filled": self.safe_string(order.clone(), Value::from("z"), Value::Undefined),
             "remaining": Value::Undefined,
             "status": status,
             "fee": fee,
@@ -5754,7 +5763,7 @@ pub trait Binance : Exchange {
         //         }
         //     }
         //
-        let mut e: Value = self.safe_string(message.clone(), Value::from("e"));
+        let mut e: Value = self.safe_string(message.clone(), Value::from("e"), Value::Undefined);
         if e.clone() == Value::from("ORDER_TRADE_UPDATE") || e.clone() == Value::from("ALGO_UPDATE") {
             message = self.safe_dict(message.clone(), Value::from("o"), message.clone());
         };
@@ -5781,9 +5790,9 @@ pub trait Binance : Exchange {
         };
         let mut sub_type: Value = Value::Undefined;
         (sub_type, params) = shift_2(self.handle_sub_type_and_params(Value::from("watchPositions"), market.clone(), params.clone(), Value::Undefined));
-        if self.is_linear(r#type.clone(), sub_type.clone()).is_truthy() {
+        if <Self as Binance>::is_linear(self, r#type.clone(), sub_type.clone()).is_truthy() {
             r#type = Value::from("future");
-        } else if self.is_inverse(r#type.clone(), sub_type.clone()).is_truthy() {
+        } else if <Self as Binance>::is_inverse(self, r#type.clone(), sub_type.clone()).is_truthy() {
             r#type = Value::from("delivery");
         };
         let mut market_type_object: Value = Value::new_object();
@@ -5803,7 +5812,7 @@ pub trait Binance : Exchange {
         <Self as Binance>::set_positions_cache(self, client.clone(), r#type.clone(), symbols.clone(), is_portfolio_margin.clone());
         let mut fetch_positions_snapshot: Value = self.handle_option(Value::from("watchPositions"), Value::from("fetchPositionsSnapshot"), true.into());
         let mut await_positions_snapshot: Value = self.handle_option(Value::from("watchPositions"), Value::from("awaitPositionsSnapshot"), true.into());
-        let mut cache: Value = self.safe_value(self.get("positions".into()), r#type.clone());
+        let mut cache: Value = self.safe_value(self.get("positions".into()), r#type.clone(), Value::Undefined);
         if fetch_positions_snapshot.is_truthy() && await_positions_snapshot.is_truthy() && cache.clone().is_nullish() {
             let mut snapshot: Value = client.future(r#type.clone() + Value::from(":fetchPositionsSnapshot")).await;
             return self.filter_by_symbols_since_limit(snapshot.clone(), symbols.clone(), since.clone(), limit.clone(), true.into());
@@ -5898,7 +5907,7 @@ pub trait Binance : Exchange {
         // each account is connected to a different endpoint
         // and has exactly one subscriptionhash which is the account type
         let mut subscriptions: Value = client.get(subscriptions.clone());
-        let mut subscriptions_keys: Value = Object::keys(subscriptions.clone());
+        let mut subscriptions_keys: Value = subscriptions.clone().keys();
         let mut account_type: Value = <Self as Binance>::get_account_type_from_subscriptions(self, subscriptions_keys.clone());
         if self.get("positions".into()).is_nullish() {
             self.set("positions".into(), Value::new_object());
@@ -5913,8 +5922,8 @@ pub trait Binance : Exchange {
         let mut i: usize = 0;
         while i < raw_positions.len() {
             let mut raw_position: Value = raw_positions.get(i.into());
-            let mut position: Value = <Self as Binance>::parse_ws_position(self, raw_position.clone(), Value::Undefined);
-            let mut timestamp: Value = self.safe_integer(message.clone(), Value::from("E"));
+            let mut position: Value = <Self as Binance>::parse_ws_position(self, raw_position.clone());
+            let mut timestamp: Value = self.safe_integer(message.clone(), Value::from("E"), Value::Undefined);
             position.set("timestamp".into(), timestamp.clone());
             position.set("datetime".into(), self.iso8601(timestamp.clone()));
             new_positions.push(position.clone());
@@ -5951,10 +5960,10 @@ pub trait Binance : Exchange {
         //         "ps": "BOTH" // Position Side
         //     }
         //
-        let mut market_id: Value = self.safe_string(position.clone(), Value::from("s"));
-        let mut contracts: Value = self.safe_string(position.clone(), Value::from("pa"));
-        let mut contracts_abs: Value = Precise::string_abs(self.safe_string(position.clone(), Value::from("pa")));
-        let mut position_side: Value = self.safe_string_lower(position.clone(), Value::from("ps"));
+        let mut market_id: Value = self.safe_string(position.clone(), Value::from("s"), Value::Undefined);
+        let mut contracts: Value = self.safe_string(position.clone(), Value::from("pa"), Value::Undefined);
+        let mut contracts_abs: Value = Precise::string_abs(self.safe_string(position.clone(), Value::from("pa"), Value::Undefined));
+        let mut position_side: Value = self.safe_string_lower(position.clone(), Value::from("ps"), Value::Undefined);
         let mut hedged: Value = true.into();
         if position_side.clone() == Value::from("both") {
             hedged = false.into();
@@ -5971,7 +5980,7 @@ pub trait Binance : Exchange {
             "id": Value::Undefined,
             "symbol": self.safe_symbol(market_id.clone(), Value::Undefined, Value::Undefined, Value::from("swap")),
             "notional": Value::Undefined,
-            "marginMode": self.safe_string(position.clone(), Value::from("mt")),
+            "marginMode": self.safe_string(position.clone(), Value::from("mt"), Value::Undefined),
             "liquidationPrice": Value::Undefined,
             "entryPrice": self.safe_number(position.clone(), Value::from("ep"), Value::Undefined),
             "unrealizedPnl": self.safe_number(position.clone(), Value::from("up"), Value::Undefined),
@@ -6019,7 +6028,7 @@ pub trait Binance : Exchange {
         if limit.clone().is_nonnullish() {
             payload.set("limit".into(), limit.clone());
         };
-        let mut from_id: Value = self.safe_integer(params.clone(), Value::from("fromId"));
+        let mut from_id: Value = self.safe_integer(params.clone(), Value::from("fromId"), Value::Undefined);
         if from_id.clone().is_nonnullish() && since.clone().is_nonnullish() {
             panic!(r###"BadRequest::new(self.get("id".into()) + Value::from(" fetchMyTradesWs does not support fetching by both fromId and since parameters at the same time"))"###);
         };
@@ -6113,7 +6122,7 @@ pub trait Binance : Exchange {
         //        ],
         //    }
         //
-        let mut message_hash: Value = self.safe_string(message.clone(), Value::from("id"));
+        let mut message_hash: Value = self.safe_string(message.clone(), Value::from("id"), Value::Undefined);
         let mut result: Value = self.safe_list(message.clone(), Value::from("result"), Value::new_array());
         let mut trades: Value = self.parse_trades(result.clone(), Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined);
         client.resolve(trades.clone(), message_hash.clone());
@@ -6132,9 +6141,9 @@ pub trait Binance : Exchange {
         (r#type, params) = shift_2(self.handle_market_type_and_params(Value::from("watchMyTrades"), market.clone(), params.clone(), Value::Undefined));
         let mut sub_type: Value = Value::Undefined;
         (sub_type, params) = shift_2(self.handle_sub_type_and_params(Value::from("watchMyTrades"), market.clone(), params.clone(), Value::Undefined));
-        if self.is_linear(r#type.clone(), sub_type.clone()).is_truthy() {
+        if <Self as Binance>::is_linear(self, r#type.clone(), sub_type.clone()).is_truthy() {
             r#type = Value::from("future");
-        } else if self.is_inverse(r#type.clone(), sub_type.clone()).is_truthy() {
+        } else if <Self as Binance>::is_inverse(self, r#type.clone(), sub_type.clone()).is_truthy() {
             r#type = Value::from("delivery");
         };
         let mut message_hash: Value = Value::from("myTrades");
@@ -6180,22 +6189,22 @@ pub trait Binance : Exchange {
 
     fn handle_my_trade(&mut self, mut client: Value, mut message: Value) -> Value {
         let mut message_hash: Value = Value::from("myTrades");
-        let mut execution_type: Value = self.safe_string(message.clone(), Value::from("x"));
+        let mut execution_type: Value = self.safe_string(message.clone(), Value::from("x"), Value::Undefined);
         if execution_type.clone() == Value::from("TRADE") {
             let mut trade: Value = <Self as Binance>::parse_ws_trade(self, message.clone(), Value::Undefined);
-            let mut order_id: Value = self.safe_string(trade.clone(), Value::from("order"));
+            let mut order_id: Value = self.safe_string(trade.clone(), Value::from("order"), Value::Undefined);
             let mut trade_fee: Value = self.safe_dict(trade.clone(), Value::from("fee"), Value::new_object());
             trade_fee = extend_2(Value::new_object(), trade_fee.clone());
-            let mut symbol: Value = self.safe_string(trade.clone(), Value::from("symbol"));
+            let mut symbol: Value = self.safe_string(trade.clone(), Value::from("symbol"), Value::Undefined);
             if order_id.clone().is_nonnullish() && trade_fee.clone().is_nonnullish() && symbol.clone().is_nonnullish() {
                 let mut cached_orders: Value = self.get("orders".into());
                 if cached_orders.clone().is_nonnullish() {
                     let mut orders: Value = self.safe_value(cached_orders.get(hashmap.clone()), symbol.clone(), Value::new_object());
-                    let mut order: Value = self.safe_value(orders.clone(), order_id.clone());
+                    let mut order: Value = self.safe_value(orders.clone(), order_id.clone(), Value::Undefined);
                     if order.clone().is_nonnullish() {
                         // accumulate order fees
-                        let mut fees: Value = self.safe_value(order.clone(), Value::from("fees"));
-                        let mut fee: Value = self.safe_value(order.clone(), Value::from("fee"));
+                        let mut fees: Value = self.safe_value(order.clone(), Value::from("fees"), Value::Undefined);
+                        let mut fee: Value = self.safe_value(order.clone(), Value::from("fee"), Value::Undefined);
                         if !self.is_empty(fees.clone()).is_truthy() {
                             let mut insert_new_fee_currency: Value = true.into();
                             let mut i: usize = 0;
@@ -6249,8 +6258,8 @@ pub trait Binance : Exchange {
 
     fn handle_order(&mut self, mut client: Value, mut message: Value) -> Value {
         let mut parsed: Value = <Self as Binance>::parse_ws_order(self, message.clone(), Value::Undefined);
-        let mut symbol: Value = self.safe_string(parsed.clone(), Value::from("symbol"));
-        let mut order_id: Value = self.safe_string(parsed.clone(), Value::from("id"));
+        let mut symbol: Value = self.safe_string(parsed.clone(), Value::from("symbol"), Value::Undefined);
+        let mut order_id: Value = self.safe_string(parsed.clone(), Value::from("id"), Value::Undefined);
         if symbol.clone().is_nonnullish() {
             if self.get("orders".into()).is_nullish() {
                 let mut limit: Value = self.safe_integer(self.get("options".into()), Value::from("ordersLimit"), Value::from(1000));
@@ -6258,21 +6267,21 @@ pub trait Binance : Exchange {
             };
             let mut cached_orders: Value = self.get("orders".into());
             let mut orders: Value = self.safe_value(cached_orders.get(hashmap.clone()), symbol.clone(), Value::new_object());
-            let mut order: Value = self.safe_value(orders.clone(), order_id.clone());
+            let mut order: Value = self.safe_value(orders.clone(), order_id.clone(), Value::Undefined);
             if order.clone().is_nonnullish() {
-                let mut fee: Value = self.safe_value(order.clone(), Value::from("fee"));
+                let mut fee: Value = self.safe_value(order.clone(), Value::from("fee"), Value::Undefined);
                 if fee.clone().is_nonnullish() {
                     parsed.set("fee".into(), fee.clone());
                 };
-                let mut fees: Value = self.safe_value(order.clone(), Value::from("fees"));
+                let mut fees: Value = self.safe_value(order.clone(), Value::from("fees"), Value::Undefined);
                 if fees.clone().is_nonnullish() {
                     parsed.set("fees".into(), fees.clone());
                 };
-                parsed.set("trades".into(), self.safe_value(order.clone(), Value::from("trades")));
-                let mut timestamp: Value = self.safe_integer(parsed.clone(), Value::from("timestamp"));
+                parsed.set("trades".into(), self.safe_value(order.clone(), Value::from("trades"), Value::Undefined));
+                let mut timestamp: Value = self.safe_integer(parsed.clone(), Value::from("timestamp"), Value::Undefined);
                 if timestamp.clone().is_nullish() {
-                    parsed.set("timestamp".into(), self.safe_integer(order.clone(), Value::from("timestamp")));
-                    parsed.set("datetime".into(), self.safe_string(order.clone(), Value::from("datetime")));
+                    parsed.set("timestamp".into(), self.safe_integer(order.clone(), Value::from("timestamp"), Value::Undefined));
+                    parsed.set("datetime".into(), self.safe_string(order.clone(), Value::from("datetime"), Value::Undefined));
                 };
             };
             cached_orders.append(parsed.clone());
@@ -6300,11 +6309,11 @@ pub trait Binance : Exchange {
         //        "id": 1
         //    }
         //
-        let mut id: Value = self.safe_string(message.clone(), Value::from("id"));
+        let mut id: Value = self.safe_string(message.clone(), Value::from("id"), Value::Undefined);
         let mut rejected: Value = false.into();
         let mut error: Value = self.safe_dict(message.clone(), Value::from("error"), Value::new_object());
-        let mut code: Value = self.safe_integer(error.clone(), Value::from("code"));
-        let mut msg: Value = self.safe_string(error.clone(), Value::from("msg"));
+        let mut code: Value = self.safe_integer(error.clone(), Value::from("code"), Value::Undefined);
+        let mut msg: Value = self.safe_string(error.clone(), Value::from("msg"), Value::Undefined);
                 self.handle_errors(code.clone(), msg.clone(), client.get(url.clone()), Value::from(""), Value::new_object(), self.json(error.clone()), error.clone(), Value::new_object(), Value::new_object());
         // catch block omitted (no exception support in Value runtime)
 ;
@@ -6314,7 +6323,7 @@ pub trait Binance : Exchange {
             client.reject(message.clone(), id.clone());
         };
         // reset connection if 5xx error
-        let mut code_string: Value = self.safe_string(error.clone(), Value::from("code"));
+        let mut code_string: Value = self.safe_string(error.clone(), Value::from("code"), Value::Undefined);
         if code_string.clone().is_nonnullish() && code_string.get(Value::from(0)) == Value::from("5") {
             client.reset(message.clone());
         };
@@ -6328,9 +6337,9 @@ pub trait Binance : Exchange {
         //        E: 1757896885229
         //    }
         //
-        let mut event: Value = self.safe_string(message.clone(), Value::from("e"));
+        let mut event: Value = self.safe_string(message.clone(), Value::from("e"), Value::Undefined);
         let mut subscriptions: Value = client.get(subscriptions.clone());
-        let mut subscriptions_keys: Value = Object::keys(subscriptions.clone());
+        let mut subscriptions_keys: Value = subscriptions.clone().keys();
         let mut account_type: Value = <Self as Binance>::get_account_type_from_subscriptions(self, subscriptions_keys.clone());
         if event.clone() == Value::from("eventStreamTerminated") {
             client.get(subscriptions.clone()).get(account_type.clone());
@@ -6345,16 +6354,16 @@ pub trait Binance : Exchange {
         if event_msg.clone().is_nonnullish() {
             message = event_msg.clone();
         };
-        let mut status: Value = self.safe_string(message.clone(), Value::from("status"));
-        let mut error: Value = self.safe_value(message.clone(), Value::from("error"));
+        let mut status: Value = self.safe_string(message.clone(), Value::from("status"), Value::Undefined);
+        let mut error: Value = self.safe_value(message.clone(), Value::from("error"), Value::Undefined);
         if error.clone().is_nonnullish() || status.clone().is_nonnullish() && status.clone() != Value::from("200") {
             <Self as Binance>::handle_ws_error(self, client.clone(), message.clone());
             return Value::Undefined;
         };
         // user subscription wraps message in subscriptionId and event
-        let mut id: Value = self.safe_string(message.clone(), Value::from("id"));
-        let mut subscriptions: Value = self.safe_value(client.get(subscriptions.clone()), id.clone());
-        let mut method: Value = self.safe_value(subscriptions.clone(), Value::from("method"));
+        let mut id: Value = self.safe_string(message.clone(), Value::from("id"), Value::Undefined);
+        let mut subscriptions: Value = self.safe_value(client.get(subscriptions.clone()), id.clone(), Value::Undefined);
+        let mut method: Value = self.safe_value(subscriptions.clone(), Value::from("method"), Value::Undefined);
         if method.clone().is_nonnullish() {
             method.call(self, client.clone(), message.clone());
             return Value::Undefined;
@@ -6390,14 +6399,14 @@ pub trait Binance : Exchange {
             "eventStreamTerminated": self.get("handleEventStreamTerminated".into()),
             "externalLockUpdate": self.get("handleBalance".into())
         }))).unwrap());
-        let mut event: Value = self.safe_string(message.clone(), Value::from("e"));
+        let mut event: Value = self.safe_string(message.clone(), Value::from("e"), Value::Undefined);
         if Array::is_array(message.clone()).is_truthy() {
             let mut data: Value = message.get(Value::from(0));
-            event = self.safe_string(data.clone(), Value::from("e")) + Value::from("@arr");
+            event = self.safe_string(data.clone(), Value::from("e"), Value::Undefined) + Value::from("@arr");
         };
-        method = self.safe_value(methods.clone(), event.clone());
+        method = self.safe_value(methods.clone(), event.clone(), Value::Undefined);
         if method.clone().is_nullish() {
-            let mut request_id: Value = self.safe_string(message.clone(), Value::from("id"));
+            let mut request_id: Value = self.safe_string(message.clone(), Value::from("id"), Value::Undefined);
             if request_id.clone().is_nonnullish() {
                 <Self as Binance>::handle_subscription_status(self, client.clone(), message.clone());
                 return Value::Undefined;
@@ -7246,8 +7255,8 @@ impl ValueTrait for BinanceImpl {
     fn push(&mut self, value: Value) { self.0.push(value) }
     fn split(&self, separator: Value) -> Value { self.0.split(separator) }
     fn contains_key(&self, key: Value) -> bool { self.0.contains_key(key) }
-    fn keys(&self) -> Vec<Value> { self.0.keys() }
-    fn values(&self) -> Vec<Value> { self.0.values() }
+    fn keys(&self) -> Value { self.0.keys() }
+    fn values(&self) -> Value { self.0.values() }
     fn to_array(&self, x: Value) -> Value { self.0.to_array(x) }
     fn index_of(&self, x: Value) -> Value { self.0.index_of(x) }
     fn join(&self, glue: Value) -> Value { self.0.join(glue) }

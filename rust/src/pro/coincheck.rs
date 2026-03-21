@@ -11,7 +11,16 @@ use async_trait::async_trait;
 use std::str::FromStr;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, JSON, Array, Object, Math, parse_int, shift_2, extend_2, normalize};
+use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, BoolExt, JSON, Array, Object, Math, Promise, parse_int, shift_2, extend_2, normalize};
+// Crypto hash identifiers
+fn sha256() -> Value { Value::from("sha256") }
+fn sha384() -> Value { Value::from("sha384") }
+fn sha512() -> Value { Value::from("sha512") }
+fn md5() -> Value { Value::from("md5") }
+fn ed25519() -> Value { Value::from("ed25519") }
+fn rsa(msg: Value, secret: Value, _hash: Value) -> Value { msg }
+fn eddsa(msg: Value, secret: Value, _curve: Value) -> Value { msg }
+fn secp256k1() -> Value { Value::from("secp256k1") }
 
 use crate::exchange::{PRECISE_BASE, TRUNCATE, ROUND, ROUND_UP, ROUND_DOWN};
 use crate::exchange::{DECIMAL_PLACES, SIGNIFICANT_DIGITS, TICK_SIZE, NO_PADDING, PAD_WITH_ZERO};
@@ -445,11 +454,11 @@ pub trait Coincheck : Exchange {
         //         }
         //     ]
         //
-        let mut symbol: Value = self.symbol(self.safe_string(message.clone(), Value::from(0)));
+        let mut symbol: Value = self.symbol(self.safe_string(message.clone(), Value::from(0), Value::Undefined));
         let mut data: Value = self.safe_value(message.clone(), Value::from(1), Value::new_object());
-        let mut timestamp: Value = self.safe_timestamp(data.clone(), Value::from("last_update_at"));
-        let mut snapshot: Value = self.parse_order_book(data.clone(), symbol.clone(), timestamp.clone(), Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined);
-        let mut orderbook: Value = self.safe_value(self.get("orderbooks".into()), symbol.clone());
+        let mut timestamp: Value = self.safe_timestamp(data.clone(), Value::from("last_update_at"), Value::Undefined);
+        let mut snapshot: Value = self.parse_order_book(data.clone(), symbol.clone(), timestamp.clone(), Value::Undefined, Value::Undefined);
+        let mut orderbook: Value = self.safe_value(self.get("orderbooks".into()), symbol.clone(), Value::Undefined);
         if orderbook.clone().is_nullish() {
             orderbook = self.order_book(snapshot.clone(), Value::Undefined);
             self.get("orderbooks".into()).set(symbol.clone(), orderbook.clone());
@@ -497,8 +506,8 @@ pub trait Coincheck : Exchange {
         //     ]
         //
         let mut first: Value = self.safe_value(message.clone(), Value::from(0), Value::new_array());
-        let mut symbol: Value = self.symbol(self.safe_string(first.clone(), Value::from(2)));
-        let mut stored: Value = self.safe_value(self.get("trades".into()), symbol.clone());
+        let mut symbol: Value = self.symbol(self.safe_string(first.clone(), Value::from(2), Value::Undefined));
+        let mut stored: Value = self.safe_value(self.get("trades".into()), symbol.clone(), Value::Undefined);
         if stored.clone().is_nullish() {
             let mut limit: Value = self.safe_integer(self.get("options".into()), Value::from("tradesLimit"), Value::from(1000));
             stored = ArrayCache::new(limit);
@@ -506,7 +515,7 @@ pub trait Coincheck : Exchange {
         };
         let mut i: usize = 0;
         while i < message.len() {
-            let mut data: Value = self.safe_value(message.clone(), Value::from(i));
+            let mut data: Value = self.safe_value(message.clone(), Value::from(i), Value::Undefined);
             let mut trade: Value = <Self as Coincheck>::parse_ws_trade(self, data.clone(), Value::Undefined);
             stored.append(trade.clone());
             i += 1;
@@ -529,13 +538,13 @@ pub trait Coincheck : Exchange {
         //         "2078767" // ID of the Maker
         //     ]
         //
-        let mut symbol: Value = self.symbol(self.safe_string(trade.clone(), Value::from(2)));
-        let mut timestamp: Value = self.safe_timestamp(trade.clone(), Value::from(0));
-        let mut side: Value = self.safe_string(trade.clone(), Value::from(5));
-        let mut price_string: Value = self.safe_string(trade.clone(), Value::from(3));
-        let mut amount_string: Value = self.safe_string(trade.clone(), Value::from(4));
+        let mut symbol: Value = self.symbol(self.safe_string(trade.clone(), Value::from(2), Value::Undefined));
+        let mut timestamp: Value = self.safe_timestamp(trade.clone(), Value::from(0), Value::Undefined);
+        let mut side: Value = self.safe_string(trade.clone(), Value::from(5), Value::Undefined);
+        let mut price_string: Value = self.safe_string(trade.clone(), Value::from(3), Value::Undefined);
+        let mut amount_string: Value = self.safe_string(trade.clone(), Value::from(4), Value::Undefined);
         return self.safe_trade(Value::Json(normalize(&Value::Json(json!({
-            "id": self.safe_string(trade.clone(), Value::from(1)),
+            "id": self.safe_string(trade.clone(), Value::from(1), Value::Undefined),
             "info": trade,
             "timestamp": timestamp,
             "datetime": self.iso8601(timestamp.clone()),
@@ -552,7 +561,7 @@ pub trait Coincheck : Exchange {
     }
 
     fn handle_message(&mut self, mut client: Value, mut message: Value) -> Value {
-        let mut data: Value = self.safe_value(message.clone(), Value::from(0));
+        let mut data: Value = self.safe_value(message.clone(), Value::from(0), Value::Undefined);
         if !Array::is_array(data.clone()).is_truthy() {
             <Self as Coincheck>::handle_order_book(self, client.clone(), message.clone());
         } else {
@@ -631,8 +640,8 @@ impl ValueTrait for CoincheckImpl {
     fn push(&mut self, value: Value) { self.0.push(value) }
     fn split(&self, separator: Value) -> Value { self.0.split(separator) }
     fn contains_key(&self, key: Value) -> bool { self.0.contains_key(key) }
-    fn keys(&self) -> Vec<Value> { self.0.keys() }
-    fn values(&self) -> Vec<Value> { self.0.values() }
+    fn keys(&self) -> Value { self.0.keys() }
+    fn values(&self) -> Value { self.0.values() }
     fn to_array(&self, x: Value) -> Value { self.0.to_array(x) }
     fn index_of(&self, x: Value) -> Value { self.0.index_of(x) }
     fn join(&self, glue: Value) -> Value { self.0.join(glue) }

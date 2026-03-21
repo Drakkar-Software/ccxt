@@ -11,7 +11,16 @@ use async_trait::async_trait;
 use std::str::FromStr;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, JSON, Array, Object, Math, parse_int, shift_2, extend_2, normalize};
+use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, BoolExt, JSON, Array, Object, Math, Promise, parse_int, shift_2, extend_2, normalize};
+// Crypto hash identifiers
+fn sha256() -> Value { Value::from("sha256") }
+fn sha384() -> Value { Value::from("sha384") }
+fn sha512() -> Value { Value::from("sha512") }
+fn md5() -> Value { Value::from("md5") }
+fn ed25519() -> Value { Value::from("ed25519") }
+fn rsa(msg: Value, secret: Value, _hash: Value) -> Value { msg }
+fn eddsa(msg: Value, secret: Value, _curve: Value) -> Value { msg }
+fn secp256k1() -> Value { Value::from("secp256k1") }
 
 use crate::exchange::{PRECISE_BASE, TRUNCATE, ROUND, ROUND_UP, ROUND_DOWN};
 use crate::exchange::{DECIMAL_PLACES, SIGNIFICANT_DIGITS, TICK_SIZE, NO_PADDING, PAD_WITH_ZERO};
@@ -477,7 +486,7 @@ pub trait Bullish : Exchange {
         request = request.or_default(Value::new_object());
         params = params.or_default(Value::new_object());
         let mut url: Value = self.get("urls".into()).get(Value::from("api")).get(Value::from("ws")).get(Value::from("private"));
-        let mut token: Value = self.handle_token().await;
+        let mut token: Value = <Self as Bullish>::handle_token(self, Value::Undefined).await;
         let mut cookies: Value = Value::Json(normalize(&Value::Json(json!({
             "JWT_COOKIE": token
         }))).unwrap());
@@ -537,7 +546,7 @@ pub trait Bullish : Exchange {
         //     }
         //
         let mut data: Value = self.safe_dict(message.clone(), Value::from("data"), Value::new_object());
-        let mut market_id: Value = self.safe_string(data.clone(), Value::from("symbol"));
+        let mut market_id: Value = self.safe_string(data.clone(), Value::from("symbol"), Value::Undefined);
         let mut symbol: Value = self.safe_symbol(market_id.clone(), Value::Undefined, Value::Undefined, Value::Undefined);
         let mut market: Value = self.market(symbol.clone());
         let mut raw_trades: Value = self.safe_list(data.clone(), Value::from("trades"), Value::new_array());
@@ -616,7 +625,7 @@ pub trait Bullish : Exchange {
         //
         let mut update_type: Value = self.safe_string(message.clone(), Value::from("type"), Value::from(""));
         let mut data: Value = self.safe_dict(message.clone(), Value::from("data"), Value::new_object());
-        let mut market_id: Value = self.safe_string(data.clone(), Value::from("symbol"));
+        let mut market_id: Value = self.safe_string(data.clone(), Value::from("symbol"), Value::Undefined);
         let mut market: Value = self.safe_market(market_id.clone(), Value::Undefined, Value::Undefined, Value::Undefined);
         let mut symbol: Value = market.get(Value::from("symbol"));
         let mut parsed: Value = Value::Undefined;
@@ -672,10 +681,10 @@ pub trait Bullish : Exchange {
         //
         // current channel is 'l2Orderbook' which returns only snapshots
         let mut data: Value = self.safe_dict(message.clone(), Value::from("data"), Value::new_object());
-        let mut market_id: Value = self.safe_string(data.clone(), Value::from("symbol"));
+        let mut market_id: Value = self.safe_string(data.clone(), Value::from("symbol"), Value::Undefined);
         let mut symbol: Value = self.safe_symbol(market_id.clone(), Value::Undefined, Value::Undefined, Value::Undefined);
         let mut message_hash: Value = Value::from("orderbook::") + symbol.clone();
-        let mut timestamp: Value = self.safe_integer(data.clone(), Value::from("timestamp"));
+        let mut timestamp: Value = self.safe_integer(data.clone(), Value::from("timestamp"), Value::Undefined);
         if !self.get("orderbooks".into()).contains_key(symbol.clone()) {
             self.get("orderbooks".into()).set(symbol.clone(), self.order_book(Value::Undefined, Value::Undefined));
         };
@@ -686,11 +695,11 @@ pub trait Bullish : Exchange {
             "bids": bids,
             "asks": asks
         }))).unwrap());
-        let mut parsed: Value = self.parse_order_book(snapshot.clone(), symbol.clone(), timestamp.clone(), Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined);
+        let mut parsed: Value = self.parse_order_book(snapshot.clone(), symbol.clone(), timestamp.clone(), Value::Undefined, Value::Undefined);
         let mut sequence_number_range: Value = self.safe_list(data.clone(), Value::from("sequenceNumberRange"), Value::new_array());
         if sequence_number_range.len() > 0 {
             let mut last_index: Value = sequence_number_range.len().into() - Value::from(1);
-            parsed.set("nonce".into(), self.safe_integer(sequence_number_range.clone(), last_index.clone()));
+            parsed.set("nonce".into(), self.safe_integer(sequence_number_range.clone(), last_index.clone(), Value::Undefined));
         };
         orderbook.reset(parsed.clone());
         self.get("orderbooks".into()).set(symbol.clone(), orderbook.clone());
@@ -708,8 +717,8 @@ pub trait Bullish : Exchange {
             if Value::from(i) % Value::from(2) != Value::from(0) {
                 continue;
             };
-            let mut price: Value = self.safe_string(entry.clone(), Value::from(i));
-            let mut amount: Value = self.safe_string(entry.clone(), Value::from(i) + Value::from(1));
+            let mut price: Value = self.safe_string(entry.clone(), Value::from(i), Value::Undefined);
+            let mut amount: Value = self.safe_string(entry.clone(), Value::from(i) + Value::from(1), Value::Undefined);
             result.push(Value::Json(serde_json::Value::Array(vec![price.clone().into(), amount.clone().into()])));
             i += 1;
         };
@@ -728,7 +737,7 @@ pub trait Bullish : Exchange {
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
             "topic": "orders"
         }))).unwrap());
-        let mut trading_account_id: Value = self.safe_string(params.clone(), Value::from("tradingAccountId"));
+        let mut trading_account_id: Value = self.safe_string(params.clone(), Value::from("tradingAccountId"), Value::Undefined);
         if trading_account_id.clone().is_nonnullish() {
             request.set("tradingAccountId".into(), trading_account_id.clone());
             params = self.omit(params.clone(), Value::from("tradingAccountId"));
@@ -785,7 +794,7 @@ pub trait Bullish : Exchange {
         //         }
         //     }
         //
-        let mut r#type: Value = self.safe_string(message.clone(), Value::from("type"));
+        let mut r#type: Value = self.safe_string(message.clone(), Value::from("type"), Value::Undefined);
         let mut raw_orders: Value = Value::new_array();
         if r#type.clone() == Value::from("update") {
             let mut data: Value = self.safe_dict(message.clone(), Value::from("data"), Value::new_object());
@@ -807,13 +816,13 @@ pub trait Bullish : Exchange {
                 let mut raw_order: Value = raw_orders.get(i.into());
                 let mut parsed_order: Value = self.parse_order(raw_order.clone(), Value::Undefined);
                 orders.append(parsed_order.clone());
-                let mut symbol: Value = self.safe_string(parsed_order.clone(), Value::from("symbol"));
+                let mut symbol: Value = self.safe_string(parsed_order.clone(), Value::from("symbol"), Value::Undefined);
                 symbols.set(symbol.clone(), true.into());
                 i += 1;
             };
             let mut message_hash: Value = Value::from("orders");
             client.resolve(orders.clone(), message_hash.clone());
-            let mut keys: Value = Object::keys(symbols.clone());
+            let mut keys: Value = symbols.clone().keys();
             let mut i: usize = 0;
             while i < keys.len() {
                 let mut hash_symbol: Value = keys.get(i.into());
@@ -837,7 +846,7 @@ pub trait Bullish : Exchange {
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
             "topic": "trades"
         }))).unwrap());
-        let mut trading_account_id: Value = self.safe_string(params.clone(), Value::from("tradingAccountId"));
+        let mut trading_account_id: Value = self.safe_string(params.clone(), Value::from("tradingAccountId"), Value::Undefined);
         if trading_account_id.clone().is_nonnullish() {
             request.set("tradingAccountId".into(), trading_account_id.clone());
             params = self.omit(params.clone(), Value::from("tradingAccountId"));
@@ -887,7 +896,7 @@ pub trait Bullish : Exchange {
         //         }
         //     }
         //
-        let mut r#type: Value = self.safe_string(message.clone(), Value::from("type"));
+        let mut r#type: Value = self.safe_string(message.clone(), Value::from("type"), Value::Undefined);
         let mut raw_trades: Value = Value::new_array();
         if r#type.clone() == Value::from("update") {
             let mut data: Value = self.safe_dict(message.clone(), Value::from("data"), Value::new_object());
@@ -909,13 +918,13 @@ pub trait Bullish : Exchange {
                 let mut raw_trade: Value = raw_trades.get(i.into());
                 let mut parsed_trade: Value = self.parse_trade(raw_trade.clone(), Value::Undefined);
                 trades.append(parsed_trade.clone());
-                let mut symbol: Value = self.safe_string(parsed_trade.clone(), Value::from("symbol"));
+                let mut symbol: Value = self.safe_string(parsed_trade.clone(), Value::from("symbol"), Value::Undefined);
                 symbols.set(symbol.clone(), true.into());
                 i += 1;
             };
             let mut message_hash: Value = Value::from("myTrades");
             client.resolve(trades.clone(), message_hash.clone());
-            let mut keys: Value = Object::keys(symbols.clone());
+            let mut keys: Value = symbols.clone().keys();
             let mut i: usize = 0;
             while i < keys.len() {
                 let mut hash_symbol: Value = keys.get(i.into());
@@ -934,7 +943,7 @@ pub trait Bullish : Exchange {
             "topic": "assetAccounts"
         }))).unwrap());
         let mut message_hash: Value = Value::from("balance");
-        let mut trading_account_id: Value = self.safe_string(params.clone(), Value::from("tradingAccountId"));
+        let mut trading_account_id: Value = self.safe_string(params.clone(), Value::from("tradingAccountId"), Value::Undefined);
         if trading_account_id.clone().is_nonnullish() {
             params = self.omit(params.clone(), Value::from("tradingAccountId"));
             request.set("tradingAccountId".into(), trading_account_id.clone());
@@ -985,20 +994,20 @@ pub trait Bullish : Exchange {
         //         }
         //     }
         //
-        let mut trading_account_id: Value = self.safe_string(message.clone(), Value::from("tradingAccountId"));
+        let mut trading_account_id: Value = self.safe_string(message.clone(), Value::from("tradingAccountId"), Value::Undefined);
         if !self.get("balance".into()).contains_key(trading_account_id.clone()) {
             self.get("balance".into()).set(trading_account_id.clone(), Value::new_object());
         };
-        let mut message_type: Value = self.safe_string(message.clone(), Value::from("type"));
+        let mut message_type: Value = self.safe_string(message.clone(), Value::from("type"), Value::Undefined);
         if message_type.clone() == Value::from("snapshot") {
             let mut data: Value = self.safe_list(message.clone(), Value::from("data"), Value::new_array());
             self.get("balance".into()).set(trading_account_id.clone(), self.parse_balance(data.clone()));
         } else {
             let mut data: Value = self.safe_dict(message.clone(), Value::from("data"), Value::new_object());
-            let mut asset_id: Value = self.safe_string(data.clone(), Value::from("assetSymbol"));
+            let mut asset_id: Value = self.safe_string(data.clone(), Value::from("assetSymbol"), Value::Undefined);
             let mut account: Value = self.account();
-            account.set("total".into(), self.safe_string(data.clone(), Value::from("availableQuantity")));
-            account.set("used".into(), self.safe_string(data.clone(), Value::from("lockedQuantity")));
+            account.set("total".into(), self.safe_string(data.clone(), Value::from("availableQuantity"), Value::Undefined));
+            account.set("used".into(), self.safe_string(data.clone(), Value::from("lockedQuantity"), Value::Undefined));
             let mut code: Value = self.safe_currency_code(asset_id.clone(), Value::Undefined);
             self.get("balance".into()).get(trading_account_id.clone()).set(code.clone(), account.clone());
             self.get("balance".into()).get(trading_account_id.clone()).set("info".into(), message.clone());
@@ -1034,7 +1043,7 @@ pub trait Bullish : Exchange {
         // exchange does not return messages for sandbox mode
         // current method is implemented blindly
         // todo: check if this works with not-sandbox mode
-        let mut message_type: Value = self.safe_string(message.clone(), Value::from("type"));
+        let mut message_type: Value = self.safe_string(message.clone(), Value::from("type"), Value::Undefined);
         let mut raw_positions: Value = Value::new_array();
         if message_type.clone() == Value::from("update") {
             let mut data: Value = self.safe_dict(message.clone(), Value::from("data"), Value::new_object());
@@ -1086,8 +1095,8 @@ pub trait Bullish : Exchange {
         //
         let mut data: Value = self.safe_dict(message.clone(), Value::from("data"), Value::new_object());
         let mut feedback: Value = self.get("id".into()) + Value::from(" ") + self.json(data.clone());
-                let mut error_code: Value = self.safe_string(data.clone(), Value::from("errorCode"));
-        let mut error_code_name: Value = self.safe_string(data.clone(), Value::from("errorCodeName"));
+                let mut error_code: Value = self.safe_string(data.clone(), Value::from("errorCode"), Value::Undefined);
+        let mut error_code_name: Value = self.safe_string(data.clone(), Value::from("errorCodeName"), Value::Undefined);
         self.throw_exactly_matched_exception(self.get("exceptions".into()).get(Value::from("exact")), error_code.clone(), feedback.clone());
         self.throw_broadly_matched_exception(self.get("exceptions".into()).get(Value::from("broad")), error_code_name.clone(), feedback.clone());
         panic!(r###"ExchangeError::new(feedback)"###);
@@ -1097,10 +1106,10 @@ pub trait Bullish : Exchange {
     }
 
     fn handle_message(&mut self, mut client: Value, mut message: Value) -> Value {
-        let mut data_type: Value = self.safe_string(message.clone(), Value::from("dataType"));
+        let mut data_type: Value = self.safe_string(message.clone(), Value::from("dataType"), Value::Undefined);
         let mut result: Value = self.safe_dict(message.clone(), Value::from("result"), Value::Undefined);
         if result.clone().is_nonnullish() {
-            let mut response: Value = self.safe_string(result.clone(), Value::from("message"));
+            let mut response: Value = self.safe_string(result.clone(), Value::from("message"), Value::Undefined);
             if response.clone() == Value::from("Keep alive pong") {
                 <Self as Bullish>::handle_pong(self, client.clone(), message.clone());
             };
@@ -1229,8 +1238,8 @@ impl ValueTrait for BullishImpl {
     fn push(&mut self, value: Value) { self.0.push(value) }
     fn split(&self, separator: Value) -> Value { self.0.split(separator) }
     fn contains_key(&self, key: Value) -> bool { self.0.contains_key(key) }
-    fn keys(&self) -> Vec<Value> { self.0.keys() }
-    fn values(&self) -> Vec<Value> { self.0.values() }
+    fn keys(&self) -> Value { self.0.keys() }
+    fn values(&self) -> Value { self.0.values() }
     fn to_array(&self, x: Value) -> Value { self.0.to_array(x) }
     fn index_of(&self, x: Value) -> Value { self.0.index_of(x) }
     fn join(&self, glue: Value) -> Value { self.0.join(glue) }
