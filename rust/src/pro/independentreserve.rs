@@ -405,7 +405,7 @@ pub trait Independentreserve : Exchange {
         symbol = market.get(Value::from("symbol"));
         let mut url: Value = self.get("urls".into()).get(Value::from("api")).get(Value::from("ws")) + Value::from("?subscribe=ticker-") + market.get(Value::from("base")) + Value::from("-") + market.get(Value::from("quote"));
         let mut message_hash: Value = Value::from("trades:") + symbol.clone();
-        let mut trades: Value = self.watch(url.clone(), message_hash.clone(), Value::Undefined, message_hash.clone(), Value::Undefined).await;
+        let mut trades: Value = self.watch(url.clone(), message_hash.clone(), Value::Undefined, message_hash.clone()).await;
         return self.filter_by_since_limit(trades.clone(), since.clone(), limit.clone(), Value::from("timestamp"), true.into());
     }
 
@@ -534,7 +534,7 @@ pub trait Independentreserve : Exchange {
         let mut timestamp: Value = self.safe_integer(message.clone(), Value::from("Time"), Value::Undefined);
         // let orderbook = this.safeValue (this.orderbooks, symbol);
         if !self.get("orderbooks".into()).contains_key(symbol.clone()) {
-            self.get("orderbooks".into()).set(symbol.clone(), self.order_book(Value::new_object(), Value::Undefined));
+            self.get("orderbooks".into()).set(symbol.clone(), self.order_book(Value::new_object()));
         };
         let mut orderbook: Value = self.get("orderbooks".into()).get(symbol.clone());
         if event.clone() == Value::from("OrderBookSnapshot") {
@@ -693,10 +693,10 @@ pub trait Independentreserve : Exchange {
                     "privatePostWithdrawfiatcurrency" => self.request("WithdrawFiatCurrency".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privatePostWithdrawdigitalcurrency" => self.request("WithdrawDigitalCurrency".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privatePostWithdrawcrypto" => self.request("WithdrawCrypto".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    _ => unimplemented!(),
+                    _ => panic!("Unknown API method: {}", m),
                 }
             },
-            _ => unimplemented!()
+            _ => panic!("dispatch: method must be a string, got {:?}", method)
         }
     }
 }

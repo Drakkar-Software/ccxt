@@ -1989,10 +1989,10 @@ pub trait Coinsph : Exchange {
                     "privateDeleteOpenapiv1order" => self.request("openapi/v1/order".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privateDeleteOpenapiv1openorders" => self.request("openapi/v1/openOrders".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privateDeleteOpenapiv1userdatastream" => self.request("openapi/v1/userDataStream".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    _ => unimplemented!(),
+                    _ => panic!("Unknown API method: {}", m),
                 }
             },
-            _ => unimplemented!()
+            _ => panic!("dispatch: method must be a string, got {:?}", method)
         }
     }
 }

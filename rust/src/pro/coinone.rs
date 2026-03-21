@@ -398,7 +398,7 @@ pub trait Coinone : Exchange {
             }))).unwrap())
         }))).unwrap());
         let mut message: Value = extend_2(request.clone(), params.clone());
-        let mut orderbook: Value = self.watch(url.clone(), message_hash.clone(), message.clone(), message_hash.clone(), Value::Undefined).await;
+        let mut orderbook: Value = self.watch(url.clone(), message_hash.clone(), message.clone(), message_hash.clone()).await;
         return orderbook.limit();
     }
 
@@ -436,7 +436,7 @@ pub trait Coinone : Exchange {
         let mut timestamp: Value = self.safe_integer(data.clone(), Value::from("timestamp"), Value::Undefined);
         let mut orderbook: Value = self.safe_value(self.get("orderbooks".into()), symbol.clone(), Value::Undefined);
         if orderbook.clone().is_nullish() {
-            orderbook = self.order_book(Value::Undefined, Value::Undefined);
+            orderbook = self.order_book();
         } else {
             orderbook.reset();
         };
@@ -474,7 +474,7 @@ pub trait Coinone : Exchange {
             }))).unwrap())
         }))).unwrap());
         let mut message: Value = extend_2(request.clone(), params.clone());
-        return self.watch(url.clone(), message_hash.clone(), message.clone(), message_hash.clone(), Value::Undefined).await;
+        return self.watch(url.clone(), message_hash.clone(), message.clone(), message_hash.clone()).await;
     }
 
     fn handle_ticker(&mut self, mut client: Value, mut message: Value) -> Value {
@@ -508,7 +508,7 @@ pub trait Coinone : Exchange {
         //     }
         //
         let mut data: Value = self.safe_value(message.clone(), Value::from("data"), Value::new_object());
-        let mut ticker: Value = <Self as Coinone>::parse_ws_ticker(self, data.clone());
+        let mut ticker: Value = <Self as Coinone>::parse_ws_ticker(self, data.clone(), Value::Undefined);
         let mut symbol: Value = ticker.get(Value::from("symbol"));
         self.get("tickers".into()).set(symbol.clone(), ticker.clone());
         let mut message_hash: Value = Value::from("ticker:") + symbol.clone();
@@ -588,7 +588,7 @@ pub trait Coinone : Exchange {
             }))).unwrap())
         }))).unwrap());
         let mut message: Value = extend_2(request.clone(), params.clone());
-        let mut trades: Value = self.watch(url.clone(), message_hash.clone(), message.clone(), message_hash.clone(), Value::Undefined).await;
+        let mut trades: Value = self.watch(url.clone(), message_hash.clone(), message.clone(), message_hash.clone()).await;
         if self.get("newUpdates".into()).is_truthy() {
             limit = trades.get_limit(market.get(Value::from("symbol")), limit.clone());
         };
@@ -804,10 +804,10 @@ pub trait Coinone : Exchange {
                     "v21privatePostTransactionkrwhistory" => self.request("transaction/krw/history".into(), "v2_1Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "v21privatePostTransactioncoinhistory" => self.request("transaction/coin/history".into(), "v2_1Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "v21privatePostTransactioncoinwithdrawallimit" => self.request("transaction/coin/withdrawal/limit".into(), "v2_1Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    _ => unimplemented!(),
+                    _ => panic!("Unknown API method: {}", m),
                 }
             },
-            _ => unimplemented!()
+            _ => panic!("dispatch: method must be a string, got {:?}", method)
         }
     }
 }

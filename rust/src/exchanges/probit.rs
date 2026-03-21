@@ -1702,10 +1702,10 @@ pub trait Probit : Exchange {
                     "privateGetDepositaddress" => self.request("deposit_address".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privateGetTransferpayment" => self.request("transfer/payment".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "accountsPostToken" => self.request("token".into(), "accounts".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    _ => unimplemented!(),
+                    _ => panic!("Unknown API method: {}", m),
                 }
             },
-            _ => unimplemented!()
+            _ => panic!("dispatch: method must be a string, got {:?}", method)
         }
     }
 }

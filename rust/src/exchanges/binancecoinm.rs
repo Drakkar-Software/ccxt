@@ -2912,10 +2912,10 @@ pub trait Binancecoinm : Exchange {
                     "papiDeleteMarginorderlist" => self.request("margin/orderList".into(), "papi".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "papiDeleteListenkey" => self.request("listenKey".into(), "papi".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "papiv2GetUmaccount" => self.request("um/account".into(), "papiV2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    _ => unimplemented!(),
+                    _ => panic!("Unknown API method: {}", m),
                 }
             },
-            _ => unimplemented!()
+            _ => panic!("dispatch: method must be a string, got {:?}", method)
         }
     }
 }

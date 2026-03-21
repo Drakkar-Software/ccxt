@@ -2573,10 +2573,10 @@ pub trait Wavesexchange : Exchange {
                     "forwardGetMatcherordersaddressorderid" => self.request("matcher/orders/{address}/{orderId}".into(), "forward".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "forwardPostMatcherorderswavesaddresscancel" => self.request("matcher/orders/{wavesAddress}/cancel".into(), "forward".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "marketGetTickers" => self.request("tickers".into(), "market".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    _ => unimplemented!(),
+                    _ => panic!("Unknown API method: {}", m),
                 }
             },
-            _ => unimplemented!()
+            _ => panic!("dispatch: method must be a string, got {:?}", method)
         }
     }
 }

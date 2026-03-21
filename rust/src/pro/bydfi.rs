@@ -164,7 +164,7 @@ pub trait Bydfi : Exchange {
 
     async fn watch_private(&mut self, mut message_hashes: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
-        self.check_required_credentials(Value::Undefined);
+        self.check_required_credentials();
         let mut url: Value = self.get("urls".into()).get(Value::from("api")).get(Value::from("ws"));
         let mut sub_hash: Value = Value::from("private");
         let mut client: Value = self.client(url.clone());
@@ -197,7 +197,7 @@ pub trait Bydfi : Exchange {
         let mut market_id: Value = market.get(Value::from("id"));
         let mut message_hash: Value = Value::from("ticker::") + symbol.clone();
         let mut channel: Value = market_id.clone() + Value::from("@ticker");
-        return <Self as Bydfi>::watch_public(self, Value::Json(serde_json::Value::Array(vec![message_hash.clone().into()])), Value::Json(serde_json::Value::Array(vec![channel.clone().into()])), params.clone()).await;
+        return <Self as Bydfi>::watch_public(self, Value::Json(serde_json::Value::Array(vec![message_hash.clone().into()])), Value::Json(serde_json::Value::Array(vec![channel.clone().into()])), params.clone(), Value::Undefined).await;
     }
 
     async fn un_watch_ticker(&mut self, mut symbol: Value, mut params: Value) -> Value {
@@ -208,7 +208,7 @@ pub trait Bydfi : Exchange {
     async fn watch_tickers(&mut self, mut symbols: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        symbols = self.market_symbols(symbols.clone(), Value::Undefined, true.into(), Value::Undefined, Value::Undefined);
+        symbols = self.market_symbols(symbols.clone(), Value::Undefined, true.into());
         let mut message_hashes: Value = Value::new_array();
         let mut message_hash: Value = Value::from("ticker::");
         let mut channels: Value = Value::new_array();
@@ -226,13 +226,13 @@ pub trait Bydfi : Exchange {
                 i += 1;
             };
         };
-        <Self as Bydfi>::watch_public(self, message_hashes.clone(), channels.clone(), params.clone()).await;
-        return self.filter_by_array(self.get("tickers".into()), Value::from("symbol"), symbols.clone(), Value::Undefined);
+        <Self as Bydfi>::watch_public(self, message_hashes.clone(), channels.clone(), params.clone(), Value::Undefined).await;
+        return self.filter_by_array(self.get("tickers".into()), Value::from("symbol"), symbols.clone());
     }
 
     async fn un_watch_tickers(&mut self, mut symbols: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
-        symbols = self.market_symbols(symbols.clone(), Value::Undefined, true.into(), Value::Undefined, Value::Undefined);
+        symbols = self.market_symbols(symbols.clone(), Value::Undefined, true.into());
         let mut message_hashes: Value = Value::new_array();
         let mut message_hash: Value = Value::from("unsubscribe::ticker::");
         let mut channels: Value = Value::new_array();
@@ -308,7 +308,7 @@ pub trait Bydfi : Exchange {
         //         "o": 0.04657
         //     }
         //
-        let mut ticker: Value = self.parse_ticker(message.clone(), Value::Undefined);
+        let mut ticker: Value = self.parse_ticker(message.clone());
         let mut symbol: Value = ticker.get(Value::from("symbol"));
         let mut message_hash: Value = Value::from("ticker::") + symbol.clone();
         self.get("tickers".into()).set(symbol.clone(), ticker.clone());
@@ -351,7 +351,7 @@ pub trait Bydfi : Exchange {
             message_hashes.push(Value::from("ohlcv::") + market.get(Value::from("symbol")) + Value::from("::") + interval.clone());
             i += 1;
         };
-        let (mut symbol, mut timeframe, mut candles) = shift_3(<Self as Bydfi>::watch_public(self, message_hashes.clone(), channels.clone(), params.clone()).await);
+        let (mut symbol, mut timeframe, mut candles) = shift_3(<Self as Bydfi>::watch_public(self, message_hashes.clone(), channels.clone(), params.clone(), Value::Undefined).await);
         if self.get("newUpdates".into()).is_truthy() {
             limit = candles.get_limit(symbol.clone(), limit.clone());
         };
@@ -419,7 +419,7 @@ pub trait Bydfi : Exchange {
             self.get("ohlcvs".into()).get(symbol.clone()).set(timeframe.clone(), stored.clone());
         };
         let mut ohlcv: Value = self.get("ohlcvs".into()).get(symbol.clone()).get(timeframe.clone());
-        let mut parsed: Value = self.parse_ws_ohlcv(message.clone(), Value::Undefined);
+        let mut parsed: Value = self.parse_ws_ohlcv(message.clone());
         ohlcv.append(parsed.clone());
         let mut message_hash: Value = Value::from("ohlcv::") + symbol.clone() + Value::from("::") + timeframe.clone();
         client.resolve(Value::Json(serde_json::Value::Array(vec![symbol.clone().into(), timeframe.clone().into(), ohlcv.clone().into()])), message_hash.clone());
@@ -439,7 +439,7 @@ pub trait Bydfi : Exchange {
     async fn watch_order_book_for_symbols(&mut self, mut symbols: Value, mut limit: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        symbols = self.market_symbols(symbols.clone(), Value::Undefined, false.into(), Value::Undefined, Value::Undefined);
+        symbols = self.market_symbols(symbols.clone(), Value::Undefined, false.into());
         let mut depth: Value = Value::from("100");
         (depth, params) = shift_2(self.handle_option_and_params(params.clone(), Value::from("watchOrderBookForSymbols"), Value::from("depth"), depth.clone()));
         let mut frequency: Value = Value::from("100ms");
@@ -458,14 +458,14 @@ pub trait Bydfi : Exchange {
             message_hashes.push(Value::from("orderbook::") + symbol.clone());
             i += 1;
         };
-        let mut orderbook: Value = <Self as Bydfi>::watch_public(self, message_hashes.clone(), channels.clone(), params.clone()).await;
+        let mut orderbook: Value = <Self as Bydfi>::watch_public(self, message_hashes.clone(), channels.clone(), params.clone(), Value::Undefined).await;
         return orderbook.limit();
     }
 
     async fn un_watch_order_book_for_symbols(&mut self, mut symbols: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        symbols = self.market_symbols(symbols.clone(), Value::Undefined, false.into(), Value::Undefined, Value::Undefined);
+        symbols = self.market_symbols(symbols.clone(), Value::Undefined, false.into());
         let mut depth: Value = Value::from("100");
         (depth, params) = shift_2(self.handle_option_and_params(params.clone(), Value::from("watchOrderBookForSymbols"), Value::from("depth"), depth.clone()));
         let mut frequency: Value = Value::from("100ms");
@@ -508,7 +508,7 @@ pub trait Bydfi : Exchange {
         let mut symbol: Value = self.safe_symbol(market_id.clone(), Value::Undefined, Value::Undefined, Value::Undefined);
         let mut timestamp: Value = self.safe_integer(message.clone(), Value::from("E"), Value::Undefined);
         if !self.get("orderbooks".into()).contains_key(symbol.clone()) {
-            self.get("orderbooks".into()).set(symbol.clone(), self.order_book(Value::Undefined, Value::Undefined));
+            self.get("orderbooks".into()).set(symbol.clone(), self.order_book());
         };
         let mut orderbook: Value = self.get("orderbooks".into()).get(symbol.clone());
         let mut parsed: Value = self.parse_order_book(message.clone(), symbol.clone(), timestamp.clone(), Value::from("b"), Value::from("a"), Value::Undefined, Value::Undefined, Value::Undefined);
@@ -531,7 +531,7 @@ pub trait Bydfi : Exchange {
     async fn watch_orders_for_symbols(&mut self, mut symbols: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        symbols = self.market_symbols(symbols.clone(), Value::Undefined, true.into(), Value::Undefined, Value::Undefined);
+        symbols = self.market_symbols(symbols.clone(), Value::Undefined, true.into());
         let mut message_hashes: Value = Value::new_array();
         if symbols.clone().is_nullish() {
             message_hashes.push(Value::from("orders"));
@@ -645,9 +645,9 @@ pub trait Bydfi : Exchange {
             "datetime": Value::Undefined,
             "lastTradeTimestamp": Value::Undefined,
             "lastUpdateTimestamp": Value::Undefined,
-            "status": <Self as Bydfi>::parse_order_status(self, raw_status.clone()),
+            "status": self.parse_order_status(raw_status.clone()),
             "symbol": market.get(Value::from("symbol")),
-            "type": <Self as Bydfi>::parse_order_type(self, raw_type.clone()),
+            "type": self.parse_order_type(raw_type.clone()),
             "timeInForce": Value::Undefined,
             "postOnly": Value::Undefined,
             "reduceOnly": self.safe_bool(order.clone(), Value::from("ro"), Value::Undefined),
@@ -669,7 +669,7 @@ pub trait Bydfi : Exchange {
     async fn watch_positions(&mut self, mut symbols: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        symbols = self.market_symbols(symbols.clone(), Value::Undefined, true.into(), Value::Undefined, Value::Undefined);
+        symbols = self.market_symbols(symbols.clone(), Value::Undefined, true.into());
         let mut message_hashes: Value = Value::new_array();
         let mut message_hash: Value = Value::from("positions");
         if symbols.clone().is_nullish() {
@@ -1027,10 +1027,10 @@ pub trait Bydfi : Exchange {
         match method {
             Value::Json(serde_json::Value::String(ref m)) => {
                 match m.as_ref() {
-                    _ => unimplemented!(),
+                    _ => panic!("Unknown API method: {}", m),
                 }
             },
-            _ => unimplemented!()
+            _ => panic!("dispatch: method must be a string, got {:?}", method)
         }
     }
 }

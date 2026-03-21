@@ -500,7 +500,7 @@ pub trait Arkham : Exchange {
             "confirmationId": self.uuid(),
             "method": "subscribe"
         }))).unwrap());
-        return self.watch(self.get("urls".into()).get(Value::from("api")).get(Value::from("ws")), message_hash.clone(), request.clone(), subscription_hash.clone(), Value::Undefined).await;
+        return self.watch(self.get("urls".into()).get(Value::from("api")).get(Value::from("ws")), message_hash.clone(), request.clone(), subscription_hash.clone()).await;
     }
 
     async fn watch_ticker(&mut self, mut symbol: Value, mut params: Value) -> Value {
@@ -599,7 +599,7 @@ pub trait Arkham : Exchange {
         let mut market: Value = self.safe_market(market_id.clone(), Value::Undefined, Value::Undefined, Value::Undefined);
         let mut symbol: Value = market.get(Value::from("symbol"));
         let mut duration: Value = self.safe_integer(data.clone(), Value::from("duration"), Value::Undefined);
-        let mut timeframe: Value = <Self as Arkham>::find_timeframe_by_duration(self, duration.clone());
+        let mut timeframe: Value = self.find_timeframe_by_duration(duration.clone());
         let mut message_hash: Value = Value::from("ohlcv::") + symbol.clone() + Value::from("::") + timeframe.clone();
         self.get("ohlcvs".into()).set(symbol.clone(), self.safe_value(self.get("ohlcvs".into()), symbol.clone(), Value::new_object()));
         if !self.get("ohlcvs".into()).get(symbol.clone()).contains_key(timeframe.clone()) {
@@ -670,7 +670,7 @@ pub trait Arkham : Exchange {
         let mut symbol: Value = market.get(Value::from("symbol"));
         let mut message_hash: Value = Value::from("orderBook::") + symbol.clone();
         if !self.get("orderbooks".into()).contains_key(symbol.clone()) {
-            let mut ob: Value = self.order_book(Value::new_object(), Value::Undefined);
+            let mut ob: Value = self.order_book(Value::new_object());
             ob.set("symbol".into(), symbol.clone());
             self.get("orderbooks".into()).set(symbol.clone(), ob.clone());
         };
@@ -749,7 +749,7 @@ pub trait Arkham : Exchange {
 
     async fn authenticate(&mut self, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
-        self.check_required_credentials(Value::Undefined);
+        self.check_required_credentials();
         let mut expires: Value = self.milliseconds() + self.safe_integer(self.get("options".into()), Value::from("requestExpiration"), Value::from(5000)) * Value::from(1000);
         // need macroseconds
         let mut ws_options: Value = self.safe_dict(self.get("options".into()), Value::from("ws"), Value::new_object());
@@ -782,7 +782,7 @@ pub trait Arkham : Exchange {
 
     async fn watch_balance(&mut self, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
-        <Self as Arkham>::authenticate(self).await;
+        <Self as Arkham>::authenticate(self, Value::Undefined).await;
         self.load_markets(Value::Undefined, Value::Undefined).await;
         let mut request_arg: Value = Value::Json(normalize(&Value::Json(json!({
             "snapshot": true
@@ -877,11 +877,11 @@ pub trait Arkham : Exchange {
 
     async fn watch_positions(&mut self, mut symbols: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
-        <Self as Arkham>::authenticate(self).await;
+        <Self as Arkham>::authenticate(self, Value::Undefined).await;
         self.load_markets(Value::Undefined, Value::Undefined).await;
         let mut message_hash: Value = Value::from("positions");
         if !self.is_empty(symbols.clone()).is_truthy() {
-            symbols = self.market_symbols(symbols.clone(), Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined);
+            symbols = self.market_symbols(symbols.clone());
             message_hash = message_hash +  Value::from("::") + symbols.join(Value::from(","));
         };
         self.set("positions".into(), ArrayCacheBySymbolBySide::new());
@@ -938,7 +938,7 @@ pub trait Arkham : Exchange {
             let mut data: Value = self.safe_list(message.clone(), Value::from("data"), Value::new_array());
             let mut i: usize = 0;
             while i < data.len() {
-                let mut position: Value = <Self as Arkham>::parse_ws_position(self, data.get(i.into()));
+                let mut position: Value = <Self as Arkham>::parse_ws_position(self, data.get(i.into()), Value::Undefined);
                 if self.safe_integer(position.clone(), Value::from("entryPrice"), Value::Undefined) != Value::from(0) {
                     new_positions.push(position.clone());
                     let mut symbol: Value = self.safe_string(position.clone(), Value::from("symbol"), Value::Undefined);
@@ -948,7 +948,7 @@ pub trait Arkham : Exchange {
             };
         } else {
             let mut data: Value = self.safe_dict(message.clone(), Value::from("data"), Value::Undefined);
-            let mut position: Value = <Self as Arkham>::parse_ws_position(self, data.clone());
+            let mut position: Value = <Self as Arkham>::parse_ws_position(self, data.clone(), Value::Undefined);
             let mut symbol: Value = self.safe_string(position.clone(), Value::from("symbol"), Value::Undefined);
             self.get("positions".into()).set(symbol.clone(), position.clone());
             new_positions.push(position.clone());
@@ -975,7 +975,7 @@ pub trait Arkham : Exchange {
 
     fn parse_ws_positions(&self, mut positions: Value, mut symbols: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
-        symbols = self.market_symbols(symbols.clone(), Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined);
+        symbols = self.market_symbols(symbols.clone());
         positions = self.to_array(positions.clone());
         let mut result: Value = Value::new_array();
         let mut i: usize = 0;
@@ -994,7 +994,7 @@ pub trait Arkham : Exchange {
 
     async fn watch_orders(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
-        <Self as Arkham>::authenticate(self).await;
+        <Self as Arkham>::authenticate(self, Value::Undefined).await;
         self.load_markets(Value::Undefined, Value::Undefined).await;
         let mut market: Value = Value::Undefined;
         if symbol.clone().is_nonnullish() {
@@ -1217,10 +1217,10 @@ pub trait Arkham : Exchange {
                     "v1PrivateDeleteAccountwithdrawaladdressesid" => self.request("account/withdrawal/addresses/{id}".into(), "v1".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "v1PrivateDeleteSubaccountssubaccountid" => self.request("subaccounts/{subaccountId}".into(), "v1".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "v1PrivateDeleteApikeyid" => self.request("api-key/{id}".into(), "v1".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    _ => unimplemented!(),
+                    _ => panic!("Unknown API method: {}", m),
                 }
             },
-            _ => unimplemented!()
+            _ => panic!("dispatch: method must be a string, got {:?}", method)
         }
     }
 }

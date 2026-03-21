@@ -465,7 +465,7 @@ pub trait Bitopro : Exchange {
 
     async fn watch_public(&mut self, mut path: Value, mut message_hash: Value, mut market_id: Value) -> Value {
         let mut url: Value = self.get("urls".into()).get(Value::from("ws")).get(Value::from("public")) + Value::from("/") + path.clone() + Value::from("/") + market_id.clone();
-        return self.watch(url.clone(), message_hash.clone(), Value::Undefined, message_hash.clone(), Value::Undefined).await;
+        return self.watch(url.clone(), message_hash.clone(), Value::Undefined, message_hash.clone()).await;
     }
 
     async fn watch_order_book(&mut self, mut symbol: Value, mut limit: Value, mut params: Value) -> Value {
@@ -518,7 +518,7 @@ pub trait Bitopro : Exchange {
         let mut message_hash: Value = event.clone() + Value::from(":") + symbol.clone();
         let mut orderbook: Value = self.safe_value(self.get("orderbooks".into()), symbol.clone(), Value::Undefined);
         if orderbook.clone().is_nullish() {
-            orderbook = self.order_book(Value::new_object(), Value::Undefined);
+            orderbook = self.order_book(Value::new_object());
         };
         let mut timestamp: Value = self.safe_integer(message.clone(), Value::from("timestamp"), Value::Undefined);
         let mut snapshot: Value = self.parse_order_book(message.clone(), symbol.clone(), timestamp.clone(), Value::from("bids"), Value::from("asks"), Value::from("price"), Value::from("amount"), Value::Undefined);
@@ -566,7 +566,7 @@ pub trait Bitopro : Exchange {
         let mut event: Value = self.safe_string(message.clone(), Value::from("event"), Value::Undefined);
         let mut message_hash: Value = event.clone() + Value::from(":") + symbol.clone();
         let mut raw_data: Value = self.safe_value(message.clone(), Value::from("data"), Value::new_array());
-        let mut trades: Value = self.parse_trades(raw_data.clone(), market.clone(), Value::Undefined, Value::Undefined, Value::Undefined);
+        let mut trades: Value = self.parse_trades(raw_data.clone(), market.clone());
         let mut trades_cache: Value = self.safe_value(self.get("trades".into()), symbol.clone(), Value::Undefined);
         if trades_cache.clone().is_nullish() {
             let mut limit: Value = self.safe_integer(self.get("options".into()), Value::from("tradesLimit"), Value::from(1000));
@@ -584,7 +584,7 @@ pub trait Bitopro : Exchange {
 
     async fn watch_my_trades(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
-        self.check_required_credentials(Value::Undefined);
+        self.check_required_credentials();
         self.load_markets(Value::Undefined, Value::Undefined).await;
         let mut message_hash: Value = Value::from("USER_TRADE");
         if symbol.clone().is_nonnullish() {
@@ -593,7 +593,7 @@ pub trait Bitopro : Exchange {
         };
         let mut url: Value = self.get("urls".into()).get(Value::from("ws")).get(Value::from("private")) + Value::from("/") + Value::from("user-trades");
         <Self as Bitopro>::authenticate(self, url.clone());
-        let mut trades: Value = self.watch(url.clone(), message_hash.clone(), Value::Undefined, message_hash.clone(), Value::Undefined).await;
+        let mut trades: Value = self.watch(url.clone(), message_hash.clone(), Value::Undefined, message_hash.clone()).await;
         if self.get("newUpdates".into()).is_truthy() {
             limit = trades.get_limit(symbol.clone(), limit.clone());
         };
@@ -768,7 +768,7 @@ pub trait Bitopro : Exchange {
         if self.get("clients".into()).is_nonnullish() && self.get("clients".into()).contains_key(url.clone()) {
             return Value::Undefined;
         };
-        self.check_required_credentials(Value::Undefined);
+        self.check_required_credentials();
         let mut nonce: Value = self.milliseconds();
         let mut raw_data: Value = self.json(Value::Json(normalize(&Value::Json(json!({
             "nonce": nonce,
@@ -801,12 +801,12 @@ pub trait Bitopro : Exchange {
 
     async fn watch_balance(&mut self, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
-        self.check_required_credentials(Value::Undefined);
+        self.check_required_credentials();
         self.load_markets(Value::Undefined, Value::Undefined).await;
         let mut message_hash: Value = Value::from("ACCOUNT_BALANCE");
         let mut url: Value = self.get("urls".into()).get(Value::from("ws")).get(Value::from("private")) + Value::from("/") + Value::from("account-balance");
         <Self as Bitopro>::authenticate(self, url.clone());
-        return self.watch(url.clone(), message_hash.clone(), Value::Undefined, message_hash.clone(), Value::Undefined).await;
+        return self.watch(url.clone(), message_hash.clone(), Value::Undefined, message_hash.clone()).await;
     }
 
     fn handle_balance(&mut self, mut client: Value, mut message: Value) -> Value {
@@ -900,10 +900,10 @@ pub trait Bitopro : Exchange {
                     "privateDeleteOrderspairid" => self.request("orders/{pair}/{id}".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privateDeleteOrdersall" => self.request("orders/all".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privateDeleteOrderspair" => self.request("orders/{pair}".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    _ => unimplemented!(),
+                    _ => panic!("Unknown API method: {}", m),
                 }
             },
-            _ => unimplemented!()
+            _ => panic!("dispatch: method must be a string, got {:?}", method)
         }
     }
 }

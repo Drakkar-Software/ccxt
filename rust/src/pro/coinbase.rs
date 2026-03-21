@@ -644,7 +644,7 @@ pub trait Coinbase : Exchange {
         let mut message_hash: Value = name.clone();
         let mut product_ids: Value = Value::new_array();
         if Array::is_array(symbol.clone()).is_truthy() {
-            let mut symbols: Value = self.market_symbols(symbol.clone(), Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined);
+            let mut symbols: Value = self.market_symbols(symbol.clone());
             let mut market_ids: Value = self.market_ids(symbols.clone());
             product_ids = market_ids.clone();
             message_hash = message_hash.clone() + Value::from("::") + symbol.join(Value::from(","));
@@ -665,7 +665,7 @@ pub trait Coinbase : Exchange {
         if is_private.is_truthy() {
             subscribe = extend_2(subscribe.clone(), <Self as Coinbase>::create_ws_auth(self, name.clone(), product_ids.clone()));
         };
-        return self.watch(url.clone(), message_hash.clone(), subscribe.clone(), message_hash.clone(), Value::Undefined).await;
+        return self.watch(url.clone(), message_hash.clone(), subscribe.clone(), message_hash.clone()).await;
     }
 
     async fn un_subscribe(&mut self, mut topic: Value, mut name: Value, mut is_private: Value, mut symbol: Value) -> Value {
@@ -679,7 +679,7 @@ pub trait Coinbase : Exchange {
         let mut un_watch_message_hash: Value = Value::from("unsubscribe:") + name.clone();
         let mut product_ids: Value = Value::new_array();
         if Array::is_array(symbol.clone()).is_truthy() {
-            let mut symbols: Value = self.market_symbols(symbol.clone(), Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined);
+            let mut symbols: Value = self.market_symbols(symbol.clone());
             let mut market_ids: Value = self.market_ids(symbols.clone());
             product_ids = market_ids.clone();
             watch_message_hash = watch_message_hash.clone() + Value::from("::") + symbol.join(Value::from(","));
@@ -719,7 +719,7 @@ pub trait Coinbase : Exchange {
         self.load_markets(Value::Undefined, Value::Undefined).await;
         let mut product_ids: Value = Value::new_array();
         let mut message_hashes: Value = Value::new_array();
-        symbols = self.market_symbols(symbols.clone(), Value::Undefined, false.into(), Value::Undefined, Value::Undefined);
+        symbols = self.market_symbols(symbols.clone(), Value::Undefined, false.into());
         let mut i: usize = 0;
         while i < symbols.len() {
             let mut symbol: Value = symbols.get(i.into());
@@ -738,7 +738,7 @@ pub trait Coinbase : Exchange {
         if is_private.is_truthy() {
             subscribe = extend_2(subscribe.clone(), <Self as Coinbase>::create_ws_auth(self, name.clone(), product_ids.clone()));
         };
-        return self.watch_multiple(url.clone(), message_hashes.clone(), subscribe.clone(), message_hashes.clone(), Value::Undefined).await;
+        return self.watch_multiple(url.clone(), message_hashes.clone(), subscribe.clone(), message_hashes.clone()).await;
     }
 
     async fn un_subscribe_multiple(&mut self, mut topic: Value, mut name: Value, mut is_private: Value, mut symbols: Value, mut params: Value) -> Value {
@@ -751,7 +751,7 @@ pub trait Coinbase : Exchange {
         let mut product_ids: Value = Value::new_array();
         let mut watch_message_hashes: Value = Value::new_array();
         let mut un_watch_message_hashes: Value = Value::new_array();
-        symbols = self.market_symbols(symbols.clone(), Value::Undefined, false.into(), Value::Undefined, Value::Undefined);
+        symbols = self.market_symbols(symbols.clone(), Value::Undefined, false.into());
         let mut i: usize = 0;
         while i < symbols.len() {
             let mut symbol: Value = symbols.get(i.into());
@@ -788,7 +788,7 @@ pub trait Coinbase : Exchange {
     fn create_ws_auth(&mut self, mut name: Value, mut product_ids: Value) -> Value {
         let mut subscribe: Value = Value::new_object();
         let mut timestamp: Value = self.number_to_string(self.seconds());
-        self.check_required_credentials(Value::Undefined);
+        self.check_required_credentials();
         let mut is_cloud_a_pi_key: Value = (self.get("apiKey".into()).index_of(Value::from("organizations/")) >= Value::from(0) || self.get("secret".into()).starts_with(Value::from("-----BEGIN")).is_truthy()).into();
         let mut auth: Value = timestamp.clone() + name.clone() + product_ids.join(Value::from(","));
         if !is_cloud_a_pi_key.is_truthy() {
@@ -804,7 +804,7 @@ pub trait Coinbase : Exchange {
             let mut seconds: Value = self.seconds();
             if current_token.clone().is_nullish() || token_timestamp.clone() + Value::from(120) < seconds.clone() {
                 // we should generate new token
-                let mut token: Value = <Self as Coinbase>::create_auth_token(self, seconds.clone(), Value::Undefined, Value::Undefined, Value::Undefined);
+                let mut token: Value = self.create_auth_token(seconds.clone());
                 self.get("options".into()).set("wsToken".into(), token.clone());
                 self.get("options".into()).set("wsTokenTimestamp".into(), seconds.clone());
             };
@@ -850,7 +850,7 @@ pub trait Coinbase : Exchange {
         if symbols.clone().is_nullish() {
             symbols = self.get("symbols".into());
         };
-        return <Self as Coinbase>::un_subscribe_multiple(self, Value::from("ticker"), Value::from("ticker_batch"), false.into(), symbols.clone()).await;
+        return <Self as Coinbase>::un_subscribe_multiple(self, Value::from("ticker"), Value::from("ticker_batch"), false.into(), symbols.clone(), Value::Undefined).await;
     }
 
     fn handle_tickers(&mut self, mut client: Value, mut message: Value) -> Value {
@@ -959,7 +959,7 @@ pub trait Coinbase : Exchange {
                 if ws_market_id.clone().is_nullish() {
                     continue;
                 };
-                let mut result: Value = <Self as Coinbase>::parse_ws_ticker(self, ticker.clone());
+                let mut result: Value = <Self as Coinbase>::parse_ws_ticker(self, ticker.clone(), Value::Undefined);
                 result.set("timestamp".into(), timestamp.clone());
                 result.set("datetime".into(), datetime.clone());
                 let mut symbol: Value = result.get(Value::from("symbol"));
@@ -1018,7 +1018,7 @@ pub trait Coinbase : Exchange {
             "average": Value::Undefined,
             "baseVolume": self.safe_string(ticker.clone(), Value::from("volume_24_h"), Value::Undefined),
             "quoteVolume": Value::Undefined
-        }))).unwrap()), Value::Undefined);
+        }))).unwrap()));
     }
 
     async fn watch_trades(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
@@ -1148,7 +1148,7 @@ pub trait Coinbase : Exchange {
             let mut j: usize = 0;
             while j < current_trades.len() {
                 let mut item: Value = current_trades.get(i.into());
-                trades_array.append(self.parse_trade(item.clone(), Value::Undefined));
+                trades_array.append(self.parse_trade(item.clone()));
                 j += 1;
             };
             i += 1;
@@ -1266,13 +1266,13 @@ pub trait Coinbase : Exchange {
             "average": self.safe_string(order.clone(), Value::from("avg_price"), Value::Undefined),
             "filled": self.safe_string(order.clone(), Value::from("cumulative_quantity"), Value::Undefined),
             "remaining": self.safe_string(order.clone(), Value::from("leaves_quantity"), Value::Undefined),
-            "status": <Self as Coinbase>::parse_order_status(self, self.safe_string(order.clone(), Value::from("status"), Value::Undefined)),
+            "status": self.parse_order_status(self.safe_string(order.clone(), Value::from("status"), Value::Undefined)),
             "fee": Value::Json(normalize(&Value::Json(json!({
                 "amount": self.safe_string(order.clone(), Value::from("total_fees"), Value::Undefined),
                 "currency": self.safe_string(market.clone(), Value::from("quote"), Value::Undefined)
             }))).unwrap()),
             "trades": Value::Undefined
-        }))).unwrap()), Value::Undefined);
+        }))).unwrap()));
     }
 
     fn handle_order_book_helper(&mut self, mut orderbook: Value, mut updates: Value) -> Value {
@@ -1393,7 +1393,7 @@ pub trait Coinbase : Exchange {
             while i < message_hashes.len() {
                 let mut message_hash: Value = message_hashes.get(i.into());
                 let mut sub_hash: Value = sub_message_hashes.get(i.into());
-                self.clean_unsubscription(client.clone(), sub_hash.clone(), message_hash.clone(), Value::Undefined);
+                self.clean_unsubscription(client.clone(), sub_hash.clone(), message_hash.clone());
                 i += 1;
             };
             self.clean_cache(un_sub_object.clone());
@@ -1540,10 +1540,10 @@ pub trait Coinbase : Exchange {
                     "v3PrivatePutBrokerageportfoliosportfoliouuid" => self.request("brokerage/portfolios/{portfolio_uuid}".into(), "v3".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "v3PrivateDeleteBrokerageportfoliosportfoliouuid" => self.request("brokerage/portfolios/{portfolio_uuid}".into(), "v3".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "v3PrivateDeleteBrokeragecfmsweeps" => self.request("brokerage/cfm/sweeps".into(), "v3".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    _ => unimplemented!(),
+                    _ => panic!("Unknown API method: {}", m),
                 }
             },
-            _ => unimplemented!()
+            _ => panic!("dispatch: method must be a string, got {:?}", method)
         }
     }
 }

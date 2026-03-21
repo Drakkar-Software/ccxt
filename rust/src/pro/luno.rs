@@ -389,7 +389,7 @@ pub trait Luno : Exchange {
 
     async fn watch_trades(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
-        self.check_required_credentials(Value::Undefined);
+        self.check_required_credentials();
         self.load_markets(Value::Undefined, Value::Undefined).await;
         let mut market: Value = self.market(symbol.clone());
         symbol = market.get(Value::from("symbol"));
@@ -484,7 +484,7 @@ pub trait Luno : Exchange {
 
     async fn watch_order_book(&mut self, mut symbol: Value, mut limit: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
-        self.check_required_credentials(Value::Undefined);
+        self.check_required_credentials();
         self.load_markets(Value::Undefined, Value::Undefined).await;
         let mut market: Value = self.market(symbol.clone());
         symbol = market.get(Value::from("symbol"));
@@ -540,12 +540,12 @@ pub trait Luno : Exchange {
         let mut message_hash: Value = Value::from("orderbook:") + symbol.clone();
         let mut timestamp: Value = self.safe_integer(message.clone(), Value::from("timestamp"), Value::Undefined);
         if !self.get("orderbooks".into()).contains_key(symbol.clone()) {
-            self.get("orderbooks".into()).set(symbol.clone(), self.indexed_order_book(Value::new_object(), Value::Undefined));
+            self.get("orderbooks".into()).set(symbol.clone(), self.indexed_order_book(Value::new_object()));
         };
         let mut asks: Value = self.safe_value(message.clone(), Value::from("asks"), Value::Undefined);
         if asks.clone().is_nonnullish() {
             let mut snapshot: Value = <Self as Luno>::custom_parse_order_book(self, message.clone(), symbol.clone(), timestamp.clone(), Value::from("bids"), Value::from("asks"), Value::from("price"), Value::from("volume"), Value::from("id"));
-            self.get("orderbooks".into()).set(symbol.clone(), self.indexed_order_book(snapshot.clone(), Value::Undefined));
+            self.get("orderbooks".into()).set(symbol.clone(), self.indexed_order_book(snapshot.clone()));
         } else {
             let mut ob: Value = self.get("orderbooks".into()).get(symbol.clone());
             <Self as Luno>::handle_delta(self, ob.clone(), message.clone());
@@ -712,10 +712,10 @@ pub trait Luno : Exchange {
                     "privatePutAccountsidname" => self.request("accounts/{id}/name".into(), "private".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privateDeleteWithdrawalsid" => self.request("withdrawals/{id}".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privateDeleteBeneficiariesid" => self.request("beneficiaries/{id}".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    _ => unimplemented!(),
+                    _ => panic!("Unknown API method: {}", m),
                 }
             },
-            _ => unimplemented!()
+            _ => panic!("dispatch: method must be a string, got {:?}", method)
         }
     }
 }

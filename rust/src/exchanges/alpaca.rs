@@ -1612,10 +1612,10 @@ pub trait Alpaca : Exchange {
                     "marketPrivateGetV2stockssymbolsnapshot" => self.request("v2/stocks/{symbol}/snapshot".into(), "market".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "marketPrivateGetV2stockssymboltrades" => self.request("v2/stocks/{symbol}/trades".into(), "market".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "marketPrivateGetV2stockssymboltradeslatest" => self.request("v2/stocks/{symbol}/trades/latest".into(), "market".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    _ => unimplemented!(),
+                    _ => panic!("Unknown API method: {}", m),
                 }
             },
-            _ => unimplemented!()
+            _ => panic!("dispatch: method must be a string, got {:?}", method)
         }
     }
 }

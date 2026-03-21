@@ -519,7 +519,7 @@ pub trait Ascendex : Exchange {
             "op": "sub"
         }))).unwrap());
         let mut message: Value = extend_2(request.clone(), params.clone());
-        return self.watch(url.clone(), message_hash.clone(), message.clone(), message_hash.clone(), Value::Undefined).await;
+        return self.watch(url.clone(), message_hash.clone(), message.clone(), message_hash.clone()).await;
     }
 
     async fn watch_public_multiple(&mut self, mut message_hashes: Value, mut params: Value) -> Value {
@@ -531,12 +531,12 @@ pub trait Ascendex : Exchange {
             "op": "sub"
         }))).unwrap());
         let mut message: Value = extend_2(request.clone(), params.clone());
-        return self.watch_multiple(url.clone(), message_hashes.clone(), message.clone(), message_hashes.clone(), Value::Undefined).await;
+        return self.watch_multiple(url.clone(), message_hashes.clone(), message.clone(), message_hashes.clone()).await;
     }
 
     async fn watch_private(&mut self, mut channel: Value, mut message_hash: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
-        self.load_accounts(Value::Undefined, Value::Undefined).await;
+        self.load_accounts().await;
         let mut account_group: Value = self.safe_string(self.get("options".into()), Value::from("account-group"), Value::Undefined);
         let mut url: Value = self.get("urls".into()).get(Value::from("api")).get(Value::from("ws")).get(Value::from("private"));
         url = self.implode_params(url.clone(), Value::Json(normalize(&Value::Json(json!({
@@ -550,7 +550,7 @@ pub trait Ascendex : Exchange {
         }))).unwrap());
         let mut message: Value = extend_2(request.clone(), params.clone());
         <Self as Ascendex>::authenticate(self, url.clone(), params.clone()).await;
-        return self.watch(url.clone(), message_hash.clone(), message.clone(), channel.clone(), Value::Undefined).await;
+        return self.watch(url.clone(), message_hash.clone(), message.clone(), channel.clone()).await;
     }
 
     async fn watch_ohlcv(&mut self, mut symbol: Value, mut timeframe: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
@@ -596,7 +596,7 @@ pub trait Ascendex : Exchange {
         let mut data: Value = self.safe_value(message.clone(), Value::from("data"), Value::new_object());
         let mut interval: Value = self.safe_string(data.clone(), Value::from("i"), Value::Undefined);
         let mut message_hash: Value = channel.clone() + Value::from(":") + interval.clone() + Value::from(":") + market_id.clone();
-        let mut timeframe: Value = self.find_timeframe(interval.clone(), Value::Undefined);
+        let mut timeframe: Value = self.find_timeframe(interval.clone());
         let mut market: Value = self.market(symbol.clone());
         let mut parsed: Value = self.parse_ohlcv(message.clone(), market.clone());
         self.get("ohlcvs".into()).set(symbol.clone(), self.safe_value(self.get("ohlcvs".into()), symbol.clone(), Value::new_object()));
@@ -669,7 +669,7 @@ pub trait Ascendex : Exchange {
         if raw_data.clone().is_nullish() {
             raw_data = Value::new_array();
         };
-        let mut trades: Value = self.parse_trades(raw_data.clone(), market.clone(), Value::Undefined, Value::Undefined, Value::Undefined);
+        let mut trades: Value = self.parse_trades(raw_data.clone(), market.clone());
         let mut trades_array: Value = self.safe_value(self.get("trades".into()), symbol.clone(), Value::Undefined);
         if trades_array.clone().is_nullish() {
             let mut limit: Value = self.safe_integer(self.get("options".into()), Value::from("tradesLimit"), Value::from(1000));
@@ -718,7 +718,7 @@ pub trait Ascendex : Exchange {
         params = params.or_default(Value::new_object());
         let mut rest_order_book: Value = self.fetch_rest_order_book_safe(symbol.clone(), limit.clone(), params.clone()).await;
         if !self.get("orderbooks".into()).contains_key(symbol.clone()) {
-            self.get("orderbooks".into()).set(symbol.clone(), self.order_book(Value::Undefined, Value::Undefined));
+            self.get("orderbooks".into()).set(symbol.clone(), self.order_book());
         };
         let mut orderbook: Value = self.get("orderbooks".into()).get(symbol.clone());
         orderbook.reset(rest_order_book.clone());
@@ -784,7 +784,7 @@ pub trait Ascendex : Exchange {
         let mut symbol: Value = self.safe_symbol(market_id.clone(), Value::Undefined, Value::Undefined, Value::Undefined);
         let mut message_hash: Value = channel.clone() + Value::from(":") + market_id.clone();
         if !self.get("orderbooks".into()).contains_key(symbol.clone()) {
-            self.get("orderbooks".into()).set(symbol.clone(), self.order_book(Value::new_object(), Value::Undefined));
+            self.get("orderbooks".into()).set(symbol.clone(), self.order_book(Value::new_object()));
         };
         let mut orderbook: Value = self.get("orderbooks".into()).get(symbol.clone());
         if orderbook.get(Value::from("nonce")).is_nullish() {
@@ -853,7 +853,7 @@ pub trait Ascendex : Exchange {
     async fn watch_balance(&mut self, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        let (mut r#type, mut query) = shift_2(self.handle_market_type_and_params(Value::from("watchBalance"), Value::Undefined, params.clone(), Value::Undefined));
+        let (mut r#type, mut query) = shift_2(self.handle_market_type_and_params(Value::from("watchBalance"), Value::Undefined, params.clone()));
         let mut channel: Value = Value::Undefined;
         let mut message_hash: Value = Value::Undefined;
         if r#type.clone() == Value::from("spot") || r#type.clone() == Value::from("margin") {
@@ -979,7 +979,7 @@ pub trait Ascendex : Exchange {
             market = self.market(symbol.clone());
             symbol = market.get(Value::from("symbol"));
         };
-        let (mut r#type, mut query) = shift_2(self.handle_market_type_and_params(Value::from("watchOrders"), market.clone(), params.clone(), Value::Undefined));
+        let (mut r#type, mut query) = shift_2(self.handle_market_type_and_params(Value::from("watchOrders"), market.clone(), params.clone()));
         let mut message_hash: Value = Value::Undefined;
         let mut channel: Value = Value::Undefined;
         if r#type.clone() != Value::from("spot") && r#type.clone() != Value::from("margin") {
@@ -1120,7 +1120,7 @@ pub trait Ascendex : Exchange {
         //     "ptpt": "market"
         //   }
         //
-        let mut status: Value = <Self as Ascendex>::parse_order_status(self, self.safe_string(order.clone(), Value::from("st"), Value::Undefined));
+        let mut status: Value = self.parse_order_status(self.safe_string(order.clone(), Value::from("st"), Value::Undefined));
         let mut market_id: Value = self.safe_string(order.clone(), Value::from("s"), Value::Undefined);
         let mut timestamp: Value = self.safe_integer(order.clone(), Value::from("t"), Value::Undefined);
         let mut symbol: Value = self.safe_symbol(market_id.clone(), market.clone(), Value::from("/"), Value::Undefined);
@@ -1400,7 +1400,7 @@ pub trait Ascendex : Exchange {
         if self.get("orderbooks".into()).contains_key(symbol.clone()) {
             self.get("orderbooks".into()).get(symbol.clone());
         };
-        self.get("orderbooks".into()).set(symbol.clone(), self.order_book(Value::new_object(), Value::Undefined));
+        self.get("orderbooks".into()).set(symbol.clone(), self.order_book(Value::new_object()));
         if self.get("options".into()).get(Value::from("defaultType")) == Value::from("swap") || market.get(Value::from("contract")).is_truthy() {
             self.spawn(self.get("fetchOrderBookSnapshotCustom".into()), symbol.clone());
         } else {
@@ -1429,7 +1429,7 @@ pub trait Ascendex : Exchange {
 
     async fn authenticate(&mut self, mut url: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
-        self.check_required_credentials(Value::Undefined);
+        self.check_required_credentials();
         let mut message_hash: Value = Value::from("authenticated");
         let mut client: Value = self.client(url.clone());
         let mut future: Value = self.safe_value(client.get(subscriptions.clone()), message_hash.clone(), Value::Undefined);
@@ -1449,7 +1449,7 @@ pub trait Ascendex : Exchange {
                 "key": self.get("apiKey".into()),
                 "sig": signature
             }))).unwrap());
-            future = self.watch(url.clone(), message_hash.clone(), extend_2(request.clone(), params.clone()), message_hash.clone(), Value::Undefined).await;
+            future = self.watch(url.clone(), message_hash.clone(), extend_2(request.clone(), params.clone()), message_hash.clone()).await;
             client.get(subscriptions.clone()).set(message_hash.clone(), future.clone());
         };
         return future.clone();
@@ -1533,10 +1533,10 @@ pub trait Ascendex : Exchange {
                     "v2PrivateAccountgroupDeleteFuturesorder" => self.request("futures/order".into(), "v2".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "v2PrivateAccountgroupDeleteFuturesorderbatch" => self.request("futures/order/batch".into(), "v2".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "v2PrivateAccountgroupDeleteFuturesorderall" => self.request("futures/order/all".into(), "v2".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    _ => unimplemented!(),
+                    _ => panic!("Unknown API method: {}", m),
                 }
             },
-            _ => unimplemented!()
+            _ => panic!("dispatch: method must be a string, got {:?}", method)
         }
     }
 }

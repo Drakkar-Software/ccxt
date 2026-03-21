@@ -1753,10 +1753,10 @@ pub trait Apex : Exchange {
                     "privatePostV3setinitialmarginrate" => self.request("v3/set-initial-margin-rate".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privatePostV3transferout" => self.request("v3/transfer-out".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privatePostV3contracttransferout" => self.request("v3/contract-transfer-out".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    _ => unimplemented!(),
+                    _ => panic!("Unknown API method: {}", m),
                 }
             },
-            _ => unimplemented!()
+            _ => panic!("dispatch: method must be a string, got {:?}", method)
         }
     }
 }

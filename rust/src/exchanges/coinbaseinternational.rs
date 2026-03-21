@@ -2167,10 +2167,10 @@ pub trait Coinbaseinternational : Exchange {
                     "v1PrivatePutPortfoliosportfolio" => self.request("portfolios/{portfolio}".into(), "v1".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "v1PrivateDeleteOrders" => self.request("orders".into(), "v1".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "v1PrivateDeleteOrdersid" => self.request("orders/{id}".into(), "v1".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    _ => unimplemented!(),
+                    _ => panic!("Unknown API method: {}", m),
                 }
             },
-            _ => unimplemented!()
+            _ => panic!("dispatch: method must be a string, got {:?}", method)
         }
     }
 }

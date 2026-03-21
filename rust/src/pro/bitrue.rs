@@ -833,7 +833,7 @@ pub trait Bitrue : Exchange {
 
     async fn watch_balance(&mut self, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
-        let mut url: Value = <Self as Bitrue>::authenticate(self).await;
+        let mut url: Value = <Self as Bitrue>::authenticate(self, Value::Undefined).await;
         let mut message_hash: Value = Value::from("balance");
         let mut message: Value = Value::Json(normalize(&Value::Json(json!({
             "event": "sub",
@@ -842,7 +842,7 @@ pub trait Bitrue : Exchange {
             }))).unwrap())
         }))).unwrap());
         let mut request: Value = self.deep_extend_2(message.clone(), params.clone());
-        return self.watch(url.clone(), message_hash.clone(), request.clone(), message_hash.clone(), Value::Undefined).await;
+        return self.watch(url.clone(), message_hash.clone(), request.clone(), message_hash.clone()).await;
     }
 
     fn handle_balance(&mut self, mut client: Value, mut message: Value) -> Value {
@@ -950,7 +950,7 @@ pub trait Bitrue : Exchange {
             let mut market: Value = self.market(symbol.clone());
             symbol = market.get(Value::from("symbol"));
         };
-        let mut url: Value = <Self as Bitrue>::authenticate(self).await;
+        let mut url: Value = <Self as Bitrue>::authenticate(self, Value::Undefined).await;
         let mut message_hash: Value = Value::from("orders");
         let mut message: Value = Value::Json(normalize(&Value::Json(json!({
             "event": "sub",
@@ -959,7 +959,7 @@ pub trait Bitrue : Exchange {
             }))).unwrap())
         }))).unwrap());
         let mut request: Value = self.deep_extend_2(message.clone(), params.clone());
-        let mut orders: Value = self.watch(url.clone(), message_hash.clone(), request.clone(), message_hash.clone(), Value::Undefined).await;
+        let mut orders: Value = self.watch(url.clone(), message_hash.clone(), request.clone(), message_hash.clone()).await;
         if self.get("newUpdates".into()).is_truthy() {
             limit = orders.get_limit(symbol.clone(), limit.clone());
         };
@@ -1079,7 +1079,7 @@ pub trait Bitrue : Exchange {
             }))).unwrap())
         }))).unwrap());
         let mut request: Value = self.deep_extend_2(message.clone(), params.clone());
-        return self.watch(url.clone(), message_hash.clone(), request.clone(), message_hash.clone(), Value::Undefined).await;
+        return self.watch(url.clone(), message_hash.clone(), request.clone(), message_hash.clone()).await;
     }
 
     fn handle_order_book(&mut self, mut client: Value, mut message: Value) -> Value {
@@ -1123,7 +1123,7 @@ pub trait Bitrue : Exchange {
         let mut timestamp: Value = self.safe_integer(message.clone(), Value::from("ts"), Value::Undefined);
         let mut tick: Value = self.safe_value(message.clone(), Value::from("tick"), Value::new_object());
         if !self.get("orderbooks".into()).contains_key(symbol.clone()) {
-            self.get("orderbooks".into()).set(symbol.clone(), self.order_book(Value::Undefined, Value::Undefined));
+            self.get("orderbooks".into()).set(symbol.clone(), self.order_book());
         };
         let mut orderbook: Value = self.get("orderbooks".into()).get(symbol.clone());
         let mut snapshot: Value = self.parse_order_book(tick.clone(), symbol.clone(), timestamp.clone(), Value::from("buys"), Value::from("asks"), Value::Undefined, Value::Undefined, Value::Undefined);
@@ -1311,10 +1311,10 @@ pub trait Bitrue : Exchange {
                     "openV1PrivatePostPoseidonapiv1listenkey" => self.request("poseidon/api/v1/listenKey".into(), "open".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "openV1PrivatePutPoseidonapiv1listenkeylistenkey" => self.request("poseidon/api/v1/listenKey/{listenKey}".into(), "open".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "openV1PrivateDeletePoseidonapiv1listenkeylistenkey" => self.request("poseidon/api/v1/listenKey/{listenKey}".into(), "open".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    _ => unimplemented!(),
+                    _ => panic!("Unknown API method: {}", m),
                 }
             },
-            _ => unimplemented!()
+            _ => panic!("dispatch: method must be a string, got {:?}", method)
         }
     }
 }

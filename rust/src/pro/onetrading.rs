@@ -554,7 +554,7 @@ pub trait Onetrading : Exchange {
     async fn watch_tickers(&mut self, mut symbols: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        symbols = self.market_symbols(symbols.clone(), Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined);
+        symbols = self.market_symbols(symbols.clone());
         if symbols.clone().is_nullish() {
             symbols = Value::new_array();
         };
@@ -568,7 +568,7 @@ pub trait Onetrading : Exchange {
             }))).unwrap()).into()]))
         }))).unwrap());
         let mut tickers: Value = <Self as Onetrading>::watch_many(self, message_hash.clone(), request.clone(), subscription_hash.clone(), symbols.clone(), params.clone()).await;
-        return self.filter_by_array(tickers.clone(), Value::from("symbol"), symbols.clone(), Value::Undefined);
+        return self.filter_by_array(tickers.clone(), Value::from("symbol"), symbols.clone());
     }
 
     fn handle_ticker(&mut self, mut client: Value, mut message: Value) -> Value {
@@ -595,7 +595,7 @@ pub trait Onetrading : Exchange {
             let mut ticker: Value = tickers.get(i.into());
             let mut market_id: Value = self.safe_string(ticker.clone(), Value::from("instrument"), Value::Undefined);
             let mut symbol: Value = self.safe_symbol(market_id.clone(), Value::Undefined, Value::Undefined, Value::Undefined);
-            self.get("tickers".into()).set(symbol.clone(), <Self as Onetrading>::parse_ws_ticker(self, ticker.clone()));
+            self.get("tickers".into()).set(symbol.clone(), <Self as Onetrading>::parse_ws_ticker(self, ticker.clone(), Value::Undefined));
             let mut timestamp: Value = self.parse8601(datetime.clone());
             self.get("tickers".into()).get(symbol.clone()).set("timestamp".into(), timestamp.clone());
             self.get("tickers".into()).get(symbol.clone()).set("datetime".into(), self.iso8601(timestamp.clone()));
@@ -668,7 +668,7 @@ pub trait Onetrading : Exchange {
         if self.get("newUpdates".into()).is_truthy() {
             limit = trades.get_limit(symbol.clone(), limit.clone());
         };
-        trades = self.filter_by_symbol_since_limit(trades.clone(), symbol.clone(), since.clone(), limit.clone(), Value::Undefined);
+        trades = self.filter_by_symbol_since_limit(trades.clone(), symbol.clone(), since.clone(), limit.clone());
         let mut num_trades: usize = trades.len();
         if num_trades.clone() == Value::from(0) {
             return <Self as Onetrading>::watch_my_trades(self, symbol.clone(), since.clone(), limit.clone(), params.clone()).await;
@@ -735,7 +735,7 @@ pub trait Onetrading : Exchange {
         let mut channel: Value = Value::from("book:") + symbol.clone();
         let mut orderbook: Value = self.safe_value(self.get("orderbooks".into()), symbol.clone(), Value::Undefined);
         if orderbook.clone().is_nullish() {
-            orderbook = self.order_book(Value::new_object(), Value::Undefined);
+            orderbook = self.order_book(Value::new_object());
         };
         if r#type.clone() == Value::from("ORDER_BOOK_SNAPSHOT") {
             let mut snapshot: Value = self.parse_order_book(message.clone(), symbol.clone(), timestamp.clone(), Value::from("bids"), Value::from("asks"), Value::Undefined, Value::Undefined, Value::Undefined);
@@ -812,7 +812,7 @@ pub trait Onetrading : Exchange {
         if self.get("newUpdates".into()).is_truthy() {
             limit = orders.get_limit(symbol.clone(), limit.clone());
         };
-        orders = self.filter_by_symbol_since_limit(orders.clone(), symbol.clone(), since.clone(), limit.clone(), Value::Undefined);
+        orders = self.filter_by_symbol_since_limit(orders.clone(), symbol.clone(), since.clone(), limit.clone());
         let mut num_orders: usize = orders.len();
         if num_orders.clone() == Value::from(0) {
             return <Self as Onetrading>::watch_orders(self, symbol.clone(), since.clone(), limit.clone(), params.clone()).await;
@@ -869,7 +869,7 @@ pub trait Onetrading : Exchange {
             let mut limit: Value = self.safe_integer(self.get("options".into()), Value::from("ordersLimit"), Value::from(1000));
             self.set("orders".into(), ArrayCacheBySymbolById::new(limit));
         };
-        let mut order: Value = <Self as Onetrading>::parse_trading_order(self, message.clone());
+        let mut order: Value = <Self as Onetrading>::parse_trading_order(self, message.clone(), Value::Undefined);
         let mut orders: Value = self.get("orders".into());
         orders.append(order.clone());
         client.resolve(self.get("orders".into()), Value::from("orders:") + order.get(Value::from("symbol")));
@@ -1075,14 +1075,14 @@ pub trait Onetrading : Exchange {
         let mut orders: Value = self.get("orders".into());
         let mut i: usize = 0;
         while i < raw_orders.len() {
-            let mut order: Value = self.parse_order(raw_orders.get(i.into()), Value::Undefined);
+            let mut order: Value = self.parse_order(raw_orders.get(i.into()));
             let mut symbol: Value = self.safe_string(order.clone(), Value::from("symbol"), Value::from(""));
             orders.append(order.clone());
             client.resolve(self.get("orders".into()), Value::from("orders:") + symbol.clone());
             let mut raw_trades: Value = self.safe_value(raw_orders.get(i.into()), Value::from("trades"), Value::new_array());
             let mut ii: usize = 0;
             while ii < raw_trades.len() {
-                let mut trade: Value = self.parse_trade(raw_trades.get(ii.into()), Value::Undefined);
+                let mut trade: Value = self.parse_trade(raw_trades.get(ii.into()));
                 symbol = self.safe_string(trade.clone(), Value::from("symbol"), symbol.clone());
                 self.get("myTrades".into()).append(trade.clone());
                 client.resolve(self.get("myTrades".into()), Value::from("myTrades:") + symbol.clone());
@@ -1349,7 +1349,7 @@ pub trait Onetrading : Exchange {
             }))).unwrap());
             orders.append(order_object.clone());
         } else {
-            let mut parsed: Value = self.parse_order(update.clone(), Value::Undefined);
+            let mut parsed: Value = self.parse_order(update.clone());
             symbol = self.safe_string(parsed.clone(), Value::from("symbol"), Value::from(""));
             orders.append(parsed.clone());
         };
@@ -1368,7 +1368,7 @@ pub trait Onetrading : Exchange {
         client.resolve(self.get("balance".into()), Value::from("balance"));
         // update trades
         if update_type.clone() == Value::from("TRADE_SETTLED") {
-            let mut parsed: Value = self.parse_trade(update.clone(), Value::Undefined);
+            let mut parsed: Value = self.parse_trade(update.clone());
             symbol = self.safe_string(parsed.clone(), Value::from("symbol"), Value::from(""));
             let mut my_trades: Value = self.get("myTrades".into());
             my_trades.append(parsed.clone());
@@ -1709,12 +1709,12 @@ pub trait Onetrading : Exchange {
         let mut future: Value = client.reusable_future(Value::from("authenticated"));
         let mut authenticated: Value = self.safe_value(client.get(subscriptions.clone()), message_hash.clone(), Value::Undefined);
         if authenticated.clone().is_nullish() {
-            self.check_required_credentials(Value::Undefined);
+            self.check_required_credentials();
             let mut request: Value = Value::Json(normalize(&Value::Json(json!({
                 "type": "AUTHENTICATE",
                 "api_token": self.get("apiKey".into())
             }))).unwrap());
-            self.watch(url.clone(), message_hash.clone(), extend_2(request.clone(), params.clone()), message_hash.clone(), Value::Undefined);
+            self.watch(url.clone(), message_hash.clone(), extend_2(request.clone(), params.clone()), message_hash.clone());
         };
         return future.clone();
     }
@@ -1743,10 +1743,10 @@ pub trait Onetrading : Exchange {
                     "privateDeleteAccountorders" => self.request("account/orders".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privateDeleteAccountordersorderid" => self.request("account/orders/{order_id}".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privateDeleteAccountordersclientclientid" => self.request("account/orders/client/{client_id}".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    _ => unimplemented!(),
+                    _ => panic!("Unknown API method: {}", m),
                 }
             },
-            _ => unimplemented!()
+            _ => panic!("dispatch: method must be a string, got {:?}", method)
         }
     }
 }

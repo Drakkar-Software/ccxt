@@ -1077,14 +1077,14 @@ pub trait Bybit : Exchange {
             is_usdc_settled = (market.get(Value::from("settle")) == Value::from("USDC")).into();
             r#type = market.get(Value::from("type"));
         } else {
-            (r#type, params) = shift_2(self.handle_market_type_and_params(method.clone(), Value::Undefined, params.clone(), Value::Undefined));
+            (r#type, params) = shift_2(self.handle_market_type_and_params(method.clone(), Value::Undefined, params.clone()));
             let mut default_settle: Value = self.safe_string(self.get("options".into()), Value::from("defaultSettle"), Value::Undefined);
             default_settle = self.safe_string_2(params.clone(), Value::from("settle"), Value::from("defaultSettle"), default_settle.clone());
             is_usdc_settled = (default_settle.clone() == Value::from("USDC")).into();
         };
         is_spot = (r#type.clone() == Value::from("spot")).into();
         if is_private.is_truthy() {
-            let mut unified: Value = <Self as Bybit>::is_unified_enabled(self, Value::Undefined).await;
+            let mut unified: Value = self.is_unified_enabled().await;
             let mut is_unified_margin: Value = self.safe_bool(unified.clone(), Value::from(0), false.into());
             let mut is_unified_account: Value = self.safe_bool(unified.clone(), Value::from(1), false.into());
             if is_usdc_settled.is_truthy() && !is_unified_margin.is_truthy() && !is_unified_account.is_truthy() {
@@ -1116,9 +1116,9 @@ pub trait Bybit : Exchange {
     async fn create_order_ws(&mut self, mut symbol: Value, mut r#type: Value, mut side: Value, mut amount: Value, mut price: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        let mut order_request: Value = <Self as Bybit>::create_order_request(self, symbol.clone(), r#type.clone(), side.clone(), amount.clone(), price.clone(), params.clone(), true.into());
+        let mut order_request: Value = self.create_order_request(symbol.clone(), r#type.clone(), side.clone(), amount.clone(), price.clone(), params.clone(), true.into());
         let mut url: Value = self.get("urls".into()).get(Value::from("api")).get(Value::from("ws")).get(Value::from("private")).get(Value::from("trade"));
-        <Self as Bybit>::authenticate(self, url.clone()).await;
+        <Self as Bybit>::authenticate(self, url.clone(), Value::Undefined).await;
         let mut request_id: Value = <Self as Bybit>::request_id(self).to_string();
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
             "op": "order.create",
@@ -1135,9 +1135,9 @@ pub trait Bybit : Exchange {
     async fn edit_order_ws(&mut self, mut id: Value, mut symbol: Value, mut r#type: Value, mut side: Value, mut amount: Value, mut price: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        let mut order_request: Value = <Self as Bybit>::edit_order_request(self, id.clone(), symbol.clone(), r#type.clone(), side.clone(), amount.clone(), price.clone(), params.clone());
+        let mut order_request: Value = self.edit_order_request(id.clone(), symbol.clone(), r#type.clone(), side.clone(), amount.clone(), price.clone(), params.clone());
         let mut url: Value = self.get("urls".into()).get(Value::from("api")).get(Value::from("ws")).get(Value::from("private")).get(Value::from("trade"));
-        <Self as Bybit>::authenticate(self, url.clone()).await;
+        <Self as Bybit>::authenticate(self, url.clone(), Value::Undefined).await;
         let mut request_id: Value = <Self as Bybit>::request_id(self).to_string();
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
             "op": "order.amend",
@@ -1157,9 +1157,9 @@ pub trait Bybit : Exchange {
         if symbol.clone().is_nullish() {
             panic!(r###"ArgumentsRequired::new(self.get("id".into()) + Value::from(" cancelOrderWs() requires a symbol argument"))"###);
         };
-        let mut order_request: Value = <Self as Bybit>::cancel_order_request(self, id.clone(), symbol.clone(), params.clone());
+        let mut order_request: Value = self.cancel_order_request(id.clone(), symbol.clone(), params.clone());
         let mut url: Value = self.get("urls".into()).get(Value::from("api")).get(Value::from("ws")).get(Value::from("private")).get(Value::from("trade"));
-        <Self as Bybit>::authenticate(self, url.clone()).await;
+        <Self as Bybit>::authenticate(self, url.clone(), Value::Undefined).await;
         let mut request_id: Value = <Self as Bybit>::request_id(self).to_string();
         if order_request.contains_key(Value::from("orderFilter")) {
             order_request.get(Value::from("orderFilter"));
@@ -1197,7 +1197,7 @@ pub trait Bybit : Exchange {
     async fn watch_tickers(&mut self, mut symbols: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        symbols = self.market_symbols(symbols.clone(), Value::Undefined, false.into(), Value::Undefined, Value::Undefined);
+        symbols = self.market_symbols(symbols.clone(), Value::Undefined, false.into());
         let mut message_hashes: Value = Value::new_array();
         let mut url: Value = <Self as Bybit>::get_url_by_market_type(self, symbols.get(Value::from(0)), false.into(), Value::from("watchTickers"), params.clone()).await;
         params = <Self as Bybit>::clean_params(self, params.clone());
@@ -1218,13 +1218,13 @@ pub trait Bybit : Exchange {
             result.set(ticker.get(Value::from("symbol")), ticker.clone());
             return result.clone();
         };
-        return self.filter_by_array(self.get("tickers".into()), Value::from("symbol"), symbols.clone(), Value::Undefined);
+        return self.filter_by_array(self.get("tickers".into()), Value::from("symbol"), symbols.clone());
     }
 
     async fn un_watch_tickers(&mut self, mut symbols: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        symbols = self.market_symbols(symbols.clone(), Value::Undefined, false.into(), Value::Undefined, Value::Undefined);
+        symbols = self.market_symbols(symbols.clone(), Value::Undefined, false.into());
         let mut options: Value = self.safe_value(self.get("options".into()), Value::from("watchTickers"), Value::new_object());
         let mut topic: Value = self.safe_string(options.clone(), Value::from("name"), Value::from("tickers"));
         let mut message_hashes: Value = Value::new_array();
@@ -1241,7 +1241,7 @@ pub trait Bybit : Exchange {
             i += 1;
         };
         let mut url: Value = <Self as Bybit>::get_url_by_market_type(self, symbols.get(Value::from(0)), false.into(), Value::from("watchTickers"), params.clone()).await;
-        return <Self as Bybit>::un_watch_topics(self, url.clone(), Value::from("ticker"), symbols.clone(), message_hashes.clone(), sub_message_hashes.clone(), topics.clone(), params.clone()).await;
+        return <Self as Bybit>::un_watch_topics(self, url.clone(), Value::from("ticker"), symbols.clone(), message_hashes.clone(), sub_message_hashes.clone(), topics.clone(), params.clone(), Value::Undefined).await;
     }
 
     async fn un_watch_ticker(&mut self, mut symbol: Value, mut params: Value) -> Value {
@@ -1373,7 +1373,7 @@ pub trait Bybit : Exchange {
         let mut symbol: Value = Value::Undefined;
         let mut parsed: Value = Value::Undefined;
         if update_type.clone() == Value::from("snapshot") {
-            parsed = self.parse_ticker(data.clone(), Value::Undefined);
+            parsed = self.parse_ticker(data.clone());
             symbol = parsed.get(Value::from("symbol"));
         } else if update_type.clone() == Value::from("delta") {
             let mut topic_parts: Value = topic.split(Value::from("."));
@@ -1385,7 +1385,7 @@ pub trait Bybit : Exchange {
             let mut ticker: Value = self.safe_dict(self.get("tickers".into()), symbol.clone(), Value::new_object());
             let mut raw_ticker: Value = self.safe_dict(ticker.clone(), Value::from("info"), Value::new_object());
             let mut merged: Value = extend_2(raw_ticker.clone(), data.clone());
-            parsed = self.parse_ticker(merged.clone(), Value::Undefined);
+            parsed = self.parse_ticker(merged.clone());
         };
         let mut timestamp: Value = self.safe_integer(message.clone(), Value::from("ts"), Value::Undefined);
         parsed.set("timestamp".into(), timestamp.clone());
@@ -1399,7 +1399,7 @@ pub trait Bybit : Exchange {
     async fn watch_bids_asks(&mut self, mut symbols: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        symbols = self.market_symbols(symbols.clone(), Value::Undefined, false.into(), Value::Undefined, Value::Undefined);
+        symbols = self.market_symbols(symbols.clone(), Value::Undefined, false.into());
         let mut message_hashes: Value = Value::new_array();
         let mut url: Value = <Self as Bybit>::get_url_by_market_type(self, symbols.get(Value::from(0)), false.into(), Value::from("watchBidsAsks"), params.clone()).await;
         params = <Self as Bybit>::clean_params(self, params.clone());
@@ -1417,7 +1417,7 @@ pub trait Bybit : Exchange {
         if self.get("newUpdates".into()).is_truthy() {
             return ticker.clone();
         };
-        return self.filter_by_array(self.get("bidsasks".into()), Value::from("symbol"), symbols.clone(), Value::Undefined);
+        return self.filter_by_array(self.get("bidsasks".into()), Value::from("symbol"), symbols.clone());
     }
 
     fn parse_ws_bid_ask(&self, mut orderbook: Value, mut market: Value) -> Value {
@@ -1539,7 +1539,7 @@ pub trait Bybit : Exchange {
         let mut topic_parts: Value = topic.split(Value::from("."));
         let mut topic_length: usize = topic_parts.len();
         let mut timeframe_id: Value = self.safe_string(topic_parts.clone(), Value::from(1), Value::Undefined);
-        let mut timeframe: Value = self.find_timeframe(timeframe_id.clone(), Value::Undefined);
+        let mut timeframe: Value = self.find_timeframe(timeframe_id.clone());
         let mut market_id: Value = self.safe_string(topic_parts.clone(), topic_length.clone() - Value::from(1), Value::Undefined);
         let mut is_spot: Value = (client.get(url.clone()).index_of(Value::from("spot")) > Value::from(1).neg()).into();
         let mut market_type: Value = if is_spot.is_truthy() { Value::from("spot") } else { Value::from("contract") };
@@ -1598,7 +1598,7 @@ pub trait Bybit : Exchange {
         if symbols_length.clone() == Value::from(0) {
             panic!(r###"ArgumentsRequired::new(self.get("id".into()) + Value::from(" watchOrderBookForSymbols() requires a non-empty array of symbols"))"###);
         };
-        symbols = self.market_symbols(symbols.clone(), Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined);
+        symbols = self.market_symbols(symbols.clone());
         let mut url: Value = <Self as Bybit>::get_url_by_market_type(self, symbols.get(Value::from(0)), false.into(), Value::from("watchOrderBook"), params.clone()).await;
         params = <Self as Bybit>::clean_params(self, params.clone());
         let mut market: Value = self.market(symbols.get(Value::from(0)));
@@ -1637,7 +1637,7 @@ pub trait Bybit : Exchange {
     async fn un_watch_order_book_for_symbols(&mut self, mut symbols: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        symbols = self.market_symbols(symbols.clone(), Value::Undefined, false.into(), Value::Undefined, Value::Undefined);
+        symbols = self.market_symbols(symbols.clone(), Value::Undefined, false.into());
         let mut channel: Value = Value::from("orderbook.");
         let mut limit: Value = self.safe_integer(params.clone(), Value::from("limit"), Value::Undefined);
         if limit.clone().is_nonnullish() {
@@ -1662,7 +1662,7 @@ pub trait Bybit : Exchange {
             i += 1;
         };
         let mut url: Value = <Self as Bybit>::get_url_by_market_type(self, symbols.get(Value::from(0)), false.into(), Value::from("watchOrderBook"), params.clone()).await;
-        return <Self as Bybit>::un_watch_topics(self, url.clone(), Value::from("orderbook"), symbols.clone(), message_hashes.clone(), sub_message_hashes.clone(), topics.clone(), params.clone()).await;
+        return <Self as Bybit>::un_watch_topics(self, url.clone(), Value::from("orderbook"), symbols.clone(), message_hashes.clone(), sub_message_hashes.clone(), topics.clone(), params.clone(), Value::Undefined).await;
     }
 
     async fn un_watch_order_book(&mut self, mut symbol: Value, mut params: Value) -> Value {
@@ -1717,7 +1717,7 @@ pub trait Bybit : Exchange {
         let mut symbol: Value = market.get(Value::from("symbol"));
         let mut timestamp: Value = self.safe_integer(message.clone(), Value::from("ts"), Value::Undefined);
         if !self.get("orderbooks".into()).contains_key(symbol.clone()) {
-            self.get("orderbooks".into()).set(symbol.clone(), self.order_book(Value::Undefined, Value::Undefined));
+            self.get("orderbooks".into()).set(symbol.clone(), self.order_book());
         };
         let mut orderbook: Value = self.get("orderbooks".into()).get(symbol.clone());
         orderbook.set("symbol".into(), symbol.clone());
@@ -1768,7 +1768,7 @@ pub trait Bybit : Exchange {
     async fn watch_trades_for_symbols(&mut self, mut symbols: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        symbols = self.market_symbols(symbols.clone(), Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined);
+        symbols = self.market_symbols(symbols.clone());
         let mut symbols_length: usize = symbols.len();
         if symbols_length.clone() == Value::from(0) {
             panic!(r###"ArgumentsRequired::new(self.get("id".into()) + Value::from(" watchTradesForSymbols() requires a non-empty array of symbols"))"###);
@@ -1799,7 +1799,7 @@ pub trait Bybit : Exchange {
     async fn un_watch_trades_for_symbols(&mut self, mut symbols: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        symbols = self.market_symbols(symbols.clone(), Value::Undefined, false.into(), true.into(), Value::Undefined);
+        symbols = self.market_symbols(symbols.clone(), Value::Undefined, false.into(), true.into());
         let mut url: Value = <Self as Bybit>::get_url_by_market_type(self, symbols.get(Value::from(0)), false.into(), Value::from("unWatchTradesForSymbols"), params.clone()).await;
         let mut message_hashes: Value = Value::new_array();
         let mut topics: Value = Value::new_array();
@@ -1815,7 +1815,7 @@ pub trait Bybit : Exchange {
             sub_message_hashes.push(Value::from("trade:") + symbol.clone());
             i += 1;
         };
-        return <Self as Bybit>::un_watch_topics(self, url.clone(), Value::from("trades"), symbols.clone(), message_hashes.clone(), sub_message_hashes.clone(), topics.clone(), params.clone()).await;
+        return <Self as Bybit>::un_watch_topics(self, url.clone(), Value::from("trades"), symbols.clone(), message_hashes.clone(), sub_message_hashes.clone(), topics.clone(), params.clone(), Value::Undefined).await;
     }
 
     async fn un_watch_trades(&mut self, mut symbol: Value, mut params: Value) -> Value {
@@ -1962,7 +1962,7 @@ pub trait Bybit : Exchange {
             message_hash = message_hash +  Value::from(":") + symbol.clone();
         };
         let mut url: Value = <Self as Bybit>::get_url_by_market_type(self, symbol.clone(), true.into(), method.clone(), params.clone()).await;
-        <Self as Bybit>::authenticate(self, url.clone()).await;
+        <Self as Bybit>::authenticate(self, url.clone(), Value::Undefined).await;
         let mut topic_by_market: Value = Value::Json(normalize(&Value::Json(json!({
             "spot": "ticketInfo",
             "unified": "execution",
@@ -1991,7 +1991,7 @@ pub trait Bybit : Exchange {
             panic!(r###"NotSupported::new(self.get("id".into()) + Value::from(" unWatchMyTrades() does not support a symbol parameter, you must unwatch all my trades"))"###);
         };
         let mut url: Value = <Self as Bybit>::get_url_by_market_type(self, symbol.clone(), true.into(), method.clone(), params.clone()).await;
-        <Self as Bybit>::authenticate(self, url.clone()).await;
+        <Self as Bybit>::authenticate(self, url.clone(), Value::Undefined).await;
         let mut topic_by_market: Value = Value::Json(normalize(&Value::Json(json!({
             "spot": "ticketInfo",
             "unified": "execution",
@@ -2003,7 +2003,7 @@ pub trait Bybit : Exchange {
         if execution_fast.is_truthy() {
             topic = Value::from("execution.fast");
         };
-        return <Self as Bybit>::un_watch_topics(self, url.clone(), Value::from("myTrades"), Value::new_array(), Value::Json(serde_json::Value::Array(vec![message_hash.clone().into()])), Value::Json(serde_json::Value::Array(vec![sub_hash.clone().into()])), Value::Json(serde_json::Value::Array(vec![topic.clone().into()])), params.clone()).await;
+        return <Self as Bybit>::un_watch_topics(self, url.clone(), Value::from("myTrades"), Value::new_array(), Value::Json(serde_json::Value::Array(vec![message_hash.clone().into()])), Value::Json(serde_json::Value::Array(vec![sub_hash.clone().into()])), Value::Json(serde_json::Value::Array(vec![topic.clone().into()])), params.clone(), Value::Undefined).await;
     }
 
     fn handle_my_trades(&mut self, mut client: Value, mut message: Value) -> Value {
@@ -2120,7 +2120,7 @@ pub trait Bybit : Exchange {
                 if !self.in_array(exec_type.clone(), filter_exec_types.clone()).is_truthy() {
                     continue;
                 };
-                parsed = self.parse_trade(raw_trade.clone(), Value::Undefined);
+                parsed = self.parse_trade(raw_trade.clone());
             };
             let mut symbol: Value = parsed.get(Value::from("symbol"));
             symbols.set(symbol.clone(), true.into());
@@ -2146,14 +2146,14 @@ pub trait Bybit : Exchange {
         let mut method: Value = Value::from("watchPositions");
         let mut message_hash: Value = Value::from("");
         if !self.is_empty(symbols.clone()).is_truthy() {
-            symbols = self.market_symbols(symbols.clone(), Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined);
+            symbols = self.market_symbols(symbols.clone());
             message_hash = Value::from("::") + symbols.join(Value::from(","));
         };
         let mut first_symbol: Value = self.safe_string(symbols.clone(), Value::from(0), Value::Undefined);
         let mut url: Value = <Self as Bybit>::get_url_by_market_type(self, first_symbol.clone(), true.into(), method.clone(), params.clone()).await;
         message_hash = Value::from("positions") + message_hash.clone();
         let mut client: Value = self.client(url.clone());
-        <Self as Bybit>::authenticate(self, url.clone()).await;
+        <Self as Bybit>::authenticate(self, url.clone(), Value::Undefined).await;
         <Self as Bybit>::set_positions_cache(self, client.clone(), symbols.clone());
         let mut cache: Value = self.get("positions".into());
         let mut fetch_positions_snapshot: Value = self.handle_option(Value::from("watchPositions"), Value::from("fetchPositionsSnapshot"), true.into());
@@ -2314,9 +2314,9 @@ pub trait Bybit : Exchange {
             panic!(r###"NotSupported::new(self.get("id".into()) + Value::from(" unWatchPositions() does not support a symbol parameter, you must unwatch all orders"))"###);
         };
         let mut url: Value = <Self as Bybit>::get_url_by_market_type(self, Value::Undefined, true.into(), method.clone(), params.clone()).await;
-        <Self as Bybit>::authenticate(self, url.clone()).await;
+        <Self as Bybit>::authenticate(self, url.clone(), Value::Undefined).await;
         let mut topics: Value = Value::Json(serde_json::Value::Array(vec![Value::from("position").into()]));
-        return <Self as Bybit>::un_watch_topics(self, url.clone(), Value::from("positions"), symbols.clone(), Value::Json(serde_json::Value::Array(vec![message_hash.clone().into()])), Value::Json(serde_json::Value::Array(vec![sub_hash.clone().into()])), topics.clone(), params.clone()).await;
+        return <Self as Bybit>::un_watch_topics(self, url.clone(), Value::from("positions"), symbols.clone(), Value::Json(serde_json::Value::Array(vec![message_hash.clone().into()])), Value::Json(serde_json::Value::Array(vec![sub_hash.clone().into()])), topics.clone(), params.clone(), Value::Undefined).await;
     }
 
     async fn watch_liquidations(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
@@ -2434,7 +2434,7 @@ pub trait Bybit : Exchange {
             "quoteValue": Value::Undefined,
             "timestamp": timestamp,
             "datetime": self.iso8601(timestamp.clone())
-        }))).unwrap()), Value::Undefined);
+        }))).unwrap()));
     }
 
     async fn watch_orders(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
@@ -2447,7 +2447,7 @@ pub trait Bybit : Exchange {
             message_hash = message_hash +  Value::from(":") + symbol.clone();
         };
         let mut url: Value = <Self as Bybit>::get_url_by_market_type(self, symbol.clone(), true.into(), method.clone(), params.clone()).await;
-        <Self as Bybit>::authenticate(self, url.clone()).await;
+        <Self as Bybit>::authenticate(self, url.clone(), Value::Undefined).await;
         let mut topics_by_market: Value = Value::Json(normalize(&Value::Json(json!({
             "spot": Value::Json(serde_json::Value::Array(vec![Value::from("order").into(), Value::from("stopOrder").into()])),
             "unified": Value::Json(serde_json::Value::Array(vec![Value::from("order").into()])),
@@ -2471,14 +2471,14 @@ pub trait Bybit : Exchange {
             panic!(r###"NotSupported::new(self.get("id".into()) + Value::from(" unWatchOrders() does not support a symbol parameter, you must unwatch all orders"))"###);
         };
         let mut url: Value = <Self as Bybit>::get_url_by_market_type(self, symbol.clone(), true.into(), method.clone(), params.clone()).await;
-        <Self as Bybit>::authenticate(self, url.clone()).await;
+        <Self as Bybit>::authenticate(self, url.clone(), Value::Undefined).await;
         let mut topics_by_market: Value = Value::Json(normalize(&Value::Json(json!({
             "spot": Value::Json(serde_json::Value::Array(vec![Value::from("order").into(), Value::from("stopOrder").into()])),
             "unified": Value::Json(serde_json::Value::Array(vec![Value::from("order").into()])),
             "usdc": Value::Json(serde_json::Value::Array(vec![Value::from("user.openapi.perp.order").into()]))
         }))).unwrap());
         let mut topics: Value = self.safe_value(topics_by_market.clone(), <Self as Bybit>::get_private_type(self, url.clone()), Value::Undefined);
-        return <Self as Bybit>::un_watch_topics(self, url.clone(), Value::from("orders"), Value::new_array(), Value::Json(serde_json::Value::Array(vec![message_hash.clone().into()])), Value::Json(serde_json::Value::Array(vec![sub_hash.clone().into()])), topics.clone(), params.clone()).await;
+        return <Self as Bybit>::un_watch_topics(self, url.clone(), Value::from("orders"), Value::new_array(), Value::Json(serde_json::Value::Array(vec![message_hash.clone().into()])), Value::Json(serde_json::Value::Array(vec![sub_hash.clone().into()])), topics.clone(), params.clone(), Value::Undefined).await;
     }
 
     fn handle_order_ws(&mut self, mut client: Value, mut message: Value) -> Value {
@@ -2504,7 +2504,7 @@ pub trait Bybit : Exchange {
         //
         let mut message_hash: Value = self.safe_string(message.clone(), Value::from("reqId"), Value::Undefined);
         let mut data: Value = self.safe_dict(message.clone(), Value::from("data"), Value::Undefined);
-        let mut order: Value = self.parse_order(data.clone(), Value::Undefined);
+        let mut order: Value = self.parse_order(data.clone());
         client.resolve(order.clone(), message_hash.clone());
         Value::Undefined
     }
@@ -2608,7 +2608,7 @@ pub trait Bybit : Exchange {
         let mut symbols: Value = Value::new_object();
         let mut i: usize = 0;
         while i < raw_orders.len() {
-            let mut parsed: Value = self.parse_order(raw_orders.get(i.into()), Value::Undefined);
+            let mut parsed: Value = self.parse_order(raw_orders.get(i.into()));
             // if (isSpot) {
             //     parsed = this.parseWsSpotOrder (rawOrders[i]);
             // } else {
@@ -2637,14 +2637,14 @@ pub trait Bybit : Exchange {
         let mut method: Value = Value::from("watchBalance");
         let mut message_hash: Value = Value::from("balances");
         let mut r#type: Value = Value::Undefined;
-        (r#type, params) = shift_2(self.handle_market_type_and_params(Value::from("watchBalance"), Value::Undefined, params.clone(), Value::Undefined));
+        (r#type, params) = shift_2(self.handle_market_type_and_params(Value::from("watchBalance"), Value::Undefined, params.clone()));
         let mut sub_type: Value = Value::Undefined;
-        (sub_type, params) = shift_2(self.handle_sub_type_and_params(Value::from("watchBalance"), Value::Undefined, params.clone(), Value::Undefined));
-        let mut unified: Value = <Self as Bybit>::is_unified_enabled(self, Value::Undefined).await;
+        (sub_type, params) = shift_2(self.handle_sub_type_and_params(Value::from("watchBalance"), Value::Undefined, params.clone()));
+        let mut unified: Value = self.is_unified_enabled().await;
         let mut is_unified_margin: Value = self.safe_bool(unified.clone(), Value::from(0), false.into());
         let mut is_unified_account: Value = self.safe_bool(unified.clone(), Value::from(1), false.into());
         let mut url: Value = <Self as Bybit>::get_url_by_market_type(self, Value::Undefined, true.into(), method.clone(), params.clone()).await;
-        <Self as Bybit>::authenticate(self, url.clone()).await;
+        <Self as Bybit>::authenticate(self, url.clone(), Value::Undefined).await;
         let mut topic_by_market: Value = Value::Json(normalize(&Value::Json(json!({
             "spot": "outboundAccountInfo",
             "unified": "wallet"
@@ -2933,7 +2933,7 @@ pub trait Bybit : Exchange {
             "args": topics
         }))).unwrap());
         let mut message: Value = extend_2(request.clone(), params.clone());
-        return self.watch_multiple(url.clone(), message_hashes.clone(), message.clone(), message_hashes.clone(), Value::Undefined).await;
+        return self.watch_multiple(url.clone(), message_hashes.clone(), message.clone(), message_hashes.clone()).await;
     }
 
     async fn un_watch_topics(&mut self, mut url: Value, mut topic: Value, mut symbols: Value, mut message_hashes: Value, mut sub_message_hashes: Value, mut topics: Value, mut params: Value, mut sub_extension: Value) -> Value {
@@ -2958,7 +2958,7 @@ pub trait Bybit : Exchange {
 
     async fn authenticate(&mut self, mut url: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
-        self.check_required_credentials(Value::Undefined);
+        self.check_required_credentials();
         let mut message_hash: Value = Value::from("authenticated");
         let mut client: Value = self.client(url.clone());
         let mut future: Value = client.reusable_future(message_hash.clone());
@@ -2974,7 +2974,7 @@ pub trait Bybit : Exchange {
                 "args": Value::Json(serde_json::Value::Array(vec![self.get("apiKey".into()).into(), expires.clone().into(), signature.clone().into()]))
             }))).unwrap());
             let mut message: Value = extend_2(request.clone(), params.clone());
-            self.watch(url.clone(), message_hash.clone(), message.clone(), message_hash.clone(), Value::Undefined);
+            self.watch(url.clone(), message_hash.clone(), message.clone(), message_hash.clone());
         };
         return future.clone();
     }
@@ -3621,10 +3621,10 @@ pub trait Bybit : Exchange {
                     "privatePostV5brokerawarddistributeaward" => self.request("v5/broker/award/distribute-award".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privatePostV5brokerawarddistributionrecord" => self.request("v5/broker/award/distribution-record".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privatePostV5earnplaceorder" => self.request("v5/earn/place-order".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    _ => unimplemented!(),
+                    _ => panic!("Unknown API method: {}", m),
                 }
             },
-            _ => unimplemented!()
+            _ => panic!("dispatch: method must be a string, got {:?}", method)
         }
     }
 }

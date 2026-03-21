@@ -929,10 +929,10 @@ pub trait Mercado : Exchange {
                     "privatePostWithdrawcoin" => self.request("withdraw_coin".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "v4publicGetCoincandle" => self.request("{coin}/candle/".into(), "v4Public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "v4publicnetGetCandles" => self.request("candles".into(), "v4PublicNet".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    _ => unimplemented!(),
+                    _ => panic!("Unknown API method: {}", m),
                 }
             },
-            _ => unimplemented!()
+            _ => panic!("dispatch: method must be a string, got {:?}", method)
         }
     }
 }

@@ -494,7 +494,7 @@ pub trait Lbank : Exchange {
             "pair": market.get(Value::from("id"))
         }))).unwrap());
         let mut request: Value = self.deep_extend_2(subscribe.clone(), params.clone());
-        let mut ohlcv: Value = self.watch(url.clone(), message_hash.clone(), request.clone(), message_hash.clone(), Value::Undefined).await;
+        let mut ohlcv: Value = self.watch(url.clone(), message_hash.clone(), request.clone(), message_hash.clone()).await;
         if self.get("newUpdates".into()).is_truthy() {
             limit = ohlcv.get_limit(symbol.clone(), limit.clone());
         };
@@ -1068,7 +1068,7 @@ pub trait Lbank : Exchange {
             "pair": market.get(Value::from("id"))
         }))).unwrap());
         let mut request: Value = self.deep_extend_2(subscribe.clone(), params.clone());
-        let mut orderbook: Value = self.watch(url.clone(), message_hash.clone(), request.clone(), message_hash.clone(), Value::Undefined).await;
+        let mut orderbook: Value = self.watch(url.clone(), message_hash.clone(), request.clone(), message_hash.clone()).await;
         return orderbook.limit();
     }
 
@@ -1089,7 +1089,7 @@ pub trait Lbank : Exchange {
             "pair": market.get(Value::from("id"))
         }))).unwrap());
         let mut request: Value = self.deep_extend_2(subscribe.clone(), params.clone());
-        let mut orderbook: Value = self.watch(url.clone(), message_hash.clone(), request.clone(), message_hash.clone(), Value::Undefined).await;
+        let mut orderbook: Value = self.watch(url.clone(), message_hash.clone(), request.clone(), message_hash.clone()).await;
         return orderbook.limit();
     }
 
@@ -1157,7 +1157,7 @@ pub trait Lbank : Exchange {
         let mut timestamp: Value = self.parse8601(datetime.clone());
         // let orderbook = this.safeValue (this.orderbooks, symbol);
         if !self.get("orderbooks".into()).contains_key(symbol.clone()) {
-            self.get("orderbooks".into()).set(symbol.clone(), self.order_book(Value::new_object(), Value::Undefined));
+            self.get("orderbooks".into()).set(symbol.clone(), self.order_book(Value::new_object()));
         };
         let mut orderbook: Value = self.get("orderbooks".into()).get(symbol.clone());
         let mut snapshot: Value = self.parse_order_book(order_book.clone(), symbol.clone(), timestamp.clone(), Value::from("bids"), Value::from("asks"), Value::Undefined, Value::Undefined, Value::Undefined);
@@ -1234,7 +1234,7 @@ pub trait Lbank : Exchange {
         let mut message_hash: Value = Value::from("authenticated");
         let mut authenticated: Value = self.safe_value(client.get(subscriptions.clone()), message_hash.clone(), Value::Undefined);
         if authenticated.clone().is_nullish() {
-            self.check_required_credentials(Value::Undefined);
+            self.check_required_credentials();
             let mut response: Value = self.dispatch("spotPrivatePostSubscribeGetKey".into(), params.clone(), Value::Undefined).await;
             //
             // {"result":true,"data":"4e9958623e6006bd7b13ff9f36c03b36132f0f8da37f70b14ff2c4eab1fe0c97","error_code":0,"ts":1705602277198}
@@ -1332,10 +1332,10 @@ pub trait Lbank : Exchange {
                     "contractPublicGetCfdopenapiv1pubinstrument" => self.request("cfd/openApi/v1/pub/instrument".into(), "contract".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "contractPublicGetCfdopenapiv1pubmarketdata" => self.request("cfd/openApi/v1/pub/marketData".into(), "contract".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "contractPublicGetCfdopenapiv1pubmarketorder" => self.request("cfd/openApi/v1/pub/marketOrder".into(), "contract".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    _ => unimplemented!(),
+                    _ => panic!("Unknown API method: {}", m),
                 }
             },
-            _ => unimplemented!()
+            _ => panic!("dispatch: method must be a string, got {:?}", method)
         }
     }
 }

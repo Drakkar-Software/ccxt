@@ -2457,10 +2457,10 @@ pub trait Exmo : Exchange {
                     "privatePostMarginusertradelist" => self.request("margin/user/trade/list".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privatePostMargintrades" => self.request("margin/trades".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privatePostMarginliquidationfeed" => self.request("margin/liquidation/feed".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    _ => unimplemented!(),
+                    _ => panic!("Unknown API method: {}", m),
                 }
             },
-            _ => unimplemented!()
+            _ => panic!("dispatch: method must be a string, got {:?}", method)
         }
     }
 }

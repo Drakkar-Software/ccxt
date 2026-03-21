@@ -2567,10 +2567,10 @@ pub trait Bullish : Exchange {
                     "privatePostV2mmpconfiguration" => self.request("v2/mmp-configuration".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privatePostV2otctrades" => self.request("v2/otc-trades".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privatePostV2otccommand" => self.request("v2/otc-command".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    _ => unimplemented!(),
+                    _ => panic!("Unknown API method: {}", m),
                 }
             },
-            _ => unimplemented!()
+            _ => panic!("dispatch: method must be a string, got {:?}", method)
         }
     }
 }

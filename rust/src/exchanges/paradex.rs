@@ -2320,10 +2320,10 @@ pub trait Paradex : Exchange {
                     "privateDeleteOrdersbyclientidclientid" => self.request("orders/by_client_id/{client_id}".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privateDeleteOrdersorderid" => self.request("orders/{order_id}".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privateDeleteAlgoordersalgoid" => self.request("algo/orders/{algo_id}".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    _ => unimplemented!(),
+                    _ => panic!("Unknown API method: {}", m),
                 }
             },
-            _ => unimplemented!()
+            _ => panic!("dispatch: method must be a string, got {:?}", method)
         }
     }
 }

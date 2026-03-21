@@ -364,7 +364,7 @@ pub trait Bithumb : Exchange {
             "symbols": Value::Json(serde_json::Value::Array(vec![market.get(Value::from("base")) + Value::from("_") + market.get(Value::from("quote")).into()])),
             "tickTypes": Value::Json(serde_json::Value::Array(vec![self.safe_string(params.clone(), Value::from("tickTypes"), Value::from("24H")).into()]))
         }))).unwrap());
-        return self.watch(url.clone(), message_hash.clone(), extend_2(request.clone(), params.clone()), message_hash.clone(), Value::Undefined).await;
+        return self.watch(url.clone(), message_hash.clone(), extend_2(request.clone(), params.clone()), message_hash.clone()).await;
     }
 
     async fn watch_tickers(&mut self, mut symbols: Value, mut params: Value) -> Value {
@@ -388,13 +388,13 @@ pub trait Bithumb : Exchange {
             "tickTypes": Value::Json(serde_json::Value::Array(vec![self.safe_string(params.clone(), Value::from("tickTypes"), Value::from("24H")).into()]))
         }))).unwrap());
         let mut message: Value = extend_2(request.clone(), params.clone());
-        let mut new_ticker: Value = self.watch_multiple(url.clone(), message_hashes.clone(), message.clone(), message_hashes.clone(), Value::Undefined).await;
+        let mut new_ticker: Value = self.watch_multiple(url.clone(), message_hashes.clone(), message.clone(), message_hashes.clone()).await;
         if self.get("newUpdates".into()).is_truthy() {
             let mut result: Value = Value::new_object();
             result.set(new_ticker.get(Value::from("symbol")), new_ticker.clone());
             return result.clone();
         };
-        return self.filter_by_array(self.get("tickers".into()), Value::from("symbol"), symbols.clone(), Value::Undefined);
+        return self.filter_by_array(self.get("tickers".into()), Value::from("symbol"), symbols.clone());
     }
 
     fn handle_ticker(&mut self, mut client: Value, mut message: Value) -> Value {
@@ -424,7 +424,7 @@ pub trait Bithumb : Exchange {
         let mut content: Value = self.safe_dict(message.clone(), Value::from("content"), Value::new_object());
         let mut market_id: Value = self.safe_string(content.clone(), Value::from("symbol"), Value::Undefined);
         let mut symbol: Value = self.safe_symbol(market_id.clone(), Value::Undefined, Value::from("_"), Value::Undefined);
-        let mut ticker: Value = <Self as Bithumb>::parse_ws_ticker(self, content.clone());
+        let mut ticker: Value = <Self as Bithumb>::parse_ws_ticker(self, content.clone(), Value::Undefined);
         let mut message_hash: Value = Value::from("ticker:") + symbol.clone();
         self.get("tickers".into()).set(symbol.clone(), ticker.clone());
         client.resolve(self.get("tickers".into()).get(symbol.clone()), message_hash.clone());
@@ -491,7 +491,7 @@ pub trait Bithumb : Exchange {
             "type": "orderbookdepth",
             "symbols": Value::Json(serde_json::Value::Array(vec![market.get(Value::from("base")) + Value::from("_") + market.get(Value::from("quote")).into()]))
         }))).unwrap());
-        let mut orderbook: Value = self.watch(url.clone(), message_hash.clone(), extend_2(request.clone(), params.clone()), message_hash.clone(), Value::Undefined).await;
+        let mut orderbook: Value = self.watch(url.clone(), message_hash.clone(), extend_2(request.clone(), params.clone()), message_hash.clone()).await;
         return orderbook.limit();
     }
 
@@ -527,7 +527,7 @@ pub trait Bithumb : Exchange {
         let mut timestamp_str: Value = self.safe_string(content.clone(), Value::from("datetime"), Value::Undefined);
         let mut timestamp: Value = self.parse_to_int(timestamp_str.slice(Value::from(0), Value::from(13)));
         if !self.get("orderbooks".into()).contains_key(symbol.clone()) {
-            let mut ob: Value = self.order_book(Value::Undefined, Value::Undefined);
+            let mut ob: Value = self.order_book();
             ob.set("symbol".into(), symbol.clone());
             self.get("orderbooks".into()).set(symbol.clone(), ob.clone());
         };
@@ -578,7 +578,7 @@ pub trait Bithumb : Exchange {
             "type": "transaction",
             "symbols": Value::Json(serde_json::Value::Array(vec![market.get(Value::from("base")) + Value::from("_") + market.get(Value::from("quote")).into()]))
         }))).unwrap());
-        let mut trades: Value = self.watch(url.clone(), message_hash.clone(), extend_2(request.clone(), params.clone()), message_hash.clone(), Value::Undefined).await;
+        let mut trades: Value = self.watch(url.clone(), message_hash.clone(), extend_2(request.clone(), params.clone()), message_hash.clone()).await;
         if self.get("newUpdates".into()).is_truthy() {
             limit = trades.get_limit(symbol.clone(), limit.clone());
         };
@@ -684,7 +684,7 @@ pub trait Bithumb : Exchange {
     async fn watch_balance(&mut self, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        <Self as Bithumb>::authenticate(self).await;
+        <Self as Bithumb>::authenticate(self, Value::Undefined).await;
         let mut url: Value = self.get("urls".into()).get(Value::from("api")).get(Value::from("ws")).get(Value::from("privateV2"));
         let mut message_hash: Value = Value::from("myAsset");
         let mut request: Value = Value::Json(serde_json::Value::Array(vec![Value::Json(normalize(&Value::Json(json!({
@@ -692,7 +692,7 @@ pub trait Bithumb : Exchange {
         }))).unwrap()).into(), Value::Json(normalize(&Value::Json(json!({
             "type": message_hash
         }))).unwrap()).into()]));
-        let mut balance: Value = self.watch(url.clone(), message_hash.clone(), request.clone(), message_hash.clone(), Value::Undefined).await;
+        let mut balance: Value = self.watch(url.clone(), message_hash.clone(), request.clone(), message_hash.clone()).await;
         return balance.clone();
     }
 
@@ -739,7 +739,7 @@ pub trait Bithumb : Exchange {
 
     async fn authenticate(&mut self, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
-        self.check_required_credentials(Value::Undefined);
+        self.check_required_credentials();
         let mut ws_options: Value = self.safe_dict(self.get("options".into()), Value::from("ws"), Value::new_object());
         let mut authenticated: Value = self.safe_string(ws_options.clone(), Value::from("token"), Value::Undefined);
         if authenticated.clone().is_nullish() {
@@ -765,7 +765,7 @@ pub trait Bithumb : Exchange {
     async fn watch_orders(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        <Self as Bithumb>::authenticate(self).await;
+        <Self as Bithumb>::authenticate(self, Value::Undefined).await;
         let mut url: Value = self.get("urls".into()).get(Value::from("api")).get(Value::from("ws")).get(Value::from("privateV2"));
         let mut message_hash: Value = Value::from("myOrder");
         let mut codes: Value = self.safe_list(params.clone(), Value::from("codes"), Value::new_array());
@@ -780,7 +780,7 @@ pub trait Bithumb : Exchange {
             symbol = market.get(Value::from("symbol"));
             message_hash = message_hash.clone() + Value::from(":") + symbol.clone();
         };
-        let mut orders: Value = self.watch(url.clone(), message_hash.clone(), request.clone(), message_hash.clone(), Value::Undefined).await;
+        let mut orders: Value = self.watch(url.clone(), message_hash.clone(), request.clone(), message_hash.clone()).await;
         if self.get("newUpdates".into()).is_truthy() {
             limit = orders.get_limit(symbol.clone(), limit.clone());
         };
@@ -973,10 +973,10 @@ pub trait Bithumb : Exchange {
                     "privatePostTrademarketbuy" => self.request("trade/market_buy".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privatePostTrademarketsell" => self.request("trade/market_sell".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privatePostTradestoplimit" => self.request("trade/stop_limit".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    _ => unimplemented!(),
+                    _ => panic!("Unknown API method: {}", m),
                 }
             },
-            _ => unimplemented!()
+            _ => panic!("dispatch: method must be a string, got {:?}", method)
         }
     }
 }

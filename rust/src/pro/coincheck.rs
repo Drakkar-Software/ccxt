@@ -453,7 +453,7 @@ pub trait Coincheck : Exchange {
             "channel": market.get(Value::from("id")) + Value::from("-orderbook")
         }))).unwrap());
         let mut message: Value = extend_2(request.clone(), params.clone());
-        let mut orderbook: Value = self.watch(url.clone(), message_hash.clone(), message.clone(), message_hash.clone(), Value::Undefined).await;
+        let mut orderbook: Value = self.watch(url.clone(), message_hash.clone(), message.clone(), message_hash.clone()).await;
         return orderbook.limit();
     }
 
@@ -484,7 +484,7 @@ pub trait Coincheck : Exchange {
         let mut snapshot: Value = self.parse_order_book(data.clone(), symbol.clone(), timestamp.clone(), Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined);
         let mut orderbook: Value = self.safe_value(self.get("orderbooks".into()), symbol.clone(), Value::Undefined);
         if orderbook.clone().is_nullish() {
-            orderbook = self.order_book(snapshot.clone(), Value::Undefined);
+            orderbook = self.order_book(snapshot.clone());
             self.get("orderbooks".into()).set(symbol.clone(), orderbook.clone());
         } else {
             orderbook = self.get("orderbooks".into()).get(symbol.clone());
@@ -507,7 +507,7 @@ pub trait Coincheck : Exchange {
             "channel": market.get(Value::from("id")) + Value::from("-trades")
         }))).unwrap());
         let mut message: Value = extend_2(request.clone(), params.clone());
-        let mut trades: Value = self.watch(url.clone(), message_hash.clone(), message.clone(), message_hash.clone(), Value::Undefined).await;
+        let mut trades: Value = self.watch(url.clone(), message_hash.clone(), message.clone(), message_hash.clone()).await;
         if self.get("newUpdates".into()).is_truthy() {
             limit = trades.get_limit(symbol.clone(), limit.clone());
         };
@@ -628,10 +628,10 @@ pub trait Coincheck : Exchange {
                     "privateDeleteBankaccountsid" => self.request("bank_accounts/{id}".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privateDeleteExchangeordersid" => self.request("exchange/orders/{id}".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privateDeleteWithdrawsid" => self.request("withdraws/{id}".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    _ => unimplemented!(),
+                    _ => panic!("Unknown API method: {}", m),
                 }
             },
-            _ => unimplemented!()
+            _ => panic!("dispatch: method must be a string, got {:?}", method)
         }
     }
 }

@@ -1828,10 +1828,10 @@ pub trait Bittrade : Exchange {
                     "privatePostCrossmarginordersidrepay" => self.request("cross-margin/orders/{id}/repay".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privatePostStablecoinexchange" => self.request("stable-coin/exchange".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privatePostSubusertransfer" => self.request("subuser/transfer".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    _ => unimplemented!(),
+                    _ => panic!("Unknown API method: {}", m),
                 }
             },
-            _ => unimplemented!()
+            _ => panic!("dispatch: method must be a string, got {:?}", method)
         }
     }
 }

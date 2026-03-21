@@ -2555,10 +2555,10 @@ pub trait Krakenfutures : Exchange {
                     "historyGetAccountlog" => self.request("account-log".into(), "history".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "historyGetMarketsymbolorders" => self.request("market/{symbol}/orders".into(), "history".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "historyGetMarketsymbolexecutions" => self.request("market/{symbol}/executions".into(), "history".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    _ => unimplemented!(),
+                    _ => panic!("Unknown API method: {}", m),
                 }
             },
-            _ => unimplemented!()
+            _ => panic!("dispatch: method must be a string, got {:?}", method)
         }
     }
 }

@@ -2633,10 +2633,10 @@ pub trait Modetrade : Exchange {
                     "v1PrivateDeleteOrders" => self.request("orders".into(), "v1".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "v1PrivateDeleteBatchorder" => self.request("batch-order".into(), "v1".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "v1PrivateDeleteClientbatchorder" => self.request("client/batch-order".into(), "v1".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    _ => unimplemented!(),
+                    _ => panic!("Unknown API method: {}", m),
                 }
             },
-            _ => unimplemented!()
+            _ => panic!("dispatch: method must be a string, got {:?}", method)
         }
     }
 }

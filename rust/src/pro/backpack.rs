@@ -576,13 +576,13 @@ pub trait Backpack : Exchange {
             <Self as Backpack>::handle_unsubscriptions(self, url.clone(), message_hashes.clone(), message.clone());
             return Value::Undefined;
         };
-        return self.watch_multiple(url.clone(), message_hashes.clone(), message.clone(), message_hashes.clone(), Value::Undefined).await;
+        return self.watch_multiple(url.clone(), message_hashes.clone(), message.clone(), message_hashes.clone()).await;
     }
 
     async fn watch_private(&mut self, mut topics: Value, mut message_hashes: Value, mut params: Value, mut unwatch: Value) -> Value {
         params = params.or_default(Value::new_object());
         unwatch = unwatch.or_default(false.into());
-        self.check_required_credentials(Value::Undefined);
+        self.check_required_credentials();
         let mut url: Value = self.get("urls".into()).get(Value::from("api")).get(Value::from("ws")).get(Value::from("private"));
         let mut instruction: Value = Value::from("subscribe");
         let mut ts: Value = self.nonce().to_string();
@@ -602,17 +602,17 @@ pub trait Backpack : Exchange {
             <Self as Backpack>::handle_unsubscriptions(self, url.clone(), message_hashes.clone(), message.clone());
             return Value::Undefined;
         };
-        return self.watch_multiple(url.clone(), message_hashes.clone(), message.clone(), message_hashes.clone(), Value::Undefined).await;
+        return self.watch_multiple(url.clone(), message_hashes.clone(), message.clone(), message_hashes.clone()).await;
     }
 
     fn handle_unsubscriptions(&mut self, mut url: Value, mut message_hashes: Value, mut message: Value) -> Value {
         let mut client: Value = self.client(url.clone());
-        self.watch_multiple(url.clone(), message_hashes.clone(), message.clone(), message_hashes.clone(), Value::Undefined);
+        self.watch_multiple(url.clone(), message_hashes.clone(), message.clone(), message_hashes.clone());
         let mut i: usize = 0;
         while i < message_hashes.len() {
             let mut message_hash: Value = message_hashes.get(i.into());
             let mut sub_message_hash: Value = message_hash.replace(Value::from("unsubscribe:"), Value::from(""));
-            self.clean_unsubscription(client.clone(), sub_message_hash.clone(), message_hash.clone(), Value::Undefined);
+            self.clean_unsubscription(client.clone(), sub_message_hash.clone(), message_hash.clone());
             if message_hash.index_of(Value::from("ticker")) >= Value::from(0) {
                 let mut symbol: Value = message_hash.replace(Value::from("unsubscribe:ticker:"), Value::from(""));
                 if self.get("tickers".into()).contains_key(symbol.clone()) {
@@ -687,7 +687,7 @@ pub trait Backpack : Exchange {
         symbol = market.get(Value::from("symbol"));
         let mut topic: Value = Value::from("ticker") + Value::from(".") + market.get(Value::from("id"));
         let mut message_hash: Value = Value::from("ticker") + Value::from(":") + symbol.clone();
-        return <Self as Backpack>::watch_public(self, Value::Json(serde_json::Value::Array(vec![topic.clone().into()])), Value::Json(serde_json::Value::Array(vec![message_hash.clone().into()])), params.clone()).await;
+        return <Self as Backpack>::watch_public(self, Value::Json(serde_json::Value::Array(vec![topic.clone().into()])), Value::Json(serde_json::Value::Array(vec![message_hash.clone().into()])), params.clone(), Value::Undefined).await;
     }
 
     async fn un_watch_ticker(&mut self, mut symbol: Value, mut params: Value) -> Value {
@@ -698,7 +698,7 @@ pub trait Backpack : Exchange {
     async fn watch_tickers(&mut self, mut symbols: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        symbols = self.market_symbols(symbols.clone(), Value::Undefined, false.into(), Value::Undefined, Value::Undefined);
+        symbols = self.market_symbols(symbols.clone(), Value::Undefined, false.into());
         let mut message_hashes: Value = Value::new_array();
         let mut topics: Value = Value::new_array();
         let mut i: usize = 0;
@@ -709,14 +709,14 @@ pub trait Backpack : Exchange {
             topics.push(Value::from("ticker.") + market_id.clone());
             i += 1;
         };
-        <Self as Backpack>::watch_public(self, topics.clone(), message_hashes.clone(), params.clone()).await;
-        return self.filter_by_array(self.get("tickers".into()), Value::from("symbol"), symbols.clone(), Value::Undefined);
+        <Self as Backpack>::watch_public(self, topics.clone(), message_hashes.clone(), params.clone(), Value::Undefined).await;
+        return self.filter_by_array(self.get("tickers".into()), Value::from("symbol"), symbols.clone());
     }
 
     async fn un_watch_tickers(&mut self, mut symbols: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        symbols = self.market_symbols(symbols.clone(), Value::Undefined, false.into(), Value::Undefined, Value::Undefined);
+        symbols = self.market_symbols(symbols.clone(), Value::Undefined, false.into());
         let mut topics: Value = Value::new_array();
         let mut message_hashes: Value = Value::new_array();
         let mut i: usize = 0;
@@ -808,7 +808,7 @@ pub trait Backpack : Exchange {
     async fn watch_bids_asks(&mut self, mut symbols: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        symbols = self.market_symbols(symbols.clone(), Value::Undefined, false.into(), Value::Undefined, Value::Undefined);
+        symbols = self.market_symbols(symbols.clone(), Value::Undefined, false.into());
         let mut topics: Value = Value::new_array();
         let mut message_hashes: Value = Value::new_array();
         let mut i: usize = 0;
@@ -819,14 +819,14 @@ pub trait Backpack : Exchange {
             message_hashes.push(Value::from("bidask:") + symbol.clone());
             i += 1;
         };
-        <Self as Backpack>::watch_public(self, topics.clone(), message_hashes.clone(), params.clone()).await;
-        return self.filter_by_array(self.get("bidsasks".into()), Value::from("symbol"), symbols.clone(), Value::Undefined);
+        <Self as Backpack>::watch_public(self, topics.clone(), message_hashes.clone(), params.clone(), Value::Undefined).await;
+        return self.filter_by_array(self.get("bidsasks".into()), Value::from("symbol"), symbols.clone());
     }
 
     async fn un_watch_bids_asks(&mut self, mut symbols: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        symbols = self.market_symbols(symbols.clone(), Value::Undefined, false.into(), Value::Undefined, Value::Undefined);
+        symbols = self.market_symbols(symbols.clone(), Value::Undefined, false.into());
         let mut topics: Value = Value::new_array();
         let mut message_hashes: Value = Value::new_array();
         let mut i: usize = 0;
@@ -935,7 +935,7 @@ pub trait Backpack : Exchange {
             message_hashes.push(Value::from("candles:") + market.get(Value::from("symbol")) + Value::from(":") + interval.clone());
             i += 1;
         };
-        let (mut symbol, mut timeframe, mut candles) = shift_3(<Self as Backpack>::watch_public(self, topics.clone(), message_hashes.clone(), params.clone()).await);
+        let (mut symbol, mut timeframe, mut candles) = shift_3(<Self as Backpack>::watch_public(self, topics.clone(), message_hashes.clone(), params.clone(), Value::Undefined).await);
         if self.get("newUpdates".into()).is_truthy() {
             limit = candles.get_limit(symbol.clone(), limit.clone());
         };
@@ -1042,7 +1042,7 @@ pub trait Backpack : Exchange {
     async fn watch_trades_for_symbols(&mut self, mut symbols: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        symbols = self.market_symbols(symbols.clone(), Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined);
+        symbols = self.market_symbols(symbols.clone());
         let mut symbols_length: usize = symbols.len();
         if symbols_length.clone() == Value::from(0) {
             panic!(r###"ArgumentsRequired::new(self.get("id".into()) + Value::from(" watchTradesForSymbols() requires a non-empty array of symbols"))"###);
@@ -1057,7 +1057,7 @@ pub trait Backpack : Exchange {
             message_hashes.push(Value::from("trades:") + symbol.clone());
             i += 1;
         };
-        let mut trades: Value = <Self as Backpack>::watch_public(self, topics.clone(), message_hashes.clone(), params.clone()).await;
+        let mut trades: Value = <Self as Backpack>::watch_public(self, topics.clone(), message_hashes.clone(), params.clone(), Value::Undefined).await;
         if self.get("newUpdates".into()).is_truthy() {
             let mut first: Value = self.safe_value(trades.clone(), Value::from(0), Value::Undefined);
             let mut trade_symbol: Value = self.safe_string(first.clone(), Value::from("symbol"), Value::Undefined);
@@ -1070,7 +1070,7 @@ pub trait Backpack : Exchange {
     async fn un_watch_trades_for_symbols(&mut self, mut symbols: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        symbols = self.market_symbols(symbols.clone(), Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined);
+        symbols = self.market_symbols(symbols.clone());
         let mut symbols_length: usize = symbols.len();
         if symbols_length.clone() == Value::from(0) {
             panic!(r###"ArgumentsRequired::new(self.get("id".into()) + Value::from(" unWatchTradesForSymbols() requires a non-empty array of symbols"))"###);
@@ -1183,7 +1183,7 @@ pub trait Backpack : Exchange {
     async fn watch_order_book_for_symbols(&mut self, mut symbols: Value, mut limit: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        symbols = self.market_symbols(symbols.clone(), Value::Undefined, false.into(), Value::Undefined, Value::Undefined);
+        symbols = self.market_symbols(symbols.clone(), Value::Undefined, false.into());
         let mut market_ids: Value = self.market_ids(symbols.clone());
         let mut message_hashes: Value = Value::new_array();
         let mut topics: Value = Value::new_array();
@@ -1196,7 +1196,7 @@ pub trait Backpack : Exchange {
             topics.push(topic.clone());
             i += 1;
         };
-        let mut orderbook: Value = <Self as Backpack>::watch_public(self, topics.clone(), message_hashes.clone(), params.clone()).await;
+        let mut orderbook: Value = <Self as Backpack>::watch_public(self, topics.clone(), message_hashes.clone(), params.clone(), Value::Undefined).await;
         return orderbook.limit();
     }
 
@@ -1208,7 +1208,7 @@ pub trait Backpack : Exchange {
     async fn un_watch_order_book_for_symbols(&mut self, mut symbols: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        symbols = self.market_symbols(symbols.clone(), Value::Undefined, false.into(), Value::Undefined, Value::Undefined);
+        symbols = self.market_symbols(symbols.clone(), Value::Undefined, false.into());
         let mut market_ids: Value = self.market_ids(symbols.clone());
         let mut message_hashes: Value = Value::new_array();
         let mut topics: Value = Value::new_array();
@@ -1247,7 +1247,7 @@ pub trait Backpack : Exchange {
         let mut market_id: Value = self.safe_string(data.clone(), Value::from("s"), Value::Undefined);
         let mut symbol: Value = self.safe_symbol(market_id.clone(), Value::Undefined, Value::Undefined, Value::Undefined);
         if !self.get("orderbooks".into()).contains_key(symbol.clone()) {
-            self.get("orderbooks".into()).set(symbol.clone(), self.order_book(Value::Undefined, Value::Undefined));
+            self.get("orderbooks".into()).set(symbol.clone(), self.order_book());
         };
         let mut stored_order_book: Value = self.get("orderbooks".into()).get(symbol.clone());
         let mut nonce: Value = self.safe_integer(stored_order_book.clone(), Value::from("nonce"), Value::Undefined);
@@ -1331,7 +1331,7 @@ pub trait Backpack : Exchange {
             topic = Value::from("account.orderUpdate.") + market.get(Value::from("id"));
             message_hash = Value::from("orders:") + symbol.clone();
         };
-        let mut orders: Value = <Self as Backpack>::watch_private(self, Value::Json(serde_json::Value::Array(vec![topic.clone().into()])), Value::Json(serde_json::Value::Array(vec![message_hash.clone().into()])), params.clone()).await;
+        let mut orders: Value = <Self as Backpack>::watch_private(self, Value::Json(serde_json::Value::Array(vec![topic.clone().into()])), Value::Json(serde_json::Value::Array(vec![message_hash.clone().into()])), params.clone(), Value::Undefined).await;
         if self.get("newUpdates".into()).is_truthy() {
             limit = orders.get_limit(symbol.clone(), limit.clone());
         };
@@ -1499,7 +1499,7 @@ pub trait Backpack : Exchange {
     async fn watch_positions(&mut self, mut symbols: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        symbols = self.market_symbols(symbols.clone(), Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined);
+        symbols = self.market_symbols(symbols.clone());
         let mut message_hashes: Value = Value::new_array();
         let mut topics: Value = Value::new_array();
         if symbols.clone().is_nonnullish() {
@@ -1514,7 +1514,7 @@ pub trait Backpack : Exchange {
             message_hashes.push(Value::from("positions"));
             topics.push(Value::from("account.positionUpdate"));
         };
-        let mut positions: Value = <Self as Backpack>::watch_private(self, topics.clone(), message_hashes.clone(), params.clone()).await;
+        let mut positions: Value = <Self as Backpack>::watch_private(self, topics.clone(), message_hashes.clone(), params.clone(), Value::Undefined).await;
         if self.get("newUpdates".into()).is_truthy() {
             return positions.clone();
         };
@@ -1524,7 +1524,7 @@ pub trait Backpack : Exchange {
     async fn un_watch_positions(&mut self, mut symbols: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        symbols = self.market_symbols(symbols.clone(), Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined);
+        symbols = self.market_symbols(symbols.clone());
         let mut message_hashes: Value = Value::new_array();
         let mut topics: Value = Value::new_array();
         if symbols.clone().is_nonnullish() {
@@ -1572,7 +1572,7 @@ pub trait Backpack : Exchange {
             self.set("positions".into(), ArrayCacheBySymbolById::new());
         };
         let mut cache: Value = self.get("positions".into());
-        let mut parsed_position: Value = <Self as Backpack>::parse_ws_position(self, data.clone());
+        let mut parsed_position: Value = <Self as Backpack>::parse_ws_position(self, data.clone(), Value::Undefined);
         let mut microseconds: Value = self.safe_integer(data.clone(), Value::from("E"), Value::Undefined);
         let mut timestamp: Value = self.parse_to_int(microseconds.clone() / Value::from(1000));
         parsed_position.set("timestamp".into(), timestamp.clone());
@@ -1764,10 +1764,10 @@ pub trait Backpack : Exchange {
                     "privatePostApiv1rfqquote" => self.request("api/v1/rfq/quote".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privateDeleteApiv1order" => self.request("api/v1/order".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privateDeleteApiv1orders" => self.request("api/v1/orders".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    _ => unimplemented!(),
+                    _ => panic!("Unknown API method: {}", m),
                 }
             },
-            _ => unimplemented!()
+            _ => panic!("dispatch: method must be a string, got {:?}", method)
         }
     }
 }

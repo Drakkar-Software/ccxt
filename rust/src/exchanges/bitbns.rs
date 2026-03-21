@@ -1122,10 +1122,10 @@ pub trait Bitbns : Exchange {
                     "v2PostCancel" => self.request("cancel".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "v2PostGetordersnew" => self.request("getordersnew".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "v2PostMarginorders" => self.request("marginOrders".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    _ => unimplemented!(),
+                    _ => panic!("Unknown API method: {}", m),
                 }
             },
-            _ => unimplemented!()
+            _ => panic!("dispatch: method must be a string, got {:?}", method)
         }
     }
 }

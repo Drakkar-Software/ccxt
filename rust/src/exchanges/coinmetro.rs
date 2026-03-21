@@ -1745,10 +1745,10 @@ pub trait Coinmetro : Exchange {
                     "privatePutExchangeorderscancelorderid" => self.request("exchange/orders/cancel/{orderID}".into(), "private".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privatePutUsersmargincollateral" => self.request("users/margin/collateral".into(), "private".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privatePutUsersmarginprimarycurrency" => self.request("users/margin/primary/{currency}".into(), "private".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    _ => unimplemented!(),
+                    _ => panic!("Unknown API method: {}", m),
                 }
             },
-            _ => unimplemented!()
+            _ => panic!("dispatch: method must be a string, got {:?}", method)
         }
     }
 }

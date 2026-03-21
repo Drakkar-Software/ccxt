@@ -2728,10 +2728,10 @@ pub trait Lbank : Exchange {
                     "contractPublicGetCfdopenapiv1pubinstrument" => self.request("cfd/openApi/v1/pub/instrument".into(), "contract".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "contractPublicGetCfdopenapiv1pubmarketdata" => self.request("cfd/openApi/v1/pub/marketData".into(), "contract".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "contractPublicGetCfdopenapiv1pubmarketorder" => self.request("cfd/openApi/v1/pub/marketOrder".into(), "contract".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    _ => unimplemented!(),
+                    _ => panic!("Unknown API method: {}", m),
                 }
             },
-            _ => unimplemented!()
+            _ => panic!("dispatch: method must be a string, got {:?}", method)
         }
     }
 }

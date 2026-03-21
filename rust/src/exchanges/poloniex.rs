@@ -3258,10 +3258,10 @@ pub trait Poloniex : Exchange {
                     "swapprivateDeleteV3tradeorder" => self.request("v3/trade/order".into(), "swapPrivate".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "swapprivateDeleteV3tradebatchorders" => self.request("v3/trade/batchOrders".into(), "swapPrivate".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "swapprivateDeleteV3tradeallorders" => self.request("v3/trade/allOrders".into(), "swapPrivate".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    _ => unimplemented!(),
+                    _ => panic!("Unknown API method: {}", m),
                 }
             },
-            _ => unimplemented!()
+            _ => panic!("dispatch: method must be a string, got {:?}", method)
         }
     }
 }

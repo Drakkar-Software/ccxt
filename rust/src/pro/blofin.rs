@@ -651,7 +651,7 @@ pub trait Blofin : Exchange {
         let mut symbol: Value = market.get(Value::from("symbol"));
         let mut message_hash: Value = channel_name.clone() + Value::from(":") + symbol.clone();
         if !self.get("orderbooks".into()).contains_key(symbol.clone()) {
-            self.get("orderbooks".into()).set(symbol.clone(), self.order_book(Value::Undefined, Value::Undefined));
+            self.get("orderbooks".into()).set(symbol.clone(), self.order_book());
         };
         let mut orderbook: Value = self.get("orderbooks".into()).get(symbol.clone());
         let mut timestamp: Value = self.safe_integer(data.clone(), Value::from("ts"), Value::Undefined);
@@ -663,8 +663,8 @@ pub trait Blofin : Exchange {
         } else {
             let mut asks: Value = self.safe_list(data.clone(), Value::from("asks"), Value::new_array());
             let mut bids: Value = self.safe_list(data.clone(), Value::from("bids"), Value::new_array());
-            self.handle_deltas_with_keys(orderbook.get(Value::from("asks")), asks.clone(), Value::Undefined, Value::Undefined, Value::Undefined);
-            self.handle_deltas_with_keys(orderbook.get(Value::from("bids")), bids.clone(), Value::Undefined, Value::Undefined, Value::Undefined);
+            self.handle_deltas_with_keys(orderbook.get(Value::from("asks")), asks.clone());
+            self.handle_deltas_with_keys(orderbook.get(Value::from("bids")), bids.clone());
             orderbook.set("timestamp".into(), timestamp.clone());
             orderbook.set("datetime".into(), self.iso8601(timestamp.clone()));
         };
@@ -693,7 +693,7 @@ pub trait Blofin : Exchange {
             tickers.set(ticker.get(Value::from("symbol")), ticker.clone());
             return tickers.clone();
         };
-        return self.filter_by_array(self.get("tickers".into()), Value::from("symbol"), symbols.clone(), Value::Undefined);
+        return self.filter_by_array(self.get("tickers".into()), Value::from("symbol"), symbols.clone());
     }
 
     fn handle_ticker(&mut self, mut client: Value, mut message: Value) -> Value {
@@ -716,7 +716,7 @@ pub trait Blofin : Exchange {
         let mut data: Value = self.safe_list(message.clone(), Value::from("data"), Value::Undefined);
         let mut i: usize = 0;
         while i < data.len() {
-            let mut ticker: Value = <Self as Blofin>::parse_ws_ticker(self, data.get(i.into()));
+            let mut ticker: Value = <Self as Blofin>::parse_ws_ticker(self, data.get(i.into()), Value::Undefined);
             let mut symbol: Value = ticker.get(Value::from("symbol"));
             let mut message_hash: Value = channel_name.clone() + Value::from(":") + symbol.clone();
             self.get("tickers".into()).set(symbol.clone(), ticker.clone());
@@ -733,11 +733,11 @@ pub trait Blofin : Exchange {
     async fn watch_bids_asks(&mut self, mut symbols: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        symbols = self.market_symbols(symbols.clone(), Value::Undefined, false.into(), Value::Undefined, Value::Undefined);
+        symbols = self.market_symbols(symbols.clone(), Value::Undefined, false.into());
         let mut first_market: Value = self.market(symbols.get(Value::from(0)));
         let mut channel: Value = Value::from("tickers");
         let mut market_type: Value = Value::Undefined;
-        (market_type, params) = shift_2(self.handle_market_type_and_params(Value::from("watchBidsAsks"), first_market.clone(), params.clone(), Value::Undefined));
+        (market_type, params) = shift_2(self.handle_market_type_and_params(Value::from("watchBidsAsks"), first_market.clone(), params.clone()));
         let mut url: Value = self.implode_hostname(self.get("urls".into()).get(Value::from("api")).get(Value::from("ws")).get(market_type.clone()).get(Value::from("public")));
         let mut message_hashes: Value = Value::new_array();
         let mut args: Value = Value::new_array();
@@ -752,20 +752,20 @@ pub trait Blofin : Exchange {
             i += 1;
         };
         let mut request: Value = <Self as Blofin>::get_subscription_request(self, args.clone());
-        let mut ticker: Value = self.watch_multiple(url.clone(), message_hashes.clone(), self.deep_extend_2(request.clone(), params.clone()), message_hashes.clone(), Value::Undefined).await;
+        let mut ticker: Value = self.watch_multiple(url.clone(), message_hashes.clone(), self.deep_extend_2(request.clone(), params.clone()), message_hashes.clone()).await;
         if self.get("newUpdates".into()).is_truthy() {
             let mut tickers: Value = Value::new_object();
             tickers.set(ticker.get(Value::from("symbol")), ticker.clone());
             return tickers.clone();
         };
-        return self.filter_by_array(self.get("bidsasks".into()), Value::from("symbol"), symbols.clone(), Value::Undefined);
+        return self.filter_by_array(self.get("bidsasks".into()), Value::from("symbol"), symbols.clone());
     }
 
     fn handle_bid_ask(&mut self, mut client: Value, mut message: Value) -> Value {
         let mut data: Value = self.safe_list(message.clone(), Value::from("data"), Value::Undefined);
         let mut i: usize = 0;
         while i < data.len() {
-            let mut ticker: Value = <Self as Blofin>::parse_ws_bid_ask(self, data.get(i.into()));
+            let mut ticker: Value = <Self as Blofin>::parse_ws_bid_ask(self, data.get(i.into()), Value::Undefined);
             let mut symbol: Value = ticker.get(Value::from("symbol"));
             let mut message_hash: Value = Value::from("bidask:") + symbol.clone();
             self.get("bidsasks".into()).set(symbol.clone(), ticker.clone());
@@ -836,7 +836,7 @@ pub trait Blofin : Exchange {
         let mut market: Value = self.safe_market(market_id.clone(), Value::Undefined, Value::Undefined, Value::Undefined);
         let mut symbol: Value = market.get(Value::from("symbol"));
         let mut interval: Value = channel_name.replace(Value::from("candle"), Value::from(""));
-        let mut unified_timeframe: Value = self.find_timeframe(interval.clone(), Value::Undefined);
+        let mut unified_timeframe: Value = self.find_timeframe(interval.clone());
         self.get("ohlcvs".into()).set(symbol.clone(), self.safe_dict(self.get("ohlcvs".into()), symbol.clone(), Value::new_object()));
         let mut stored: Value = self.safe_value(self.get("ohlcvs".into()).get(symbol.clone()), unified_timeframe.clone(), Value::Undefined);
         if stored.clone().is_nullish() {
@@ -860,9 +860,9 @@ pub trait Blofin : Exchange {
     async fn watch_balance(&mut self, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        <Self as Blofin>::authenticate(self).await;
+        <Self as Blofin>::authenticate(self, Value::Undefined).await;
         let mut market_type: Value = Value::Undefined;
-        (market_type, params) = shift_2(self.handle_market_type_and_params(Value::from("watchBalance"), Value::Undefined, params.clone(), Value::Undefined));
+        (market_type, params) = shift_2(self.handle_market_type_and_params(Value::from("watchBalance"), Value::Undefined, params.clone()));
         if market_type.clone() == Value::from("spot") {
             panic!(r###"NotSupported::new(self.get("id".into()) + Value::from(" watchBalance() is not supported for spot markets yet"))"###);
         };
@@ -872,7 +872,7 @@ pub trait Blofin : Exchange {
         }))).unwrap());
         let mut request: Value = <Self as Blofin>::get_subscription_request(self, Value::Json(serde_json::Value::Array(vec![sub.clone().into()])));
         let mut url: Value = self.implode_hostname(self.get("urls".into()).get(Value::from("api")).get(Value::from("ws")).get(market_type.clone()).get(Value::from("private")));
-        return self.watch(url.clone(), message_hash.clone(), self.deep_extend_2(request.clone(), params.clone()), message_hash.clone(), Value::Undefined).await;
+        return self.watch(url.clone(), message_hash.clone(), self.deep_extend_2(request.clone(), params.clone()), message_hash.clone()).await;
     }
 
     fn handle_balance(&mut self, mut client: Value, mut message: Value) -> Value {
@@ -908,7 +908,7 @@ pub trait Blofin : Exchange {
 
     async fn watch_orders_for_symbols(&mut self, mut symbols: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
-        <Self as Blofin>::authenticate(self).await;
+        <Self as Blofin>::authenticate(self, Value::Undefined).await;
         self.load_markets(Value::Undefined, Value::Undefined).await;
         let mut trigger: Value = self.safe_value_2(params.clone(), Value::from("stop"), Value::from("trigger"), Value::Undefined);
         params = self.omit(params.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("stop").into(), Value::from("trigger").into()])));
@@ -959,13 +959,13 @@ pub trait Blofin : Exchange {
 
     async fn watch_positions(&mut self, mut symbols: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
-        <Self as Blofin>::authenticate(self).await;
+        <Self as Blofin>::authenticate(self, Value::Undefined).await;
         self.load_markets(Value::Undefined, Value::Undefined).await;
         let mut new_positions: Value = <Self as Blofin>::watch_multiple_wrapper(self, false.into(), Value::from("positions"), Value::from("watchPositions"), symbols.clone(), params.clone()).await;
         if self.get("newUpdates".into()).is_truthy() {
             return new_positions.clone();
         };
-        return self.filter_by_symbols_since_limit(self.get("positions".into()), symbols.clone(), since.clone(), limit.clone(), Value::Undefined);
+        return self.filter_by_symbols_since_limit(self.get("positions".into()), symbols.clone(), since.clone(), limit.clone());
     }
 
     fn handle_positions(&mut self, mut client: Value, mut message: Value) -> Value {
@@ -987,7 +987,7 @@ pub trait Blofin : Exchange {
         let mut new_positions: Value = Value::new_array();
         let mut i: usize = 0;
         while i < data.len() {
-            let mut position: Value = <Self as Blofin>::parse_ws_position(self, data.get(i.into()));
+            let mut position: Value = <Self as Blofin>::parse_ws_position(self, data.get(i.into()), Value::Undefined);
             new_positions.push(position.clone());
             cache.append(position.clone());
             let mut message_hash: Value = channel_name.clone() + Value::from(":") + position.get(Value::from("symbol"));
@@ -1009,14 +1009,14 @@ pub trait Blofin : Exchange {
         // if OHLCV method are being called, then symbols would be symbolsAndTimeframes (multi-dimensional) array
         let mut is_ohlcv: Value = (channel_name.clone() == Value::from("candle")).into();
         let mut symbols: Value = if is_ohlcv.is_truthy() { self.get_list_from_object_values(symbols_array.clone(), Value::from(0)) } else { symbols_array.clone() };
-        symbols = self.market_symbols(symbols.clone(), Value::Undefined, true.into(), true.into(), Value::Undefined);
+        symbols = self.market_symbols(symbols.clone(), Value::Undefined, true.into(), true.into());
         let mut first_market: Value = Value::Undefined;
         let mut first_symbol: Value = self.safe_string(symbols.clone(), Value::from(0), Value::Undefined);
         if first_symbol.clone().is_nonnullish() {
             first_market = self.market(first_symbol.clone());
         };
         let mut market_type: Value = Value::Undefined;
-        (market_type, params) = shift_2(self.handle_market_type_and_params(caller_method_name.clone(), first_market.clone(), params.clone(), Value::Undefined));
+        (market_type, params) = shift_2(self.handle_market_type_and_params(caller_method_name.clone(), first_market.clone(), params.clone()));
         if market_type.clone() != Value::from("swap") {
             panic!(r###"NotSupported::new(self.get("id".into()) + Value::from(" ") + caller_method_name.clone() + Value::from("() does not support ") + market_type.clone() + Value::from(" markets yet"))"###);
         };
@@ -1064,7 +1064,7 @@ pub trait Blofin : Exchange {
         let mut request: Value = <Self as Blofin>::get_subscription_request(self, raw_subscriptions.clone());
         let mut private_or_public: Value = if is_public.is_truthy() { Value::from("public") } else { Value::from("private") };
         let mut url: Value = self.implode_hostname(self.get("urls".into()).get(Value::from("api")).get(Value::from("ws")).get(market_type.clone()).get(private_or_public.clone()));
-        return self.watch_multiple(url.clone(), message_hashes.clone(), self.deep_extend_2(request.clone(), params.clone()), message_hashes.clone(), Value::Undefined).await;
+        return self.watch_multiple(url.clone(), message_hashes.clone(), self.deep_extend_2(request.clone(), params.clone()), message_hashes.clone()).await;
     }
 
     fn get_subscription_request(&mut self, mut args: Value) -> Value {
@@ -1130,7 +1130,7 @@ pub trait Blofin : Exchange {
 
     async fn authenticate(&mut self, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
-        self.check_required_credentials(Value::Undefined);
+        self.check_required_credentials();
         let mut milliseconds: Value = self.milliseconds();
         let mut message_hash: Value = Value::from("authenticate_hash");
         let mut timestamp: Value = milliseconds.to_string();
@@ -1150,7 +1150,7 @@ pub trait Blofin : Exchange {
         let mut market_type: Value = Value::from("swap");
         // for now
         let mut url: Value = self.implode_hostname(self.get("urls".into()).get(Value::from("api")).get(Value::from("ws")).get(market_type.clone()).get(Value::from("private")));
-        self.watch(url.clone(), message_hash.clone(), self.deep_extend_2(request.clone(), params.clone()), message_hash.clone(), Value::Undefined).await;
+        self.watch(url.clone(), message_hash.clone(), self.deep_extend_2(request.clone(), params.clone()), message_hash.clone()).await;
         Value::Undefined
     }
 
@@ -1222,10 +1222,10 @@ pub trait Blofin : Exchange {
                     "privatePostCopytradingtradecanceltpslbyorder" => self.request("copytrading/trade/cancel-tpsl-by-order".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privatePostCopytradingtradeclosepositionbyorder" => self.request("copytrading/trade/close-position-by-order".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privatePostCopytradingtradeclosepositionbycontract" => self.request("copytrading/trade/close-position-by-contract".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    _ => unimplemented!(),
+                    _ => panic!("Unknown API method: {}", m),
                 }
             },
-            _ => unimplemented!()
+            _ => panic!("dispatch: method must be a string, got {:?}", method)
         }
     }
 }

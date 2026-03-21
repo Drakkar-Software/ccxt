@@ -7925,10 +7925,10 @@ pub trait Gate : Exchange {
                     "privateOtcPostStablecoinordercreate" => self.request("stable_coin/order/create".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privateOtcPostOrderpaid" => self.request("order/paid".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privateOtcPostOrdercancel" => self.request("order/cancel".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    _ => unimplemented!(),
+                    _ => panic!("Unknown API method: {}", m),
                 }
             },
-            _ => unimplemented!()
+            _ => panic!("dispatch: method must be a string, got {:?}", method)
         }
     }
 }

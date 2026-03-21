@@ -1781,10 +1781,10 @@ pub trait Defx : Exchange {
                     "v1PrivateDeleteApipositionall" => self.request("api/position/all".into(), "v1".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "v1PrivateDeleteApiuserssocketlistenkeyslistenkey" => self.request("api/users/socket/listenKeys/{listenKey}".into(), "v1".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "v1PrivateDeleteApiusersapikeysaccesskey" => self.request("api/users/apikeys/{accessKey}".into(), "v1".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    _ => unimplemented!(),
+                    _ => panic!("Unknown API method: {}", m),
                 }
             },
-            _ => unimplemented!()
+            _ => panic!("dispatch: method must be a string, got {:?}", method)
         }
     }
 }

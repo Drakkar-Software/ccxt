@@ -3210,10 +3210,10 @@ pub trait Deribit : Exchange {
                     "privateGetSubmittransfertosubaccount" => self.request("submit_transfer_to_subaccount".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privateGetSubmittransfertouser" => self.request("submit_transfer_to_user".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privateGetWithdraw" => self.request("withdraw".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    _ => unimplemented!(),
+                    _ => panic!("Unknown API method: {}", m),
                 }
             },
-            _ => unimplemented!()
+            _ => panic!("dispatch: method must be a string, got {:?}", method)
         }
     }
 }

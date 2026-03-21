@@ -3573,10 +3573,10 @@ pub trait Whitebit : Exchange {
                     "v4PrivatePostMiningrewards" => self.request("mining/rewards".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "v4PrivatePostMarketfee" => self.request("market/fee".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "v4PrivatePostConditionalorders" => self.request("conditional-orders".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    _ => unimplemented!(),
+                    _ => panic!("Unknown API method: {}", m),
                 }
             },
-            _ => unimplemented!()
+            _ => panic!("dispatch: method must be a string, got {:?}", method)
         }
     }
 }

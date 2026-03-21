@@ -2056,10 +2056,10 @@ pub trait Bitvavo : Exchange {
                     "privatePutOrder" => self.request("order".into(), "private".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privateDeleteOrder" => self.request("order".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privateDeleteOrders" => self.request("orders".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    _ => unimplemented!(),
+                    _ => panic!("Unknown API method: {}", m),
                 }
             },
-            _ => unimplemented!()
+            _ => panic!("dispatch: method must be a string, got {:?}", method)
         }
     }
 }

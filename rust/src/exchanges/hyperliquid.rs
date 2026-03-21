@@ -4261,10 +4261,10 @@ pub trait Hyperliquid : Exchange {
                 match m.as_ref() {
                     "publicPostInfo" => self.request("info".into(), "public".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privatePostExchange" => self.request("exchange".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    _ => unimplemented!(),
+                    _ => panic!("Unknown API method: {}", m),
                 }
             },
-            _ => unimplemented!()
+            _ => panic!("dispatch: method must be a string, got {:?}", method)
         }
     }
 }

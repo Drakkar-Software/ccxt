@@ -837,7 +837,7 @@ pub trait Kraken : Exchange {
     async fn create_order_ws(&mut self, mut symbol: Value, mut r#type: Value, mut side: Value, mut amount: Value, mut price: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         <Self as Kraken>::load_markets(self, Value::Undefined, Value::Undefined).await;
-        let mut token: Value = <Self as Kraken>::authenticate(self).await;
+        let mut token: Value = <Self as Kraken>::authenticate(self, Value::Undefined).await;
         let mut market: Value = self.market(symbol.clone());
         let mut url: Value = self.get("urls".into()).get(Value::from("api")).get(Value::from("ws")).get(Value::from("privateV2"));
         let mut request_id: Value = <Self as Kraken>::request_id(self);
@@ -854,7 +854,7 @@ pub trait Kraken : Exchange {
             "req_id": request_id
         }))).unwrap());
         (request, params) = shift_2(<Self as Kraken>::order_request_ws(self, Value::from("createOrderWs"), symbol.clone(), r#type.clone(), request.clone(), amount.clone(), price.clone(), params.clone()));
-        return self.watch(url.clone(), message_hash.clone(), extend_2(request.clone(), params.clone()), message_hash.clone(), Value::Undefined).await;
+        return self.watch(url.clone(), message_hash.clone(), extend_2(request.clone(), params.clone()), message_hash.clone()).await;
     }
 
     fn handle_create_edit_order(&mut self, mut client: Value, mut message: Value) -> Value {
@@ -885,7 +885,7 @@ pub trait Kraken : Exchange {
         //     }
         //
         let mut result: Value = self.safe_dict(message.clone(), Value::from("result"), Value::new_object());
-        let mut order: Value = self.parse_order(result.clone(), Value::Undefined);
+        let mut order: Value = self.parse_order(result.clone());
         let mut message_hash: Value = self.safe_string_2(message.clone(), Value::from("reqid"), Value::from("req_id"), Value::Undefined);
         client.resolve(order.clone(), message_hash.clone());
         Value::Undefined
@@ -894,7 +894,7 @@ pub trait Kraken : Exchange {
     async fn edit_order_ws(&mut self, mut id: Value, mut symbol: Value, mut r#type: Value, mut side: Value, mut amount: Value, mut price: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         <Self as Kraken>::load_markets(self, Value::Undefined, Value::Undefined).await;
-        let mut token: Value = <Self as Kraken>::authenticate(self).await;
+        let mut token: Value = <Self as Kraken>::authenticate(self, Value::Undefined).await;
         let mut url: Value = self.get("urls".into()).get(Value::from("api")).get(Value::from("ws")).get(Value::from("privateV2"));
         let mut request_id: Value = <Self as Kraken>::request_id(self);
         let mut message_hash: Value = self.number_to_string(request_id.clone());
@@ -908,7 +908,7 @@ pub trait Kraken : Exchange {
             "req_id": request_id
         }))).unwrap());
         (request, params) = shift_2(<Self as Kraken>::order_request_ws(self, Value::from("editOrderWs"), symbol.clone(), r#type.clone(), request.clone(), amount.clone(), price.clone(), params.clone()));
-        return self.watch(url.clone(), message_hash.clone(), extend_2(request.clone(), params.clone()), message_hash.clone(), Value::Undefined).await;
+        return self.watch(url.clone(), message_hash.clone(), extend_2(request.clone(), params.clone()), message_hash.clone()).await;
     }
 
     async fn cancel_orders_ws(&mut self, mut ids: Value, mut symbol: Value, mut params: Value) -> Value {
@@ -917,7 +917,7 @@ pub trait Kraken : Exchange {
             panic!(r###"NotSupported::new(self.get("id".into()) + Value::from(" cancelOrdersWs () does not support cancelling orders for a specific symbol."))"###);
         };
         <Self as Kraken>::load_markets(self, Value::Undefined, Value::Undefined).await;
-        let mut token: Value = <Self as Kraken>::authenticate(self).await;
+        let mut token: Value = <Self as Kraken>::authenticate(self, Value::Undefined).await;
         let mut url: Value = self.get("urls".into()).get(Value::from("api")).get(Value::from("ws")).get(Value::from("privateV2"));
         let mut request_id: Value = <Self as Kraken>::request_id(self);
         let mut message_hash: Value = self.number_to_string(request_id.clone());
@@ -929,7 +929,7 @@ pub trait Kraken : Exchange {
             }))).unwrap()),
             "req_id": request_id
         }))).unwrap());
-        return self.watch(url.clone(), message_hash.clone(), extend_2(request.clone(), params.clone()), message_hash.clone(), Value::Undefined).await;
+        return self.watch(url.clone(), message_hash.clone(), extend_2(request.clone(), params.clone()), message_hash.clone()).await;
     }
 
     async fn cancel_order_ws(&mut self, mut id: Value, mut symbol: Value, mut params: Value) -> Value {
@@ -938,7 +938,7 @@ pub trait Kraken : Exchange {
             panic!(r###"NotSupported::new(self.get("id".into()) + Value::from(" cancelOrderWs () does not support cancelling orders for a specific symbol."))"###);
         };
         <Self as Kraken>::load_markets(self, Value::Undefined, Value::Undefined).await;
-        let mut token: Value = <Self as Kraken>::authenticate(self).await;
+        let mut token: Value = <Self as Kraken>::authenticate(self, Value::Undefined).await;
         let mut url: Value = self.get("urls".into()).get(Value::from("api")).get(Value::from("ws")).get(Value::from("privateV2"));
         let mut request_id: Value = <Self as Kraken>::request_id(self);
         let mut message_hash: Value = self.number_to_string(request_id.clone());
@@ -950,7 +950,7 @@ pub trait Kraken : Exchange {
             }))).unwrap()),
             "req_id": request_id
         }))).unwrap());
-        return self.watch(url.clone(), message_hash.clone(), extend_2(request.clone(), params.clone()), message_hash.clone(), Value::Undefined).await;
+        return self.watch(url.clone(), message_hash.clone(), extend_2(request.clone(), params.clone()), message_hash.clone()).await;
     }
 
     fn handle_cancel_order(&mut self, mut client: Value, mut message: Value) -> Value {
@@ -977,7 +977,7 @@ pub trait Kraken : Exchange {
             panic!(r###"NotSupported::new(self.get("id".into()) + Value::from(" cancelAllOrdersWs () does not support cancelling orders in a specific market."))"###);
         };
         <Self as Kraken>::load_markets(self, Value::Undefined, Value::Undefined).await;
-        let mut token: Value = <Self as Kraken>::authenticate(self).await;
+        let mut token: Value = <Self as Kraken>::authenticate(self, Value::Undefined).await;
         let mut url: Value = self.get("urls".into()).get(Value::from("api")).get(Value::from("ws")).get(Value::from("privateV2"));
         let mut request_id: Value = <Self as Kraken>::request_id(self);
         let mut message_hash: Value = self.number_to_string(request_id.clone());
@@ -988,7 +988,7 @@ pub trait Kraken : Exchange {
             }))).unwrap()),
             "req_id": request_id
         }))).unwrap());
-        return self.watch(url.clone(), message_hash.clone(), extend_2(request.clone(), params.clone()), message_hash.clone(), Value::Undefined).await;
+        return self.watch(url.clone(), message_hash.clone(), extend_2(request.clone(), params.clone()), message_hash.clone()).await;
     }
 
     fn handle_cancel_all_orders(&mut self, mut client: Value, mut message: Value) -> Value {
@@ -1064,7 +1064,7 @@ pub trait Kraken : Exchange {
             "baseVolume": base_volume,
             "quoteVolume": quote_volume,
             "info": ticker
-        }))).unwrap()), Value::Undefined);
+        }))).unwrap()));
         self.get("tickers".into()).set(symbol.clone(), result.clone());
         client.resolve(result.clone(), message_hash.clone());
         Value::Undefined
@@ -1099,7 +1099,7 @@ pub trait Kraken : Exchange {
             self.get("trades".into()).set(symbol.clone(), stored.clone());
         };
         let mut market: Value = self.market(symbol.clone());
-        let mut parsed: Value = self.parse_trades(data.clone(), market.clone(), Value::Undefined, Value::Undefined, Value::Undefined);
+        let mut parsed: Value = self.parse_trades(data.clone(), market.clone());
         let mut i: usize = 0;
         while i < parsed.len() {
             stored.append(parsed.get(i.into()));
@@ -1140,7 +1140,7 @@ pub trait Kraken : Exchange {
             self.get("ohlcvs".into()).set(symbol.clone(), Value::new_object());
         };
         let mut interval: Value = self.safe_integer(first.clone(), Value::from("interval"), Value::Undefined);
-        let mut timeframe: Value = self.find_timeframe(interval.clone(), Value::Undefined);
+        let mut timeframe: Value = self.find_timeframe(interval.clone());
         let mut message_hash: Value = <Self as Kraken>::get_message_hash(self, Value::from("ohlcv"), Value::Undefined, symbol.clone());
         let mut stored: Value = self.safe_value(self.get("ohlcvs".into()).get(symbol.clone()), timeframe.clone(), Value::Undefined);
         self.get("ohlcvs".into()).set(symbol.clone(), self.safe_value(self.get("ohlcvs".into()), symbol.clone(), Value::new_object()));
@@ -1183,20 +1183,20 @@ pub trait Kraken : Exchange {
     async fn watch_tickers(&mut self, mut symbols: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         <Self as Kraken>::load_markets(self, Value::Undefined, Value::Undefined).await;
-        symbols = self.market_symbols(symbols.clone(), Value::Undefined, false.into(), Value::Undefined, Value::Undefined);
+        symbols = self.market_symbols(symbols.clone(), Value::Undefined, false.into());
         let mut ticker: Value = <Self as Kraken>::watch_multi_helper(self, Value::from("ticker"), Value::from("ticker"), symbols.clone(), Value::Undefined, params.clone()).await;
         if self.get("newUpdates".into()).is_truthy() {
             let mut result: Value = Value::new_object();
             result.set(ticker.get(Value::from("symbol")), ticker.clone());
             return result.clone();
         };
-        return self.filter_by_array(self.get("tickers".into()), Value::from("symbol"), symbols.clone(), Value::Undefined);
+        return self.filter_by_array(self.get("tickers".into()), Value::from("symbol"), symbols.clone());
     }
 
     async fn watch_bids_asks(&mut self, mut symbols: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         <Self as Kraken>::load_markets(self, Value::Undefined, Value::Undefined).await;
-        symbols = self.market_symbols(symbols.clone(), Value::Undefined, false.into(), Value::Undefined, Value::Undefined);
+        symbols = self.market_symbols(symbols.clone(), Value::Undefined, false.into());
         params.set("event_trigger".into(), Value::from("bbo"));
         let mut ticker: Value = <Self as Kraken>::watch_multi_helper(self, Value::from("bidask"), Value::from("ticker"), symbols.clone(), Value::Undefined, params.clone()).await;
         if self.get("newUpdates".into()).is_truthy() {
@@ -1204,7 +1204,7 @@ pub trait Kraken : Exchange {
             result.set(ticker.get(Value::from("symbol")), ticker.clone());
             return result.clone();
         };
-        return self.filter_by_array(self.get("bidsasks".into()), Value::from("symbol"), symbols.clone(), Value::Undefined);
+        return self.filter_by_array(self.get("bidsasks".into()), Value::from("symbol"), symbols.clone());
     }
 
     async fn watch_trades(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
@@ -1265,7 +1265,7 @@ pub trait Kraken : Exchange {
             "req_id": request_id
         }))).unwrap());
         let mut request: Value = self.deep_extend_2(subscribe.clone(), params.clone());
-        let mut ohlcv: Value = self.watch(url.clone(), message_hash.clone(), request.clone(), message_hash.clone(), Value::Undefined).await;
+        let mut ohlcv: Value = self.watch(url.clone(), message_hash.clone(), request.clone(), message_hash.clone()).await;
         if self.get("newUpdates".into()).is_truthy() {
             limit = ohlcv.get_limit(symbol.clone(), limit.clone());
         };
@@ -1314,7 +1314,7 @@ pub trait Kraken : Exchange {
         <Self as Kraken>::load_markets(self, Value::Undefined, Value::Undefined).await;
         let mut event: Value = Value::from("heartbeat");
         let mut url: Value = self.get("urls".into()).get(Value::from("api")).get(Value::from("ws")).get(Value::from("publicV2"));
-        return self.watch(url.clone(), event.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+        return self.watch(url.clone(), event.clone()).await;
     }
 
     fn handle_heartbeat(&mut self, mut client: Value, mut message: Value) -> Value {
@@ -1553,7 +1553,7 @@ pub trait Kraken : Exchange {
     async fn watch_private(&mut self, mut name: Value, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         <Self as Kraken>::load_markets(self, Value::Undefined, Value::Undefined).await;
-        let mut token: Value = <Self as Kraken>::authenticate(self).await;
+        let mut token: Value = <Self as Kraken>::authenticate(self, Value::Undefined).await;
         let mut subscription_hash: Value = Value::from("executions");
         let mut message_hash: Value = name.clone();
         if symbol.clone().is_nonnullish() {
@@ -1573,11 +1573,11 @@ pub trait Kraken : Exchange {
         if params.clone().is_nonnullish() {
             subscribe.set("params".into(), self.deep_extend_2(subscribe.get(Value::from("params")), params.clone()));
         };
-        let mut result: Value = self.watch(url.clone(), message_hash.clone(), subscribe.clone(), subscription_hash.clone(), Value::Undefined).await;
+        let mut result: Value = self.watch(url.clone(), message_hash.clone(), subscribe.clone(), subscription_hash.clone()).await;
         if self.get("newUpdates".into()).is_truthy() {
             limit = result.get_limit(symbol.clone(), limit.clone());
         };
-        return self.filter_by_symbol_since_limit(result.clone(), symbol.clone(), since.clone(), limit.clone(), Value::Undefined);
+        return self.filter_by_symbol_since_limit(result.clone(), symbol.clone(), since.clone(), limit.clone());
     }
 
     async fn watch_my_trades(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
@@ -1844,7 +1844,7 @@ pub trait Kraken : Exchange {
             "timestamp": self.parse8601(datetime.clone()),
             "datetime": datetime,
             "lastTradeTimestamp": Value::Undefined,
-            "status": <Self as Kraken>::parse_order_status(self, self.safe_string(order.clone(), Value::from("order_status"), Value::Undefined)),
+            "status": self.parse_order_status(self.safe_string(order.clone(), Value::from("order_status"), Value::Undefined)),
             "symbol": self.safe_string(order.clone(), Value::from("symbol"), Value::Undefined),
             "type": self.safe_string(order.clone(), Value::from("order_type"), Value::Undefined),
             "timeInForce": self.safe_string(order.clone(), Value::from("time_in_force"), Value::Undefined),
@@ -1860,7 +1860,7 @@ pub trait Kraken : Exchange {
             "remaining": Value::Undefined,
             "fee": fee,
             "trades": Value::Undefined
-        }))).unwrap()), Value::Undefined);
+        }))).unwrap()));
     }
 
     async fn watch_multi_helper(&mut self, mut unified_name: Value, mut channel_name: Value, mut symbols: Value, mut subscription_args: Value, mut params: Value) -> Value {
@@ -1895,7 +1895,7 @@ pub trait Kraken : Exchange {
     async fn watch_balance(&mut self, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         <Self as Kraken>::load_markets(self, Value::Undefined, Value::Undefined).await;
-        let mut token: Value = <Self as Kraken>::authenticate(self).await;
+        let mut token: Value = <Self as Kraken>::authenticate(self, Value::Undefined).await;
         let mut message_hash: Value = Value::from("balances");
         let mut url: Value = self.get("urls".into()).get(Value::from("api")).get(Value::from("ws")).get(Value::from("privateV2"));
         let mut request_id: Value = <Self as Kraken>::request_id(self);
@@ -1908,7 +1908,7 @@ pub trait Kraken : Exchange {
             }))).unwrap())
         }))).unwrap());
         let mut request: Value = self.deep_extend_2(subscribe.clone(), params.clone());
-        return self.watch(url.clone(), message_hash.clone(), request.clone(), message_hash.clone(), Value::Undefined).await;
+        return self.watch(url.clone(), message_hash.clone(), request.clone(), message_hash.clone()).await;
     }
 
     fn handle_balance(&mut self, mut client: Value, mut message: Value) -> Value {
@@ -2147,10 +2147,10 @@ pub trait Kraken : Exchange {
                     "privatePostEarndeallocatestatus" => self.request("Earn/DeallocateStatus".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privatePostEarnstrategies" => self.request("Earn/Strategies".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privatePostEarnallocations" => self.request("Earn/Allocations".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    _ => unimplemented!(),
+                    _ => panic!("Unknown API method: {}", m),
                 }
             },
-            _ => unimplemented!()
+            _ => panic!("dispatch: method must be a string, got {:?}", method)
         }
     }
 }

@@ -1092,10 +1092,10 @@ pub trait Cryptomus : Exchange {
                     "privatePostV2userapiexchangeorders" => self.request("v2/user-api/exchange/orders".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privatePostV2userapiexchangeordersmarket" => self.request("v2/user-api/exchange/orders/market".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privateDeleteV2userapiexchangeordersorderid" => self.request("v2/user-api/exchange/orders/{orderId}".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    _ => unimplemented!(),
+                    _ => panic!("Unknown API method: {}", m),
                 }
             },
-            _ => unimplemented!()
+            _ => panic!("dispatch: method must be a string, got {:?}", method)
         }
     }
 }

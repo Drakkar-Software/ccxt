@@ -6194,10 +6194,10 @@ pub trait Bingx : Exchange {
                     "agentV1PrivateGetAssetpartnerdata" => self.request("asset/partnerData".into(), "agent".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "agentV1PrivateGetCommissiondatalistreferralcode" => self.request("commissionDataList/referralCode".into(), "agent".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "agentV1PrivateGetAccountsuperiorcheck" => self.request("account/superiorCheck".into(), "agent".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    _ => unimplemented!(),
+                    _ => panic!("Unknown API method: {}", m),
                 }
             },
-            _ => unimplemented!()
+            _ => panic!("dispatch: method must be a string, got {:?}", method)
         }
     }
 }

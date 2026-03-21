@@ -895,7 +895,7 @@ pub trait Woo : Exchange {
     async fn watch_tickers(&mut self, mut symbols: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        symbols = self.market_symbols(symbols.clone(), Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined);
+        symbols = self.market_symbols(symbols.clone());
         let mut name: Value = Value::from("tickers");
         let mut topic: Value = name.clone();
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
@@ -904,7 +904,7 @@ pub trait Woo : Exchange {
         }))).unwrap());
         let mut message: Value = extend_2(request.clone(), params.clone());
         let mut tickers: Value = <Self as Woo>::watch_public(self, topic.clone(), message.clone()).await;
-        return self.filter_by_array(tickers.clone(), Value::from("symbol"), symbols.clone(), Value::Undefined);
+        return self.filter_by_array(tickers.clone(), Value::from("symbol"), symbols.clone());
     }
 
     async fn un_watch_tickers(&mut self, mut symbols: Value, mut params: Value) -> Value {
@@ -970,7 +970,7 @@ pub trait Woo : Exchange {
     async fn watch_bids_asks(&mut self, mut symbols: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        symbols = self.market_symbols(symbols.clone(), Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined);
+        symbols = self.market_symbols(symbols.clone());
         let mut name: Value = Value::from("bbos");
         let mut topic: Value = name.clone();
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
@@ -982,7 +982,7 @@ pub trait Woo : Exchange {
         if self.get("newUpdates".into()).is_truthy() {
             return bidsasks.clone();
         };
-        return self.filter_by_array(self.get("bidsasks".into()), Value::from("symbol"), symbols.clone(), Value::Undefined);
+        return self.filter_by_array(self.get("bidsasks".into()), Value::from("symbol"), symbols.clone());
     }
 
     async fn un_watch_bids_asks(&mut self, mut symbols: Value, mut params: Value) -> Value {
@@ -1020,7 +1020,7 @@ pub trait Woo : Exchange {
         while i < data.len() {
             let mut ticker: Value = self.safe_dict(data.clone(), Value::from(i), Value::Undefined);
             ticker.set("ts".into(), timestamp.clone());
-            let mut parsed_ticker: Value = <Self as Woo>::parse_ws_bid_ask(self, ticker.clone());
+            let mut parsed_ticker: Value = <Self as Woo>::parse_ws_bid_ask(self, ticker.clone(), Value::Undefined);
             let mut symbol: Value = parsed_ticker.get(Value::from("symbol"));
             self.get("bidsasks".into()).set(symbol.clone(), parsed_ticker.clone());
             result.set(symbol.clone(), parsed_ticker.clone());
@@ -1108,7 +1108,7 @@ pub trait Woo : Exchange {
         let mut market: Value = self.safe_market(market_id.clone(), Value::Undefined, Value::Undefined, Value::Undefined);
         let mut symbol: Value = market.get(Value::from("symbol"));
         let mut interval: Value = self.safe_string(data.clone(), Value::from("type"), Value::Undefined);
-        let mut timeframe: Value = self.find_timeframe(interval.clone(), Value::Undefined);
+        let mut timeframe: Value = self.find_timeframe(interval.clone());
         let mut parsed: Value = Value::Json(serde_json::Value::Array(vec![self.safe_integer(data.clone(), Value::from("startTime"), Value::Undefined).into(), self.safe_float(data.clone(), Value::from("open"), Value::Undefined).into(), self.safe_float(data.clone(), Value::from("high"), Value::Undefined).into(), self.safe_float(data.clone(), Value::from("low"), Value::Undefined).into(), self.safe_float(data.clone(), Value::from("close"), Value::Undefined).into(), self.safe_float(data.clone(), Value::from("volume"), Value::Undefined).into()]));
         self.get("ohlcvs".into()).set(symbol.clone(), self.safe_value(self.get("ohlcvs".into()), symbol.clone(), Value::new_object()));
         let mut stored: Value = self.safe_value(self.get("ohlcvs".into()).get(symbol.clone()), timeframe.clone(), Value::Undefined);
@@ -1276,7 +1276,7 @@ pub trait Woo : Exchange {
 
     async fn authenticate(&mut self, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
-        self.check_required_credentials(Value::Undefined);
+        self.check_required_credentials();
         let mut url: Value = self.get("urls".into()).get(Value::from("api")).get(Value::from("ws")).get(Value::from("private")) + Value::from("/") + self.get("uid".into());
         let mut client: Value = self.client(url.clone());
         let mut message_hash: Value = Value::from("authenticated");
@@ -1342,7 +1342,7 @@ pub trait Woo : Exchange {
             "topic": topic
         }))).unwrap());
         let mut message: Value = extend_2(request.clone(), params.clone());
-        let mut orders: Value = <Self as Woo>::watch_private(self, message_hash.clone(), message.clone()).await;
+        let mut orders: Value = <Self as Woo>::watch_private(self, message_hash.clone(), message.clone(), Value::Undefined).await;
         if self.get("newUpdates".into()).is_truthy() {
             limit = orders.get_limit(symbol.clone(), limit.clone());
         };
@@ -1366,7 +1366,7 @@ pub trait Woo : Exchange {
             "topic": topic
         }))).unwrap());
         let mut message: Value = extend_2(request.clone(), params.clone());
-        let mut trades: Value = <Self as Woo>::watch_private(self, message_hash.clone(), message.clone()).await;
+        let mut trades: Value = <Self as Woo>::watch_private(self, message_hash.clone(), message.clone(), Value::Undefined).await;
         if self.get("newUpdates".into()).is_truthy() {
             limit = trades.get_limit(symbol.clone(), limit.clone());
         };
@@ -1466,7 +1466,7 @@ pub trait Woo : Exchange {
             remaining = remaining -  total_exec_quantity.clone();
         };
         let mut raw_status: Value = self.safe_string_2(order.clone(), Value::from("status"), Value::from("algoStatus"), Value::Undefined);
-        let mut status: Value = <Self as Woo>::parse_order_status(self, raw_status.clone());
+        let mut status: Value = self.parse_order_status(raw_status.clone());
         let mut trades: Value = Value::Undefined;
         let mut client_order_id: Value = self.safe_string(order.clone(), Value::from("clientOrderId"), Value::Undefined);
         let mut trigger_price: Value = self.safe_string(order.clone(), Value::from("triggerPrice"), Value::Undefined);
@@ -1494,7 +1494,7 @@ pub trait Woo : Exchange {
             "status": status,
             "fee": fee,
             "trades": trades
-        }))).unwrap()), Value::Undefined);
+        }))).unwrap()));
     }
 
     fn handle_order_update(&mut self, mut client: Value, mut message: Value) -> Value {
@@ -1634,7 +1634,7 @@ pub trait Woo : Exchange {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
         let mut message_hashes: Value = Value::new_array();
-        symbols = self.market_symbols(symbols.clone(), Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined);
+        symbols = self.market_symbols(symbols.clone());
         if !self.is_empty(symbols.clone()).is_truthy() {
             let mut i: usize = 0;
             while i < symbols.len() {
@@ -1647,7 +1647,7 @@ pub trait Woo : Exchange {
         };
         let mut url: Value = self.get("urls".into()).get(Value::from("api")).get(Value::from("ws")).get(Value::from("private")) + Value::from("/") + self.get("uid".into());
         let mut client: Value = self.client(url.clone());
-        <Self as Woo>::set_positions_cache(self, client.clone(), symbols.clone());
+        <Self as Woo>::set_positions_cache(self, client.clone(), symbols.clone(), Value::Undefined);
         let mut fetch_positions_snapshot: Value = self.handle_option(Value::from("watchPositions"), Value::from("fetchPositionsSnapshot"), true.into());
         let mut await_positions_snapshot: Value = self.handle_option(Value::from("watchPositions"), Value::from("awaitPositionsSnapshot"), true.into());
         if fetch_positions_snapshot.is_truthy() && await_positions_snapshot.is_truthy() && self.get("positions".into()).is_nullish() {
@@ -1680,7 +1680,7 @@ pub trait Woo : Exchange {
     }
 
     async fn load_positions_snapshot(&mut self, mut client: Value, mut message_hash: Value) -> Value {
-        let mut positions: Value = self.fetch_positions(Value::Undefined, Value::Undefined).await;
+        let mut positions: Value = self.fetch_positions().await;
         self.set("positions".into(), ArrayCacheBySymbolBySide::new());
         let mut cache: Value = self.get("positions".into());
         let mut i: usize = 0;
@@ -1761,7 +1761,7 @@ pub trait Woo : Exchange {
             "topic": topic
         }))).unwrap());
         let mut message: Value = extend_2(request.clone(), params.clone());
-        return <Self as Woo>::watch_private(self, message_hash.clone(), message.clone()).await;
+        return <Self as Woo>::watch_private(self, message_hash.clone(), message.clone(), Value::Undefined).await;
     }
 
     fn handle_balance(&mut self, mut client: Value, mut message: Value) -> Value {
@@ -1860,7 +1860,7 @@ pub trait Woo : Exchange {
         while i < sub_message_hashes.len() {
             let mut sub_hash: Value = sub_message_hashes.get(i.into());
             let mut unsub_hash: Value = unsub_message_hashes.get(i.into());
-            self.clean_unsubscription(client.clone(), sub_hash.clone(), unsub_hash.clone(), Value::Undefined);
+            self.clean_unsubscription(client.clone(), sub_hash.clone(), unsub_hash.clone());
             i += 1;
         };
         self.clean_cache(subscription.clone());
@@ -2127,10 +2127,10 @@ pub trait Woo : Exchange {
                     "v3PrivateDeleteAlgoorderspending" => self.request("algo/orders/pending".into(), "v3".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "v3PrivateDeleteAlgoorderspendingsymbol" => self.request("algo/orders/pending/{symbol}".into(), "v3".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "v3PrivateDeleteOrderspending" => self.request("orders/pending".into(), "v3".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    _ => unimplemented!(),
+                    _ => panic!("Unknown API method: {}", m),
                 }
             },
-            _ => unimplemented!()
+            _ => panic!("dispatch: method must be a string, got {:?}", method)
         }
     }
 }

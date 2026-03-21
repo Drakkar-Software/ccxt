@@ -731,7 +731,7 @@ pub trait Bitstamp : Exchange {
             }))).unwrap())
         }))).unwrap());
         let mut message: Value = extend_2(request.clone(), params.clone());
-        let mut orderbook: Value = self.watch(url.clone(), message_hash.clone(), message.clone(), message_hash.clone(), Value::Undefined).await;
+        let mut orderbook: Value = self.watch(url.clone(), message_hash.clone(), message.clone(), message_hash.clone()).await;
         return orderbook.limit();
     }
 
@@ -845,7 +845,7 @@ pub trait Bitstamp : Exchange {
             }))).unwrap())
         }))).unwrap());
         let mut message: Value = extend_2(request.clone(), params.clone());
-        let mut trades: Value = self.watch(url.clone(), message_hash.clone(), message.clone(), message_hash.clone(), Value::Undefined).await;
+        let mut trades: Value = self.watch(url.clone(), message_hash.clone(), message.clone(), message_hash.clone()).await;
         if self.get("newUpdates".into()).is_truthy() {
             limit = trades.get_limit(symbol.clone(), limit.clone());
         };
@@ -1074,7 +1074,7 @@ pub trait Bitstamp : Exchange {
         let mut parts: Value = channel.split(Value::from("_"));
         let mut market_id: Value = self.safe_string(parts.clone(), Value::from(3), Value::Undefined);
         let mut symbol: Value = self.safe_symbol(market_id.clone(), Value::Undefined, Value::Undefined, Value::Undefined);
-        self.get("orderbooks".into()).set(symbol.clone(), self.order_book(Value::Undefined, Value::Undefined));
+        self.get("orderbooks".into()).set(symbol.clone(), self.order_book());
         Value::Undefined
     }
 
@@ -1218,7 +1218,7 @@ pub trait Bitstamp : Exchange {
 
     async fn authenticate(&mut self, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
-        self.check_required_credentials(Value::Undefined);
+        self.check_required_credentials();
         let mut time: Value = self.milliseconds();
         let mut expires_in: Value = self.safe_integer(self.get("options".into()), Value::from("expiresIn"), Value::Undefined);
         if expires_in.clone().is_nullish() || time.clone() > expires_in.clone() {
@@ -1245,7 +1245,7 @@ pub trait Bitstamp : Exchange {
     async fn subscribe_private(&mut self, mut subscription: Value, mut message_hash: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         let mut url: Value = self.get("urls".into()).get(Value::from("api")).get(Value::from("ws"));
-        <Self as Bitstamp>::authenticate(self).await;
+        <Self as Bitstamp>::authenticate(self, Value::Undefined).await;
         message_hash = message_hash +  Value::from("-") + self.get("options".into()).get(Value::from("userId"));
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
             "event": "bts:subscribe",
@@ -1518,10 +1518,10 @@ pub trait Bitstamp : Exchange {
                     "privatePostBobaaddress" => self.request("boba_address/".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privatePostPythwithdrawal" => self.request("pyth_withdrawal/".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privatePostPythaddress" => self.request("pyth_address/".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    _ => unimplemented!(),
+                    _ => panic!("Unknown API method: {}", m),
                 }
             },
-            _ => unimplemented!()
+            _ => panic!("dispatch: method must be a string, got {:?}", method)
         }
     }
 }

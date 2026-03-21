@@ -2557,10 +2557,10 @@ pub trait Oxfun : Exchange {
                     "privatePostV3ordersplace" => self.request("v3/orders/place".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privateDeleteV3orderscancel" => self.request("v3/orders/cancel".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privateDeleteV3orderscancelall" => self.request("v3/orders/cancel-all".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    _ => unimplemented!(),
+                    _ => panic!("Unknown API method: {}", m),
                 }
             },
-            _ => unimplemented!()
+            _ => panic!("dispatch: method must be a string, got {:?}", method)
         }
     }
 }

@@ -2848,10 +2848,10 @@ pub trait Bitrue : Exchange {
                     "dapiV2PrivatePostOrder" => self.request("order".into(), "dapi".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "dapiV2PrivatePostAllopenorders" => self.request("allOpenOrders".into(), "dapi".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "dapiV2PrivatePostFuturestransfer" => self.request("futures_transfer".into(), "dapi".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    _ => unimplemented!(),
+                    _ => panic!("Unknown API method: {}", m),
                 }
             },
-            _ => unimplemented!()
+            _ => panic!("dispatch: method must be a string, got {:?}", method)
         }
     }
 }

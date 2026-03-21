@@ -951,7 +951,7 @@ pub trait Xt : Exchange {
     }
 
     async fn get_listen_key(&mut self, mut is_contract: Value) -> Value {
-        self.check_required_credentials(Value::Undefined);
+        self.check_required_credentials();
         let mut trade_type: Value = if is_contract.is_truthy() { Value::from("contract") } else { Value::from("spot") };
         let mut url: Value = self.get("urls".into()).get(Value::from("api")).get(Value::from("ws")).get(trade_type.clone());
         if !is_contract.is_truthy() {
@@ -1040,7 +1040,7 @@ pub trait Xt : Exchange {
         params = params.or_default(Value::new_object());
         let mut private_access: Value = (access.clone() == Value::from("private")).into();
         let mut r#type: Value = Value::Undefined;
-        (r#type, params) = shift_2(self.handle_market_type_and_params(method_name.clone(), market.clone(), params.clone(), Value::Undefined));
+        (r#type, params) = shift_2(self.handle_market_type_and_params(method_name.clone(), market.clone(), params.clone()));
         let mut is_contract: Value = (r#type.clone() != Value::from("spot")).into();
         let mut id: Value = self.number_to_string(self.milliseconds()) + name.clone();
         // call back ID
@@ -1082,7 +1082,7 @@ pub trait Xt : Exchange {
         subscription_params = subscription_params.or_default(Value::new_object());
         let mut private_access: Value = (access.clone() == Value::from("private")).into();
         let mut r#type: Value = Value::Undefined;
-        (r#type, params) = shift_2(self.handle_market_type_and_params(method_name.clone(), market.clone(), params.clone(), Value::Undefined));
+        (r#type, params) = shift_2(self.handle_market_type_and_params(method_name.clone(), market.clone(), params.clone()));
         let mut is_contract: Value = (r#type.clone() != Value::from("spot")).into();
         let mut id: Value = self.number_to_string(self.milliseconds()) + name.clone();
         // call back ID
@@ -1146,7 +1146,7 @@ pub trait Xt : Exchange {
         let mut method: Value = self.safe_string(params.clone(), Value::from("method"), default_method.clone());
         let mut name: Value = method.clone() + Value::from("@") + market.get(Value::from("id"));
         let mut message_hash: Value = Value::from("unsubscribe::") + name.clone();
-        return <Self as Xt>::un_subscribe(self, message_hash.clone(), name.clone(), Value::from("public"), Value::from("unWatchTicker"), default_method.clone(), market.clone(), Value::Undefined, params.clone()).await;
+        return <Self as Xt>::un_subscribe(self, message_hash.clone(), name.clone(), Value::from("public"), Value::from("unWatchTicker"), default_method.clone(), market.clone(), Value::Undefined, params.clone(), Value::Undefined).await;
     }
 
     async fn watch_tickers(&mut self, mut symbols: Value, mut params: Value) -> Value {
@@ -1163,7 +1163,7 @@ pub trait Xt : Exchange {
         if self.get("newUpdates".into()).is_truthy() {
             return tickers.clone();
         };
-        return self.filter_by_array(self.get("tickers".into()), Value::from("symbol"), symbols.clone(), Value::Undefined);
+        return self.filter_by_array(self.get("tickers".into()), Value::from("symbol"), symbols.clone());
     }
 
     async fn un_watch_tickers(&mut self, mut symbols: Value, mut params: Value) -> Value {
@@ -1176,11 +1176,11 @@ pub trait Xt : Exchange {
             panic!(r###"NotSupported::new(self.get("id".into()) + Value::from(" unWatchTickers() does not support symbols argument, unsubscribtion is for all tickers at once only"))"###);
         };
         let mut message_hash: Value = Value::from("unsubscribe::") + name.clone();
-        let mut tickers: Value = <Self as Xt>::un_subscribe(self, message_hash.clone(), name.clone(), Value::from("public"), Value::from("unWatchTickers"), Value::from("ticker"), Value::Undefined, symbols.clone(), params.clone()).await;
+        let mut tickers: Value = <Self as Xt>::un_subscribe(self, message_hash.clone(), name.clone(), Value::from("public"), Value::from("unWatchTickers"), Value::from("ticker"), Value::Undefined, symbols.clone(), params.clone(), Value::Undefined).await;
         if self.get("newUpdates".into()).is_truthy() {
             return tickers.clone();
         };
-        return self.filter_by_array(self.get("tickers".into()), Value::from("symbol"), symbols.clone(), Value::Undefined);
+        return self.filter_by_array(self.get("tickers".into()), Value::from("symbol"), symbols.clone());
     }
 
     async fn watch_ohlcv(&mut self, mut symbol: Value, mut timeframe: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
@@ -1227,7 +1227,7 @@ pub trait Xt : Exchange {
         let mut market: Value = self.market(symbol.clone());
         let mut name: Value = Value::from("trade@") + market.get(Value::from("id"));
         let mut message_hash: Value = Value::from("unsubscribe::") + name.clone();
-        return <Self as Xt>::un_subscribe(self, message_hash.clone(), name.clone(), Value::from("public"), Value::from("unWatchTrades"), Value::from("trades"), market.clone(), Value::Json(serde_json::Value::Array(vec![symbol.clone().into()])), params.clone()).await;
+        return <Self as Xt>::un_subscribe(self, message_hash.clone(), name.clone(), Value::from("public"), Value::from("unWatchTrades"), Value::from("trades"), market.clone(), Value::Json(serde_json::Value::Array(vec![symbol.clone().into()])), params.clone(), Value::Undefined).await;
     }
 
     async fn watch_order_book(&mut self, mut symbol: Value, mut limit: Value, mut params: Value) -> Value {
@@ -1255,7 +1255,7 @@ pub trait Xt : Exchange {
             name = Value::from("depth@") + market.get(Value::from("id")) + Value::from(",") + levels.clone();
         };
         let mut message_hash: Value = Value::from("unsubscribe::") + name.clone();
-        return <Self as Xt>::un_subscribe(self, message_hash.clone(), name.clone(), Value::from("public"), Value::from("unWatchOrderBook"), Value::from("orderbook"), market.clone(), Value::Json(serde_json::Value::Array(vec![symbol.clone().into()])), params.clone()).await;
+        return <Self as Xt>::un_subscribe(self, message_hash.clone(), name.clone(), Value::from("public"), Value::from("unWatchOrderBook"), Value::from("orderbook"), market.clone(), Value::Json(serde_json::Value::Array(vec![symbol.clone().into()])), params.clone(), Value::Undefined).await;
     }
 
     async fn watch_orders(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
@@ -1320,7 +1320,7 @@ pub trait Xt : Exchange {
         if self.get("positions".into()).is_nullish() {
             self.set("positions".into(), ArrayCacheBySymbolBySide::new());
         };
-        let mut fetch_positions_snapshot: Value = self.handle_option(Value::from("watchPositions"), Value::from("fetchPositionsSnapshot"), Value::Undefined);
+        let mut fetch_positions_snapshot: Value = self.handle_option(Value::from("watchPositions"), Value::from("fetchPositionsSnapshot"));
         if fetch_positions_snapshot.is_truthy() {
             let mut message_hash: Value = Value::from("fetchPositionsSnapshot");
             if !client.get(futures.clone()).contains_key(message_hash.clone()) {
@@ -1332,7 +1332,7 @@ pub trait Xt : Exchange {
     }
 
     async fn load_positions_snapshot(&mut self, mut client: Value, mut message_hash: Value) -> Value {
-        let mut positions: Value = self.fetch_positions(Value::Undefined, Value::Undefined).await;
+        let mut positions: Value = self.fetch_positions(Value::Undefined).await;
         self.set("positions".into(), ArrayCacheBySymbolBySide::new());
         let mut cache: Value = self.get("positions".into());
         let mut i: usize = 0;
@@ -1474,7 +1474,7 @@ pub trait Xt : Exchange {
         if market_id.clone().is_nonnullish() {
             let mut cv: Value = self.safe_string(data.clone(), Value::from("cv"), Value::Undefined);
             let mut is_spot: Value = (cv.clone().is_nonnullish()).into();
-            let mut ticker: Value = self.parse_ticker(data.clone(), Value::Undefined);
+            let mut ticker: Value = self.parse_ticker(data.clone());
             let mut symbol: Value = ticker.get(Value::from("symbol"));
             self.get("tickers".into()).set(symbol.clone(), ticker.clone());
             let mut event: Value = self.safe_string(message.clone(), Value::from("event"), Value::Undefined);
@@ -1561,7 +1561,7 @@ pub trait Xt : Exchange {
         let mut i: usize = 0;
         while i < data.len() {
             let mut ticker_data: Value = data.get(i.into());
-            let mut ticker: Value = self.parse_ticker(ticker_data.clone(), Value::Undefined);
+            let mut ticker: Value = self.parse_ticker(ticker_data.clone());
             let mut symbol: Value = ticker.get(Value::from("symbol"));
             self.get("tickers".into()).set(symbol.clone(), ticker.clone());
             new_tickers.push(ticker.clone());
@@ -1575,7 +1575,7 @@ pub trait Xt : Exchange {
             let mut parts: Value = message_hash.split(Value::from("::"));
             let mut symbols_string: Value = parts.get(Value::from(2));
             let mut symbols: Value = symbols_string.split(Value::from(","));
-            let mut tickers: Value = self.filter_by_array(new_tickers.clone(), Value::from("symbol"), symbols.clone(), Value::Undefined);
+            let mut tickers: Value = self.filter_by_array(new_tickers.clone(), Value::from("symbol"), symbols.clone());
             let mut tickers_symbols: Value = tickers.clone().keys();
             let mut num_tickers: usize = tickers_symbols.len();
             if num_tickers.clone() > Value::from(0) {
@@ -1682,7 +1682,7 @@ pub trait Xt : Exchange {
         let mut data: Value = self.safe_dict(message.clone(), Value::from("data"), Value::Undefined);
         let mut market_id: Value = self.safe_string_lower(data.clone(), Value::from("s"), Value::Undefined);
         if market_id.clone().is_nonnullish() {
-            let mut trade: Value = self.parse_trade(data.clone(), Value::Undefined);
+            let mut trade: Value = self.parse_trade(data.clone());
             let mut i: Value = self.safe_string(data.clone(), Value::from("i"), Value::Undefined);
             let mut trade_type: Value = if i.clone().is_nonnullish() { Value::from("spot") } else { Value::from("contract") };
             let mut market: Value = self.safe_market(market_id.clone(), Value::Undefined, Value::Undefined, trade_type.clone());
@@ -1865,7 +1865,7 @@ pub trait Xt : Exchange {
             "datetime": self.iso8601(timestamp.clone()),
             "symbol": market.get(Value::from("symbol")),
             "order": self.safe_string(trade.clone(), Value::from("i"), Value::from("orderId")),
-            "type": <Self as Xt>::parse_order_status(self, self.safe_string(trade.clone(), Value::from("st"), Value::from("state"))),
+            "type": self.parse_order_status(self.safe_string(trade.clone(), Value::from("st"), Value::from("state"))),
             "side": self.safe_string_lower(trade.clone(), Value::from("sd"), Value::from("orderSide")),
             "takerOrMaker": Value::Undefined,
             "price": self.safe_number(trade.clone(), Value::from("price"), Value::Undefined),
@@ -1947,7 +1947,7 @@ pub trait Xt : Exchange {
             "remaining": self.safe_string(order.clone(), Value::from("lq"), Value::Undefined),
             "cost": Value::Undefined,
             "average": self.safe_string_2(order.clone(), Value::from("ap"), Value::from("avgPrice"), Value::Undefined),
-            "status": <Self as Xt>::parse_order_status(self, self.safe_string(order.clone(), Value::from("st"), Value::from("state"))),
+            "status": self.parse_order_status(self.safe_string(order.clone(), Value::from("st"), Value::from("state"))),
             "fee": Value::Json(normalize(&Value::Json(json!({
                 "currency": Value::Undefined,
                 "cost": self.safe_number(order.clone(), Value::from("f"), Value::Undefined)
@@ -2108,7 +2108,7 @@ pub trait Xt : Exchange {
             stored = ArrayCacheBySymbolById::new(limit);
             self.set("my_trades".into(), stored.clone());
         };
-        let mut parsed_trade: Value = self.parse_trade(data.clone(), Value::Undefined);
+        let mut parsed_trade: Value = self.parse_trade(data.clone());
         let mut market: Value = self.market(parsed_trade.get(Value::from("symbol")));
         stored.append(parsed_trade.clone());
         let mut trade_type: Value = if market.get(Value::from("contract")).is_truthy() { Value::from("contract") } else { Value::from("spot") };
@@ -2193,7 +2193,7 @@ pub trait Xt : Exchange {
         while j < message_hashes.len() {
             let mut unsub_hash: Value = message_hashes.get(j.into());
             let mut sub_hash: Value = sub_message_hashes.get(j.into());
-            self.clean_unsubscription(client.clone(), sub_hash.clone(), unsub_hash.clone(), Value::Undefined);
+            self.clean_unsubscription(client.clone(), sub_hash.clone(), unsub_hash.clone());
             j += 1;
         };
         self.clean_cache(subscription.clone());
@@ -2376,10 +2376,10 @@ pub trait Xt : Exchange {
                     "privateUserPostUseraccountapikey" => self.request("user/account/api-key".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privateUserPutUseraccountapikey" => self.request("user/account/api-key".into(), "private".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privateUserDeleteUseraccountapikeyid" => self.request("user/account/{apiKeyId}".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    _ => unimplemented!(),
+                    _ => panic!("Unknown API method: {}", m),
                 }
             },
-            _ => unimplemented!()
+            _ => panic!("dispatch: method must be a string, got {:?}", method)
         }
     }
 }

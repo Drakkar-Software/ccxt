@@ -447,26 +447,26 @@ pub trait Hyperliquid : Exchange {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
         let mut url: Value = self.get("urls".into()).get(Value::from("api")).get(Value::from("ws")).get(Value::from("public"));
-        let mut orders_request: Value = <Self as Hyperliquid>::create_orders_request(self, orders.clone(), params.clone());
+        let mut orders_request: Value = self.create_orders_request(orders.clone(), params.clone());
         let mut wrapped: Value = <Self as Hyperliquid>::wrap_as_post_action(self, orders_request.clone());
         let mut request: Value = self.safe_dict(wrapped.clone(), Value::from("request"), Value::new_object());
         let mut request_id: Value = self.safe_string(wrapped.clone(), Value::from("requestId"), Value::Undefined);
-        let mut response: Value = self.watch(url.clone(), request_id.clone(), request.clone(), request_id.clone(), Value::Undefined).await;
+        let mut response: Value = self.watch(url.clone(), request_id.clone(), request.clone(), request_id.clone()).await;
         let mut response_ojb: Value = self.safe_dict(response.clone(), Value::from("response"), Value::new_object());
         let mut data: Value = self.safe_dict(response_ojb.clone(), Value::from("data"), Value::new_object());
         let mut statuses: Value = self.safe_list(data.clone(), Value::from("statuses"), Value::new_array());
-        return self.parse_orders(statuses.clone(), Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined);
+        return self.parse_orders(statuses.clone(), Value::Undefined);
     }
 
     async fn create_order_ws(&mut self, mut symbol: Value, mut r#type: Value, mut side: Value, mut amount: Value, mut price: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        let (mut order, mut global_params) = shift_2(<Self as Hyperliquid>::parse_create_edit_order_args(self, Value::Undefined, symbol.clone(), r#type.clone(), side.clone(), amount.clone(), price.clone(), params.clone()));
+        let (mut order, mut global_params) = shift_2(self.parse_create_edit_order_args(Value::Undefined, symbol.clone(), r#type.clone(), side.clone(), amount.clone(), price.clone(), params.clone()));
         let mut orders: Value = <Self as Hyperliquid>::create_orders_ws(self, Value::Json(serde_json::Value::Array(vec![order.clone().into()])), global_params.clone()).await;
         let mut orders_length: usize = orders.len();
         if orders_length.clone() == Value::from(0) {
             // not sure why but it is happening sometimes
-            return self.safe_order(Value::new_object(), Value::Undefined);
+            return self.safe_order(Value::new_object());
         };
         let mut parsed_order: Value = orders.get(Value::from(0));
         return parsed_order.clone();
@@ -477,12 +477,12 @@ pub trait Hyperliquid : Exchange {
         self.load_markets(Value::Undefined, Value::Undefined).await;
         let mut market: Value = self.market(symbol.clone());
         let mut url: Value = self.get("urls".into()).get(Value::from("api")).get(Value::from("ws")).get(Value::from("public"));
-        let (mut order, mut global_params) = shift_2(<Self as Hyperliquid>::parse_create_edit_order_args(self, id.clone(), symbol.clone(), r#type.clone(), side.clone(), amount.clone(), price.clone(), params.clone()));
-        let mut post_request: Value = <Self as Hyperliquid>::edit_orders_request(self, Value::Json(serde_json::Value::Array(vec![order.clone().into()])), global_params.clone());
+        let (mut order, mut global_params) = shift_2(self.parse_create_edit_order_args(id.clone(), symbol.clone(), r#type.clone(), side.clone(), amount.clone(), price.clone(), params.clone()));
+        let mut post_request: Value = self.edit_orders_request(Value::Json(serde_json::Value::Array(vec![order.clone().into()])), global_params.clone());
         let mut wrapped: Value = <Self as Hyperliquid>::wrap_as_post_action(self, post_request.clone());
         let mut request: Value = self.safe_dict(wrapped.clone(), Value::from("request"), Value::new_object());
         let mut request_id: Value = self.safe_string(wrapped.clone(), Value::from("requestId"), Value::Undefined);
-        let mut response: Value = self.watch(url.clone(), request_id.clone(), request.clone(), request_id.clone(), Value::Undefined).await;
+        let mut response: Value = self.watch(url.clone(), request_id.clone(), request.clone(), request_id.clone()).await;
         // response is the same as in this.editOrder
         let mut response_object: Value = self.safe_dict(response.clone(), Value::from("response"), Value::new_object());
         let mut data_object: Value = self.safe_dict(response_object.clone(), Value::from("data"), Value::new_object());
@@ -494,14 +494,14 @@ pub trait Hyperliquid : Exchange {
 
     async fn cancel_orders_ws(&mut self, mut ids: Value, mut symbol: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
-        self.check_required_credentials(Value::Undefined);
+        self.check_required_credentials();
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        let mut request: Value = <Self as Hyperliquid>::cancel_orders_request(self, ids.clone(), symbol.clone(), params.clone());
+        let mut request: Value = self.cancel_orders_request(ids.clone(), symbol.clone(), params.clone());
         let mut url: Value = self.get("urls".into()).get(Value::from("api")).get(Value::from("ws")).get(Value::from("public"));
         let mut wrapped: Value = <Self as Hyperliquid>::wrap_as_post_action(self, request.clone());
         let mut ws_request: Value = self.safe_dict(wrapped.clone(), Value::from("request"), Value::new_object());
         let mut request_id: Value = self.safe_string(wrapped.clone(), Value::from("requestId"), Value::Undefined);
-        let mut response: Value = self.watch(url.clone(), request_id.clone(), ws_request.clone(), request_id.clone(), Value::Undefined).await;
+        let mut response: Value = self.watch(url.clone(), request_id.clone(), ws_request.clone(), request_id.clone()).await;
         let mut response_obj: Value = self.safe_dict(response.clone(), Value::from("response"), Value::new_object());
         let mut data: Value = self.safe_dict(response_obj.clone(), Value::from("data"), Value::new_object());
         let mut statuses: Value = self.safe_list(data.clone(), Value::from("statuses"), Value::new_array());
@@ -512,7 +512,7 @@ pub trait Hyperliquid : Exchange {
             orders.push(self.safe_order(Value::Json(normalize(&Value::Json(json!({
                 "info": status,
                 "status": status
-            }))).unwrap()), Value::Undefined));
+            }))).unwrap())));
             i += 1;
         };
         return orders.clone();
@@ -539,7 +539,7 @@ pub trait Hyperliquid : Exchange {
             }))).unwrap())
         }))).unwrap());
         let mut message: Value = extend_2(request.clone(), params.clone());
-        let mut orderbook: Value = self.watch(url.clone(), message_hash.clone(), message.clone(), message_hash.clone(), Value::Undefined).await;
+        let mut orderbook: Value = self.watch(url.clone(), message_hash.clone(), message.clone(), message_hash.clone()).await;
         return orderbook.limit();
     }
 
@@ -561,7 +561,7 @@ pub trait Hyperliquid : Exchange {
             }))).unwrap())
         }))).unwrap());
         let mut message: Value = extend_2(request.clone(), params.clone());
-        return self.watch(url.clone(), message_hash.clone(), message.clone(), message_hash.clone(), Value::Undefined).await;
+        return self.watch(url.clone(), message_hash.clone(), message.clone(), message_hash.clone()).await;
     }
 
     fn handle_order_book(&mut self, mut client: Value, mut message: Value) -> Value {
@@ -592,7 +592,7 @@ pub trait Hyperliquid : Exchange {
         //
         let mut entry: Value = self.safe_dict(message.clone(), Value::from("data"), Value::new_object());
         let mut coin: Value = self.safe_string(entry.clone(), Value::from("coin"), Value::Undefined);
-        let mut market_id: Value = <Self as Hyperliquid>::coin_to_market_id(self, coin.clone());
+        let mut market_id: Value = self.coin_to_market_id(coin.clone());
         let mut market: Value = self.market(market_id.clone());
         let mut symbol: Value = market.get(Value::from("symbol"));
         let mut raw_data: Value = self.safe_list(entry.clone(), Value::from("levels"), Value::new_array());
@@ -603,7 +603,7 @@ pub trait Hyperliquid : Exchange {
         let mut timestamp: Value = self.safe_integer(entry.clone(), Value::from("time"), Value::Undefined);
         let mut snapshot: Value = self.parse_order_book(data.clone(), symbol.clone(), timestamp.clone(), Value::from("bids"), Value::from("asks"), Value::from("px"), Value::from("sz"), Value::Undefined);
         if !self.get("orderbooks".into()).contains_key(symbol.clone()) {
-            let mut ob: Value = self.order_book(snapshot.clone(), Value::Undefined);
+            let mut ob: Value = self.order_book(snapshot.clone());
             self.get("orderbooks".into()).set(symbol.clone(), ob.clone());
         };
         let mut orderbook: Value = self.get("orderbooks".into()).get(symbol.clone());
@@ -631,7 +631,7 @@ pub trait Hyperliquid : Exchange {
     async fn watch_tickers(&mut self, mut symbols: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        symbols = self.market_symbols(symbols.clone(), Value::Undefined, true.into(), Value::Undefined, Value::Undefined);
+        symbols = self.market_symbols(symbols.clone(), Value::Undefined, true.into());
         let mut message_hash: Value = Value::from("tickers");
         let mut url: Value = self.get("urls".into()).get(Value::from("api")).get(Value::from("ws")).get(Value::from("public"));
         let mut channel: Value = Value::from("webData2");
@@ -658,9 +658,9 @@ pub trait Hyperliquid : Exchange {
             request.get(Value::from("subscription")).set("type".into(), Value::from("allMids"));
             request.get(Value::from("subscription")).set("dex".into(), default_dex.clone());
         };
-        let mut tickers: Value = self.watch(url.clone(), message_hash.clone(), extend_2(request.clone(), params.clone()), message_hash.clone(), Value::Undefined).await;
+        let mut tickers: Value = self.watch(url.clone(), message_hash.clone(), extend_2(request.clone(), params.clone()), message_hash.clone()).await;
         if self.get("newUpdates".into()).is_truthy() {
-            return self.filter_by_array_tickers(tickers.clone(), Value::from("symbol"), symbols.clone(), Value::Undefined);
+            return self.filter_by_array_tickers(tickers.clone(), Value::from("symbol"), symbols.clone());
         };
         return self.get("tickers".into());
     }
@@ -668,7 +668,7 @@ pub trait Hyperliquid : Exchange {
     async fn un_watch_tickers(&mut self, mut symbols: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        symbols = self.market_symbols(symbols.clone(), Value::Undefined, true.into(), Value::Undefined, Value::Undefined);
+        symbols = self.market_symbols(symbols.clone(), Value::Undefined, true.into());
         let mut sub_message_hash: Value = Value::from("tickers");
         let mut channel: Value = Value::from("webData2");
         (channel, params) = shift_2(self.handle_option_and_params(params.clone(), Value::from("unWatchTickers"), Value::from("channel"), channel.clone()));
@@ -681,13 +681,13 @@ pub trait Hyperliquid : Exchange {
                 "user": "0x0000000000000000000000000000000000000000"
             }))).unwrap())
         }))).unwrap());
-        return self.watch(url.clone(), message_hash.clone(), extend_2(request.clone(), params.clone()), message_hash.clone(), Value::Undefined).await;
+        return self.watch(url.clone(), message_hash.clone(), extend_2(request.clone(), params.clone()), message_hash.clone()).await;
     }
 
     async fn watch_my_trades(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         let mut user_address: Value = Value::Undefined;
-        (user_address, params) = shift_2(<Self as Hyperliquid>::handle_public_address(self, Value::from("watchMyTrades"), params.clone()));
+        (user_address, params) = shift_2(self.handle_public_address(Value::from("watchMyTrades"), params.clone()));
         self.load_markets(Value::Undefined, Value::Undefined).await;
         let mut message_hash: Value = Value::from("myTrades");
         if symbol.clone().is_nonnullish() {
@@ -703,7 +703,7 @@ pub trait Hyperliquid : Exchange {
             }))).unwrap())
         }))).unwrap());
         let mut message: Value = extend_2(request.clone(), params.clone());
-        let mut trades: Value = self.watch(url.clone(), message_hash.clone(), message.clone(), message_hash.clone(), Value::Undefined).await;
+        let mut trades: Value = self.watch(url.clone(), message_hash.clone(), message.clone(), message_hash.clone()).await;
         if self.get("newUpdates".into()).is_truthy() {
             limit = trades.get_limit(symbol.clone(), limit.clone());
         };
@@ -717,7 +717,7 @@ pub trait Hyperliquid : Exchange {
             panic!(r###"NotSupported::new(self.get("id".into()) + Value::from(" unWatchMyTrades does not support a symbol argument, unWatch from all markets only"))"###);
         };
         let mut user_address: Value = Value::Undefined;
-        (user_address, params) = shift_2(<Self as Hyperliquid>::handle_public_address(self, Value::from("unWatchMyTrades"), params.clone()));
+        (user_address, params) = shift_2(self.handle_public_address(Value::from("unWatchMyTrades"), params.clone()));
         let mut message_hash: Value = Value::from("unsubscribe:myTrades");
         let mut url: Value = self.get("urls".into()).get(Value::from("api")).get(Value::from("ws")).get(Value::from("public"));
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
@@ -728,7 +728,7 @@ pub trait Hyperliquid : Exchange {
             }))).unwrap())
         }))).unwrap());
         let mut message: Value = extend_2(request.clone(), params.clone());
-        return self.watch(url.clone(), message_hash.clone(), message.clone(), message_hash.clone(), Value::Undefined).await;
+        return self.watch(url.clone(), message_hash.clone(), message.clone(), message_hash.clone()).await;
     }
 
     fn handle_ws_tickers(&mut self, mut client: Value, mut message: Value) -> Value {
@@ -801,7 +801,7 @@ pub trait Hyperliquid : Exchange {
                 let mut i: usize = 0;
                 while i < keys.len() {
                     let mut name: Value = keys.get(i.into());
-                    let mut market_id: Value = <Self as Hyperliquid>::coin_to_market_id(self, name.clone());
+                    let mut market_id: Value = self.coin_to_market_id(name.clone());
                     let mut market: Value = self.safe_market(market_id.clone(), Value::Undefined, Value::Undefined, Value::from("swap"));
                     let mut symbol: Value = market.get(Value::from("symbol"));
                     let mut ticker: Value = <Self as Hyperliquid>::parse_ws_ticker(self, Value::Json(normalize(&Value::Json(json!({
@@ -827,7 +827,7 @@ pub trait Hyperliquid : Exchange {
         while i < spot_assets.len() {
             let mut asset_object: Value = spot_assets.get(i.into());
             let mut coin: Value = self.safe_string(asset_object.clone(), Value::from("coin"), Value::Undefined);
-            let mut market_id: Value = <Self as Hyperliquid>::coin_to_market_id(self, coin.clone());
+            let mut market_id: Value = self.coin_to_market_id(coin.clone());
             let mut market: Value = self.safe_market(market_id.clone(), Value::Undefined, Value::Undefined, Value::from("spot"));
             let mut symbol: Value = market.get(Value::from("symbol"));
             let mut ticker: Value = <Self as Hyperliquid>::parse_ws_ticker(self, asset_object.clone(), market.clone());
@@ -843,7 +843,7 @@ pub trait Hyperliquid : Exchange {
         while i < universe.len() {
             let mut data: Value = extend_2(self.safe_dict(universe.clone(), Value::from(i), Value::new_object()), self.safe_dict(asset_ctxs.clone(), Value::from(i), Value::new_object()));
             let mut coin: Value = self.safe_string(data.clone(), Value::from("name"), Value::Undefined);
-            let mut market_id: Value = <Self as Hyperliquid>::coin_to_market_id(self, coin.clone());
+            let mut market_id: Value = self.coin_to_market_id(coin.clone());
             let mut market: Value = self.safe_market(market_id.clone(), Value::Undefined, Value::Undefined, Value::from("swap"));
             let mut symbol: Value = market.get(Value::from("symbol"));
             let mut ticker: Value = <Self as Hyperliquid>::parse_ws_ticker(self, data.clone(), market.clone());
@@ -938,7 +938,7 @@ pub trait Hyperliquid : Exchange {
             }))).unwrap())
         }))).unwrap());
         let mut message: Value = extend_2(request.clone(), params.clone());
-        let mut trades: Value = self.watch(url.clone(), message_hash.clone(), message.clone(), message_hash.clone(), Value::Undefined).await;
+        let mut trades: Value = self.watch(url.clone(), message_hash.clone(), message.clone(), message_hash.clone()).await;
         if self.get("newUpdates".into()).is_truthy() {
             limit = trades.get_limit(symbol.clone(), limit.clone());
         };
@@ -961,7 +961,7 @@ pub trait Hyperliquid : Exchange {
             }))).unwrap())
         }))).unwrap());
         let mut message: Value = extend_2(request.clone(), params.clone());
-        return self.watch(url.clone(), message_hash.clone(), message.clone(), message_hash.clone(), Value::Undefined).await;
+        return self.watch(url.clone(), message_hash.clone(), message.clone(), message_hash.clone()).await;
     }
 
     fn handle_trades(&mut self, mut client: Value, mut message: Value) -> Value {
@@ -984,7 +984,7 @@ pub trait Hyperliquid : Exchange {
         let mut entry: Value = self.safe_list(message.clone(), Value::from("data"), Value::new_array());
         let mut first: Value = self.safe_dict(entry.clone(), Value::from(0), Value::new_object());
         let mut coin: Value = self.safe_string(first.clone(), Value::from("coin"), Value::Undefined);
-        let mut market_id: Value = <Self as Hyperliquid>::coin_to_market_id(self, coin.clone());
+        let mut market_id: Value = self.coin_to_market_id(coin.clone());
         let mut market: Value = self.market(market_id.clone());
         let mut symbol: Value = market.get(Value::from("symbol"));
         if !self.get("trades".into()).contains_key(symbol.clone()) {
@@ -1043,7 +1043,7 @@ pub trait Hyperliquid : Exchange {
         let mut price: Value = self.safe_string(trade.clone(), Value::from("px"), Value::Undefined);
         let mut amount: Value = self.safe_string(trade.clone(), Value::from("sz"), Value::Undefined);
         let mut coin: Value = self.safe_string(trade.clone(), Value::from("coin"), Value::Undefined);
-        let mut market_id: Value = <Self as Hyperliquid>::coin_to_market_id(self, coin.clone());
+        let mut market_id: Value = self.coin_to_market_id(coin.clone());
         market = self.safe_market(market_id.clone(), Value::Undefined, Value::Undefined, Value::Undefined);
         let mut symbol: Value = market.get(Value::from("symbol"));
         let mut id: Value = self.safe_string(trade.clone(), Value::from("tid"), Value::Undefined);
@@ -1089,7 +1089,7 @@ pub trait Hyperliquid : Exchange {
         }))).unwrap());
         let mut message_hash: Value = Value::from("candles:") + timeframe.clone() + Value::from(":") + symbol.clone();
         let mut message: Value = extend_2(request.clone(), params.clone());
-        let mut ohlcv: Value = self.watch(url.clone(), message_hash.clone(), message.clone(), message_hash.clone(), Value::Undefined).await;
+        let mut ohlcv: Value = self.watch(url.clone(), message_hash.clone(), message.clone(), message_hash.clone()).await;
         if self.get("newUpdates".into()).is_truthy() {
             limit = ohlcv.get_limit(symbol.clone(), limit.clone());
         };
@@ -1114,7 +1114,7 @@ pub trait Hyperliquid : Exchange {
         let mut sub_message_hash: Value = Value::from("candles:") + timeframe.clone() + Value::from(":") + symbol.clone();
         let mut messagehash: Value = Value::from("unsubscribe:") + sub_message_hash.clone();
         let mut message: Value = extend_2(request.clone(), params.clone());
-        return self.watch(url.clone(), messagehash.clone(), message.clone(), messagehash.clone(), Value::Undefined).await;
+        return self.watch(url.clone(), messagehash.clone(), message.clone(), messagehash.clone()).await;
     }
 
     fn handle_ohlcv(&mut self, mut client: Value, mut message: Value) -> Value {
@@ -1137,7 +1137,7 @@ pub trait Hyperliquid : Exchange {
         //
         let mut data: Value = self.safe_dict(message.clone(), Value::from("data"), Value::new_object());
         let mut base: Value = self.safe_string(data.clone(), Value::from("s"), Value::Undefined);
-        let mut market_id: Value = <Self as Hyperliquid>::coin_to_market_id(self, base.clone());
+        let mut market_id: Value = self.coin_to_market_id(base.clone());
         let mut symbol: Value = self.safe_symbol(market_id.clone(), Value::Undefined, Value::Undefined, Value::Undefined);
         let mut timeframe: Value = self.safe_string(data.clone(), Value::from("i"), Value::Undefined);
         if !self.get("ohlcvs".into()).contains_key(symbol.clone()) {
@@ -1149,7 +1149,7 @@ pub trait Hyperliquid : Exchange {
             self.get("ohlcvs".into()).get(symbol.clone()).set(timeframe.clone(), stored.clone());
         };
         let mut ohlcv: Value = self.get("ohlcvs".into()).get(symbol.clone()).get(timeframe.clone());
-        let mut parsed: Value = self.parse_ohlcv(data.clone(), Value::Undefined);
+        let mut parsed: Value = self.parse_ohlcv(data.clone());
         ohlcv.append(parsed.clone());
         let mut message_hash: Value = Value::from("candles:") + timeframe.clone() + Value::from(":") + symbol.clone();
         client.resolve(ohlcv.clone(), message_hash.clone());
@@ -1178,7 +1178,7 @@ pub trait Hyperliquid : Exchange {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
         let mut user_address: Value = Value::Undefined;
-        (user_address, params) = shift_2(<Self as Hyperliquid>::handle_public_address(self, Value::from("watchOrders"), params.clone()));
+        (user_address, params) = shift_2(self.handle_public_address(Value::from("watchOrders"), params.clone()));
         let mut market: Value = Value::Undefined;
         let mut message_hash: Value = Value::from("order");
         if symbol.clone().is_nonnullish() {
@@ -1195,7 +1195,7 @@ pub trait Hyperliquid : Exchange {
             }))).unwrap())
         }))).unwrap());
         let mut message: Value = extend_2(request.clone(), params.clone());
-        let mut orders: Value = self.watch(url.clone(), message_hash.clone(), message.clone(), message_hash.clone(), Value::Undefined).await;
+        let mut orders: Value = self.watch(url.clone(), message_hash.clone(), message.clone(), message_hash.clone()).await;
         if self.get("newUpdates".into()).is_truthy() {
             limit = orders.get_limit(symbol.clone(), limit.clone());
         };
@@ -1211,7 +1211,7 @@ pub trait Hyperliquid : Exchange {
         let mut message_hash: Value = Value::from("unsubscribe:order");
         let mut url: Value = self.get("urls".into()).get(Value::from("api")).get(Value::from("ws")).get(Value::from("public"));
         let mut user_address: Value = Value::Undefined;
-        (user_address, params) = shift_2(<Self as Hyperliquid>::handle_public_address(self, Value::from("unWatchOrders"), params.clone()));
+        (user_address, params) = shift_2(self.handle_public_address(Value::from("unWatchOrders"), params.clone()));
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
             "method": "unsubscribe",
             "subscription": Value::Json(normalize(&Value::Json(json!({
@@ -1220,7 +1220,7 @@ pub trait Hyperliquid : Exchange {
             }))).unwrap())
         }))).unwrap());
         let mut message: Value = extend_2(request.clone(), params.clone());
-        return self.watch(url.clone(), message_hash.clone(), message.clone(), message_hash.clone(), Value::Undefined).await;
+        return self.watch(url.clone(), message_hash.clone(), message.clone(), message_hash.clone()).await;
     }
 
     fn handle_order(&mut self, mut client: Value, mut message: Value) -> Value {
@@ -1259,7 +1259,7 @@ pub trait Hyperliquid : Exchange {
         let mut i: usize = 0;
         while i < data.len() {
             let mut raw_order: Value = data.get(i.into());
-            let mut order: Value = self.parse_order(raw_order.clone(), Value::Undefined);
+            let mut order: Value = self.parse_order(raw_order.clone());
             stored.append(order.clone());
             let mut symbol: Value = self.safe_string(order.clone(), Value::from("symbol"), Value::Undefined);
             market_symbols.set(symbol.clone(), true.into());
@@ -1349,11 +1349,11 @@ pub trait Hyperliquid : Exchange {
         //        }
         //
         let mut coin: Value = self.safe_string(subscription.clone(), Value::from("coin"), Value::Undefined);
-        let mut market_id: Value = <Self as Hyperliquid>::coin_to_market_id(self, coin.clone());
+        let mut market_id: Value = self.coin_to_market_id(coin.clone());
         let mut symbol: Value = self.safe_symbol(market_id.clone(), Value::Undefined, Value::Undefined, Value::Undefined);
         let mut sub_message_hash: Value = Value::from("orderbook:") + symbol.clone();
         let mut message_hash: Value = Value::from("unsubscribe:") + sub_message_hash.clone();
-        self.clean_unsubscription(client.clone(), sub_message_hash.clone(), message_hash.clone(), Value::Undefined);
+        self.clean_unsubscription(client.clone(), sub_message_hash.clone(), message_hash.clone());
         if self.get("orderbooks".into()).contains_key(symbol.clone()) {
             self.get("orderbooks".into()).get(symbol.clone());
         };
@@ -1363,11 +1363,11 @@ pub trait Hyperliquid : Exchange {
     fn handle_trades_unsubscription(&mut self, mut client: Value, mut subscription: Value) -> Value {
         //
         let mut coin: Value = self.safe_string(subscription.clone(), Value::from("coin"), Value::Undefined);
-        let mut market_id: Value = <Self as Hyperliquid>::coin_to_market_id(self, coin.clone());
+        let mut market_id: Value = self.coin_to_market_id(coin.clone());
         let mut symbol: Value = self.safe_symbol(market_id.clone(), Value::Undefined, Value::Undefined, Value::Undefined);
         let mut sub_message_hash: Value = Value::from("trade:") + symbol.clone();
         let mut message_hash: Value = Value::from("unsubscribe:") + sub_message_hash.clone();
-        self.clean_unsubscription(client.clone(), sub_message_hash.clone(), message_hash.clone(), Value::Undefined);
+        self.clean_unsubscription(client.clone(), sub_message_hash.clone(), message_hash.clone());
         if self.get("trades".into()).contains_key(symbol.clone()) {
             self.get("trades".into()).get(symbol.clone());
         };
@@ -1378,7 +1378,7 @@ pub trait Hyperliquid : Exchange {
         //
         let mut sub_message_hash: Value = Value::from("tickers");
         let mut message_hash: Value = Value::from("unsubscribe:") + sub_message_hash.clone();
-        self.clean_unsubscription(client.clone(), sub_message_hash.clone(), message_hash.clone(), Value::Undefined);
+        self.clean_unsubscription(client.clone(), sub_message_hash.clone(), message_hash.clone());
         let mut symbols: Value = self.get("tickers".into()).keys();
         let mut i: usize = 0;
         while i < symbols.len() {
@@ -1390,13 +1390,13 @@ pub trait Hyperliquid : Exchange {
 
     fn handle_ohlcv_unsubscription(&mut self, mut client: Value, mut subscription: Value) -> Value {
         let mut coin: Value = self.safe_string(subscription.clone(), Value::from("coin"), Value::Undefined);
-        let mut market_id: Value = <Self as Hyperliquid>::coin_to_market_id(self, coin.clone());
+        let mut market_id: Value = self.coin_to_market_id(coin.clone());
         let mut symbol: Value = self.safe_symbol(market_id.clone(), Value::Undefined, Value::Undefined, Value::Undefined);
         let mut interval: Value = self.safe_string(subscription.clone(), Value::from("interval"), Value::Undefined);
-        let mut timeframe: Value = self.find_timeframe(interval.clone(), Value::Undefined);
+        let mut timeframe: Value = self.find_timeframe(interval.clone());
         let mut sub_message_hash: Value = Value::from("candles:") + timeframe.clone() + Value::from(":") + symbol.clone();
         let mut message_hash: Value = Value::from("unsubscribe:") + sub_message_hash.clone();
-        self.clean_unsubscription(client.clone(), sub_message_hash.clone(), message_hash.clone(), Value::Undefined);
+        self.clean_unsubscription(client.clone(), sub_message_hash.clone(), message_hash.clone());
         if self.get("ohlcvs".into()).contains_key(symbol.clone()) {
             if self.get("ohlcvs".into()).get(symbol.clone()).contains_key(timeframe.clone()) {
                 self.get("ohlcvs".into()).get(symbol.clone()).get(timeframe.clone());
@@ -1568,10 +1568,10 @@ pub trait Hyperliquid : Exchange {
                 match m.as_ref() {
                     "publicPostInfo" => self.request("info".into(), "public".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privatePostExchange" => self.request("exchange".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    _ => unimplemented!(),
+                    _ => panic!("Unknown API method: {}", m),
                 }
             },
-            _ => unimplemented!()
+            _ => panic!("dispatch: method must be a string, got {:?}", method)
         }
     }
 }

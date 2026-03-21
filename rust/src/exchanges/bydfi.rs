@@ -2487,10 +2487,10 @@ pub trait Bydfi : Exchange {
         match method {
             Value::Json(serde_json::Value::String(ref m)) => {
                 match m.as_ref() {
-                    _ => unimplemented!(),
+                    _ => panic!("Unknown API method: {}", m),
                 }
             },
-            _ => unimplemented!()
+            _ => panic!("dispatch: method must be a string, got {:?}", method)
         }
     }
 }

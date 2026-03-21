@@ -5674,10 +5674,10 @@ pub trait Coinex : Exchange {
                     "v2PrivatePostFuturesadjustpositionleverage" => self.request("futures/adjust-position-leverage".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "v2PrivatePostFuturessetpositionstoploss" => self.request("futures/set-position-stop-loss".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "v2PrivatePostFuturessetpositiontakeprofit" => self.request("futures/set-position-take-profit".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    _ => unimplemented!(),
+                    _ => panic!("Unknown API method: {}", m),
                 }
             },
-            _ => unimplemented!()
+            _ => panic!("dispatch: method must be a string, got {:?}", method)
         }
     }
 }

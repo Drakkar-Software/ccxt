@@ -4773,10 +4773,10 @@ pub trait Bitmart : Exchange {
                     "privatePostContractprivatesubmittrailorder" => self.request("contract/private/submit-trail-order".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privatePostContractprivatecanceltrailorder" => self.request("contract/private/cancel-trail-order".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privatePostContractprivatesetpositionmode" => self.request("contract/private/set-position-mode".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    _ => unimplemented!(),
+                    _ => panic!("Unknown API method: {}", m),
                 }
             },
-            _ => unimplemented!()
+            _ => panic!("dispatch: method must be a string, got {:?}", method)
         }
     }
 }

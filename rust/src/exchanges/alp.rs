@@ -983,10 +983,10 @@ pub trait Alp : Exchange {
                     "privateGetWithdraws" => self.request("withdraws/".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privatePostOrder" => self.request("order/".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privatePostOrdercancel" => self.request("order-cancel/".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    _ => unimplemented!(),
+                    _ => panic!("Unknown API method: {}", m),
                 }
             },
-            _ => unimplemented!()
+            _ => panic!("dispatch: method must be a string, got {:?}", method)
         }
     }
 }

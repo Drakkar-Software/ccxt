@@ -1421,9 +1421,9 @@ pub trait Bitget : Exchange {
         };
         let mut inst_type: Value = Value::Undefined;
         if market.clone().is_nullish() {
-            (inst_type, params) = shift_2(<Self as Bitget>::handle_product_type_and_params(self, Value::Undefined, params.clone()));
+            (inst_type, params) = shift_2(self.handle_product_type_and_params(Value::Undefined, params.clone()));
         } else if market.get(Value::from("swap")).is_truthy() || market.get(Value::from("future")).is_truthy() {
-            (inst_type, params) = shift_2(<Self as Bitget>::handle_product_type_and_params(self, market.clone(), params.clone()));
+            (inst_type, params) = shift_2(self.handle_product_type_and_params(market.clone(), params.clone()));
         } else {
             inst_type = Value::from("SPOT");
         };
@@ -1465,7 +1465,7 @@ pub trait Bitget : Exchange {
     async fn watch_tickers(&mut self, mut symbols: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        symbols = self.market_symbols(symbols.clone(), Value::Undefined, false.into(), Value::Undefined, Value::Undefined);
+        symbols = self.market_symbols(symbols.clone(), Value::Undefined, false.into());
         let mut market: Value = self.market(symbols.get(Value::from(0)));
         let mut inst_type: Value = Value::Undefined;
         let mut uta: Value = Value::Undefined;
@@ -1494,7 +1494,7 @@ pub trait Bitget : Exchange {
             result.set(tickers.get(Value::from("symbol")), tickers.clone());
             return result.clone();
         };
-        return self.filter_by_array(self.get("tickers".into()), Value::from("symbol"), symbols.clone(), Value::Undefined);
+        return self.filter_by_array(self.get("tickers".into()), Value::from("symbol"), symbols.clone());
     }
 
     fn handle_ticker(&mut self, mut client: Value, mut message: Value) -> Value {
@@ -1554,7 +1554,7 @@ pub trait Bitget : Exchange {
         //     }
         //
         <Self as Bitget>::handle_bid_ask(self, client.clone(), message.clone());
-        let mut ticker: Value = <Self as Bitget>::parse_ws_ticker(self, message.clone());
+        let mut ticker: Value = <Self as Bitget>::parse_ws_ticker(self, message.clone(), Value::Undefined);
         let mut symbol: Value = ticker.get(Value::from("symbol"));
         self.get("tickers".into()).set(symbol.clone(), ticker.clone());
         let mut message_hash: Value = Value::from("ticker:") + symbol.clone();
@@ -1696,7 +1696,7 @@ pub trait Bitget : Exchange {
     async fn watch_bids_asks(&mut self, mut symbols: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        symbols = self.market_symbols(symbols.clone(), Value::Undefined, false.into(), Value::Undefined, Value::Undefined);
+        symbols = self.market_symbols(symbols.clone(), Value::Undefined, false.into());
         let mut market: Value = self.market(symbols.get(Value::from(0)));
         let mut inst_type: Value = Value::Undefined;
         let mut uta: Value = Value::Undefined;
@@ -1725,11 +1725,11 @@ pub trait Bitget : Exchange {
             result.set(tickers.get(Value::from("symbol")), tickers.clone());
             return result.clone();
         };
-        return self.filter_by_array(self.get("bidsasks".into()), Value::from("symbol"), symbols.clone(), Value::Undefined);
+        return self.filter_by_array(self.get("bidsasks".into()), Value::from("symbol"), symbols.clone());
     }
 
     fn handle_bid_ask(&mut self, mut client: Value, mut message: Value) -> Value {
-        let mut ticker: Value = <Self as Bitget>::parse_ws_bid_ask(self, message.clone());
+        let mut ticker: Value = <Self as Bitget>::parse_ws_bid_ask(self, message.clone(), Value::Undefined);
         let mut symbol: Value = ticker.get(Value::from("symbol"));
         self.get("bidsasks".into()).set(symbol.clone(), ticker.clone());
         let mut message_hash: Value = Value::from("bidask:") + symbol.clone();
@@ -2009,7 +2009,7 @@ pub trait Bitget : Exchange {
     async fn watch_order_book_for_symbols(&mut self, mut symbols: Value, mut limit: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        symbols = self.market_symbols(symbols.clone(), Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined);
+        symbols = self.market_symbols(symbols.clone());
         let mut channel: Value = Value::from("books");
         let mut incremental_feed: Value = true.into();
         if limit.clone() == Value::from(1) || limit.clone() == Value::from(5) || limit.clone() == Value::from(15) || limit.clone() == Value::from(50) {
@@ -2112,7 +2112,7 @@ pub trait Bitget : Exchange {
             // storedOrderBook = this.safeValue (this.orderbooks, symbol);
             if !self.get("orderbooks".into()).contains_key(symbol.clone()) {
                 // const ob = this.orderBook ({});
-                let mut ob: Value = self.counted_order_book(Value::new_object(), Value::Undefined);
+                let mut ob: Value = self.counted_order_book(Value::new_object());
                 ob.set("symbol".into(), symbol.clone());
                 self.get("orderbooks".into()).set(symbol.clone(), ob.clone());
             };
@@ -2157,7 +2157,7 @@ pub trait Bitget : Exchange {
                 };
             };
         } else {
-            let mut orderbook: Value = self.order_book(Value::new_object(), Value::Undefined);
+            let mut orderbook: Value = self.order_book(Value::new_object());
             let mut bids_key: Value = Value::from("bids");
             let mut asks_key: Value = Value::from("asks");
             // bitget UTA has `a` and `b` instead of `asks` and `bids`
@@ -2216,7 +2216,7 @@ pub trait Bitget : Exchange {
             panic!(r###"ArgumentsRequired::new(self.get("id".into()) + Value::from(" watchTradesForSymbols() requires a non-empty array of symbols"))"###);
         };
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        symbols = self.market_symbols(symbols.clone(), Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined);
+        symbols = self.market_symbols(symbols.clone());
         let mut uta: Value = Value::Undefined;
         (uta, params) = shift_2(self.handle_option_and_params(params.clone(), Value::from("watchTradesForSymbols"), Value::from("uta"), false.into()));
         let mut topics: Value = Value::new_array();
@@ -2474,7 +2474,7 @@ pub trait Bitget : Exchange {
         let mut inst_type: Value = Value::from("USDT-FUTURES");
         let mut uta: Value = Value::Undefined;
         (uta, params) = shift_2(self.handle_option_and_params(params.clone(), Value::from("watchPositions"), Value::from("uta"), false.into()));
-        symbols = self.market_symbols(symbols.clone(), Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined);
+        symbols = self.market_symbols(symbols.clone());
         if !self.is_empty(symbols.clone()).is_truthy() {
             market = self.get_market_from_symbols(symbols.clone());
             (inst_type, params) = shift_2(<Self as Bitget>::get_inst_type(self, market.clone(), uta.clone(), params.clone()));
@@ -2735,7 +2735,7 @@ pub trait Bitget : Exchange {
         (uta, params) = shift_2(self.handle_option_and_params(params.clone(), Value::from("watchOrders"), Value::from("uta"), false.into()));
         let mut product_type: Value = self.safe_string(params.clone(), Value::from("productType"), Value::Undefined);
         let mut r#type: Value = Value::Undefined;
-        (r#type, params) = shift_2(self.handle_market_type_and_params(Value::from("watchOrders"), market.clone(), params.clone(), Value::Undefined));
+        (r#type, params) = shift_2(self.handle_market_type_and_params(Value::from("watchOrders"), market.clone(), params.clone()));
         let mut sub_type: Value = Value::Undefined;
         (sub_type, params) = shift_2(self.handle_sub_type_and_params(Value::from("watchOrders"), market.clone(), params.clone(), Value::from("linear")));
         if r#type.clone() == Value::from("spot") || r#type.clone() == Value::from("margin") && symbol.clone().is_nullish() {
@@ -2768,7 +2768,7 @@ pub trait Bitget : Exchange {
         // different from other streams here the 'rest' id is required for spot markets, contract markets require default here
         let mut channel: Value = if is_trigger.is_truthy() { Value::from("orders-algo") } else { Value::from("orders") };
         let mut margin_mode: Value = Value::Undefined;
-        (margin_mode, params) = shift_2(self.handle_margin_mode_and_params(Value::from("watchOrders"), params.clone(), Value::Undefined));
+        (margin_mode, params) = shift_2(self.handle_margin_mode_and_params(Value::from("watchOrders"), params.clone()));
         if margin_mode.clone().is_nonnullish() {
             inst_type = Value::from("MARGIN");
             message_hash = message_hash.clone() + Value::from(":") + margin_mode.clone();
@@ -3228,7 +3228,7 @@ pub trait Bitget : Exchange {
             message_hash = message_hash.clone() + Value::from(":") + symbol.clone();
         };
         let mut r#type: Value = Value::Undefined;
-        (r#type, params) = shift_2(self.handle_market_type_and_params(Value::from("watchMyTrades"), market.clone(), params.clone(), Value::Undefined));
+        (r#type, params) = shift_2(self.handle_market_type_and_params(Value::from("watchMyTrades"), market.clone(), params.clone()));
         let mut inst_type: Value = Value::Undefined;
         let mut uta: Value = Value::Undefined;
         (uta, params) = shift_2(self.handle_option_and_params(params.clone(), Value::from("watchMyTrades"), Value::from("uta"), false.into()));
@@ -3397,9 +3397,9 @@ pub trait Bitget : Exchange {
         let mut uta: Value = Value::Undefined;
         (uta, params) = shift_2(self.handle_option_and_params(params.clone(), Value::from("watchBalance"), Value::from("uta"), false.into()));
         let mut r#type: Value = Value::Undefined;
-        (r#type, params) = shift_2(self.handle_market_type_and_params(Value::from("watchBalance"), Value::Undefined, params.clone(), Value::Undefined));
+        (r#type, params) = shift_2(self.handle_market_type_and_params(Value::from("watchBalance"), Value::Undefined, params.clone()));
         let mut margin_mode: Value = Value::Undefined;
-        (margin_mode, params) = shift_2(self.handle_margin_mode_and_params(Value::from("watchBalance"), params.clone(), Value::Undefined));
+        (margin_mode, params) = shift_2(self.handle_margin_mode_and_params(Value::from("watchBalance"), params.clone()));
         let mut inst_type: Value = Value::Undefined;
         let mut channel: Value = Value::from("account");
         if r#type.clone() == Value::from("swap") || r#type.clone() == Value::from("future") {
@@ -3599,7 +3599,7 @@ pub trait Bitget : Exchange {
             "args": Value::Json(serde_json::Value::Array(vec![args.clone().into()]))
         }))).unwrap());
         let mut message: Value = extend_2(request.clone(), params.clone());
-        return self.watch(url.clone(), message_hash.clone(), message.clone(), message_hash.clone(), Value::Undefined).await;
+        return self.watch(url.clone(), message_hash.clone(), message.clone(), message_hash.clone()).await;
     }
 
     async fn un_watch_public(&mut self, mut message_hash: Value, mut args: Value, mut params: Value) -> Value {
@@ -3628,7 +3628,7 @@ pub trait Bitget : Exchange {
             "args": Value::Json(serde_json::Value::Array(vec![args.clone().into()]))
         }))).unwrap());
         let mut message: Value = extend_2(request.clone(), params.clone());
-        return self.watch(url.clone(), message_hash.clone(), message.clone(), message_hash.clone(), Value::Undefined).await;
+        return self.watch(url.clone(), message_hash.clone(), message.clone(), message_hash.clone()).await;
     }
 
     async fn watch_public_multiple(&mut self, mut message_hashes: Value, mut args_array: Value, mut params: Value) -> Value {
@@ -3658,12 +3658,12 @@ pub trait Bitget : Exchange {
             "args": args_array
         }))).unwrap());
         let mut message: Value = extend_2(request.clone(), params.clone());
-        return self.watch_multiple(url.clone(), message_hashes.clone(), message.clone(), message_hashes.clone(), Value::Undefined).await;
+        return self.watch_multiple(url.clone(), message_hashes.clone(), message.clone(), message_hashes.clone()).await;
     }
 
     async fn authenticate(&mut self, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
-        self.check_required_credentials(Value::Undefined);
+        self.check_required_credentials();
         let mut url: Value = self.safe_string(params.clone(), Value::from("url"), Value::Undefined);
         let mut client: Value = self.client(url.clone());
         let mut message_hash: Value = Value::from("authenticated");
@@ -3684,7 +3684,7 @@ pub trait Bitget : Exchange {
                 }))).unwrap()).into()]))
             }))).unwrap());
             let mut message: Value = extend_2(request.clone(), params.clone());
-            self.watch(url.clone(), message_hash.clone(), message.clone(), message_hash.clone(), Value::Undefined);
+            self.watch(url.clone(), message_hash.clone(), message.clone(), message_hash.clone());
         };
         return future.clone();
     }
@@ -3718,7 +3718,7 @@ pub trait Bitget : Exchange {
             "args": Value::Json(serde_json::Value::Array(vec![args.clone().into()]))
         }))).unwrap());
         let mut message: Value = extend_2(request.clone(), params.clone());
-        return self.watch(url.clone(), message_hash.clone(), message.clone(), subscription_hash.clone(), Value::Undefined).await;
+        return self.watch(url.clone(), message_hash.clone(), message.clone(), subscription_hash.clone()).await;
     }
 
     fn handle_authenticate(&mut self, mut client: Value, mut message: Value) -> Value {
@@ -4034,7 +4034,7 @@ pub trait Bitget : Exchange {
                 self.get("ohlcvs".into()).get(symbol.clone()).get(timeframe.clone());
             };
         };
-        self.clean_unsubscription(client.clone(), sub_message_hash.clone(), message_hash.clone(), Value::Undefined);
+        self.clean_unsubscription(client.clone(), sub_message_hash.clone(), message_hash.clone());
         Value::Undefined
     }
 
@@ -4679,10 +4679,10 @@ pub trait Bitget : Exchange {
                     "privateUtaPostV3usercreatesubapi" => self.request("v3/user/create-sub-api".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privateUtaPostV3userupdatesubapi" => self.request("v3/user/update-sub-api".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privateUtaPostV3userdeletesubapi" => self.request("v3/user/delete-sub-api".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    _ => unimplemented!(),
+                    _ => panic!("Unknown API method: {}", m),
                 }
             },
-            _ => unimplemented!()
+            _ => panic!("dispatch: method must be a string, got {:?}", method)
         }
     }
 }

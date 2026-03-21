@@ -2000,10 +2000,10 @@ pub trait Bitteam : Exchange {
                     "privatePostTradeapiccxtcancelallorder" => self.request("trade/api/ccxt/cancel-all-order".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privatePostTradeapiccxtcancelorder" => self.request("trade/api/ccxt/cancelorder".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privatePostTradeapiccxtordercreate" => self.request("trade/api/ccxt/ordercreate".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    _ => unimplemented!(),
+                    _ => panic!("Unknown API method: {}", m),
                 }
             },
-            _ => unimplemented!()
+            _ => panic!("dispatch: method must be a string, got {:?}", method)
         }
     }
 }

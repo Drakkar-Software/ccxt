@@ -4090,10 +4090,10 @@ pub trait Digifinex : Exchange {
                     "privateSwapPostFollowaccountavailable" => self.request("follow/account_available".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privateSwapPostFollowplantask" => self.request("follow/plan_task".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privateSwapPostFollowinstrumentlist" => self.request("follow/instrument_list".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    _ => unimplemented!(),
+                    _ => panic!("Unknown API method: {}", m),
                 }
             },
-            _ => unimplemented!()
+            _ => panic!("dispatch: method must be a string, got {:?}", method)
         }
     }
 }

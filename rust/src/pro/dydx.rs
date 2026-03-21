@@ -435,7 +435,7 @@ pub trait Dydx : Exchange {
             "channel": "v4_trades",
             "id": market.get(Value::from("id"))
         }))).unwrap());
-        let mut trades: Value = self.watch(url.clone(), message_hash.clone(), extend_2(request.clone(), params.clone()), message_hash.clone(), Value::Undefined).await;
+        let mut trades: Value = self.watch(url.clone(), message_hash.clone(), extend_2(request.clone(), params.clone()), message_hash.clone()).await;
         if self.get("newUpdates".into()).is_truthy() {
             limit = trades.get_limit(symbol.clone(), limit.clone());
         };
@@ -453,7 +453,7 @@ pub trait Dydx : Exchange {
             "channel": "v4_trades",
             "id": market.get(Value::from("id"))
         }))).unwrap());
-        return self.watch(url.clone(), message_hash.clone(), extend_2(request.clone(), params.clone()), message_hash.clone(), Value::Undefined).await;
+        return self.watch(url.clone(), message_hash.clone(), extend_2(request.clone(), params.clone()), message_hash.clone()).await;
     }
 
     fn handle_trades(&mut self, mut client: Value, mut message: Value) -> Value {
@@ -490,7 +490,7 @@ pub trait Dydx : Exchange {
             stored = ArrayCache::new(limit);
             self.get("trades".into()).set(symbol.clone(), stored.clone());
         };
-        let mut parsed_trades: Value = self.parse_trades(raw_trades.clone(), market.clone(), Value::Undefined, Value::Undefined, Value::Undefined);
+        let mut parsed_trades: Value = self.parse_trades(raw_trades.clone(), market.clone());
         let mut i: usize = 0;
         while i < parsed_trades.len() {
             let mut parsed: Value = parsed_trades.get(i.into());
@@ -543,7 +543,7 @@ pub trait Dydx : Exchange {
             "channel": "v4_orderbook",
             "id": market.get(Value::from("id"))
         }))).unwrap());
-        let mut orderbook: Value = self.watch(url.clone(), message_hash.clone(), extend_2(request.clone(), params.clone()), message_hash.clone(), Value::Undefined).await;
+        let mut orderbook: Value = self.watch(url.clone(), message_hash.clone(), extend_2(request.clone(), params.clone()), message_hash.clone()).await;
         return orderbook.limit();
     }
 
@@ -558,7 +558,7 @@ pub trait Dydx : Exchange {
             "channel": "v4_orderbook",
             "id": market.get(Value::from("id"))
         }))).unwrap());
-        return self.watch(url.clone(), message_hash.clone(), extend_2(request.clone(), params.clone()), message_hash.clone(), Value::Undefined).await;
+        return self.watch(url.clone(), message_hash.clone(), extend_2(request.clone(), params.clone()), message_hash.clone()).await;
     }
 
     fn handle_order_book(&mut self, mut client: Value, mut message: Value) -> Value {
@@ -591,7 +591,7 @@ pub trait Dydx : Exchange {
         let mut content: Value = self.safe_dict(message.clone(), Value::from("contents"), Value::Undefined);
         let mut orderbook: Value = self.safe_value(self.get("orderbooks".into()), symbol.clone(), Value::Undefined);
         if orderbook.clone().is_nullish() {
-            orderbook = self.order_book(Value::Undefined, Value::Undefined);
+            orderbook = self.order_book();
         };
         orderbook.set("symbol".into(), symbol.clone());
         let mut asks: Value = self.safe_list(content.clone(), Value::from("asks"), Value::new_array());
@@ -630,7 +630,7 @@ pub trait Dydx : Exchange {
             "channel": "v4_candles",
             "id": market.get(Value::from("id")) + Value::from("/") + resolution.clone()
         }))).unwrap());
-        let mut ohlcv: Value = self.watch(url.clone(), message_hash.clone(), extend_2(request.clone(), params.clone()), message_hash.clone(), Value::Undefined).await;
+        let mut ohlcv: Value = self.watch(url.clone(), message_hash.clone(), extend_2(request.clone(), params.clone()), message_hash.clone()).await;
         if self.get("newUpdates".into()).is_truthy() {
             limit = ohlcv.get_limit(symbol.clone(), limit.clone());
         };
@@ -650,7 +650,7 @@ pub trait Dydx : Exchange {
             "channel": "v4_candles",
             "id": market.get(Value::from("id")) + Value::from("/") + resolution.clone()
         }))).unwrap());
-        return self.watch(url.clone(), message_hash.clone(), extend_2(request.clone(), params.clone()), message_hash.clone(), Value::Undefined).await;
+        return self.watch(url.clone(), message_hash.clone(), extend_2(request.clone(), params.clone()), message_hash.clone()).await;
     }
 
     fn handle_ohlcv(&mut self, mut client: Value, mut message: Value) -> Value {
@@ -708,7 +708,7 @@ pub trait Dydx : Exchange {
         let mut id: Value = self.safe_string(message.clone(), Value::from("id"), Value::Undefined);
         let mut part: Value = id.split(Value::from("/"));
         let mut interval: Value = self.safe_string(part.clone(), Value::from(1), Value::Undefined);
-        let mut timeframe: Value = self.find_timeframe(interval.clone(), Value::Undefined);
+        let mut timeframe: Value = self.find_timeframe(interval.clone());
         let mut market_id: Value = self.safe_string(part.clone(), Value::from(0), Value::Undefined);
         let mut market: Value = self.safe_market(market_id.clone(), Value::Undefined, Value::Undefined, Value::Undefined);
         let mut symbol: Value = market.get(Value::from("symbol"));
@@ -825,10 +825,10 @@ pub trait Dydx : Exchange {
                     "noderestGetCosmosauthv1beta1accountinfodydxaddress" => self.request("cosmos/auth/v1beta1/account_info/{dydxAddress}".into(), "nodeRest".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "noderestPostCosmostxv1beta1encode" => self.request("cosmos/tx/v1beta1/encode".into(), "nodeRest".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "noderestPostCosmostxv1beta1simulate" => self.request("cosmos/tx/v1beta1/simulate".into(), "nodeRest".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    _ => unimplemented!(),
+                    _ => panic!("Unknown API method: {}", m),
                 }
             },
-            _ => unimplemented!()
+            _ => panic!("dispatch: method must be a string, got {:?}", method)
         }
     }
 }

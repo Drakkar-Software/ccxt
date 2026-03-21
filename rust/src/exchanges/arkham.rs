@@ -2147,10 +2147,10 @@ pub trait Arkham : Exchange {
                     "v1PrivateDeleteAccountwithdrawaladdressesid" => self.request("account/withdrawal/addresses/{id}".into(), "v1".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "v1PrivateDeleteSubaccountssubaccountid" => self.request("subaccounts/{subaccountId}".into(), "v1".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "v1PrivateDeleteApikeyid" => self.request("api-key/{id}".into(), "v1".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    _ => unimplemented!(),
+                    _ => panic!("Unknown API method: {}", m),
                 }
             },
-            _ => unimplemented!()
+            _ => panic!("dispatch: method must be a string, got {:?}", method)
         }
     }
 }

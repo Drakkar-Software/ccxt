@@ -1953,10 +1953,10 @@ pub trait Coinbaseexchange : Exchange {
                     "privateDeleteOrders" => <Self as Coinbaseexchange>::request(self, "orders".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privateDeleteOrdersclientclientoid" => <Self as Coinbaseexchange>::request(self, "orders/client:{client_oid}".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privateDeleteOrdersid" => <Self as Coinbaseexchange>::request(self, "orders/{id}".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    _ => unimplemented!(),
+                    _ => panic!("Unknown API method: {}", m),
                 }
             },
-            _ => unimplemented!()
+            _ => panic!("dispatch: method must be a string, got {:?}", method)
         }
     }
 }

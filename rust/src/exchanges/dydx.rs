@@ -2170,10 +2170,10 @@ pub trait Dydx : Exchange {
                     "noderestGetCosmosauthv1beta1accountinfodydxaddress" => self.request("cosmos/auth/v1beta1/account_info/{dydxAddress}".into(), "nodeRest".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "noderestPostCosmostxv1beta1encode" => self.request("cosmos/tx/v1beta1/encode".into(), "nodeRest".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "noderestPostCosmostxv1beta1simulate" => self.request("cosmos/tx/v1beta1/simulate".into(), "nodeRest".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    _ => unimplemented!(),
+                    _ => panic!("Unknown API method: {}", m),
                 }
             },
-            _ => unimplemented!()
+            _ => panic!("dispatch: method must be a string, got {:?}", method)
         }
     }
 }

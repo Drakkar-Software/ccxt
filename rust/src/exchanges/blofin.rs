@@ -2304,10 +2304,10 @@ pub trait Blofin : Exchange {
                     "privatePostCopytradingtradecanceltpslbyorder" => self.request("copytrading/trade/cancel-tpsl-by-order".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privatePostCopytradingtradeclosepositionbyorder" => self.request("copytrading/trade/close-position-by-order".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privatePostCopytradingtradeclosepositionbycontract" => self.request("copytrading/trade/close-position-by-contract".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    _ => unimplemented!(),
+                    _ => panic!("Unknown API method: {}", m),
                 }
             },
-            _ => unimplemented!()
+            _ => panic!("dispatch: method must be a string, got {:?}", method)
         }
     }
 }

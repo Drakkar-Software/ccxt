@@ -1859,10 +1859,10 @@ pub trait Bigone : Exchange {
                     "contractprivateDeleteOrdersid" => self.request("orders/{id}".into(), "contractPrivate".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "contractprivateDeleteOrdersbatch" => self.request("orders/batch".into(), "contractPrivate".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "webexchangeGetV3assets" => self.request("v3/assets".into(), "webExchange".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    _ => unimplemented!(),
+                    _ => panic!("Unknown API method: {}", m),
                 }
             },
-            _ => unimplemented!()
+            _ => panic!("dispatch: method must be a string, got {:?}", method)
         }
     }
 }

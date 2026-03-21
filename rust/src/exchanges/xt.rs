@@ -4557,10 +4557,10 @@ pub trait Xt : Exchange {
                     "privateUserPostUseraccountapikey" => self.request("user/account/api-key".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privateUserPutUseraccountapikey" => self.request("user/account/api-key".into(), "private".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privateUserDeleteUseraccountapikeyid" => self.request("user/account/{apiKeyId}".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    _ => unimplemented!(),
+                    _ => panic!("Unknown API method: {}", m),
                 }
             },
-            _ => unimplemented!()
+            _ => panic!("dispatch: method must be a string, got {:?}", method)
         }
     }
 }

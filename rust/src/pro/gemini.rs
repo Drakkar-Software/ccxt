@@ -443,7 +443,7 @@ pub trait Gemini : Exchange {
         }))).unwrap());
         let mut subscribe_hash: Value = Value::from("l2:") + market.get(Value::from("symbol"));
         let mut url: Value = self.get("urls".into()).get(Value::from("api")).get(Value::from("ws")) + Value::from("/v2/marketdata");
-        let mut trades: Value = self.watch(url.clone(), message_hash.clone(), request.clone(), subscribe_hash.clone(), Value::Undefined).await;
+        let mut trades: Value = self.watch(url.clone(), message_hash.clone(), request.clone(), subscribe_hash.clone()).await;
         if self.get("newUpdates".into()).is_truthy() {
             limit = trades.get_limit(market.get(Value::from("symbol")), limit.clone());
         };
@@ -654,7 +654,7 @@ pub trait Gemini : Exchange {
         }))).unwrap());
         let mut message_hash: Value = Value::from("ohlcv:") + market.get(Value::from("symbol")) + Value::from(":") + timeframe_id.clone();
         let mut url: Value = self.get("urls".into()).get(Value::from("api")).get(Value::from("ws")) + Value::from("/v2/marketdata");
-        let mut ohlcv: Value = self.watch(url.clone(), message_hash.clone(), request.clone(), message_hash.clone(), Value::Undefined).await;
+        let mut ohlcv: Value = self.watch(url.clone(), message_hash.clone(), request.clone(), message_hash.clone()).await;
         if self.get("newUpdates".into()).is_truthy() {
             limit = ohlcv.get_limit(symbol.clone(), limit.clone());
         };
@@ -695,7 +695,7 @@ pub trait Gemini : Exchange {
         let mut market: Value = self.safe_market(market_id.clone(), Value::Undefined, Value::Undefined, Value::Undefined);
         let mut symbol: Value = self.safe_symbol(market_id.clone(), market.clone(), Value::Undefined, Value::Undefined);
         let mut changes: Value = self.safe_value(message.clone(), Value::from("changes"), Value::new_array());
-        let mut timeframe: Value = self.find_timeframe(timeframe_id.clone(), Value::Undefined);
+        let mut timeframe: Value = self.find_timeframe(timeframe_id.clone());
         let mut ohlcvs_by_symbol: Value = self.safe_value(self.get("ohlcvs".into()), symbol.clone(), Value::Undefined);
         if ohlcvs_by_symbol.clone().is_nullish() {
             self.get("ohlcvs".into()).set(symbol.clone(), Value::new_object());
@@ -735,7 +735,7 @@ pub trait Gemini : Exchange {
         }))).unwrap());
         let mut subscribe_hash: Value = Value::from("l2:") + market.get(Value::from("symbol"));
         let mut url: Value = self.get("urls".into()).get(Value::from("api")).get(Value::from("ws")) + Value::from("/v2/marketdata");
-        let mut orderbook: Value = self.watch(url.clone(), message_hash.clone(), request.clone(), subscribe_hash.clone(), Value::Undefined).await;
+        let mut orderbook: Value = self.watch(url.clone(), message_hash.clone(), request.clone(), subscribe_hash.clone()).await;
         return orderbook.limit();
     }
 
@@ -747,7 +747,7 @@ pub trait Gemini : Exchange {
         let mut message_hash: Value = Value::from("orderbook:") + symbol.clone();
         // let orderbook = this.safeValue (this.orderbooks, symbol);
         if !self.get("orderbooks".into()).contains_key(symbol.clone()) {
-            self.get("orderbooks".into()).set(symbol.clone(), self.order_book(Value::Undefined, Value::Undefined));
+            self.get("orderbooks".into()).set(symbol.clone(), self.order_book());
         };
         let mut orderbook: Value = self.get("orderbooks".into()).get(symbol.clone());
         let mut i: usize = 0;
@@ -810,7 +810,7 @@ pub trait Gemini : Exchange {
         let mut market: Value = self.safe_market(market_id.to_lower_case(), Value::Undefined, Value::Undefined, Value::Undefined);
         let mut symbol: Value = market.get(Value::from("symbol"));
         if !self.get("bidsasks".into()).contains_key(symbol.clone()) {
-            self.get("bidsasks".into()).set(symbol.clone(), self.parse_ticker(Value::new_object(), Value::Undefined));
+            self.get("bidsasks".into()).set(symbol.clone(), self.parse_ticker(Value::new_object()));
             self.get("bidsasks".into()).get(symbol.clone()).set("symbol".into(), symbol.clone());
         };
         let mut current_bid_ask: Value = self.get("bidsasks".into()).get(symbol.clone());
@@ -876,7 +876,7 @@ pub trait Gemini : Exchange {
         } else if item_hash_name.clone() == Value::from("trades") {
             url = url +  Value::from("trades=true&bids=false&offers=false");
         };
-        return self.watch_multiple(url.clone(), message_hashes.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+        return self.watch_multiple(url.clone(), message_hashes.clone(), Value::Undefined).await;
     }
 
     fn handle_order_book_for_multidata(&mut self, mut client: Value, mut raw_order_book_changes: Value, mut timestamp: Value, mut nonce: Value) -> Value {
@@ -900,7 +900,7 @@ pub trait Gemini : Exchange {
         let mut symbol: Value = market.get(Value::from("symbol"));
         let mut message_hash: Value = Value::from("orderbook:") + symbol.clone();
         if !self.get("orderbooks".into()).contains_key(symbol.clone()) {
-            let mut ob: Value = self.order_book(Value::Undefined, Value::Undefined);
+            let mut ob: Value = self.order_book();
             self.get("orderbooks".into()).set(symbol.clone(), ob.clone());
         };
         let mut orderbook: Value = self.get("orderbooks".into()).get(symbol.clone());
@@ -986,7 +986,7 @@ pub trait Gemini : Exchange {
             symbol = market.get(Value::from("symbol"));
         };
         let mut message_hash: Value = Value::from("orders");
-        let mut orders: Value = self.watch(url.clone(), message_hash.clone(), Value::Undefined, message_hash.clone(), Value::Undefined).await;
+        let mut orders: Value = self.watch(url.clone(), message_hash.clone(), Value::Undefined, message_hash.clone()).await;
         if self.get("newUpdates".into()).is_truthy() {
             limit = orders.get_limit(symbol.clone(), limit.clone());
         };
@@ -1262,7 +1262,7 @@ pub trait Gemini : Exchange {
         if self.get("clients".into()).is_nonnullish() && self.get("clients".into()).contains_key(url.clone()) {
             return Value::Undefined;
         };
-        self.check_required_credentials(Value::Undefined);
+        self.check_required_credentials();
         let mut start_index: usize = self.get("urls".into()).get(Value::from("api")).get(Value::from("ws")).len();
         let mut url_params_index: Value = url.index_of(Value::from("?"));
         let mut url_length: usize = url.len();
@@ -1355,10 +1355,10 @@ pub trait Gemini : Exchange {
                     "privatePostV1accountlist" => self.request("v1/account/list".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privatePostV1heartbeat" => self.request("v1/heartbeat".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privatePostV1roles" => self.request("v1/roles".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    _ => unimplemented!(),
+                    _ => panic!("Unknown API method: {}", m),
                 }
             },
-            _ => unimplemented!()
+            _ => panic!("dispatch: method must be a string, got {:?}", method)
         }
     }
 }

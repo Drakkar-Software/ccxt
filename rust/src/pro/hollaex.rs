@@ -412,7 +412,7 @@ pub trait Hollaex : Exchange {
         let mut snapshot: Value = self.parse_order_book(data.clone(), symbol.clone(), timestamp_ms.clone(), Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined);
         let mut orderbook: Value = Value::Undefined;
         if !self.get("orderbooks".into()).contains_key(symbol.clone()) {
-            orderbook = self.order_book(snapshot.clone(), Value::Undefined);
+            orderbook = self.order_book(snapshot.clone());
             self.get("orderbooks".into()).set(symbol.clone(), orderbook.clone());
         } else {
             orderbook = self.get("orderbooks".into()).get(symbol.clone());
@@ -463,7 +463,7 @@ pub trait Hollaex : Exchange {
             self.get("trades".into()).set(symbol.clone(), stored.clone());
         };
         let mut data: Value = self.safe_value(message.clone(), Value::from("data"), Value::new_array());
-        let mut parsed_trades: Value = self.parse_trades(data.clone(), market.clone(), Value::Undefined, Value::Undefined, Value::Undefined);
+        let mut parsed_trades: Value = self.parse_trades(data.clone(), market.clone());
         let mut j: usize = 0;
         while j < parsed_trades.len() {
             stored.append(parsed_trades.get(j.into()));
@@ -532,7 +532,7 @@ pub trait Hollaex : Exchange {
         let mut i: usize = 0;
         while i < raw_trades.len() {
             let mut trade: Value = raw_trades.get(i.into());
-            let mut parsed: Value = self.parse_trade(trade.clone(), Value::Undefined);
+            let mut parsed: Value = self.parse_trade(trade.clone());
             stored.append(parsed.clone());
             let mut symbol: Value = trade.get(Value::from("symbol"));
             let mut market: Value = self.market(symbol.clone());
@@ -650,7 +650,7 @@ pub trait Hollaex : Exchange {
         let mut i: usize = 0;
         while i < raw_orders.len() {
             let mut order: Value = raw_orders.get(i.into());
-            let mut parsed: Value = self.parse_order(order.clone(), Value::Undefined);
+            let mut parsed: Value = self.parse_order(order.clone());
             stored.append(parsed.clone());
             let mut symbol: Value = order.get(Value::from("symbol"));
             let mut market: Value = self.market(symbol.clone());
@@ -727,12 +727,12 @@ pub trait Hollaex : Exchange {
             "args": Value::Json(serde_json::Value::Array(vec![message_hash.clone().into()]))
         }))).unwrap());
         let mut message: Value = extend_2(request.clone(), params.clone());
-        return self.watch(url.clone(), message_hash.clone(), message.clone(), message_hash.clone(), Value::Undefined).await;
+        return self.watch(url.clone(), message_hash.clone(), message.clone(), message_hash.clone()).await;
     }
 
     async fn watch_private(&mut self, mut message_hash: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
-        self.check_required_credentials(Value::Undefined);
+        self.check_required_credentials();
         let mut expires: Value = self.safe_string(self.get("options".into()), Value::from("ws-expires"), Value::Undefined);
         if expires.clone().is_nullish() {
             let mut timeout: Value = parse_int(self.get("timeout".into()) / Value::from(1000).to_string(), Value::Undefined);
@@ -756,7 +756,7 @@ pub trait Hollaex : Exchange {
             "args": Value::Json(serde_json::Value::Array(vec![message_hash.clone().into()]))
         }))).unwrap());
         let mut message: Value = extend_2(request.clone(), params.clone());
-        return self.watch(signed_url.clone(), message_hash.clone(), message.clone(), message_hash.clone(), Value::Undefined).await;
+        return self.watch(signed_url.clone(), message_hash.clone(), message.clone(), message_hash.clone()).await;
     }
 
     fn handle_error_message(&mut self, mut client: Value, mut message: Value) -> Value {
@@ -941,10 +941,10 @@ pub trait Hollaex : Exchange {
                     "privatePostOrder" => self.request("order".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privateDeleteOrderall" => self.request("order/all".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privateDeleteOrder" => self.request("order".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    _ => unimplemented!(),
+                    _ => panic!("Unknown API method: {}", m),
                 }
             },
-            _ => unimplemented!()
+            _ => panic!("dispatch: method must be a string, got {:?}", method)
         }
     }
 }

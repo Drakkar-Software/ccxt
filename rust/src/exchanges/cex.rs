@@ -1612,10 +1612,10 @@ pub trait Cex : Exchange {
                     "privatePostGetdepositaddress" => self.request("get_deposit_address".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privatePostDodepositfundsfromwallet" => self.request("do_deposit_funds_from_wallet".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privatePostDowithdrawalfundstowallet" => self.request("do_withdrawal_funds_to_wallet".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    _ => unimplemented!(),
+                    _ => panic!("Unknown API method: {}", m),
                 }
             },
-            _ => unimplemented!()
+            _ => panic!("dispatch: method must be a string, got {:?}", method)
         }
     }
 }

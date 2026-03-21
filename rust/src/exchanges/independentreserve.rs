@@ -1047,10 +1047,10 @@ pub trait Independentreserve : Exchange {
                     "privatePostWithdrawfiatcurrency" => self.request("WithdrawFiatCurrency".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privatePostWithdrawdigitalcurrency" => self.request("WithdrawDigitalCurrency".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privatePostWithdrawcrypto" => self.request("WithdrawCrypto".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    _ => unimplemented!(),
+                    _ => panic!("Unknown API method: {}", m),
                 }
             },
-            _ => unimplemented!()
+            _ => panic!("dispatch: method must be a string, got {:?}", method)
         }
     }
 }

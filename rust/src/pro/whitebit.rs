@@ -656,7 +656,7 @@ pub trait Whitebit : Exchange {
         let mut data: Value = self.safe_value(params.clone(), Value::from(1), Value::Undefined);
         let mut timestamp: Value = self.safe_timestamp(data.clone(), Value::from("timestamp"), Value::Undefined);
         if !self.get("orderbooks".into()).contains_key(symbol.clone()) {
-            let mut ob: Value = self.order_book(Value::Undefined, Value::Undefined);
+            let mut ob: Value = self.order_book();
             self.get("orderbooks".into()).set(symbol.clone(), ob.clone());
         };
         let mut orderbook: Value = self.get("orderbooks".into()).get(symbol.clone());
@@ -706,7 +706,7 @@ pub trait Whitebit : Exchange {
     async fn watch_tickers(&mut self, mut symbols: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        symbols = self.market_symbols(symbols.clone(), Value::Undefined, false.into(), Value::Undefined, Value::Undefined);
+        symbols = self.market_symbols(symbols.clone(), Value::Undefined, false.into());
         let mut method: Value = Value::from("market_subscribe");
         let mut url: Value = self.get("urls".into()).get(Value::from("api")).get(Value::from("ws"));
         let mut id: Value = self.nonce();
@@ -724,8 +724,8 @@ pub trait Whitebit : Exchange {
             "method": method,
             "params": args
         }))).unwrap());
-        self.watch_multiple(url.clone(), message_hashes.clone(), extend_2(request.clone(), params.clone()), message_hashes.clone(), Value::Undefined).await;
-        return self.filter_by_array(self.get("tickers".into()), Value::from("symbol"), symbols.clone(), Value::Undefined);
+        self.watch_multiple(url.clone(), message_hashes.clone(), extend_2(request.clone(), params.clone()), message_hashes.clone()).await;
+        return self.filter_by_array(self.get("tickers".into()), Value::from("symbol"), symbols.clone());
     }
 
     fn handle_ticker(&mut self, mut client: Value, mut message: Value) -> Value {
@@ -831,7 +831,7 @@ pub trait Whitebit : Exchange {
             self.get("trades".into()).set(symbol.clone(), stored.clone());
         };
         let mut data: Value = self.safe_value(params.clone(), Value::from(1), Value::new_array());
-        let mut parsed_trades: Value = self.parse_trades(data.clone(), market.clone(), Value::Undefined, Value::Undefined, Value::Undefined);
+        let mut parsed_trades: Value = self.parse_trades(data.clone(), market.clone());
         let mut j: usize = 0;
         while j < parsed_trades.len() {
             stored.append(parsed_trades.get(j.into()));
@@ -848,7 +848,7 @@ pub trait Whitebit : Exchange {
             panic!(r###"ArgumentsRequired::new(self.get("id".into()) + Value::from(" watchMyTrades() requires a symbol argument"))"###);
         };
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        <Self as Whitebit>::authenticate(self).await;
+        <Self as Whitebit>::authenticate(self, Value::Undefined).await;
         let mut market: Value = self.market(symbol.clone());
         symbol = market.get(Value::from("symbol"));
         let mut message_hash: Value = Value::from("myTrades:") + symbol.clone();
@@ -942,7 +942,7 @@ pub trait Whitebit : Exchange {
             panic!(r###"ArgumentsRequired::new(self.get("id".into()) + Value::from(" watchOrders() requires a symbol argument"))"###);
         };
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        <Self as Whitebit>::authenticate(self).await;
+        <Self as Whitebit>::authenticate(self, Value::Undefined).await;
         let mut market: Value = self.market(symbol.clone());
         symbol = market.get(Value::from("symbol"));
         let mut message_hash: Value = Value::from("orders:") + symbol.clone();
@@ -1110,7 +1110,7 @@ pub trait Whitebit : Exchange {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
         let mut r#type: Value = Value::Undefined;
-        (r#type, params) = shift_2(self.handle_market_type_and_params(Value::from("watchBalance"), Value::Undefined, params.clone(), Value::Undefined));
+        (r#type, params) = shift_2(self.handle_market_type_and_params(Value::from("watchBalance"), Value::Undefined, params.clone()));
         let mut message_hash: Value = Value::from("wallet:");
         let mut method: Value = Value::Undefined;
         if r#type.clone() == Value::from("spot") {
@@ -1173,7 +1173,7 @@ pub trait Whitebit : Exchange {
             "params": req_params
         }))).unwrap());
         let mut message: Value = extend_2(request.clone(), params.clone());
-        return self.watch(url.clone(), message_hash.clone(), message.clone(), message_hash.clone(), Value::Undefined).await;
+        return self.watch(url.clone(), message_hash.clone(), message.clone(), message_hash.clone()).await;
     }
 
     async fn watch_multiple_subscription(&mut self, mut message_hash: Value, mut method: Value, mut symbol: Value, mut is_nested: Value, mut params: Value) -> Value {
@@ -1238,8 +1238,8 @@ pub trait Whitebit : Exchange {
     async fn watch_private(&mut self, mut message_hash: Value, mut method: Value, mut req_params: Value, mut params: Value) -> Value {
         req_params = req_params.or_default(Value::new_array());
         params = params.or_default(Value::new_object());
-        self.check_required_credentials(Value::Undefined);
-        <Self as Whitebit>::authenticate(self).await;
+        self.check_required_credentials();
+        <Self as Whitebit>::authenticate(self, Value::Undefined).await;
         let mut url: Value = self.get("urls".into()).get(Value::from("api")).get(Value::from("ws"));
         let mut id: Value = self.nonce();
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
@@ -1248,12 +1248,12 @@ pub trait Whitebit : Exchange {
             "params": req_params
         }))).unwrap());
         let mut message: Value = extend_2(request.clone(), params.clone());
-        return self.watch(url.clone(), message_hash.clone(), message.clone(), message_hash.clone(), Value::Undefined).await;
+        return self.watch(url.clone(), message_hash.clone(), message.clone(), message_hash.clone()).await;
     }
 
     async fn authenticate(&mut self, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
-        self.check_required_credentials(Value::Undefined);
+        self.check_required_credentials();
         let mut url: Value = self.get("urls".into()).get(Value::from("api")).get(Value::from("ws"));
         let mut message_hash: Value = Value::from("authenticated");
         let mut client: Value = self.client(url.clone());
@@ -1503,10 +1503,10 @@ pub trait Whitebit : Exchange {
                     "v4PrivatePostMiningrewards" => self.request("mining/rewards".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "v4PrivatePostMarketfee" => self.request("market/fee".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "v4PrivatePostConditionalorders" => self.request("conditional-orders".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    _ => unimplemented!(),
+                    _ => panic!("Unknown API method: {}", m),
                 }
             },
-            _ => unimplemented!()
+            _ => panic!("dispatch: method must be a string, got {:?}", method)
         }
     }
 }

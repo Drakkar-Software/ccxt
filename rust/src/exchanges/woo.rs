@@ -3690,10 +3690,10 @@ pub trait Woo : Exchange {
                     "v3PrivateDeleteAlgoorderspending" => self.request("algo/orders/pending".into(), "v3".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "v3PrivateDeleteAlgoorderspendingsymbol" => self.request("algo/orders/pending/{symbol}".into(), "v3".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "v3PrivateDeleteOrderspending" => self.request("orders/pending".into(), "v3".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    _ => unimplemented!(),
+                    _ => panic!("Unknown API method: {}", m),
                 }
             },
-            _ => unimplemented!()
+            _ => panic!("dispatch: method must be a string, got {:?}", method)
         }
     }
 }
