@@ -1,4 +1,5 @@
 #![allow(clippy::all)]
+#![allow(non_snake_case)]
 #![allow(dead_code)]
 #![allow(unreachable_code)]
 #![allow(unused_imports)]
@@ -371,16 +372,16 @@ pub trait Zebpay : Exchange {
             let mut min_withdraw_fee_string: Value = Value::Undefined;
             let mut min_withdraw_string: Value = Value::Undefined;
             let mut min_deposit_string: Value = Value::Undefined;
-            let mut deposit: Value = false.into();
-            let mut withdraw: Value = false.into();
+            let mut deposit: Value = Value::from(false);
+            let mut withdraw: Value = Value::from(false);
             let mut j: usize = 0;
             while j < chains.len() {
                 let mut chain: Value = chains.get(j.into());
                 let mut network_id: Value = self.safe_string(chain.clone(), Value::from("chainId"), Value::Undefined);
                 let mut network_code: Value = self.network_id_to_code(network_id.clone(), Value::Undefined);
-                let mut deposit_allowed: Value = (self.safe_bool(chain.clone(), Value::from("isDepositEnabled"), Value::Undefined) == true.into()).into();
+                let mut deposit_allowed: Value = Value::from(self.safe_bool(chain.clone(), Value::from("isDepositEnabled"), Value::Undefined) == Value::from(true));
                 deposit = if deposit_allowed.is_truthy() { deposit_allowed.clone() } else { deposit.clone() };
-                let mut withdraw_allowed: Value = (self.safe_bool(chain.clone(), Value::from("isWithdrawEnabled"), Value::Undefined) == true.into()).into();
+                let mut withdraw_allowed: Value = Value::from(self.safe_bool(chain.clone(), Value::from("isWithdrawEnabled"), Value::Undefined) == Value::from(true));
                 withdraw = if withdraw_allowed.is_truthy() { withdraw_allowed.clone() } else { withdraw.clone() };
                 let mut withdraw_fee_string: Value = self.safe_string(chain.clone(), Value::from("withdrawalFee"), Value::Undefined);
                 if withdraw_fee_string.clone().is_nonnullish() {
@@ -398,7 +399,7 @@ pub trait Zebpay : Exchange {
                     "info": chain,
                     "id": network_id,
                     "network": network_code,
-                    "active": deposit_allowed.is_truthy() && withdraw_allowed.is_truthy(),
+                    "active": Value::from(deposit_allowed.is_truthy() && withdraw_allowed.is_truthy()),
                     "deposit": deposit_allowed,
                     "withdraw": withdraw_allowed,
                     "fee": self.parse_number(withdraw_fee_string.clone(), Value::Undefined),
@@ -421,7 +422,7 @@ pub trait Zebpay : Exchange {
                 "code": code,
                 "id": currency_id,
                 "name": name,
-                "active": deposit.is_truthy() && withdraw.is_truthy(),
+                "active": Value::from(deposit.is_truthy() && withdraw.is_truthy()),
                 "deposit": deposit,
                 "withdraw": withdraw,
                 "fee": self.parse_number(min_withdraw_fee_string.clone(), Value::Undefined),
@@ -789,7 +790,7 @@ pub trait Zebpay : Exchange {
         self.load_markets(Value::Undefined, Value::Undefined).await;
         let mut r#type: Value = Value::Undefined;
         (r#type, params) = shift_2(self.handle_market_type_and_params(Value::from("fetchBalance"), Value::Undefined, params.clone(), Value::Undefined));
-        let mut is_spot: Value = (r#type.clone() == Value::from("spot")).into();
+        let mut is_spot: Value = Value::from(r#type.clone() == Value::from("spot"));
         let mut response: Value = Value::Undefined;
         if is_spot.is_truthy() {
             response = self.dispatch("privateSpotGetV2AccountBalance".into(), params.clone(), Value::Undefined).await;
@@ -837,16 +838,19 @@ pub trait Zebpay : Exchange {
             let mut margin_asset: Value = self.safe_string(params.clone(), Value::from("marginAsset"), Value::from("INR"));
             let mut form_type: Value = self.safe_string_upper(params.clone(), Value::from("formType"), Value::from("ORDER_FORM"));
             request.set("formType".into(), form_type.clone());
-            request.set("amount".into(), self.parse_to_numeric(self.amount_to_precision(market.get(Value::from("id")), amount.clone()), Value::Undefined));
+            let mut amt_prec: Value = self.amount_to_precision(market.get(Value::from("id")), amount.clone());
+            request.set("amount".into(), self.parse_to_numeric(amt_prec.clone(), Value::Undefined));
             request.set("marginAsset".into(), margin_asset.clone());
-            let mut has_tp: Value = (take_profit_price.clone().is_nonnullish()).into();
-            let mut has_sl: Value = (stop_loss_price.clone().is_nonnullish()).into();
+            let mut has_tp: Value = Value::from(take_profit_price.clone().is_nonnullish());
+            let mut has_sl: Value = Value::from(stop_loss_price.clone().is_nonnullish());
             if has_tp.is_truthy() || has_sl.is_truthy() {
                 if has_tp.is_truthy() {
-                    request.set("takeProfitPrice".into(), self.parse_to_numeric(self.price_to_precision(symbol.clone(), take_profit_price.clone()), Value::Undefined));
+                    let mut tp_prec: Value = self.price_to_precision(symbol.clone(), take_profit_price.clone());
+                    request.set("takeProfitPrice".into(), self.parse_to_numeric(tp_prec.clone(), Value::Undefined));
                 };
                 if has_sl.is_truthy() {
-                    request.set("stopLossPrice".into(), self.parse_to_numeric(self.price_to_precision(symbol.clone(), stop_loss_price.clone()), Value::Undefined));
+                    let mut sl_prec: Value = self.price_to_precision(symbol.clone(), stop_loss_price.clone());
+                    request.set("stopLossPrice".into(), self.parse_to_numeric(sl_prec.clone(), Value::Undefined));
                 };
                 response = self.dispatch("privateSwapPostV1TradeOrderAddTPSL".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
             } else {
@@ -855,7 +859,8 @@ pub trait Zebpay : Exchange {
                     if price.clone().is_nullish() {
                         panic!(r###"ArgumentsRequired::new(self.get("id".into()) + Value::from(" createOrder() requires a price argument for limit orders"))"###);
                     };
-                    request.set("price".into(), self.parse_to_numeric(self.price_to_precision(symbol.clone(), price.clone()), Value::Undefined));
+                    let mut price_prec: Value = self.price_to_precision(symbol.clone(), price.clone());
+                    request.set("price".into(), self.parse_to_numeric(price_prec.clone(), Value::Undefined));
                 };
                 response = self.dispatch("privateSwapPostV1TradeOrder".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
             };
@@ -1195,7 +1200,7 @@ pub trait Zebpay : Exchange {
         //
         let mut positions: Value = self.safe_list(response.clone(), Value::from("data"), Value::new_array());
         let mut result: Value = self.parse_positions(positions.clone(), Value::Undefined, Value::Undefined);
-        return self.filter_by_array_positions(result.clone(), Value::from("symbol"), symbols.clone(), false.into());
+        return self.filter_by_array_positions(result.clone(), Value::from("symbol"), symbols.clone(), Value::from(false));
     }
 
     async fn add_margin(&mut self, mut symbol: Value, mut amount: Value, mut params: Value) -> Value {
@@ -1390,7 +1395,7 @@ pub trait Zebpay : Exchange {
                 "future": false,
                 "type": "swap",
                 "option": false,
-                "active": status.clone() == Value::from("Open"),
+                "active": Value::from(status.clone() == Value::from("Open")),
                 "contract": true,
                 "taker": self.safe_number(market.clone(), Value::from("takerFee"), Value::Undefined),
                 "maker": self.safe_number(market.clone(), Value::from("makerFee"), Value::Undefined),

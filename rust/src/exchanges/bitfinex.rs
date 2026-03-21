@@ -1,4 +1,5 @@
 #![allow(clippy::all)]
+#![allow(non_snake_case)]
 #![allow(dead_code)]
 #![allow(unreachable_code)]
 #![allow(unused_imports)]
@@ -934,7 +935,7 @@ pub trait Bitfinex : Exchange {
             };
             let mut r#type: Value = self.safe_string(balance.clone(), Value::from(0), Value::Undefined);
             let mut currency_id: Value = self.safe_string_lower(balance.clone(), Value::from(1), Value::from(""));
-            let mut start: Value = currency_id.len().into() - Value::from(2);
+            let mut start: Value = Value::from(currency_id.len()) - Value::from(2);
             let mut is_derivative_code: Value = (currency_id.slice(start.clone(), Value::Undefined) == Value::from("f0")).into();
             // this will only filter the derivative codes if the requestedType is 'derivatives'
             let mut derivative_condition: Value = (!is_derivative.is_truthy() || is_derivative_code.is_truthy()).into();
@@ -1003,7 +1004,9 @@ pub trait Bitfinex : Exchange {
         if error.clone() == Value::from("error") {
             let mut message: Value = self.safe_string(response.clone(), Value::from(2), Value::from(""));
             // same message as in v1
-            self.throw_exactly_matched_exception(self.get("exceptions".into()).get(Value::from("exact")), message.clone(), self.get("id".into()) + Value::from(" ") + message.clone());
+            let tmp_exceptions = self.get("exceptions".into()).get(Value::from("exact"));
+            let tmp_feedback = self.get("id".into()) + Value::from(" ") + message.clone();
+            self.throw_exactly_matched_exception(tmp_exceptions, message.clone(), tmp_feedback);
             panic!(r###"ExchangeError::new(self.get("id".into()) + Value::from(" ") + message.clone())"###);
         };
         return <Self as Bitfinex>::parse_transfer(self, Value::Json(normalize(&Value::Json(json!({
@@ -1076,7 +1079,7 @@ pub trait Bitfinex : Exchange {
         let mut currency_id: Value = Value::Undefined;
         if r#type.clone() == Value::from("derivatives") {
             currency_id = self.safe_string(underlying.clone(), Value::from(0), transfer_id.clone());
-            let mut start: Value = currency_id.len().into() - Value::from(2);
+            let mut start: Value = Value::from(currency_id.len()) - Value::from(2);
             let mut is_derivative_code: Value = (currency_id.slice(start.clone(), Value::Undefined) == Value::from("F0")).into();
             if !is_derivative_code.is_truthy() {
                 currency_id = currency_id.clone() + Value::from("F0");
@@ -1165,7 +1168,7 @@ pub trait Bitfinex : Exchange {
         let mut length: usize = ticker.len();
         let mut is_fetch_ticker: Value = (length == 10 || length == 16).into();
         let mut symbol: Value = Value::Undefined;
-        let mut minus_index: usize = 0;
+        let mut minus_index: Value = Value::from(0);
         let mut is_funding_currency: Value = false.into();
         if is_fetch_ticker.is_truthy() {
             minus_index = Value::from(1);
@@ -1320,7 +1323,7 @@ pub trait Bitfinex : Exchange {
         //
         let mut trade_list: Value = self.safe_list(trade.clone(), Value::from("result"), Value::new_array());
         let mut trade_length: usize = trade_list.len();
-        let mut is_private: Value = (trade_length.clone() > Value::from(5)).into();
+        let mut is_private: Value = (trade_length > 5).into();
         let mut id: Value = self.safe_string(trade_list.clone(), Value::from(0), Value::Undefined);
         let mut amount_index: Value = if is_private.is_truthy() { Value::from(4) } else { Value::from(2) };
         let mut side: Value = Value::Undefined;
@@ -1628,15 +1631,15 @@ pub trait Bitfinex : Exchange {
         };
         request.set("type".into(), order_type.clone());
         // flag values may be summed to combine flags
-        let mut flags: usize = 0;
+        let mut flags: Value = Value::from(0);
         if post_only.is_truthy() {
-            flags = self.sum(Value::from(flags), Value::from(4096));
+            flags = self.sum(flags.clone(), Value::from(4096));
         };
         if reduce_only.is_truthy() {
-            flags = self.sum(Value::from(flags), Value::from(1024));
+            flags = self.sum(flags.clone(), Value::from(1024));
         };
-        if flags != 0 {
-            request.set("flags".into(), Value::from(flags));
+        if flags.clone() != Value::from(0) {
+            request.set("flags".into(), flags.clone());
         };
         if client_order_id.clone().is_nonnullish() {
             request.set("cid".into(), client_order_id.clone());
@@ -2276,7 +2279,7 @@ pub trait Bitfinex : Exchange {
         let mut address_to: Value = Value::Undefined;
         let mut network: Value = Value::Undefined;
         let mut comment: Value = Value::Undefined;
-        if transaction_length.clone() == Value::from(8) {
+        if transaction_length == 8 {
             let mut data: Value = self.safe_value(transaction.clone(), Value::from(4), Value::new_array());
             timestamp = self.safe_integer(transaction.clone(), Value::from(0), Value::Undefined);
             if currency.clone().is_nonnullish() {
@@ -2297,7 +2300,7 @@ pub trait Bitfinex : Exchange {
             r#type = Value::from("withdrawal");
             let mut network_id: Value = self.safe_string(data.clone(), Value::from(2), Value::Undefined);
             network = self.network_id_to_code(network_id.to_upper_case(), Value::Undefined);
-        } else if transaction_length.clone() == Value::from(22) {
+        } else if transaction_length == 22 {
             // withdraw returns in lowercase
             id = self.safe_string(transaction.clone(), Value::from(0), Value::Undefined);
             let mut currency_id: Value = self.safe_string(transaction.clone(), Value::from(1), Value::Undefined);
@@ -2579,14 +2582,17 @@ pub trait Bitfinex : Exchange {
             let mut feedback: Value = self.get("id".into()) + Value::from(" ") + response.clone();
             let mut message: Value = self.safe_string(response.clone(), Value::from(2), Value::from(""));
             // same message as in v1
-            self.throw_exactly_matched_exception(self.get("exceptions".into()).get(Value::from("exact")), message.clone(), feedback.clone());
-            self.throw_broadly_matched_exception(self.get("exceptions".into()).get(Value::from("broad")), message.clone(), feedback.clone());
+            let tmp_exact = self.get("exceptions".into()).get(Value::from("exact"));
+            self.throw_exactly_matched_exception(tmp_exact, message.clone(), feedback.clone());
+            let tmp_broad = self.get("exceptions".into()).get(Value::from("broad"));
+            self.throw_broadly_matched_exception(tmp_broad, message.clone(), feedback.clone());
             panic!(r###"ExchangeError::new(feedback)"###);
         };
         // unknown message
         let mut text: Value = self.safe_string(response.clone(), Value::from(7), Value::Undefined);
         if text.clone() != Value::from("success") {
-            self.throw_broadly_matched_exception(self.get("exceptions".into()).get(Value::from("broad")), text.clone(), text.clone());
+            let tmp_broad = self.get("exceptions".into()).get(Value::from("broad"));
+            self.throw_broadly_matched_exception(tmp_broad, text.clone(), text.clone());
         };
         return <Self as Bitfinex>::parse_transaction(self, response.clone(), currency.clone());
     }
@@ -2949,8 +2955,8 @@ pub trait Bitfinex : Exchange {
         let mut raw_rates: Value = self.filter_by_symbol_since_limit(rates.clone(), symbol.clone(), since.clone(), limit.clone(), Value::Undefined);
         let mut rates_length: usize = raw_rates.len();
         let mut i: usize = 0;
-        while i < rates_length.clone().into() {
-            let mut index: Value = rates_length.clone() - Value::from(i) - Value::from(1);
+        while i < rates_length {
+            let mut index: Value = Value::from(rates_length - i - 1);
             let mut value_at_index: Value = raw_rates.get(index.clone());
             reversed_array.push(value_at_index.clone());
             i += 1;
@@ -3263,7 +3269,7 @@ pub trait Bitfinex : Exchange {
         //     ]
         //
         let mut interest_length: usize = interest.len();
-        let mut open_interest_index: Value = if interest_length.clone() == Value::from(23) { Value::from(17) } else { Value::from(18) };
+        let mut open_interest_index: Value = if interest_length == 23 { Value::from(17) } else { Value::from(18) };
         let mut timestamp: Value = self.safe_integer(interest.clone(), Value::from(1), Value::Undefined);
         let mut market_id: Value = self.safe_string(interest.clone(), Value::from(0), Value::Undefined);
         return self.safe_open_interest(Value::Json(normalize(&Value::Json(json!({
@@ -3500,15 +3506,15 @@ pub trait Bitfinex : Exchange {
             request.set("price".into(), <Self as Bitfinex>::price_to_precision(self, symbol.clone(), price.clone()));
         };
         // flag values may be summed to combine flags
-        let mut flags: usize = 0;
+        let mut flags: Value = Value::from(0);
         if post_only.is_truthy() {
-            flags = self.sum(Value::from(flags), Value::from(4096));
+            flags = self.sum(flags.clone(), Value::from(4096));
         };
         if reduce_only.is_truthy() {
-            flags = self.sum(Value::from(flags), Value::from(1024));
+            flags = self.sum(flags.clone(), Value::from(1024));
         };
-        if flags != 0 {
-            request.set("flags".into(), Value::from(flags));
+        if flags.clone() != Value::from(0) {
+            request.set("flags".into(), flags.clone());
         };
         if client_order_id.clone().is_nonnullish() {
             request.set("cid".into(), client_order_id.clone());

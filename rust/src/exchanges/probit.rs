@@ -1,4 +1,5 @@
 #![allow(clippy::all)]
+#![allow(non_snake_case)]
 #![allow(dead_code)]
 #![allow(unreachable_code)]
 #![allow(unused_imports)]
@@ -932,7 +933,7 @@ pub trait Probit : Exchange {
             return year.clone() + Value::from("-") + month_string.clone() + Value::from("-01T00:00:00.000Z");
         } else if timeframe.clone() == Value::from("1w") {
             timestamp = self.parse_to_int(timestamp.clone() / Value::from(1000));
-            let mut first_sunday: usize = 259200;
+            let mut first_sunday: Value = Value::from(259200);
             // 1970-01-04T00:00:00.000Z
             let mut difference: Value = timestamp.clone() - first_sunday.clone();
             let mut num_weeks: Value = Math::floor(difference.clone() / duration.clone());

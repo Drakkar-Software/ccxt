@@ -1,4 +1,5 @@
 #![allow(clippy::all)]
+#![allow(non_snake_case)]
 #![allow(dead_code)]
 #![allow(unreachable_code)]
 #![allow(unused_imports)]
@@ -916,7 +917,9 @@ pub trait Bullish : Exchange {
 
     async fn fetch_my_trades(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
-        Promise::all(Value::Json(serde_json::Value::Array(vec![self.load_markets(Value::Undefined, Value::Undefined).into(), <Self as Bullish>::handle_token(self, Value::Undefined).into()]))).await;
+        let _lm = self.load_markets(Value::Undefined, Value::Undefined).await;
+        let _ht = <Self as Bullish>::handle_token(self, Value::Undefined).await;
+        Promise::all(Value::Json(serde_json::Value::Array(vec![_lm.into(), _ht.into()]))).await;
         let mut trading_account_id: Value = <Self as Bullish>::load_account(self, params.clone()).await;
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
             "tradingAccountId": trading_account_id
@@ -1168,22 +1171,21 @@ pub trait Bullish : Exchange {
         }))).unwrap()), market.clone());
     }
 
-    async fn safe_deterministic_call(&self, mut method: Value, mut symbol: Value, mut since: Value, mut limit: Value, mut timeframe: Value, mut params: Value) -> Value {
+    async fn safe_deterministic_call(&mut self, mut method: Value, mut symbol: Value, mut since: Value, mut limit: Value, mut timeframe: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         let mut max_retries: Value = Value::Undefined;
         (max_retries, params) = shift_2(self.handle_option_and_params(params.clone(), method.clone(), Value::from("maxRetries"), Value::from(3)));
-        let mut errors: usize = 0;
+        let mut errors: Value = Value::from(0);
         params = self.omit(params.clone(), Value::from("until"));
         // the exchange returns the most recent data, so we do not need to pass until into paginated calls
         // the correct util value will be calculated inside of the method
-        while errors <= max_retries.clone().into(){
+        while errors <= max_retries.clone(){
                         if timeframe.is_truthy() && method.clone() != Value::from("fetchFundingRateHistory") {
                 return self.dispatch(method, symbol.clone(), timeframe.clone()).await;
             } else {
                 return self.dispatch(method, symbol.clone(), since.clone()).await;
             };
             // catch block omitted (no exception support in Value runtime)
-;
         };
         // if we are rate limited, we should not retry and fail fast
         return Value::new_array();
@@ -1234,7 +1236,7 @@ pub trait Bullish : Exchange {
             panic!(r###"ArgumentsRequired::new(self.get("id".into()) + Value::from(" fetchFundingRateHistory() requires a symbol argument"))"###);
         };
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        let mut max_limit: usize = 100;
+        let mut max_limit: Value = Value::from(100);
         let mut paginate: Value = false.into();
         (paginate, params) = shift_2(self.handle_option_and_params(params.clone(), Value::from("fetchFundingRateHistory"), Value::from("paginate"), Value::Undefined));
         if paginate.is_truthy() {
@@ -1286,7 +1288,9 @@ pub trait Bullish : Exchange {
 
     async fn fetch_orders(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
-        Promise::all(Value::Json(serde_json::Value::Array(vec![self.load_markets(Value::Undefined, Value::Undefined).into(), <Self as Bullish>::handle_token(self, Value::Undefined).into()]))).await;
+        let _lm = self.load_markets(Value::Undefined, Value::Undefined).await;
+        let _ht = <Self as Bullish>::handle_token(self, Value::Undefined).await;
+        Promise::all(Value::Json(serde_json::Value::Array(vec![_lm.into(), _ht.into()]))).await;
         let mut trading_account_id: Value = <Self as Bullish>::load_account(self, params.clone()).await;
         let mut paginate: Value = self.safe_bool(params.clone(), Value::from("paginate"), false.into());
         if paginate.is_truthy() {
@@ -1395,7 +1399,7 @@ pub trait Bullish : Exchange {
     }
 
     fn get_closest_limit(&mut self, mut limit: Value) -> Value {
-        let mut page_size: usize = 5;
+        let mut page_size: Value = Value::from(5);
         if limit.clone() > Value::from(5) && limit.clone() < Value::from(26) {
             page_size = Value::from(25);
         } else if limit.clone() > Value::from(25) && limit.clone() < Value::from(51) {
@@ -1446,7 +1450,9 @@ pub trait Bullish : Exchange {
 
     async fn fetch_order(&mut self, mut id: Value, mut symbol: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
-        Promise::all(Value::Json(serde_json::Value::Array(vec![self.load_markets(Value::Undefined, Value::Undefined).into(), <Self as Bullish>::handle_token(self, Value::Undefined).into()]))).await;
+        let _lm = self.load_markets(Value::Undefined, Value::Undefined).await;
+        let _ht = <Self as Bullish>::handle_token(self, Value::Undefined).await;
+        Promise::all(Value::Json(serde_json::Value::Array(vec![_lm.into(), _ht.into()]))).await;
         let mut trading_account_id: Value = <Self as Bullish>::load_account(self, params.clone()).await;
         let mut market: Value = Value::Undefined;
         if symbol.clone().is_nonnullish() {
@@ -1489,7 +1495,9 @@ pub trait Bullish : Exchange {
 
     async fn create_order(&mut self, mut symbol: Value, mut r#type: Value, mut side: Value, mut amount: Value, mut price: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
-        Promise::all(Value::Json(serde_json::Value::Array(vec![self.load_markets(Value::Undefined, Value::Undefined).into(), <Self as Bullish>::handle_token(self, Value::Undefined).into()]))).await;
+        let _lm = self.load_markets(Value::Undefined, Value::Undefined).await;
+        let _ht = <Self as Bullish>::handle_token(self, Value::Undefined).await;
+        Promise::all(Value::Json(serde_json::Value::Array(vec![_lm.into(), _ht.into()]))).await;
         let mut trading_account_id: Value = <Self as Bullish>::load_account(self, params.clone()).await;
         let mut market: Value = self.market(symbol.clone());
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
@@ -1536,7 +1544,9 @@ pub trait Bullish : Exchange {
 
     async fn edit_order(&mut self, mut id: Value, mut symbol: Value, mut r#type: Value, mut side: Value, mut amount: Value, mut price: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
-        Promise::all(Value::Json(serde_json::Value::Array(vec![self.load_markets(Value::Undefined, Value::Undefined).into(), <Self as Bullish>::handle_token(self, Value::Undefined).into()]))).await;
+        let _lm = self.load_markets(Value::Undefined, Value::Undefined).await;
+        let _ht = <Self as Bullish>::handle_token(self, Value::Undefined).await;
+        Promise::all(Value::Json(serde_json::Value::Array(vec![_lm.into(), _ht.into()]))).await;
         let mut trading_account_id: Value = <Self as Bullish>::load_account(self, params.clone()).await;
         let mut market: Value = self.market(symbol.clone());
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
@@ -1568,7 +1578,9 @@ pub trait Bullish : Exchange {
 
     async fn cancel_order(&mut self, mut id: Value, mut symbol: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
-        Promise::all(Value::Json(serde_json::Value::Array(vec![self.load_markets(Value::Undefined, Value::Undefined).into(), <Self as Bullish>::handle_token(self, Value::Undefined).into()]))).await;
+        let _lm = self.load_markets(Value::Undefined, Value::Undefined).await;
+        let _ht = <Self as Bullish>::handle_token(self, Value::Undefined).await;
+        Promise::all(Value::Json(serde_json::Value::Array(vec![_lm.into(), _ht.into()]))).await;
         let mut trading_account_id: Value = <Self as Bullish>::load_account(self, params.clone()).await;
         if symbol.clone().is_nullish() {
             panic!(r###"ArgumentsRequired::new(self.get("id".into()) + Value::from(" cancelOrder() requires a symbol argument"))"###);
@@ -1594,7 +1606,9 @@ pub trait Bullish : Exchange {
 
     async fn cancel_all_orders(&mut self, mut symbol: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
-        Promise::all(Value::Json(serde_json::Value::Array(vec![self.load_markets(Value::Undefined, Value::Undefined).into(), <Self as Bullish>::handle_token(self, Value::Undefined).into()]))).await;
+        let _lm = self.load_markets(Value::Undefined, Value::Undefined).await;
+        let _ht = <Self as Bullish>::handle_token(self, Value::Undefined).await;
+        Promise::all(Value::Json(serde_json::Value::Array(vec![_lm.into(), _ht.into()]))).await;
         let mut trading_account_id: Value = <Self as Bullish>::load_account(self, params.clone()).await;
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
             "tradingAccountId": trading_account_id
@@ -1707,7 +1721,7 @@ pub trait Bullish : Exchange {
             "symbol": symbol,
             "type": <Self as Bullish>::parse_order_type(self, r#type.clone()),
             "timeInForce": time_in_force,
-            "postOnly": r#type.clone() == Value::from("POST_ONLY"),
+            "postOnly": Value::from(r#type.clone() == Value::from("POST_ONLY")),
             "side": side,
             "price": price,
             "triggerPrice": stop_price,
@@ -1744,7 +1758,9 @@ pub trait Bullish : Exchange {
 
     async fn fetch_deposits_withdrawals(&mut self, mut code: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
-        Promise::all(Value::Json(serde_json::Value::Array(vec![self.load_markets(Value::Undefined, Value::Undefined).into(), <Self as Bullish>::handle_token(self, Value::Undefined).into()]))).await;
+        let _lm = self.load_markets(Value::Undefined, Value::Undefined).await;
+        let _ht = <Self as Bullish>::handle_token(self, Value::Undefined).await;
+        Promise::all(Value::Json(serde_json::Value::Array(vec![_lm.into(), _ht.into()]))).await;
         let mut request: Value = Value::new_object();
         (request, params) = shift_2(self.handle_until_option(Value::from("createdAtDatetime[lte]"), request.clone(), params.clone(), Value::Undefined));
         let mut until: Value = self.safe_integer(request.clone(), Value::from("createdAtDatetime[lte]"), Value::Undefined);
@@ -1799,7 +1815,9 @@ pub trait Bullish : Exchange {
 
     async fn withdraw(&mut self, mut code: Value, mut amount: Value, mut address: Value, mut tag: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
-        Promise::all(Value::Json(serde_json::Value::Array(vec![self.load_markets(Value::Undefined, Value::Undefined).into(), <Self as Bullish>::handle_token(self, Value::Undefined).into()]))).await;
+        let _lm = self.load_markets(Value::Undefined, Value::Undefined).await;
+        let _ht = <Self as Bullish>::handle_token(self, Value::Undefined).await;
+        Promise::all(Value::Json(serde_json::Value::Array(vec![_lm.into(), _ht.into()]))).await;
         // todo check this method properly
         let mut currency: Value = self.currency(code.clone());
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
@@ -1950,7 +1968,9 @@ pub trait Bullish : Exchange {
 
     async fn fetch_accounts(&mut self, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
-        Promise::all(Value::Json(serde_json::Value::Array(vec![self.load_markets(Value::Undefined, Value::Undefined).into(), <Self as Bullish>::handle_token(self, Value::Undefined).into()]))).await;
+        let _lm = self.load_markets(Value::Undefined, Value::Undefined).await;
+        let _ht = <Self as Bullish>::handle_token(self, Value::Undefined).await;
+        Promise::all(Value::Json(serde_json::Value::Array(vec![_lm.into(), _ht.into()]))).await;
         let mut response: Value = self.dispatch("privateGetV1AccountsTradingAccounts".into(), params.clone(), Value::Undefined).await;
         //
         //     [
@@ -2045,7 +2065,9 @@ pub trait Bullish : Exchange {
 
     async fn fetch_deposit_address(&mut self, mut code: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
-        Promise::all(Value::Json(serde_json::Value::Array(vec![self.load_markets(Value::Undefined, Value::Undefined).into(), <Self as Bullish>::handle_token(self, Value::Undefined).into()]))).await;
+        let _lm = self.load_markets(Value::Undefined, Value::Undefined).await;
+        let _ht = <Self as Bullish>::handle_token(self, Value::Undefined).await;
+        Promise::all(Value::Json(serde_json::Value::Array(vec![_lm.into(), _ht.into()]))).await;
         let mut currency: Value = self.currency(code.clone());
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
             "symbol": currency.get(Value::from("id"))
@@ -2075,7 +2097,7 @@ pub trait Bullish : Exchange {
             if network.clone().is_nonnullish() {
                 // find the entry that matches the network or return first entry if not found and user did not specify a network
                 let mut i: usize = 0;
-                while i < safe_response.length {
+                while i < safe_response.len() {
                     let mut entry: Value = self.safe_dict(safe_response.clone(), Value::from(i), Value::new_object());
                     let mut network_id: Value = self.safe_string(entry.clone(), Value::from("network"), Value::Undefined);
                     let mut network_code: Value = self.network_id_to_code(network_id.clone(), Value::Undefined);
@@ -2108,7 +2130,9 @@ pub trait Bullish : Exchange {
 
     async fn fetch_balance(&mut self, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
-        Promise::all(Value::Json(serde_json::Value::Array(vec![self.load_markets(Value::Undefined, Value::Undefined).into(), <Self as Bullish>::handle_token(self, Value::Undefined).into()]))).await;
+        let _lm = self.load_markets(Value::Undefined, Value::Undefined).await;
+        let _ht = <Self as Bullish>::handle_token(self, Value::Undefined).await;
+        Promise::all(Value::Json(serde_json::Value::Array(vec![_lm.into(), _ht.into()]))).await;
         let mut trading_account_id: Value = <Self as Bullish>::load_account(self, params.clone()).await;
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
             "tradingAccountId": trading_account_id
@@ -2173,7 +2197,9 @@ pub trait Bullish : Exchange {
 
     async fn fetch_positions(&mut self, mut symbols: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
-        Promise::all(Value::Json(serde_json::Value::Array(vec![self.load_markets(Value::Undefined, Value::Undefined).into(), <Self as Bullish>::handle_token(self, Value::Undefined).into()]))).await;
+        let _lm = self.load_markets(Value::Undefined, Value::Undefined).await;
+        let _ht = <Self as Bullish>::handle_token(self, Value::Undefined).await;
+        Promise::all(Value::Json(serde_json::Value::Array(vec![_lm.into(), _ht.into()]))).await;
         let mut trading_account_id: Value = <Self as Bullish>::load_account(self, params.clone()).await;
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
             "tradingAccountId": trading_account_id
@@ -2271,9 +2297,11 @@ pub trait Bullish : Exchange {
 
     async fn fetch_transfers(&mut self, mut code: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
-        Promise::all(Value::Json(serde_json::Value::Array(vec![self.load_markets(Value::Undefined, Value::Undefined).into(), <Self as Bullish>::handle_token(self, Value::Undefined).into()]))).await;
+        let _lm = self.load_markets(Value::Undefined, Value::Undefined).await;
+        let _ht = <Self as Bullish>::handle_token(self, Value::Undefined).await;
+        Promise::all(Value::Json(serde_json::Value::Array(vec![_lm.into(), _ht.into()]))).await;
         let mut trading_account_id: Value = <Self as Bullish>::load_account(self, params.clone()).await;
-        let mut max_limit: usize = 100;
+        let mut max_limit: Value = Value::from(100);
         let mut paginate: Value = false.into();
         (paginate, params) = shift_2(self.handle_option_and_params(params.clone(), Value::from("fetchTransfers"), Value::from("paginate"), Value::Undefined));
         if paginate.is_truthy() {
@@ -2322,7 +2350,9 @@ pub trait Bullish : Exchange {
 
     async fn transfer(&mut self, mut code: Value, mut amount: Value, mut from_account: Value, mut to_account: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
-        Promise::all(Value::Json(serde_json::Value::Array(vec![self.load_markets(Value::Undefined, Value::Undefined).into(), <Self as Bullish>::handle_token(self, Value::Undefined).into()]))).await;
+        let _lm = self.load_markets(Value::Undefined, Value::Undefined).await;
+        let _ht = <Self as Bullish>::handle_token(self, Value::Undefined).await;
+        Promise::all(Value::Json(serde_json::Value::Array(vec![_lm.into(), _ht.into()]))).await;
         // todo check this method properly
         let mut currency: Value = self.currency(code.clone());
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
@@ -2404,7 +2434,9 @@ pub trait Bullish : Exchange {
 
     async fn fetch_borrow_rate_history(&mut self, mut code: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
-        Promise::all(Value::Json(serde_json::Value::Array(vec![self.load_markets(Value::Undefined, Value::Undefined).into(), <Self as Bullish>::handle_token(self, Value::Undefined).into()]))).await;
+        let _lm = self.load_markets(Value::Undefined, Value::Undefined).await;
+        let _ht = <Self as Bullish>::handle_token(self, Value::Undefined).await;
+        Promise::all(Value::Json(serde_json::Value::Array(vec![_lm.into(), _ht.into()]))).await;
         let mut trading_account_id: Value = <Self as Bullish>::load_account(self, params.clone()).await;
         let mut currency: Value = self.currency(code.clone());
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({

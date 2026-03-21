@@ -550,6 +550,250 @@ async fn smoke_xt() {
 }
 
 // ---------------------------------------------------------------------------
+// Additional smoke tests for remaining exchanges
+// ---------------------------------------------------------------------------
+
+#[cfg(feature = "full-exchanges")]
+#[tokio::test]
+async fn smoke_alp() {
+    smoke_test!(ccxt::exchanges::alp::Alp, ccxt::exchanges::alp::AlpImpl, "alp", "BTC/USDT");
+}
+
+#[cfg(feature = "full-exchanges")]
+#[tokio::test]
+async fn smoke_bigone() {
+    smoke_test!(ccxt::exchanges::bigone::Bigone, ccxt::exchanges::bigone::BigoneImpl, "bigone", "BTC/USDT");
+}
+
+#[cfg(feature = "full-exchanges")]
+#[tokio::test]
+async fn smoke_bit2c() {
+    smoke_test!(ccxt::exchanges::bit2c::Bit2c, ccxt::exchanges::bit2c::Bit2cImpl, "bit2c", "BTC/NIS");
+}
+
+#[cfg(feature = "full-exchanges")]
+#[tokio::test]
+async fn smoke_bitbank() {
+    smoke_test!(ccxt::exchanges::bitbank::Bitbank, ccxt::exchanges::bitbank::BitbankImpl, "bitbank", "BTC/JPY");
+}
+
+#[cfg(feature = "full-exchanges")]
+#[tokio::test]
+async fn smoke_bitbns() {
+    smoke_test!(ccxt::exchanges::bitbns::Bitbns, ccxt::exchanges::bitbns::BitbnsImpl, "bitbns", "BTC/INR");
+}
+
+#[cfg(feature = "full-exchanges")]
+#[tokio::test]
+async fn smoke_bitflyer() {
+    smoke_test!(ccxt::exchanges::bitflyer::Bitflyer, ccxt::exchanges::bitflyer::BitflyerImpl, "bitflyer", "BTC/JPY");
+}
+
+#[cfg(feature = "full-exchanges")]
+#[tokio::test]
+async fn smoke_bitso() {
+    smoke_test!(ccxt::exchanges::bitso::Bitso, ccxt::exchanges::bitso::BitsoImpl, "bitso", "BTC/MXN");
+}
+
+#[cfg(feature = "full-exchanges")]
+#[tokio::test]
+async fn smoke_bitteam() {
+    smoke_test!(ccxt::exchanges::bitteam::Bitteam, ccxt::exchanges::bitteam::BitteamImpl, "bitteam", "BTC/USDT");
+}
+
+#[cfg(feature = "full-exchanges")]
+#[tokio::test]
+async fn smoke_btcbox() {
+    smoke_test!(ccxt::exchanges::btcbox::Btcbox, ccxt::exchanges::btcbox::BtcboxImpl, "btcbox", "BTC/JPY");
+}
+
+#[cfg(feature = "full-exchanges")]
+#[tokio::test]
+async fn smoke_btcmarkets() {
+    smoke_test!(ccxt::exchanges::btcmarkets::Btcmarkets, ccxt::exchanges::btcmarkets::BtcmarketsImpl, "btcmarkets", "BTC/AUD");
+}
+
+#[cfg(feature = "full-exchanges")]
+#[tokio::test]
+async fn smoke_btcturk() {
+    smoke_test!(ccxt::exchanges::btcturk::Btcturk, ccxt::exchanges::btcturk::BtcturkImpl, "btcturk", "BTC/USDT");
+}
+
+#[cfg(feature = "full-exchanges")]
+#[tokio::test]
+async fn smoke_bydfi() {
+    smoke_test!(ccxt::exchanges::bydfi::Bydfi, ccxt::exchanges::bydfi::BydfiImpl, "bydfi", "BTC/USDT");
+}
+
+#[cfg(feature = "full-exchanges")]
+#[tokio::test]
+async fn smoke_coincheck() {
+    smoke_test!(ccxt::exchanges::coincheck::Coincheck, ccxt::exchanges::coincheck::CoincheckImpl, "coincheck", "BTC/JPY");
+}
+
+#[cfg(feature = "full-exchanges")]
+#[tokio::test]
+async fn smoke_coinmate() {
+    smoke_test!(ccxt::exchanges::coinmate::Coinmate, ccxt::exchanges::coinmate::CoinmateImpl, "coinmate", "BTC/EUR");
+}
+
+#[cfg(feature = "full-exchanges")]
+#[tokio::test]
+async fn smoke_coinmetro() {
+    smoke_test!(ccxt::exchanges::coinmetro::Coinmetro, ccxt::exchanges::coinmetro::CoinmetroImpl, "coinmetro", "BTC/EUR");
+}
+
+#[cfg(feature = "full-exchanges")]
+#[tokio::test]
+async fn smoke_coinone() {
+    smoke_test!(ccxt::exchanges::coinone::Coinone, ccxt::exchanges::coinone::CoinoneImpl, "coinone", "BTC/KRW");
+}
+
+#[cfg(feature = "full-exchanges")]
+#[tokio::test]
+async fn smoke_coinsph() {
+    smoke_test!(ccxt::exchanges::coinsph::Coinsph, ccxt::exchanges::coinsph::CoinsphImpl, "coinsph", "BTC/USDT");
+}
+
+#[cfg(feature = "full-exchanges")]
+#[tokio::test]
+async fn smoke_coinspot() {
+    smoke_test!(ccxt::exchanges::coinspot::Coinspot, ccxt::exchanges::coinspot::CoinspotImpl, "coinspot", "BTC/AUD");
+}
+
+#[cfg(feature = "full-exchanges")]
+#[tokio::test]
+async fn smoke_cryptomus() {
+    smoke_test!(ccxt::exchanges::cryptomus::Cryptomus, ccxt::exchanges::cryptomus::CryptomusImpl, "cryptomus", "BTC/USDT");
+}
+
+#[cfg(feature = "full-exchanges")]
+#[tokio::test]
+async fn smoke_deepcoin() {
+    smoke_test!(ccxt::exchanges::deepcoin::Deepcoin, ccxt::exchanges::deepcoin::DeepcoinImpl, "deepcoin", "BTC/USDT");
+}
+
+#[cfg(feature = "full-exchanges")]
+#[tokio::test]
+async fn smoke_defx() {
+    smoke_test!(ccxt::exchanges::defx::Defx, ccxt::exchanges::defx::DefxImpl, "defx", "BTC/USDT:USDT");
+}
+
+#[cfg(feature = "full-exchanges")]
+#[tokio::test]
+async fn smoke_delta() {
+    smoke_test!(ccxt::exchanges::delta::Delta, ccxt::exchanges::delta::DeltaImpl, "delta", "BTC/USDT");
+}
+
+#[cfg(feature = "full-exchanges")]
+#[tokio::test]
+async fn smoke_digifinex() {
+    smoke_test!(ccxt::exchanges::digifinex::Digifinex, ccxt::exchanges::digifinex::DigifinexImpl, "digifinex", "BTC/USDT");
+}
+
+#[cfg(feature = "full-exchanges")]
+#[tokio::test]
+async fn smoke_exmo() {
+    smoke_test!(ccxt::exchanges::exmo::Exmo, ccxt::exchanges::exmo::ExmoImpl, "exmo", "BTC/USDT");
+}
+
+#[cfg(feature = "full-exchanges")]
+#[tokio::test]
+async fn smoke_fmfwio() {
+    smoke_test!(ccxt::exchanges::fmfwio::Fmfwio, ccxt::exchanges::fmfwio::FmfwioImpl, "fmfwio", "BTC/USDT");
+}
+
+#[cfg(feature = "full-exchanges")]
+#[tokio::test]
+async fn smoke_foxbit() {
+    smoke_test!(ccxt::exchanges::foxbit::Foxbit, ccxt::exchanges::foxbit::FoxbitImpl, "foxbit", "BTC/BRL");
+}
+
+#[cfg(feature = "full-exchanges")]
+#[tokio::test]
+async fn smoke_hibachi() {
+    smoke_test!(ccxt::exchanges::hibachi::Hibachi, ccxt::exchanges::hibachi::HibachiImpl, "hibachi", "BTC/USDT");
+}
+
+#[cfg(feature = "full-exchanges")]
+#[tokio::test]
+async fn smoke_hitbtc() {
+    smoke_test!(ccxt::exchanges::hitbtc::Hitbtc, ccxt::exchanges::hitbtc::HitbtcImpl, "hitbtc", "BTC/USDT");
+}
+
+#[cfg(feature = "full-exchanges")]
+#[tokio::test]
+async fn smoke_indodax() {
+    smoke_test!(ccxt::exchanges::indodax::Indodax, ccxt::exchanges::indodax::IndodaxImpl, "indodax", "BTC/IDR");
+}
+
+#[cfg(feature = "full-exchanges")]
+#[tokio::test]
+async fn smoke_latoken() {
+    smoke_test!(ccxt::exchanges::latoken::Latoken, ccxt::exchanges::latoken::LatokenImpl, "latoken", "BTC/USDT");
+}
+
+#[cfg(feature = "full-exchanges")]
+#[tokio::test]
+async fn smoke_mercado() {
+    smoke_test!(ccxt::exchanges::mercado::Mercado, ccxt::exchanges::mercado::MercadoImpl, "mercado", "BTC/BRL");
+}
+
+#[cfg(feature = "full-exchanges")]
+#[tokio::test]
+async fn smoke_novadax() {
+    smoke_test!(ccxt::exchanges::novadax::Novadax, ccxt::exchanges::novadax::NovadaxImpl, "novadax", "BTC/BRL");
+}
+
+#[cfg(feature = "full-exchanges")]
+#[tokio::test]
+async fn smoke_paymium() {
+    smoke_test!(ccxt::exchanges::paymium::Paymium, ccxt::exchanges::paymium::PaymiumImpl, "paymium", "BTC/EUR");
+}
+
+#[cfg(feature = "full-exchanges")]
+#[tokio::test]
+async fn smoke_timex() {
+    smoke_test!(ccxt::exchanges::timex::Timex, ccxt::exchanges::timex::TimexImpl, "timex", "BTC/USDT");
+}
+
+#[cfg(feature = "full-exchanges")]
+#[tokio::test]
+async fn smoke_tokocrypto() {
+    smoke_test!(ccxt::exchanges::tokocrypto::Tokocrypto, ccxt::exchanges::tokocrypto::TokocryptoImpl, "tokocrypto", "BTC/USDT");
+}
+
+#[cfg(feature = "full-exchanges")]
+#[tokio::test]
+async fn smoke_wavesexchange() {
+    smoke_test!(ccxt::exchanges::wavesexchange::Wavesexchange, ccxt::exchanges::wavesexchange::WavesexchangeImpl, "wavesexchange", "BTC/USDT");
+}
+
+#[cfg(feature = "full-exchanges")]
+#[tokio::test]
+async fn smoke_yobit() {
+    smoke_test!(ccxt::exchanges::yobit::Yobit, ccxt::exchanges::yobit::YobitImpl, "yobit", "BTC/USDT");
+}
+
+#[cfg(feature = "full-exchanges")]
+#[tokio::test]
+async fn smoke_zaif() {
+    smoke_test!(ccxt::exchanges::zaif::Zaif, ccxt::exchanges::zaif::ZaifImpl, "zaif", "BTC/JPY");
+}
+
+#[cfg(feature = "full-exchanges")]
+#[tokio::test]
+async fn smoke_zebpay() {
+    smoke_test!(ccxt::exchanges::zebpay::Zebpay, ccxt::exchanges::zebpay::ZebpayImpl, "zebpay", "BTC/USDT");
+}
+
+#[cfg(feature = "full-exchanges")]
+#[tokio::test]
+async fn smoke_zonda() {
+    smoke_test!(ccxt::exchanges::zonda::Zonda, ccxt::exchanges::zonda::ZondaImpl, "zonda", "BTC/PLN");
+}
+
+// ---------------------------------------------------------------------------
 // Strict test: binance must return actual JSON (not Undefined) when online
 // ---------------------------------------------------------------------------
 

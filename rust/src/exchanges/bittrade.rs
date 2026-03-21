@@ -1,4 +1,5 @@
 #![allow(clippy::all)]
+#![allow(non_snake_case)]
 #![allow(dead_code)]
 #![allow(unreachable_code)]
 #![allow(unused_imports)]
@@ -449,7 +450,8 @@ pub trait Bittrade : Exchange {
         let mut i: usize = 0;
         while i < symbols.len() {
             let mut symbol: Value = symbols.get(i.into());
-            result.set(symbol.clone(), <Self as Bittrade>::fetch_trading_limits_by_id(self, self.market_id(symbol.clone()), params.clone()).await);
+            let mut mid: Value = self.market_id(symbol.clone());
+            result.set(symbol.clone(), <Self as Bittrade>::fetch_trading_limits_by_id(self, mid.clone(), params.clone()).await);
             i += 1;
         };
         return result.clone();
@@ -935,9 +937,9 @@ pub trait Bittrade : Exchange {
             let mut deposit_enabled: Value = self.safe_value(currency.clone(), Value::from("deposit-enabled"), Value::Undefined);
             let mut withdraw_enabled: Value = self.safe_value(currency.clone(), Value::from("withdraw-enabled"), Value::Undefined);
             let mut country_disabled: Value = self.safe_value(currency.clone(), Value::from("country-disabled"), Value::Undefined);
-            let mut visible: Value = self.safe_bool(currency.clone(), Value::from("visible"), false.into());
+            let mut visible: Value = self.safe_bool(currency.clone(), Value::from("visible"), Value::from(false));
             let mut state: Value = self.safe_string(currency.clone(), Value::from("state"), Value::Undefined);
-            let mut active: Value = (visible.is_truthy() && deposit_enabled.is_truthy() && withdraw_enabled.is_truthy() && state.clone() == Value::from("online") && !country_disabled.is_truthy()).into();
+            let mut active: Value = Value::from(visible.is_truthy() && deposit_enabled.is_truthy() && withdraw_enabled.is_truthy() && state.clone() == Value::from("online") && !country_disabled.is_truthy());
             let mut name: Value = self.safe_string(currency.clone(), Value::from("display-name"), Value::Undefined);
             let mut precision: Value = self.parse_number(self.parse_precision(self.safe_string(currency.clone(), Value::from("withdraw-precision"), Value::Undefined)), Value::Undefined);
             result.set(code.clone(), Value::Json(normalize(&Value::Json(json!({
@@ -1244,7 +1246,7 @@ pub trait Bittrade : Exchange {
         if !market.get(Value::from("spot")).is_truthy() {
             panic!(r###"NotSupported::new(self.get("id".into()) + Value::from(" createMarketBuyOrderWithCost() supports spot orders only"))"###);
         };
-        params.set("createMarketBuyOrderRequiresPrice".into(), false.into());
+        params.set("createMarketBuyOrderRequiresPrice".into(), Value::from(false));
         return <Self as Bittrade>::create_order(self, symbol.clone(), Value::from("market"), Value::from("buy"), cost.clone(), Value::Undefined, params.clone()).await;
     }
 
@@ -1270,8 +1272,8 @@ pub trait Bittrade : Exchange {
         params = self.omit(params.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("clientOrderId").into(), Value::from("client-order-id").into()])));
         if r#type.clone() == Value::from("market") && side.clone() == Value::from("buy") {
             let mut quote_amount: Value = Value::Undefined;
-            let mut create_market_buy_order_requires_price: Value = true.into();
-            (create_market_buy_order_requires_price, params) = shift_2(self.handle_option_and_params(params.clone(), Value::from("createOrder"), Value::from("createMarketBuyOrderRequiresPrice"), true.into()));
+            let mut create_market_buy_order_requires_price: Value = Value::from(true);
+            (create_market_buy_order_requires_price, params) = shift_2(self.handle_option_and_params(params.clone(), Value::from("createOrder"), Value::from("createMarketBuyOrderRequiresPrice"), Value::from(true)));
             let mut cost: Value = self.safe_number(params.clone(), Value::from("cost"), Value::Undefined);
             params = self.omit(params.clone(), Value::from("cost"));
             if cost.clone().is_nonnullish() {
@@ -1389,7 +1391,7 @@ pub trait Bittrade : Exchange {
         return <Self as Bittrade>::parse_cancel_orders(self, response.clone());
     }
 
-    fn parse_cancel_orders(&self, mut orders: Value) -> Value {
+    fn parse_cancel_orders(&mut self, mut orders: Value) -> Value {
         //
         //    {
         //        "success": [

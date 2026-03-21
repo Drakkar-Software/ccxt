@@ -1,4 +1,5 @@
 #![allow(clippy::all)]
+#![allow(non_snake_case)]
 #![allow(dead_code)]
 #![allow(unreachable_code)]
 #![allow(unused_imports)]
@@ -643,7 +644,6 @@ pub trait Cryptocom : Exchange {
         let mut response: Value = Value::new_object();
                 response = self.dispatch("v1PrivatePostPrivateGetCurrencyNetworks".into(), params.clone(), Value::Undefined).await;
         // catch block omitted (no exception support in Value runtime)
-;
         // sub-accounts can't access this endpoint
         // {"code":"10001","msg":"SYS_ERROR"}
         // do nothing
@@ -1714,12 +1714,12 @@ pub trait Cryptocom : Exchange {
         let mut data: Value = self.safe_dict(response.clone(), Value::from("result"), Value::new_object());
         let mut addresses: Value = self.safe_list(data.clone(), Value::from("deposit_address_list"), Value::new_array());
         let mut addresses_length: usize = addresses.len();
-        if addresses_length.clone() == Value::from(0) {
+        if addresses_length == 0 {
             panic!(r###"ExchangeError::new(self.get("id".into()) + Value::from(" fetchDepositAddressesByNetwork() generating address..."))"###);
         };
         let mut result: Value = Value::new_object();
         let mut i: usize = 0;
-        while i < addresses_length.clone().into() {
+        while i < addresses_length {
             let mut value: Value = self.safe_dict(addresses.clone(), Value::from(i), Value::Undefined);
             let mut address_string: Value = self.safe_string(value.clone(), Value::from("address"), Value::Undefined);
             let mut currency_id: Value = self.safe_string(value.clone(), Value::from("currency"), Value::Undefined);
@@ -2285,7 +2285,7 @@ pub trait Cryptocom : Exchange {
         }))).unwrap());
         if network_list.clone().is_nonnullish() {
             let mut i: usize = 0;
-            while i < network_list_length.clone().into() {
+            while i < network_list_length {
                 let mut network_info: Value = network_list.get(i.into());
                 let mut network_id: Value = self.safe_string(network_info.clone(), Value::from("network_id"), Value::Undefined);
                 let mut currency_code: Value = self.safe_string(currency.clone(), Value::from("code"), Value::Undefined);
@@ -2895,7 +2895,7 @@ pub trait Cryptocom : Exchange {
     }
 
     fn params_to_string(&mut self, mut object: Value, mut level: Value) -> Value {
-        let mut max_level: usize = 3;
+        let mut max_level: Value = Value::from(3);
         if level.clone() >= max_level.clone() {
             return object.to_string();
         };

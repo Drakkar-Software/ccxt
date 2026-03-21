@@ -1,4 +1,5 @@
 #![allow(clippy::all)]
+#![allow(non_snake_case)]
 #![allow(dead_code)]
 #![allow(unreachable_code)]
 #![allow(unused_imports)]
@@ -1237,7 +1238,7 @@ pub trait Modetrade : Exchange {
         if child_orders.clone().is_nonnullish() {
             let mut first: Value = self.safe_value(child_orders.clone(), Value::from(0), Value::Undefined);
             let mut inner_child_orders: Value = self.safe_value(first.clone(), Value::from("childOrders"), Value::new_array());
-            let mut inner_child_orders_length: usize = inner_child_orders.len();
+            let mut inner_child_orders_length: Value = Value::from(inner_child_orders.len());
             if inner_child_orders_length.clone() > Value::from(0) {
                 let mut take_profit_order: Value = self.safe_value(inner_child_orders.clone(), Value::from(0), Value::Undefined);
                 let mut stop_loss_order: Value = self.safe_value(inner_child_orders.clone(), Value::from(1), Value::Undefined);
@@ -2202,7 +2203,8 @@ pub trait Modetrade : Exchange {
     }
 
     fn sign_message(&mut self, mut message: Value, mut private_key: Value) -> Value {
-        return <Self as Modetrade>::sign_hash(self, <Self as Modetrade>::hash_message(self, message.clone()), private_key.slice(Value::from(64).neg(), Value::Undefined));
+        let hashed = <Self as Modetrade>::hash_message(self, message.clone());
+        return <Self as Modetrade>::sign_hash(self, hashed, private_key.slice(Value::from(64).neg(), Value::Undefined));
     }
 
     async fn withdraw(&mut self, mut code: Value, mut amount: Value, mut address: Value, mut tag: Value, mut params: Value) -> Value {

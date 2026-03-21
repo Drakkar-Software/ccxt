@@ -1,4 +1,5 @@
 #![allow(clippy::all)]
+#![allow(non_snake_case)]
 #![allow(dead_code)]
 #![allow(unreachable_code)]
 #![allow(unused_imports)]
@@ -751,7 +752,7 @@ pub trait Defx : Exchange {
             request.set("symbols".into(), market.get(Value::from("id")));
         };
         if limit.clone().is_nonnullish() {
-            let mut max_limit: usize = 100;
+            let mut max_limit: Value = Value::from(100);
             limit = Math::min(max_limit.clone(), limit.clone());
             request.set("pageSize".into(), limit.clone());
         };
@@ -1396,7 +1397,7 @@ pub trait Defx : Exchange {
             request.set("start".into(), self.iso8601(since.clone()));
         };
         if limit.clone().is_nonnullish() {
-            let mut max_limit: usize = 100;
+            let mut max_limit: Value = Value::from(100);
             limit = Math::min(max_limit.clone(), limit.clone());
             request.set("pageSize".into(), limit.clone());
         };

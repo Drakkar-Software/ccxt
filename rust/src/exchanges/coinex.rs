@@ -1,4 +1,5 @@
 #![allow(clippy::all)]
+#![allow(non_snake_case)]
 #![allow(dead_code)]
 #![allow(unreachable_code)]
 #![allow(unused_imports)]
@@ -940,7 +941,7 @@ pub trait Coinex : Exchange {
             let mut settle_id: Value = if sub_type.clone() == Value::from("linear") { Value::from("USDT") } else { base_id.clone() };
             let mut settle: Value = self.safe_currency_code(settle_id.clone(), Value::Undefined);
             let mut symbol: Value = base.clone() + Value::from("/") + quote.clone() + Value::from(":") + settle.clone();
-            let mut leverages_length: usize = leverages.len();
+            let mut leverages_length: Value = Value::from(leverages.len());
             result.push(Value::Json(normalize(&Value::Json(json!({
                 "id": id,
                 "symbol": symbol,
@@ -3580,7 +3581,7 @@ pub trait Coinex : Exchange {
         let mut parts: Value = coin_address.split(Value::from(":"));
         let mut address: Value = Value::Undefined;
         let mut tag: Value = Value::Undefined;
-        let mut parts_length: usize = parts.len();
+        let mut parts_length: Value = Value::from(parts.len());
         if parts_length.clone() > Value::from(1) && parts.get(Value::from(0)) != Value::from("cfx") {
             address = parts.get(Value::from(0));
             tag = parts.get(Value::from(1));
@@ -3685,7 +3686,7 @@ pub trait Coinex : Exchange {
         if symbols.clone().is_nonnullish() {
             let mut symbol: Value = Value::Undefined;
             if Array::is_array(symbols.clone()).is_truthy() {
-                let mut symbols_length: usize = symbols.len();
+                let mut symbols_length: Value = Value::from(symbols.len());
                 if symbols_length.clone() > Value::from(1) {
                     panic!(r###"BadRequest::new(self.get("id".into()) + Value::from(" fetchPositions() symbols argument cannot contain more than 1 symbol"))"###);
                 };
@@ -3950,7 +3951,7 @@ pub trait Coinex : Exchange {
     fn parse_market_leverage_tiers(&self, mut info: Value, mut market: Value) -> Value {
         let mut tiers: Value = Value::new_array();
         let mut brackets: Value = self.safe_list(info.clone(), Value::from("level"), Value::new_array());
-        let mut min_notional: usize = 0;
+        let mut min_notional: Value = Value::from(0);
         let mut i: usize = 0;
         while i < brackets.len() {
             let mut tier: Value = brackets.get(i.into());

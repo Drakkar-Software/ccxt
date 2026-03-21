@@ -1,4 +1,5 @@
 #![allow(clippy::all)]
+#![allow(non_snake_case)]
 #![allow(dead_code)]
 #![allow(unreachable_code)]
 #![allow(unused_imports)]
@@ -1110,7 +1111,7 @@ pub trait Okx : Exchange {
     }
 
     fn safe_market(&self, mut market_id: Value, mut market: Value, mut delimiter: Value, mut market_type: Value) -> Value {
-        let mut is_option: Value = (market_id.clone().is_nonnullish() && market_id.index_of(Value::from("-C")) > Value::from(1).neg() || market_id.index_of(Value::from("-P")) > Value::from(1).neg()).into();
+        let mut is_option: Value = Value::from(market_id.clone().is_nonnullish() && market_id.index_of(Value::from("-C")) > Value::from(1).neg() || market_id.index_of(Value::from("-P")) > Value::from(1).neg());
         if is_option.is_truthy() && !self.get("markets_by_id".into()).contains_key(market_id.clone()) {
             // handle expired option contracts
             return <Self as Okx>::create_expired_option_market(self, market_id.clone());
@@ -1285,11 +1286,11 @@ pub trait Okx : Exchange {
         if r#type.clone() == Value::from("futures") {
             r#type = Value::from("future");
         };
-        let mut spot: Value = (r#type.clone() == Value::from("spot")).into();
-        let mut future: Value = (r#type.clone() == Value::from("future")).into();
-        let mut swap: Value = (r#type.clone() == Value::from("swap")).into();
-        let mut option: Value = (r#type.clone() == Value::from("option")).into();
-        let mut contract: Value = (swap.is_truthy() || future.is_truthy() || option.is_truthy()).into();
+        let mut spot: Value = Value::from(r#type.clone() == Value::from("spot"));
+        let mut future: Value = Value::from(r#type.clone() == Value::from("future"));
+        let mut swap: Value = Value::from(r#type.clone() == Value::from("swap"));
+        let mut option: Value = Value::from(r#type.clone() == Value::from("option"));
+        let mut contract: Value = Value::from(swap.is_truthy() || future.is_truthy() || option.is_truthy());
         let mut base_id: Value = self.safe_string(market.clone(), Value::from("baseCcy"), Value::from(""));
         // defaulting to '' because some weird preopen markets have empty baseId
         let mut quote_id: Value = self.safe_string(market.clone(), Value::from("quoteCcy"), Value::from(""));
@@ -1357,14 +1358,14 @@ pub trait Okx : Exchange {
             "settleId": settle_id,
             "type": r#type,
             "spot": spot,
-            "margin": spot.is_truthy() && Precise::string_gt(max_leverage.clone(), Value::from("1")),
+            "margin": Value::from(spot.is_truthy() && Precise::string_gt(max_leverage.clone(), Value::from("1"))),
             "swap": swap,
             "future": future,
             "option": option,
-            "active": status.clone() == Value::from("live"),
+            "active": Value::from(status.clone() == Value::from("live")),
             "contract": contract,
-            "linear": if contract.is_truthy() { (quote_id.clone() == settle_id.clone()).into() } else { Value::Undefined },
-            "inverse": if contract.is_truthy() { (base_id.clone() == settle_id.clone()).into() } else { Value::Undefined },
+            "linear": if contract.is_truthy() { Value::from(quote_id.clone() == settle_id.clone()) } else { Value::Undefined },
+            "inverse": if contract.is_truthy() { Value::from(base_id.clone() == settle_id.clone()) } else { Value::Undefined },
             "contractSize": if contract.is_truthy() { self.safe_number(market.clone(), Value::from("ctVal"), Value::Undefined) } else { Value::Undefined },
             "expiry": expiry,
             "expiryDatetime": self.iso8601(expiry.clone()),
@@ -1467,8 +1468,8 @@ pub trait Okx : Exchange {
         // while fetchCurrencies is a public API method by design
         // therefore we check the keys here
         // and fallback to generating the currencies from the markets
-        let mut is_sandbox_mode: Value = self.safe_bool(self.get("options".into()), Value::from("sandboxMode"), false.into());
-        if !self.check_required_credentials(false.into()).is_truthy() || is_sandbox_mode.is_truthy() {
+        let mut is_sandbox_mode: Value = self.safe_bool(self.get("options".into()), Value::from("sandboxMode"), Value::from(false));
+        if !self.check_required_credentials(Value::from(false)).is_truthy() || is_sandbox_mode.is_truthy() {
             return Value::new_object();
         };
         //
@@ -1532,9 +1533,9 @@ pub trait Okx : Exchange {
             let mut chains: Value = data_by_currency_id.get(currency_id.clone());
             let mut networks: Value = Value::new_object();
             let mut r#type: Value = Value::from("crypto");
-            let mut chains_length: usize = chains.len();
+            let mut chains_length: Value = Value::from(chains.len());
             let mut j: usize = 0;
-            while j < chains_length.clone().into() {
+            while j < Value::from(chains_length.clone()) {
                 let mut chain: Value = chains.get(j.into());
                 // allow empty string for rare fiat-currencies, e.g. TRY
                 let mut network_id: Value = self.safe_string(chain.clone(), Value::from("chain"), Value::from(""));
@@ -1666,7 +1667,7 @@ pub trait Okx : Exchange {
         let mut symbol: Value = market.get(Value::from("symbol"));
         let mut last: Value = self.safe_string(ticker.clone(), Value::from("last"), Value::Undefined);
         let mut open: Value = self.safe_string(ticker.clone(), Value::from("open24h"), Value::Undefined);
-        let mut spot: Value = self.safe_bool(market.clone(), Value::from("spot"), false.into());
+        let mut spot: Value = self.safe_bool(market.clone(), Value::from("spot"), Value::from(false));
         let mut quote_volume: Value = if spot.is_truthy() { self.safe_string(ticker.clone(), Value::from("volCcy24h"), Value::Undefined) } else { Value::Undefined };
         let mut base_volume: Value = self.safe_string(ticker.clone(), Value::from("vol24h"), Value::Undefined);
         let mut high: Value = self.safe_string(ticker.clone(), Value::from("high24h"), Value::Undefined);
@@ -1928,8 +1929,7 @@ pub trait Okx : Exchange {
         //         "0" // candlestick state
         //     ]
         //
-        let mut res: Value = <Self as Okx>::handle_market_type_and_params(self, Value::from("fetchOHLCV"), market.clone(), Value::Undefined, Value::Undefined);
-        let mut r#type: Value = res.get(Value::from(0));
+        let mut r#type: Value = self.safe_string(market.clone(), Value::from("type"), Value::from("spot"));
         let mut volume_index: Value = if r#type.clone() == Value::from("spot") { Value::from(5) } else { Value::from(6) };
         return Value::Json(serde_json::Value::Array(vec![self.safe_integer(ohlcv.clone(), Value::from(0), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from(1), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from(2), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from(3), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from(4), Value::Undefined).into(), self.safe_number(ohlcv.clone(), volume_index.clone(), Value::Undefined).into()]));
     }
@@ -1975,7 +1975,7 @@ pub trait Okx : Exchange {
             panic!(r###"ArgumentsRequired::new(self.get("id".into()) + Value::from(" fetchFundingRateHistory() requires a symbol argument"))"###);
         };
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        let mut paginate: Value = false.into();
+        let mut paginate: Value = Value::from(false);
         (paginate, params) = shift_2(self.handle_option_and_params(params.clone(), Value::from("fetchFundingRateHistory"), Value::from("paginate"), Value::Undefined));
         if paginate.is_truthy() {
             return self.fetch_paginated_call_deterministic(Value::from("fetchFundingRateHistory"), symbol.clone(), since.clone(), limit.clone(), Value::from("8h"), params.clone(), Value::from(100)).await;
@@ -2310,7 +2310,7 @@ pub trait Okx : Exchange {
         let mut market: Value = self.market(symbol.clone());
         let mut take_profit_price: Value = self.safe_value_2(params.clone(), Value::from("takeProfitPrice"), Value::from("tpTriggerPx"), Value::Undefined);
         let mut stop_loss_price: Value = self.safe_value_2(params.clone(), Value::from("stopLossPrice"), Value::from("slTriggerPx"), Value::Undefined);
-        let mut conditional: Value = (stop_loss_price.clone().is_nonnullish() || take_profit_price.clone().is_nonnullish() || r#type.clone() == Value::from("conditional")).into();
+        let mut conditional: Value = Value::from(stop_loss_price.clone().is_nonnullish() || take_profit_price.clone().is_nonnullish() || r#type.clone() == Value::from("conditional"));
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
             "instId": market.get(Value::from("id")),
             "side": side,
@@ -2337,9 +2337,9 @@ pub trait Okx : Exchange {
         // 'slTriggerPx': 10, // stopLossPrice (conditional orders)
         // 'slTriggerPxType': 'last', // Conditional default is last, mark or index (conditional orders)
         // 'slOrdPx': 10, // Order price for Stop-Loss orders, if -1 will be executed at market price (conditional orders)
-        let mut is_conditional_or_oco: Value = (conditional.is_truthy() || r#type.clone() == Value::from("oco")).into();
+        let mut is_conditional_or_oco: Value = Value::from(conditional.is_truthy() || r#type.clone() == Value::from("oco"));
         let mut close_fraction: Value = self.safe_string(params.clone(), Value::from("closeFraction"), Value::Undefined);
-        let mut should_omit_size: Value = (is_conditional_or_oco.is_truthy() && close_fraction.clone().is_nonnullish()).into();
+        let mut should_omit_size: Value = Value::from(is_conditional_or_oco.is_truthy() && close_fraction.clone().is_nonnullish());
         if !should_omit_size.is_truthy() {
             request.set("sz".into(), self.amount_to_precision(symbol.clone(), amount.clone()));
         };
@@ -2356,23 +2356,23 @@ pub trait Okx : Exchange {
         let mut client_order_id: Value = self.safe_string_2(params.clone(), Value::from("clOrdId"), Value::from("clientOrderId"), Value::Undefined);
         let mut stop_loss: Value = self.safe_value(params.clone(), Value::from("stopLoss"), Value::Undefined);
         let mut take_profit: Value = self.safe_value(params.clone(), Value::from("takeProfit"), Value::Undefined);
-        let mut has_stop_loss: Value = (stop_loss.clone().is_nonnullish()).into();
-        let mut has_take_profit: Value = (take_profit.clone().is_nonnullish()).into();
+        let mut has_stop_loss: Value = Value::from(stop_loss.clone().is_nonnullish());
+        let mut has_take_profit: Value = Value::from(take_profit.clone().is_nonnullish());
         let mut trailing_percent: Value = self.safe_string_2(params.clone(), Value::from("trailingPercent"), Value::from("callbackRatio"), Value::Undefined);
-        let mut is_trailing_percent_order: Value = (trailing_percent.clone().is_nonnullish()).into();
+        let mut is_trailing_percent_order: Value = Value::from(trailing_percent.clone().is_nonnullish());
         let mut trailing_price: Value = self.safe_string_2(params.clone(), Value::from("trailingPrice"), Value::from("callbackSpread"), Value::Undefined);
-        let mut is_trailing_price_order: Value = (trailing_price.clone().is_nonnullish()).into();
-        let mut trigger: Value = (trigger_price.clone().is_nonnullish() || r#type.clone() == Value::from("trigger")).into();
-        let mut is_reduce_only: Value = (self.safe_value(params.clone(), Value::from("reduceOnly"), false.into()).is_truthy() || close_fraction.clone().is_nonnullish()).into();
+        let mut is_trailing_price_order: Value = Value::from(trailing_price.clone().is_nonnullish());
+        let mut trigger: Value = Value::from(trigger_price.clone().is_nonnullish() || r#type.clone() == Value::from("trigger"));
+        let mut is_reduce_only: Value = Value::from(self.safe_value(params.clone(), Value::from("reduceOnly"), Value::from(false)).is_truthy() || close_fraction.clone().is_nonnullish());
         let mut default_margin_mode: Value = self.safe_string_2(self.get("options".into()), Value::from("defaultMarginMode"), Value::from("marginMode"), Value::from("cross"));
         let mut margin_mode: Value = self.safe_string_2(params.clone(), Value::from("marginMode"), Value::from("tdMode"), Value::Undefined);
         // cross or isolated, tdMode not ommited so as to be extended into the request
-        let mut margin: Value = false.into();
+        let mut margin: Value = Value::from(false);
         if margin_mode.clone().is_nonnullish() && margin_mode.clone() != Value::from("cash") {
-            margin = true.into();
+            margin = Value::from(true);
         } else {
             margin_mode = default_margin_mode.clone();
-            margin = self.safe_bool(params.clone(), Value::from("margin"), false.into());
+            margin = self.safe_bool(params.clone(), Value::from("margin"), Value::from(false));
         };
         if spot.is_truthy() {
             if margin.is_truthy() {
@@ -2392,8 +2392,8 @@ pub trait Okx : Exchange {
                     let mut hedged: Value = Value::Undefined;
                     (hedged, params) = shift_2(self.handle_option_and_params(params.clone(), Value::from("createOrder"), Value::from("hedged"), Value::Undefined));
                     if hedged.is_truthy() {
-                        let mut is_buy: Value = (side.clone() == Value::from("buy")).into();
-                        let mut is_protective: Value = (take_profit_price.clone().is_nonnullish() || stop_loss_price.clone().is_nonnullish() || is_reduce_only.is_truthy()).into();
+                        let mut is_buy: Value = Value::from(side.clone() == Value::from("buy"));
+                        let mut is_protective: Value = Value::from(take_profit_price.clone().is_nonnullish() || stop_loss_price.clone().is_nonnullish() || is_reduce_only.is_truthy());
                         if is_protective.is_truthy() {
                             // in case of protective orders, the posSide should be opposite of position side
                             // reduceOnly is emulated and not natively supported by the exchange
@@ -2409,14 +2409,14 @@ pub trait Okx : Exchange {
             };
             request.set("tdMode".into(), margin_mode.clone());
         };
-        let mut is_market_order: Value = (r#type.clone() == Value::from("market")).into();
-        let mut post_only: Value = false.into();
-        (post_only, params) = shift_2(self.handle_post_only(is_market_order.clone(), (r#type.clone() == Value::from("post_only")).into(), params.clone()));
+        let mut is_market_order: Value = Value::from(r#type.clone() == Value::from("market"));
+        let mut post_only: Value = Value::from(false);
+        (post_only, params) = shift_2(self.handle_post_only(is_market_order.clone(), Value::from(r#type.clone() == Value::from("post_only")), params.clone()));
         params = self.omit(params.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("currency").into(), Value::from("ccy").into(), Value::from("marginMode").into(), Value::from("timeInForce").into(), Value::from("stopPrice").into(), Value::from("triggerPrice").into(), Value::from("clientOrderId").into(), Value::from("stopLossPrice").into(), Value::from("takeProfitPrice").into(), Value::from("slOrdPx").into(), Value::from("tpOrdPx").into(), Value::from("margin").into(), Value::from("stopLoss").into(), Value::from("takeProfit").into(), Value::from("trailingPercent").into()])));
-        let mut ioc: Value = (time_in_force.clone() == Value::from("IOC") || r#type.clone() == Value::from("ioc")).into();
-        let mut fok: Value = (time_in_force.clone() == Value::from("FOK") || r#type.clone() == Value::from("fok")).into();
+        let mut ioc: Value = Value::from(time_in_force.clone() == Value::from("IOC") || r#type.clone() == Value::from("ioc"));
+        let mut fok: Value = Value::from(time_in_force.clone() == Value::from("FOK") || r#type.clone() == Value::from("fok"));
         // const conditional = (stopLossPrice !== undefined) || (takeProfitPrice !== undefined) || (type === 'conditional');
-        let mut market_ioc: Value = (is_market_order.is_truthy() && ioc.is_truthy() || r#type.clone() == Value::from("optimal_limit_ioc")).into();
+        let mut market_ioc: Value = Value::from(is_market_order.is_truthy() && ioc.is_truthy() || r#type.clone() == Value::from("optimal_limit_ioc"));
         let mut default_tgt_ccy: Value = self.safe_string(self.get("options".into()), Value::from("tgtCcy"), Value::from("base_ccy"));
         let mut tgt_ccy: Value = self.safe_string(params.clone(), Value::from("tgtCcy"), default_tgt_ccy.clone());
         if !contract.is_truthy() && !margin.is_truthy() {
@@ -2429,8 +2429,8 @@ pub trait Okx : Exchange {
                 // see documentation: https://www.okx.com/docs-v5/en/#rest-api-trade-place-order
                 if tgt_ccy.clone() == Value::from("quote_ccy") {
                     // quote_ccy: sz refers to units of quote currency
-                    let mut create_market_buy_order_requires_price: Value = true.into();
-                    (create_market_buy_order_requires_price, params) = shift_2(self.handle_option_and_params(params.clone(), Value::from("createOrder"), Value::from("createMarketBuyOrderRequiresPrice"), true.into()));
+                    let mut create_market_buy_order_requires_price: Value = Value::from(true);
+                    (create_market_buy_order_requires_price, params) = shift_2(self.handle_option_and_params(params.clone(), Value::from("createOrder"), Value::from("createMarketBuyOrderRequiresPrice"), Value::from(true)));
                     let mut notional: Value = self.safe_number_2(params.clone(), Value::from("cost"), Value::from("sz"), Value::Undefined);
                     params = self.omit(params.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("cost").into(), Value::from("sz").into()])));
                     if create_market_buy_order_requires_price.is_truthy() {
@@ -2485,8 +2485,8 @@ pub trait Okx : Exchange {
                 let mut stop_loss_limit_price: Value = self.safe_value_n(stop_loss.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("price").into(), Value::from("stopLossPrice").into(), Value::from("slOrdPx").into()])), Value::Undefined);
                 let mut stop_loss_order_type: Value = self.safe_string(stop_loss.clone(), Value::from("type"), Value::Undefined);
                 if stop_loss_order_type.clone().is_nonnullish() {
-                    let mut stop_loss_limit_order_type: Value = (stop_loss_order_type.clone() == Value::from("limit")).into();
-                    let mut stop_loss_market_order_type: Value = (stop_loss_order_type.clone() == Value::from("market")).into();
+                    let mut stop_loss_limit_order_type: Value = Value::from(stop_loss_order_type.clone() == Value::from("limit"));
+                    let mut stop_loss_market_order_type: Value = Value::from(stop_loss_order_type.clone() == Value::from("market"));
                     if !stop_loss_limit_order_type.is_truthy() && !stop_loss_market_order_type.is_truthy() {
                         panic!(r###"InvalidOrder::new(self.get("id".into()) + Value::from(r#" createOrder() params["stopLoss"]["type"] must be either "limit" or "market""#))"###);
                     } else if stop_loss_limit_order_type.is_truthy() {
@@ -2524,8 +2524,8 @@ pub trait Okx : Exchange {
                 let mut take_profit_limit_price: Value = self.safe_value_n(take_profit.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("price").into(), Value::from("takeProfitPrice").into(), Value::from("tpOrdPx").into()])), Value::Undefined);
                 let mut take_profit_order_type: Value = self.safe_string_2(take_profit.clone(), Value::from("type"), Value::from("tpOrdKind"), Value::Undefined);
                 if take_profit_order_type.clone().is_nonnullish() {
-                    let mut take_profit_limit_order_type: Value = (take_profit_order_type.clone() == Value::from("limit")).into();
-                    let mut take_profit_market_order_type: Value = (take_profit_order_type.clone() == Value::from("market")).into();
+                    let mut take_profit_limit_order_type: Value = Value::from(take_profit_order_type.clone() == Value::from("limit"));
+                    let mut take_profit_market_order_type: Value = Value::from(take_profit_order_type.clone() == Value::from("market"));
                     if !take_profit_limit_order_type.is_truthy() && !take_profit_market_order_type.is_truthy() {
                         panic!(r###"InvalidOrder::new(self.get("id".into()) + Value::from(r#" createOrder() params["takeProfit"]["type"] must be either "limit" or "market""#))"###);
                     } else if take_profit_limit_order_type.is_truthy() {
@@ -2556,7 +2556,7 @@ pub trait Okx : Exchange {
                 attach_algo_ord = extend_2(attach_algo_ord.clone(), tp_order.clone());
             };
             let mut attach_ord_keys: Value = attach_algo_ord.clone().keys();
-            let mut attach_ord_len: usize = attach_ord_keys.len();
+            let mut attach_ord_len: Value = Value::from(attach_ord_keys.len());
             if attach_ord_len.clone() > Value::from(0) {
                 request.set("attachAlgoOrds".into(), Value::Json(serde_json::Value::Array(vec![attach_algo_ord.clone().into()])));
             };
@@ -2568,7 +2568,7 @@ pub trait Okx : Exchange {
             request.set("orderPx".into(), if is_market_order.is_truthy() { Value::from("-1") } else { self.price_to_precision(symbol.clone(), price.clone()) });
         } else if conditional.is_truthy() {
             request.set("ordType".into(), Value::from("conditional"));
-            let mut two_way_condition: Value = (take_profit_price.clone().is_nonnullish() && stop_loss_price.clone().is_nonnullish()).into();
+            let mut two_way_condition: Value = Value::from(take_profit_price.clone().is_nonnullish() && stop_loss_price.clone().is_nonnullish());
             // if TP and SL are sent together
             // as ordType 'conditional' only stop-loss order will be applied
             // tpOrdKind is 'condition' which is the default
@@ -2704,7 +2704,7 @@ pub trait Okx : Exchange {
         }))).unwrap());
         let mut is_algo_order: Value = Value::Undefined;
         if r#type.clone() == Value::from("trigger") || r#type.clone() == Value::from("conditional") || r#type.clone() == Value::from("move_order_stop") || r#type.clone() == Value::from("oco") || r#type.clone() == Value::from("iceberg") || r#type.clone() == Value::from("twap") {
-            is_algo_order = true.into();
+            is_algo_order = Value::from(true);
         };
         let mut client_order_id: Value = self.safe_string_2(params.clone(), Value::from("clOrdId"), Value::from("clientOrderId"), Value::Undefined);
         if client_order_id.clone().is_nonnullish() {
@@ -2728,8 +2728,8 @@ pub trait Okx : Exchange {
         let mut take_profit_trigger_price_type: Value = self.safe_string(params.clone(), Value::from("newTpTriggerPxType"), Value::from("last"));
         let mut stop_loss: Value = self.safe_value(params.clone(), Value::from("stopLoss"), Value::Undefined);
         let mut take_profit: Value = self.safe_value(params.clone(), Value::from("takeProfit"), Value::Undefined);
-        let mut has_stop_loss: Value = (stop_loss.clone().is_nonnullish()).into();
-        let mut has_take_profit: Value = (take_profit.clone().is_nonnullish()).into();
+        let mut has_stop_loss: Value = Value::from(stop_loss.clone().is_nonnullish());
+        let mut has_take_profit: Value = Value::from(take_profit.clone().is_nonnullish());
         if is_algo_order.is_truthy() {
             if stop_loss_trigger_price.clone().is_nullish() && take_profit_trigger_price.clone().is_nullish() {
                 panic!(r###"BadRequest::new(self.get("id".into()) + Value::from(" editOrder() requires a stopLossPrice or takeProfitPrice parameter for editing an algo order"))"###);
@@ -2798,7 +2798,7 @@ pub trait Okx : Exchange {
         let mut request: Value = <Self as Okx>::edit_order_request(self, id.clone(), symbol.clone(), r#type.clone(), side.clone(), amount.clone(), price.clone(), params.clone());
         let mut is_algo_order: Value = Value::Undefined;
         if r#type.clone() == Value::from("trigger") || r#type.clone() == Value::from("conditional") || r#type.clone() == Value::from("move_order_stop") || r#type.clone() == Value::from("oco") || r#type.clone() == Value::from("iceberg") || r#type.clone() == Value::from("twap") {
-            is_algo_order = true.into();
+            is_algo_order = Value::from(true);
         };
         let mut response: Value = Value::Undefined;
         if is_algo_order.is_truthy() {
@@ -2835,7 +2835,7 @@ pub trait Okx : Exchange {
             panic!(r###"ArgumentsRequired::new(self.get("id".into()) + Value::from(" cancelOrder() requires a symbol argument"))"###);
         };
         let mut trigger: Value = self.safe_value_2(params.clone(), Value::from("stop"), Value::from("trigger"), Value::Undefined);
-        let mut trailing: Value = self.safe_bool(params.clone(), Value::from("trailing"), false.into());
+        let mut trailing: Value = self.safe_bool(params.clone(), Value::from("trailing"), Value::from(false));
         if trigger.is_truthy() || trailing.is_truthy() {
             let mut order_inner: Value = <Self as Okx>::cancel_orders(self, Value::Json(serde_json::Value::Array(vec![id.clone().into()])), symbol.clone(), params.clone()).await;
             return self.safe_dict(order_inner.clone(), Value::from(0), Value::Undefined);
@@ -2892,7 +2892,7 @@ pub trait Okx : Exchange {
         let mut client_order_ids: Value = <Self as Okx>::parse_ids(self, self.safe_value_2(params.clone(), Value::from("clOrdId"), Value::from("clientOrderId"), Value::Undefined));
         let mut algo_ids: Value = <Self as Okx>::parse_ids(self, self.safe_value(params.clone(), Value::from("algoId"), Value::Undefined));
         let mut trigger: Value = self.safe_value_2(params.clone(), Value::from("stop"), Value::from("trigger"), Value::Undefined);
-        let mut trailing: Value = self.safe_bool(params.clone(), Value::from("trailing"), false.into());
+        let mut trailing: Value = self.safe_bool(params.clone(), Value::from("trailing"), Value::from(false));
         if trigger.is_truthy() || trailing.is_truthy() {
             method = Value::from("privatePostTradeCancelAlgos");
         };
@@ -2989,8 +2989,8 @@ pub trait Okx : Exchange {
         let mut default_method: Value = self.safe_string(options.clone(), Value::from("method"), Value::from("privatePostTradeCancelBatchOrders"));
         let mut method: Value = self.safe_string(params.clone(), Value::from("method"), default_method.clone());
         let mut trigger: Value = self.safe_bool_2(params.clone(), Value::from("stop"), Value::from("trigger"), Value::Undefined);
-        let mut trailing: Value = self.safe_bool(params.clone(), Value::from("trailing"), false.into());
-        let mut is_stop_or_trailing: Value = (trigger.is_truthy() || trailing.is_truthy()).into();
+        let mut trailing: Value = self.safe_bool(params.clone(), Value::from("trailing"), Value::from(false));
+        let mut is_stop_or_trailing: Value = Value::from(trigger.is_truthy() || trailing.is_truthy());
         if is_stop_or_trailing.is_truthy() {
             method = Value::from("privatePostTradeCancelAlgos");
         };
@@ -3295,7 +3295,7 @@ pub trait Okx : Exchange {
         let mut post_only: Value = Value::Undefined;
         let mut time_in_force: Value = Value::Undefined;
         if r#type.clone() == Value::from("post_only") {
-            post_only = true.into();
+            post_only = Value::from(true);
             r#type = Value::from("limit");
         } else if r#type.clone() == Value::from("fok") {
             time_in_force = Value::from("FOK");
@@ -3344,9 +3344,9 @@ pub trait Okx : Exchange {
         let mut stop_loss_price: Value = self.safe_number_2(order.clone(), Value::from("slTriggerPx"), Value::from("slOrdPx"), Value::Undefined);
         let mut take_profit_price: Value = self.safe_number_2(order.clone(), Value::from("tpTriggerPx"), Value::from("tpOrdPx"), Value::Undefined);
         let mut reduce_only_raw: Value = self.safe_string(order.clone(), Value::from("reduceOnly"), Value::Undefined);
-        let mut reduce_only: Value = false.into();
+        let mut reduce_only: Value = Value::from(false);
         if reduce_only.clone().is_nonnullish() {
-            reduce_only = (reduce_only_raw.clone() == Value::from("true")).into();
+            reduce_only = Value::from(reduce_only_raw.clone() == Value::from("true"));
         };
         return self.safe_order(Value::Json(normalize(&Value::Json(json!({
             "info": order,
@@ -3520,7 +3520,7 @@ pub trait Okx : Exchange {
     async fn fetch_open_orders(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        let mut paginate: Value = false.into();
+        let mut paginate: Value = Value::from(false);
         (paginate, params) = shift_2(self.handle_option_and_params(params.clone(), Value::from("fetchOpenOrders"), Value::from("paginate"), Value::Undefined));
         if paginate.is_truthy() {
             return self.fetch_paginated_call_dynamic(Value::from("fetchOpenOrders"), symbol.clone(), since.clone(), limit.clone(), params.clone(), Value::Undefined, Value::Undefined).await;
@@ -3549,7 +3549,7 @@ pub trait Okx : Exchange {
         let mut method: Value = self.safe_string(params.clone(), Value::from("method"), default_method.clone());
         let mut ord_type: Value = self.safe_string(params.clone(), Value::from("ordType"), Value::Undefined);
         let mut trigger: Value = self.safe_value_2(params.clone(), Value::from("stop"), Value::from("trigger"), Value::Undefined);
-        let mut trailing: Value = self.safe_bool(params.clone(), Value::from("trailing"), false.into());
+        let mut trailing: Value = self.safe_bool(params.clone(), Value::from("trailing"), Value::from(false));
         if trailing.is_truthy() || trigger.is_truthy() || algo_order_types.contains_key(ord_type.clone()) {
             method = Value::from("privateGetTradeOrdersAlgoPending");
         };
@@ -3697,7 +3697,7 @@ pub trait Okx : Exchange {
         let mut method: Value = self.safe_string(params.clone(), Value::from("method"), default_method.clone());
         let mut ord_type: Value = self.safe_string(params.clone(), Value::from("ordType"), Value::Undefined);
         let mut trigger: Value = self.safe_value_2(params.clone(), Value::from("stop"), Value::from("trigger"), Value::Undefined);
-        let mut trailing: Value = self.safe_bool(params.clone(), Value::from("trailing"), false.into());
+        let mut trailing: Value = self.safe_bool(params.clone(), Value::from("trailing"), Value::from(false));
         if trailing.is_truthy() {
             method = Value::from("privateGetTradeOrdersAlgoHistory");
             request.set("ordType".into(), Value::from("move_order_stop"));
@@ -3836,7 +3836,7 @@ pub trait Okx : Exchange {
     async fn fetch_closed_orders(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        let mut paginate: Value = false.into();
+        let mut paginate: Value = Value::from(false);
         (paginate, params) = shift_2(self.handle_option_and_params(params.clone(), Value::from("fetchClosedOrders"), Value::from("paginate"), Value::Undefined));
         if paginate.is_truthy() {
             return self.fetch_paginated_call_dynamic(Value::from("fetchClosedOrders"), symbol.clone(), since.clone(), limit.clone(), params.clone(), Value::Undefined, Value::Undefined).await;
@@ -3870,7 +3870,7 @@ pub trait Okx : Exchange {
         let mut method: Value = self.safe_string(params.clone(), Value::from("method"), default_method.clone());
         let mut ord_type: Value = self.safe_string(params.clone(), Value::from("ordType"), Value::Undefined);
         let mut trigger: Value = self.safe_bool_2(params.clone(), Value::from("stop"), Value::from("trigger"), Value::Undefined);
-        let mut trailing: Value = self.safe_bool(params.clone(), Value::from("trailing"), false.into());
+        let mut trailing: Value = self.safe_bool(params.clone(), Value::from("trailing"), Value::from(false));
         if trailing.is_truthy() || trigger.is_truthy() || algo_order_types.contains_key(ord_type.clone()) {
             method = Value::from("privateGetTradeOrdersAlgoHistory");
             request.set("state".into(), Value::from("effective"));
@@ -4003,7 +4003,7 @@ pub trait Okx : Exchange {
     async fn fetch_my_trades(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        let mut paginate: Value = false.into();
+        let mut paginate: Value = Value::from(false);
         (paginate, params) = shift_2(self.handle_option_and_params(params.clone(), Value::from("fetchMyTrades"), Value::from("paginate"), Value::Undefined));
         if paginate.is_truthy() {
             return self.fetch_paginated_call_dynamic(Value::from("fetchMyTrades"), symbol.clone(), since.clone(), limit.clone(), params.clone(), Value::Undefined, Value::Undefined).await;
@@ -4077,7 +4077,7 @@ pub trait Okx : Exchange {
     async fn fetch_ledger(&mut self, mut code: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        let mut paginate: Value = false.into();
+        let mut paginate: Value = Value::from(false);
         (paginate, params) = shift_2(self.handle_option_and_params(params.clone(), Value::from("fetchLedger"), Value::from("paginate"), Value::Undefined));
         if paginate.is_truthy() {
             return self.fetch_paginated_call_dynamic(Value::from("fetchLedger"), code.clone(), since.clone(), limit.clone(), params.clone(), Value::Undefined, Value::Undefined).await;
@@ -4397,7 +4397,7 @@ pub trait Okx : Exchange {
         //     }
         //
         let mut data: Value = self.safe_list(response.clone(), Value::from("data"), Value::new_array());
-        let mut filtered: Value = self.filter_by(data.clone(), Value::from("selected"), true.into());
+        let mut filtered: Value = self.filter_by(data.clone(), Value::from("selected"), Value::from(true));
         let mut parsed: Value = self.parse_deposit_addresses(filtered.clone(), Value::Json(serde_json::Value::Array(vec![currency.get(Value::from("code")).into()])), false.into(), Value::Undefined);
         return self.index_by(parsed.clone(), Value::from("network"));
     }
@@ -4487,7 +4487,7 @@ pub trait Okx : Exchange {
     async fn fetch_deposits(&mut self, mut code: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        let mut paginate: Value = false.into();
+        let mut paginate: Value = Value::from(false);
         (paginate, params) = shift_2(self.handle_option_and_params(params.clone(), Value::from("fetchDeposits"), Value::from("paginate"), Value::Undefined));
         if paginate.is_truthy() {
             return self.fetch_paginated_call_dynamic(Value::from("fetchDeposits"), code.clone(), since.clone(), limit.clone(), params.clone(), Value::Undefined, Value::Undefined).await;
@@ -4574,7 +4574,7 @@ pub trait Okx : Exchange {
     async fn fetch_withdrawals(&mut self, mut code: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        let mut paginate: Value = false.into();
+        let mut paginate: Value = Value::from(false);
         (paginate, params) = shift_2(self.handle_option_and_params(params.clone(), Value::from("fetchWithdrawals"), Value::from("paginate"), Value::Undefined));
         if paginate.is_truthy() {
             return self.fetch_paginated_call_dynamic(Value::from("fetchWithdrawals"), code.clone(), since.clone(), limit.clone(), params.clone(), Value::Undefined, Value::Undefined).await;
@@ -4963,7 +4963,7 @@ pub trait Okx : Exchange {
                 market_ids.push(market.get(Value::from("id")));
                 i += 1;
             };
-            let mut market_ids_length: usize = market_ids.len();
+            let mut market_ids_length: Value = Value::from(market_ids.len());
             if market_ids_length.clone() > Value::from(0) {
                 request.set("instId".into(), market_ids.join(Value::from(",")));
             };
@@ -5029,7 +5029,7 @@ pub trait Okx : Exchange {
             result.push(<Self as Okx>::parse_position(self, positions.get(i.into()), Value::Undefined));
             i += 1;
         };
-        return self.filter_by_array_positions(result.clone(), Value::from("symbol"), self.market_symbols(symbols.clone(), Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined), false.into());
+        return self.filter_by_array_positions(result.clone(), Value::from("symbol"), self.market_symbols(symbols.clone(), Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined), Value::from(false));
     }
 
     async fn fetch_positions_for_symbol(&mut self, mut symbol: Value, mut params: Value) -> Value {
@@ -5111,7 +5111,7 @@ pub trait Okx : Exchange {
         // 'pos' field: One way mode: 0 if position is not open, 1 if open | Two way (hedge) mode: -1 if short, 1 if long, 0 if position is not open
         let mut contracts_abs: Value = Precise::string_abs(pos.clone());
         let mut side: Value = self.safe_string_2(position.clone(), Value::from("posSide"), Value::from("direction"), Value::Undefined);
-        let mut hedged: Value = (side.clone() != Value::from("net")).into();
+        let mut hedged: Value = Value::from(side.clone() != Value::from("net"));
         let mut contracts: Value = self.parse_number(contracts_abs.clone(), Value::Undefined);
         if market.get(Value::from("margin")).is_truthy() {
             // margin position
@@ -5546,7 +5546,7 @@ pub trait Okx : Exchange {
     async fn fetch_funding_rates(&mut self, mut symbols: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        symbols = self.market_symbols(symbols.clone(), Value::from("swap"), true.into(), Value::Undefined, Value::Undefined);
+        symbols = self.market_symbols(symbols.clone(), Value::from("swap"), Value::from(true), Value::Undefined, Value::Undefined);
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
             "instId": "ANY"
         }))).unwrap());
@@ -5794,7 +5794,7 @@ pub trait Okx : Exchange {
         let mut main_account: Value = selected_account.get(Value::from("info"));
         let mut pos_mode: Value = self.safe_string(main_account.clone(), Value::from("posMode"), Value::Undefined);
         // long_short_mode, net_mode
-        let mut is_hedged: Value = (pos_mode.clone() == Value::from("long_short_mode")).into();
+        let mut is_hedged: Value = Value::from(pos_mode.clone() == Value::from("long_short_mode"));
         return Value::Json(normalize(&Value::Json(json!({
             "info": main_account,
             "hedged": is_hedged
@@ -6421,7 +6421,7 @@ pub trait Okx : Exchange {
     async fn fetch_open_interests(&mut self, mut symbols: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        symbols = self.market_symbols(symbols.clone(), Value::Undefined, true.into(), true.into(), Value::Undefined);
+        symbols = self.market_symbols(symbols.clone(), Value::Undefined, Value::from(true), Value::from(true), Value::Undefined);
         let mut market: Value = Value::Undefined;
         if symbols.clone().is_nonnullish() {
             market = self.market(symbols.get(Value::from(0)));
@@ -6692,7 +6692,7 @@ pub trait Okx : Exchange {
                 let mut withdraw_fee: Value = self.safe_number(fee_info.clone(), Value::from("fee"), Value::Undefined);
                 let mut withdraw_result: Value = Value::Json(normalize(&Value::Json(json!({
                     "fee": withdraw_fee,
-                    "percentage": if withdraw_fee.clone().is_nonnullish() { false.into() } else { Value::Undefined }
+                    "percentage": if withdraw_fee.clone().is_nonnullish() { Value::from(false) } else { Value::Undefined }
                 }))).unwrap());
                 let mut deposit_result: Value = Value::Json(normalize(&Value::Json(json!({
                     "fee": Value::Undefined,
@@ -7354,7 +7354,7 @@ pub trait Okx : Exchange {
         if r#type.clone().is_nullish() {
             panic!(r###"ArgumentsRequired::new(self.get("id".into()) + Value::from(" fetchMarginAdjustmentHistory () requires a type argument"))"###);
         };
-        let mut is_add: Value = (r#type.clone() == Value::from("add")).into();
+        let mut is_add: Value = Value::from(r#type.clone() == Value::from("add"));
         let mut sub_type: Value = if is_add.is_truthy() { Value::from("160") } else { Value::from("161") };
         if auto.is_truthy() {
             if is_add.is_truthy() {
@@ -7449,7 +7449,7 @@ pub trait Okx : Exchange {
             "limit": limit
         }))).unwrap());
         if symbols.clone().is_nonnullish() {
-            let mut symbols_length: usize = symbols.len();
+            let mut symbols_length: Value = Value::from(symbols.len());
             if symbols_length.clone() == Value::from(1) {
                 let mut market: Value = self.market(symbols.get(Value::from(0)));
                 request.set("instId".into(), market.get(Value::from("id")));

@@ -1,4 +1,5 @@
 #![allow(clippy::all)]
+#![allow(non_snake_case)]
 #![allow(dead_code)]
 #![allow(unreachable_code)]
 #![allow(unused_imports)]
@@ -1759,8 +1760,10 @@ pub trait Bitmex : Exchange {
         };
         let mut post_only: Value = self.safe_bool(params.clone(), Value::from("postOnly"), Value::Undefined);
         params = self.omit(params.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("reduceOnly").into(), Value::from("postOnly").into()])));
-        let mut broker_id: Value = self.safe_string(self.get("options".into()), Value::from("brokerId"), Value::from("CCXT"));
-        let mut qty: Value = self.parse_to_int(<Self as Bitmex>::amount_to_precision(self, symbol.clone(), amount.clone()));
+        let mut options: Value = self.get("options".into());
+        let mut broker_id: Value = self.safe_string(options, Value::from("brokerId"), Value::from("CCXT"));
+        let mut amount_precision: Value = <Self as Bitmex>::amount_to_precision(self, symbol.clone(), amount.clone());
+        let mut qty: Value = self.parse_to_int(amount_precision);
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
             "symbol": market.get(Value::from("id")),
             "side": self.capitalize(side.clone()),
@@ -1816,13 +1819,15 @@ pub trait Bitmex : Exchange {
                     // if exchange specific trigger types were provided
                     panic!(r###"ArgumentsRequired::new(self.get("id".into()) + Value::from(" createOrder() requires a triggerPrice parameter for the ") + order_type.clone() + Value::from(" order type"))"###);
                 };
-                request.set("stopPx".into(), self.parse_to_numeric(self.price_to_precision(symbol.clone(), trigger_price.clone()), Value::Undefined));
+                let mut stop_px_precision: Value = self.price_to_precision(symbol.clone(), trigger_price.clone());
+                request.set("stopPx".into(), self.parse_to_numeric(stop_px_precision, Value::Undefined));
             };
             request.set("ordType".into(), order_type.clone());
             params = self.omit(params.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("triggerPrice").into(), Value::from("stopPrice").into(), Value::from("stopPx").into(), Value::from("triggerDirection").into(), Value::from("trailingAmount").into()])));
         };
         if order_type.clone() == Value::from("Limit") || order_type.clone() == Value::from("StopLimit") || order_type.clone() == Value::from("LimitIfTouched") {
-            request.set("price".into(), self.parse_to_numeric(self.price_to_precision(symbol.clone(), price.clone()), Value::Undefined));
+            let mut price_precision: Value = self.price_to_precision(symbol.clone(), price.clone());
+            request.set("price".into(), self.parse_to_numeric(price_precision, Value::Undefined));
         };
         let mut client_order_id: Value = self.safe_string_2(params.clone(), Value::from("clOrdID"), Value::from("clientOrderId"), Value::Undefined);
         if client_order_id.clone().is_nonnullish() {
@@ -1879,7 +1884,8 @@ pub trait Bitmex : Exchange {
             request.set("orderID".into(), id.clone());
         };
         if amount.clone().is_nonnullish() {
-            let mut qty: Value = self.parse_to_int(<Self as Bitmex>::amount_to_precision(self, symbol.clone(), amount.clone()));
+            let mut edit_amount_precision: Value = <Self as Bitmex>::amount_to_precision(self, symbol.clone(), amount.clone());
+            let mut qty: Value = self.parse_to_int(edit_amount_precision);
             request.set("orderQty".into(), qty.clone());
         };
         if price.clone().is_nonnullish() {
@@ -2520,11 +2526,11 @@ pub trait Bitmex : Exchange {
             }))).unwrap()),
             "networks": Value::new_object()
         }))).unwrap());
-        if networks_length.clone() != Value::from(0) {
+        if networks_length != 0 {
             let mut scale: Value = self.safe_string(fee.clone(), Value::from("scale"), Value::Undefined);
             let mut precision: Value = self.parse_precision(scale.clone());
             let mut i: usize = 0;
-            while i < networks_length.clone().into() {
+            while i < networks_length {
                 let mut network: Value = networks.get(i.into());
                 let mut network_id: Value = self.safe_string(network.clone(), Value::from("asset"), Value::Undefined);
                 let mut currency_code: Value = self.safe_string(currency.clone(), Value::from("code"), Value::Undefined);

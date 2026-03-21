@@ -1,4 +1,5 @@
 #![allow(clippy::all)]
+#![allow(non_snake_case)]
 #![allow(dead_code)]
 #![allow(unreachable_code)]
 #![allow(unused_imports)]
@@ -546,8 +547,8 @@ pub trait Poloniex : Exchange {
         //             "1740770099999",
         //           ],
         //
-        let mut ohlcv_length: usize = ohlcv.len();
-        let mut is_contract: Value = (ohlcv_length.clone() == Value::from(9)).into();
+        let mut ohlcv_length: Value = Value::from(ohlcv.len());
+        let mut is_contract: Value = Value::from(ohlcv_length.clone() == Value::from(9));
         if is_contract.is_truthy() {
             return Value::Json(serde_json::Value::Array(vec![self.safe_integer(ohlcv.clone(), Value::from(7), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from(2), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from(1), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from(0), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from(3), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from(5), Value::Undefined).into()]));
         };
@@ -590,7 +591,7 @@ pub trait Poloniex : Exchange {
 
 
     async fn load_markets(&mut self, mut reload: Value, mut params: Value) -> Value {
-        reload = reload.or_default(false.into());
+        reload = reload.or_default(Value::from(false));
         params = params.or_default(Value::new_object());
         let mut markets: Value = Exchange::load_markets(self, reload.clone(), params.clone()).await;
         let mut currencies_by_numeric_id: Value = self.safe_value(self.get("options".into()), Value::from("currenciesByNumericId"), Value::Undefined);
@@ -693,7 +694,7 @@ pub trait Poloniex : Exchange {
         let mut base: Value = self.safe_currency_code(base_id.clone(), Value::Undefined);
         let mut quote: Value = self.safe_currency_code(quote_id.clone(), Value::Undefined);
         let mut state: Value = self.safe_string(market.clone(), Value::from("state"), Value::Undefined);
-        let mut active: Value = (state.clone() == Value::from("NORMAL")).into();
+        let mut active: Value = Value::from(state.clone() == Value::from("NORMAL"));
         let mut symbol_trade_limit: Value = self.safe_value(market.clone(), Value::from("symbolTradeLimit"), Value::Undefined);
         // these are known defaults
         return Value::Json(normalize(&Value::Json(json!({
@@ -786,8 +787,8 @@ pub trait Poloniex : Exchange {
         let mut quote: Value = self.safe_currency_code(quote_id.clone(), Value::Undefined);
         let mut settle: Value = self.safe_currency_code(settle_id.clone(), Value::Undefined);
         let mut status: Value = self.safe_string(market.clone(), Value::from("status"), Value::Undefined);
-        let mut active: Value = (status.clone() == Value::from("OPEN")).into();
-        let mut linear: Value = (market.get(Value::from("ctType")) == Value::from("LINEAR")).into();
+        let mut active: Value = Value::from(status.clone() == Value::from("OPEN"));
+        let mut linear: Value = Value::from(market.get(Value::from("ctType")) == Value::from("LINEAR"));
         let mut symbol: Value = base.clone() + Value::from("/") + quote.clone();
         if linear.is_truthy() {
             symbol = symbol +  Value::from(":") + settle.clone();
@@ -812,13 +813,13 @@ pub trait Poloniex : Exchange {
             "type": if r#type.clone() == Value::from("future") { Value::from("future") } else { Value::from("swap") },
             "spot": false,
             "margin": false,
-            "swap": r#type.clone() == Value::from("swap"),
-            "future": r#type.clone() == Value::from("future"),
+            "swap": Value::from(r#type.clone() == Value::from("swap")),
+            "future": Value::from(r#type.clone() == Value::from("future")),
             "option": false,
             "active": active,
             "contract": true,
             "linear": linear,
-            "inverse": !linear.is_truthy(),
+            "inverse": Value::from(!linear.is_truthy()),
             "contractSize": self.safe_number(market.clone(), Value::from("ctVal"), Value::Undefined),
             "expiry": Value::Undefined,
             "expiryDatetime": Value::Undefined,
@@ -1313,7 +1314,7 @@ pub trait Poloniex : Exchange {
     async fn fetch_my_trades(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         <Self as Poloniex>::load_markets(self, Value::Undefined, Value::Undefined).await;
-        let mut paginate: Value = false.into();
+        let mut paginate: Value = Value::from(false);
         (paginate, params) = shift_2(self.handle_option_and_params(params.clone(), Value::from("fetchMyTrades"), Value::from("paginate"), Value::Undefined));
         if paginate.is_truthy() {
             return self.fetch_paginated_call_dynamic(Value::from("fetchMyTrades"), symbol.clone(), since.clone(), limit.clone(), params.clone(), Value::Undefined, Value::Undefined).await;
@@ -1558,7 +1559,7 @@ pub trait Poloniex : Exchange {
         let mut margin_mode: Value = self.safe_string_lower(order.clone(), Value::from("mgnMode"), Value::Undefined);
         let mut reduce_only: Value = self.safe_bool(order.clone(), Value::from("reduceOnly"), Value::Undefined);
         let mut leverage: Value = self.safe_integer(order.clone(), Value::from("lever"), Value::Undefined);
-        let mut hedged: Value = (self.safe_string(order.clone(), Value::from("posSide"), Value::Undefined) != Value::from("BOTH")).into();
+        let mut hedged: Value = Value::from(self.safe_string(order.clone(), Value::from("posSide"), Value::Undefined) != Value::from("BOTH"));
         return self.safe_order(Value::Json(normalize(&Value::Json(json!({
             "info": order,
             "id": id,
@@ -1570,7 +1571,7 @@ pub trait Poloniex : Exchange {
             "symbol": symbol,
             "type": r#type,
             "timeInForce": self.safe_string(order.clone(), Value::from("timeInForce"), Value::Undefined),
-            "postOnly": raw_type.clone() == Value::from("LIMIT_MAKER"),
+            "postOnly": Value::from(raw_type.clone() == Value::from("LIMIT_MAKER")),
             "side": side,
             "price": price,
             "triggerPrice": self.safe_string_2(order.clone(), Value::from("triggerPrice"), Value::from("stopPrice"), Value::Undefined),
@@ -1599,7 +1600,7 @@ pub trait Poloniex : Exchange {
         return self.safe_string(statuses.clone(), status.clone(), status.clone());
     }
 
-    fn parse_open_orders(&self, mut orders: Value, mut market: Value, mut result: Value) -> Value {
+    fn parse_open_orders(&mut self, mut orders: Value, mut market: Value, mut result: Value) -> Value {
         let mut i: usize = 0;
         while i < orders.len() {
             let mut order: Value = orders.get(i.into());
@@ -1833,8 +1834,8 @@ pub trait Poloniex : Exchange {
             };
         };
         let mut upper_case_type: Value = r#type.to_upper_case();
-        let mut is_market: Value = (upper_case_type.clone() == Value::from("MARKET")).into();
-        let mut is_post_only: Value = self.is_post_only(is_market.clone(), (upper_case_type.clone() == Value::from("LIMIT_MAKER")).into(), params.clone());
+        let mut is_market: Value = Value::from(upper_case_type.clone() == Value::from("MARKET"));
+        let mut is_post_only: Value = self.is_post_only(is_market.clone(), Value::from(upper_case_type.clone() == Value::from("LIMIT_MAKER")), params.clone());
         params = self.omit(params.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("postOnly").into(), Value::from("triggerPrice").into(), Value::from("stopPrice").into()])));
         if trigger_price.clone().is_nonnullish() {
             if !market.get(Value::from("spot")).is_truthy() {
@@ -1849,8 +1850,8 @@ pub trait Poloniex : Exchange {
         if is_market.is_truthy() {
             if side.clone() == Value::from("buy") {
                 let mut quote_amount: Value = Value::Undefined;
-                let mut create_market_buy_order_requires_price: Value = true.into();
-                (create_market_buy_order_requires_price, params) = shift_2(self.handle_option_and_params(params.clone(), Value::from("createOrder"), Value::from("createMarketBuyOrderRequiresPrice"), true.into()));
+                let mut create_market_buy_order_requires_price: Value = Value::from(true);
+                (create_market_buy_order_requires_price, params) = shift_2(self.handle_option_and_params(params.clone(), Value::from("createOrder"), Value::from("createMarketBuyOrderRequiresPrice"), Value::from(true)));
                 let mut cost: Value = self.safe_number(params.clone(), Value::from("cost"), Value::Undefined);
                 params = self.omit(params.clone(), Value::from("cost"));
                 if cost.clone().is_nonnullish() {
@@ -2346,7 +2347,7 @@ pub trait Poloniex : Exchange {
     fn prepare_request_for_deposit_address(&mut self, mut code: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         if !self.get("currencies".into()).contains_key(code.clone()) {
-            panic!(r###"BadSymbol::new(self.get("id".into()) + Value::from(" fetchDepositAddress(): can not recognize ") + code.clone() + Value::from(r#" currency, you might try using unified currency-code and add provide specific "network" parameter, like: fetchDepositAddress("USDT", { "network": "TRC20" })"#))"###);
+            panic!("{}", r###"BadSymbol::new(self.get("id".into()) + Value::from(" fetchDepositAddress(): can not recognize ") + code.clone() + Value::from(r#" currency, you might try using unified currency-code and add provide specific "network" parameter, like: fetchDepositAddress("USDT", { "network": "TRC20" })"#))"###);
         };
         let mut currency: Value = self.currency(code.clone());
         let mut network_code: Value = Value::Undefined;
@@ -2369,7 +2370,7 @@ pub trait Poloniex : Exchange {
         return Value::Json(serde_json::Value::Array(vec![request.clone().into(), params.clone().into(), currency.clone().into(), network_entry.clone().into()]));
     }
 
-    fn parse_deposit_address_special(&self, mut response: Value, mut currency: Value, mut network_entry: Value) -> Value {
+    fn parse_deposit_address_special(&mut self, mut response: Value, mut currency: Value, mut network_entry: Value) -> Value {
         let mut address: Value = self.safe_string(response.clone(), Value::from("address"), Value::Undefined);
         if address.clone().is_nullish() {
             address = self.safe_string(response.clone(), network_entry.get(Value::from("id")), Value::Undefined);
@@ -2649,7 +2650,7 @@ pub trait Poloniex : Exchange {
                 let mut currency: Value = self.currency(code.clone());
                 deposit_withdraw_fees.set(code.clone(), <Self as Poloniex>::parse_deposit_withdraw_fee(self, fee_info.clone(), currency.clone()));
                 let mut child_chains: Value = self.safe_value(fee_info.clone(), Value::from("childChains"), Value::Undefined);
-                let mut chains_length: usize = child_chains.len();
+                let mut chains_length: Value = Value::from(child_chains.len());
                 if chains_length.clone() > Value::from(0) {
                     let mut j: usize = 0;
                     while j < child_chains.len() {
@@ -2662,7 +2663,7 @@ pub trait Poloniex : Exchange {
                         network_object.set(network_code.clone(), Value::Json(normalize(&Value::Json(json!({
                             "withdraw": Value::Json(normalize(&Value::Json(json!({
                                 "fee": withdraw_fee,
-                                "percentage": if withdraw_fee.clone().is_nonnullish() { false.into() } else { Value::Undefined }
+                                "percentage": if withdraw_fee.clone().is_nonnullish() { Value::from(false) } else { Value::Undefined }
                             }))).unwrap()),
                             "deposit": Value::Json(normalize(&Value::Json(json!({
                                 "fee": Value::Undefined,
@@ -2686,7 +2687,7 @@ pub trait Poloniex : Exchange {
         let mut withdraw_fee: Value = self.safe_number(fee.clone(), Value::from("withdrawalFee"), Value::Undefined);
         let mut withdraw_result: Value = Value::Json(normalize(&Value::Json(json!({
             "fee": withdraw_fee,
-            "percentage": if withdraw_fee.clone().is_nonnullish() { false.into() } else { Value::Undefined }
+            "percentage": if withdraw_fee.clone().is_nonnullish() { Value::from(false) } else { Value::Undefined }
         }))).unwrap());
         let mut deposit_result: Value = Value::Json(normalize(&Value::Json(json!({
             "fee": Value::Undefined,
@@ -2824,7 +2825,7 @@ pub trait Poloniex : Exchange {
             panic!(r###"ArgumentsRequired::new(self.get("id".into()) + Value::from(r#" setLeverage() requires a marginMode parameter "cross" or "isolated""#))"###);
         };
         let mut hedged: Value = Value::Undefined;
-        (hedged, params) = shift_2(self.handle_param_bool(params.clone(), Value::from("hedged"), false.into()));
+        (hedged, params) = shift_2(self.handle_param_bool(params.clone(), Value::from("hedged"), Value::from(false)));
         if hedged.is_truthy() {
             if !params.contains_key(Value::from("posSide")) {
                 panic!(r###"ArgumentsRequired::new(self.get("id".into()) + Value::from(r#" setLeverage() requires a posSide parameter for hedged mode: "LONG" or "SHORT""#))"###);
@@ -2939,7 +2940,7 @@ pub trait Poloniex : Exchange {
         //
         let mut data: Value = self.safe_dict(response.clone(), Value::from("data"), Value::new_object());
         let mut pos_mode: Value = self.safe_string(data.clone(), Value::from("posMode"), Value::Undefined);
-        let mut hedged: Value = (pos_mode.clone() == Value::from("HEDGE")).into();
+        let mut hedged: Value = Value::from(pos_mode.clone() == Value::from("HEDGE"));
         return Value::Json(normalize(&Value::Json(json!({
             "info": response,
             "hedged": hedged

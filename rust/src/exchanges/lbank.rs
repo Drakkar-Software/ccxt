@@ -1,4 +1,5 @@
 #![allow(clippy::all)]
+#![allow(non_snake_case)]
 #![allow(dead_code)]
 #![allow(unreachable_code)]
 #![allow(unused_imports)]
@@ -1153,7 +1154,7 @@ pub trait Lbank : Exchange {
         };
         // from spotPrivatePostSupplementUserInfo
         let mut is_array: Value = Array::is_array(data.clone());
-        if is_array.clone() == true.into() {
+        if is_array.clone() == Value::from(true) {
             let mut i: usize = 0;
             while i < data.len() {
                 let mut item: Value = data.get(i.into());
@@ -1361,7 +1362,7 @@ pub trait Lbank : Exchange {
         if !market.get(Value::from("spot")).is_truthy() {
             panic!(r###"NotSupported::new(self.get("id".into()) + Value::from(" createMarketBuyOrderWithCost() supports spot orders only"))"###);
         };
-        params.set("createMarketBuyOrderRequiresPrice".into(), false.into());
+        params.set("createMarketBuyOrderRequiresPrice".into(), Value::from(false));
         return <Self as Lbank>::create_order(self, symbol.clone(), Value::from("market"), Value::from("buy"), cost.clone(), Value::Undefined, params.clone()).await;
     }
 
@@ -1370,15 +1371,15 @@ pub trait Lbank : Exchange {
         self.load_markets(Value::Undefined, Value::Undefined).await;
         let mut market: Value = self.market(symbol.clone());
         let mut client_order_id: Value = self.safe_string_2(params.clone(), Value::from("custom_id"), Value::from("clientOrderId"), Value::Undefined);
-        let mut post_only: Value = self.safe_bool(params.clone(), Value::from("postOnly"), false.into());
+        let mut post_only: Value = self.safe_bool(params.clone(), Value::from("postOnly"), Value::from(false));
         let mut time_in_force: Value = self.safe_string_upper(params.clone(), Value::from("timeInForce"), Value::Undefined);
         params = self.omit(params.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("custom_id").into(), Value::from("clientOrderId").into(), Value::from("timeInForce").into(), Value::from("postOnly").into()])));
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
             "symbol": market.get(Value::from("id"))
         }))).unwrap());
-        let mut ioc: Value = (time_in_force.clone() == Value::from("IOC")).into();
-        let mut fok: Value = (time_in_force.clone() == Value::from("FOK")).into();
-        let mut maker: Value = (post_only.is_truthy() || time_in_force.clone() == Value::from("PO")).into();
+        let mut ioc: Value = Value::from(time_in_force.clone() == Value::from("IOC"));
+        let mut fok: Value = Value::from(time_in_force.clone() == Value::from("FOK"));
+        let mut maker: Value = Value::from(post_only.is_truthy() || time_in_force.clone() == Value::from("PO"));
         if r#type.clone() == Value::from("market") && ioc.is_truthy() || fok.is_truthy() || maker.is_truthy() {
             panic!(r###"InvalidOrder::new(self.get("id".into()) + Value::from(" createOrder () does not allow market FOK, IOC, or postOnly orders. Only limit IOC, FOK, and postOnly orders are allowed"))"###);
         };
@@ -1400,8 +1401,8 @@ pub trait Lbank : Exchange {
             } else if side.clone() == Value::from("buy") {
                 request.set("type".into(), side.clone() + Value::from("_") + Value::from("market"));
                 let mut quote_amount: Value = Value::Undefined;
-                let mut create_market_buy_order_requires_price: Value = true.into();
-                (create_market_buy_order_requires_price, params) = shift_2(self.handle_option_and_params(params.clone(), Value::from("createOrder"), Value::from("createMarketBuyOrderRequiresPrice"), true.into()));
+                let mut create_market_buy_order_requires_price: Value = Value::from(true);
+                (create_market_buy_order_requires_price, params) = shift_2(self.handle_option_and_params(params.clone(), Value::from("createOrder"), Value::from("createMarketBuyOrderRequiresPrice"), Value::from(true)));
                 let mut cost: Value = self.safe_number(params.clone(), Value::from("cost"), Value::Undefined);
                 params = self.omit(params.clone(), Value::from("cost"));
                 if cost.clone().is_nonnullish() {
@@ -1561,7 +1562,7 @@ pub trait Lbank : Exchange {
         let mut market_id: Value = self.safe_string(order.clone(), Value::from("symbol"), Value::Undefined);
         market = self.safe_market(market_id.clone(), market.clone(), Value::Undefined, Value::Undefined);
         let mut time_in_force: Value = Value::Undefined;
-        let mut post_only: Value = false.into();
+        let mut post_only: Value = Value::from(false);
         let mut r#type: Value = Value::from("limit");
         let mut raw_type: Value = self.safe_string_2(order.clone(), Value::from("type"), Value::from("tradeType"), Value::Undefined);
         // buy, sell, buy_market, sell_market, buy_maker,sell_maker,buy_ioc,sell_ioc, buy_fok, sell_fok
@@ -1573,7 +1574,7 @@ pub trait Lbank : Exchange {
             r#type = Value::from("market");
         };
         if type_part.clone() == Value::from("maker") {
-            post_only = true.into();
+            post_only = Value::from(true);
             time_in_force = Value::from("PO");
         };
         if type_part.clone() == Value::from("ioc") {
@@ -1699,7 +1700,7 @@ pub trait Lbank : Exchange {
         //      }
         //
         let mut result: Value = self.safe_value(response.clone(), Value::from("data"), Value::new_array());
-        let mut num_orders: usize = result.len();
+        let mut num_orders: Value = Value::from(result.len());
         if num_orders.clone() == Value::from(1) {
             return <Self as Lbank>::parse_order(self, result.get(Value::from(0)), Value::Undefined);
         } else {
@@ -1736,9 +1737,9 @@ pub trait Lbank : Exchange {
             request.set("size".into(), limit.clone());
         };
         if since.clone().is_nonnullish() {
-            request.set("start_date".into(), self.ymd(since.clone(), Value::from("-")));
+            request.set("start_date".into(), self.ymd(since.clone(), Value::from("-"), Value::Undefined));
             // max query 2 days ago
-            request.set("end_date".into(), self.ymd(since.clone() + Value::from(86400000), Value::from("-")));
+            request.set("end_date".into(), self.ymd(since.clone() + Value::from(86400000), Value::from("-"), Value::Undefined));
         };
         // will cover 2 days
         let mut response: Value = self.dispatch("spotPrivatePostTransactionHistory".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
@@ -2186,7 +2187,7 @@ pub trait Lbank : Exchange {
             "status": status,
             "updated": Value::Undefined,
             "comment": Value::Undefined,
-            "internal": status.clone() == Value::from("transfer"),
+            "internal": Value::from(status.clone() == Value::from("transfer")),
             "fee": fee
         }))).unwrap());
     }
@@ -2285,9 +2286,9 @@ pub trait Lbank : Exchange {
         params = params.or_default(Value::new_object());
         // private only returns information for currencies with non-zero balance
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        let mut is_authorized: Value = self.check_required_credentials(false.into());
+        let mut is_authorized: Value = self.check_required_credentials(Value::from(false));
         let mut result: Value = Value::Undefined;
-        if is_authorized.clone() == true.into() {
+        if is_authorized.clone() == Value::from(true) {
             let mut options: Value = self.safe_value(self.get("options".into()), Value::from("fetchTransactionFees"), Value::new_object());
             let mut default_method: Value = self.safe_string(options.clone(), Value::from("method"), Value::from("fetchPrivateTransactionFees"));
             let mut method: Value = self.safe_string(params.clone(), Value::from("method"), default_method.clone());
@@ -2432,9 +2433,9 @@ pub trait Lbank : Exchange {
     async fn fetch_deposit_withdraw_fees(&mut self, mut codes: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        let mut is_authorized: Value = self.check_required_credentials(false.into());
+        let mut is_authorized: Value = self.check_required_credentials(Value::from(false));
         let mut response: Value = Value::Undefined;
-        if is_authorized.clone() == true.into() {
+        if is_authorized.clone() == Value::from(true) {
             let mut options: Value = self.safe_value(self.get("options".into()), Value::from("fetchDepositWithdrawFees"), Value::new_object());
             let mut default_method: Value = self.safe_string(options.clone(), Value::from("method"), Value::from("fetchPrivateDepositWithdrawFees"));
             let mut method: Value = self.safe_string(params.clone(), Value::from("method"), default_method.clone());
@@ -2544,7 +2545,7 @@ pub trait Lbank : Exchange {
         while i < response.len() {
             let mut fee: Value = response.get(i.into());
             let mut can_withdraw: Value = self.safe_value(fee.clone(), Value::from("canWithDraw"), Value::Undefined);
-            if can_withdraw.clone() == true.into() {
+            if can_withdraw.clone() == Value::from(true) {
                 let mut currency_id: Value = self.safe_string(fee.clone(), Value::from("assetCode"), Value::Undefined);
                 let mut code: Value = self.safe_currency_code(currency_id.clone(), Value::Undefined);
                 if codes.clone().is_nullish() || self.in_array(code.clone(), codes.clone()).is_truthy() {
@@ -2644,15 +2645,15 @@ pub trait Lbank : Exchange {
     
 
     fn convert_secret_to_pem(&self, mut secret: Value) -> Value {
-        let mut line_length: usize = 64;
-        let mut secret_length: Value = secret.len().into() - Value::from(0);
+        let mut line_length: Value = Value::from(64);
+        let mut secret_length: Value = Value::from(secret.len()) - Value::from(0);
         let mut num_lines: Value = self.parse_to_int(secret_length.clone() / line_length.clone());
         num_lines = self.sum(num_lines.clone(), Value::from(1));
         let mut pem: Value = Value::from("-----BEGIN PRIVATE KEY-----
 ");
         // eslint-disable-line
         let mut i: usize = 0;
-        while i < num_lines.clone().into() {
+        while i < Value::from(num_lines.clone()) {
             let mut start: Value = Value::from(i) * line_length.clone();
             let mut end: Value = self.sum(start.clone(), line_length.clone());
             pem = pem +  self.get("secret".into()).slice(start.clone(), end.clone()) + Value::from("

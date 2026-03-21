@@ -1,4 +1,5 @@
 #![allow(clippy::all)]
+#![allow(non_snake_case)]
 #![allow(dead_code)]
 #![allow(unreachable_code)]
 #![allow(unused_imports)]
@@ -923,7 +924,8 @@ pub trait Derive : Exchange {
     }
 
     fn sign_message(&mut self, mut message: Value, mut private_key: Value) -> Value {
-        return <Self as Derive>::sign_hash(self, <Self as Derive>::hash_message(self, message.clone()), private_key.slice(Value::from(64).neg(), Value::Undefined));
+        let hash_result = <Self as Derive>::hash_message(self, message.clone());
+        return <Self as Derive>::sign_hash(self, hash_result, private_key.slice(Value::from(64).neg(), Value::Undefined));
     }
 
     fn parse_units(&self, mut num: Value, mut dec: Value) -> Value {
@@ -960,10 +962,24 @@ pub trait Derive : Exchange {
         };
         let mut max_fee_string: Value = self.number_to_string(max_fee.clone());
         let mut amount_string: Value = self.number_to_string(amount.clone());
-        let mut trade_module_data_hash: Value = self.hash(self.eth_abi_encode(Value::Json(serde_json::Value::Array(vec![Value::from("address").into(), Value::from("uint").into(), Value::from("int").into(), Value::from("int").into(), Value::from("uint").into(), Value::from("uint").into(), Value::from("bool").into()])), Value::Json(serde_json::Value::Array(vec![market.get(Value::from("info")).get(Value::from("base_asset_address")).into(), self.parse_to_numeric(market.get(Value::from("info")).get(Value::from("base_asset_sub_id")), Value::Undefined).into(), self.convert_to_big_int(<Self as Derive>::parse_units(self, price_string.clone(), Value::Undefined)).into(), self.convert_to_big_int(<Self as Derive>::parse_units(self, self.amount_to_precision(symbol.clone(), amount_string.clone()), Value::Undefined)).into(), self.convert_to_big_int(<Self as Derive>::parse_units(self, max_fee_string.clone(), Value::Undefined)).into(), subaccount_id.clone().into(), (order_side.clone() == Value::from("buy")).into().into()]))), keccak().clone(), Value::from("binary"));
+        let mut amount_precision: Value = self.amount_to_precision(symbol.clone(), amount_string.clone());
+        let mut parsed_price_units: Value = <Self as Derive>::parse_units(self, price_string.clone(), Value::Undefined);
+        let mut parsed_amount_units: Value = <Self as Derive>::parse_units(self, amount_precision.clone(), Value::Undefined);
+        let mut parsed_fee_units: Value = <Self as Derive>::parse_units(self, max_fee_string.clone(), Value::Undefined);
+        let mut base_asset_address: Value = market.get(Value::from("info")).get(Value::from("base_asset_address"));
+        let mut base_asset_sub_id: Value = market.get(Value::from("info")).get(Value::from("base_asset_sub_id"));
+        let mut parsed_sub_id: Value = self.parse_to_numeric(base_asset_sub_id.clone(), Value::Undefined);
+        let mut big_int_price: Value = self.convert_to_big_int(parsed_price_units.clone());
+        let mut big_int_amount: Value = self.convert_to_big_int(parsed_amount_units.clone());
+        let mut big_int_fee: Value = self.convert_to_big_int(parsed_fee_units.clone());
+        let mut is_buy: Value = Value::from(order_side.clone() == Value::from("buy"));
+        let mut eth_abi_encoded: Value = self.eth_abi_encode(Value::Json(serde_json::Value::Array(vec![Value::from("address").into(), Value::from("uint").into(), Value::from("int").into(), Value::from("int").into(), Value::from("uint").into(), Value::from("uint").into(), Value::from("bool").into()])), Value::Json(serde_json::Value::Array(vec![base_asset_address.clone().into(), parsed_sub_id.clone().into(), big_int_price.clone().into(), big_int_amount.clone().into(), big_int_fee.clone().into(), subaccount_id.clone().into(), is_buy.clone().into()])));
+        let mut trade_module_data_hash: Value = self.hash(eth_abi_encoded.clone(), keccak().clone(), Value::from("binary"));
         let mut derive_wallet_address: Value = Value::Undefined;
         (derive_wallet_address, params) = shift_2(<Self as Derive>::handle_derive_wallet_address(self, Value::from("createOrder"), params.clone()));
-        let mut signature: Value = <Self as Derive>::sign_order(self, Value::Json(serde_json::Value::Array(vec![ACTION_TYPEHASH.into().into(), subaccount_id.clone().into(), nonce.clone().into(), TRADE_MODULE_ADDRESS.into().into(), trade_module_data_hash.clone().into(), signature_expiry.clone().into(), derive_wallet_address.clone().into(), self.get("walletAddress".into()).into()])), self.get("privateKey".into()));
+        let mut private_key: Value = self.get("privateKey".into());
+        let mut sign_order_data: Value = Value::Json(serde_json::Value::Array(vec![ACTION_TYPEHASH.clone().into(), subaccount_id.clone().into(), nonce.clone().into(), TRADE_MODULE_ADDRESS.clone().into(), trade_module_data_hash.clone().into(), signature_expiry.clone().into(), derive_wallet_address.clone().into(), self.get("walletAddress".into()).into()]));
+        let mut signature: Value = <Self as Derive>::sign_order(self, sign_order_data.clone(), private_key.clone());
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
             "instrument_name": market.get(Value::from("id")),
             "direction": order_side,
@@ -1111,10 +1127,24 @@ pub trait Derive : Exchange {
         let mut price_string: Value = self.number_to_string(price.clone());
         let mut max_fee_string: Value = self.safe_string(params.clone(), Value::from("max_fee"), Value::from("0"));
         let mut amount_string: Value = self.number_to_string(amount.clone());
-        let mut trade_module_data_hash: Value = self.hash(self.eth_abi_encode(Value::Json(serde_json::Value::Array(vec![Value::from("address").into(), Value::from("uint").into(), Value::from("int").into(), Value::from("int").into(), Value::from("uint").into(), Value::from("uint").into(), Value::from("bool").into()])), Value::Json(serde_json::Value::Array(vec![market.get(Value::from("info")).get(Value::from("base_asset_address")).into(), self.parse_to_numeric(market.get(Value::from("info")).get(Value::from("base_asset_sub_id")), Value::Undefined).into(), self.convert_to_big_int(<Self as Derive>::parse_units(self, price_string.clone(), Value::Undefined)).into(), self.convert_to_big_int(<Self as Derive>::parse_units(self, self.amount_to_precision(symbol.clone(), amount_string.clone()), Value::Undefined)).into(), self.convert_to_big_int(<Self as Derive>::parse_units(self, max_fee_string.clone(), Value::Undefined)).into(), subaccount_id.clone().into(), (order_side.clone() == Value::from("buy")).into().into()]))), keccak().clone(), Value::from("binary"));
+        let mut amount_precision: Value = self.amount_to_precision(symbol.clone(), amount_string.clone());
+        let mut parsed_price_units: Value = <Self as Derive>::parse_units(self, price_string.clone(), Value::Undefined);
+        let mut parsed_amount_units: Value = <Self as Derive>::parse_units(self, amount_precision.clone(), Value::Undefined);
+        let mut parsed_fee_units: Value = <Self as Derive>::parse_units(self, max_fee_string.clone(), Value::Undefined);
+        let mut base_asset_address: Value = market.get(Value::from("info")).get(Value::from("base_asset_address"));
+        let mut base_asset_sub_id: Value = market.get(Value::from("info")).get(Value::from("base_asset_sub_id"));
+        let mut parsed_sub_id: Value = self.parse_to_numeric(base_asset_sub_id.clone(), Value::Undefined);
+        let mut big_int_price: Value = self.convert_to_big_int(parsed_price_units.clone());
+        let mut big_int_amount: Value = self.convert_to_big_int(parsed_amount_units.clone());
+        let mut big_int_fee: Value = self.convert_to_big_int(parsed_fee_units.clone());
+        let mut is_buy: Value = Value::from(order_side.clone() == Value::from("buy"));
+        let mut eth_abi_encoded: Value = self.eth_abi_encode(Value::Json(serde_json::Value::Array(vec![Value::from("address").into(), Value::from("uint").into(), Value::from("int").into(), Value::from("int").into(), Value::from("uint").into(), Value::from("uint").into(), Value::from("bool").into()])), Value::Json(serde_json::Value::Array(vec![base_asset_address.clone().into(), parsed_sub_id.clone().into(), big_int_price.clone().into(), big_int_amount.clone().into(), big_int_fee.clone().into(), subaccount_id.clone().into(), is_buy.clone().into()])));
+        let mut trade_module_data_hash: Value = self.hash(eth_abi_encoded.clone(), keccak().clone(), Value::from("binary"));
         let mut derive_wallet_address: Value = Value::Undefined;
         (derive_wallet_address, params) = shift_2(<Self as Derive>::handle_derive_wallet_address(self, Value::from("editOrder"), params.clone()));
-        let mut signature: Value = <Self as Derive>::sign_order(self, Value::Json(serde_json::Value::Array(vec![ACTION_TYPEHASH.into().into(), subaccount_id.clone().into(), nonce.clone().into(), TRADE_MODULE_ADDRESS.into().into(), trade_module_data_hash.clone().into(), signature_expiry.clone().into(), derive_wallet_address.clone().into(), self.get("walletAddress".into()).into()])), self.get("privateKey".into()));
+        let mut private_key: Value = self.get("privateKey".into());
+        let mut sign_order_data: Value = Value::Json(serde_json::Value::Array(vec![ACTION_TYPEHASH.clone().into(), subaccount_id.clone().into(), nonce.clone().into(), TRADE_MODULE_ADDRESS.clone().into(), trade_module_data_hash.clone().into(), signature_expiry.clone().into(), derive_wallet_address.clone().into(), self.get("walletAddress".into()).into()]));
+        let mut signature: Value = <Self as Derive>::sign_order(self, sign_order_data.clone(), private_key.clone());
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
             "instrument_name": market.get(Value::from("id")),
             "order_id_to_cancel": id,

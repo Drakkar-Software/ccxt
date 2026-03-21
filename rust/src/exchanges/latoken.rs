@@ -1,4 +1,5 @@
 #![allow(clippy::all)]
+#![allow(non_snake_case)]
 #![allow(dead_code)]
 #![allow(unreachable_code)]
 #![allow(unused_imports)]
@@ -982,7 +983,7 @@ pub trait Latoken : Exchange {
         let mut side: Value = Value::Undefined;
         if order_side.clone().is_nonnullish() {
             let mut parts: Value = order_side.split(Value::from("_"));
-            let mut parts_length: usize = parts.len();
+            let mut parts_length: Value = Value::from(parts.len());
             side = self.safe_string_lower(parts.clone(), parts_length.clone() - Value::from(1), Value::Undefined);
         };
         let mut r#type: Value = <Self as Latoken>::parse_order_type(self, self.safe_string(order.clone(), Value::from("type"), Value::Undefined));

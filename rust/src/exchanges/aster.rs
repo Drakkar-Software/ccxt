@@ -1,4 +1,5 @@
 #![allow(clippy::all)]
+#![allow(non_snake_case)]
 #![allow(dead_code)]
 #![allow(unreachable_code)]
 #![allow(unused_imports)]
@@ -2353,7 +2354,8 @@ pub trait Aster : Exchange {
     }
 
     fn sign_message(&mut self, mut message: Value, mut private_key: Value) -> Value {
-        return <Self as Aster>::sign_hash(self, <Self as Aster>::keccak_message(self, message.clone()), private_key.slice(Value::from(64).neg(), Value::Undefined));
+        let hashed = <Self as Aster>::keccak_message(self, message.clone());
+        return <Self as Aster>::sign_hash(self, hashed, private_key.slice(Value::from(64).neg(), Value::Undefined));
     }
 
     fn sign_withdraw_payload(&mut self, mut withdraw_payload: Value, mut network: Value) -> Value {

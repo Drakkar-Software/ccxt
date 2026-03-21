@@ -1,4 +1,5 @@
 #![allow(clippy::all)]
+#![allow(non_snake_case)]
 #![allow(dead_code)]
 #![allow(unreachable_code)]
 #![allow(unused_imports)]
@@ -897,7 +898,7 @@ pub trait Whitebit : Exchange {
                     "percentage": if deposit_fee.clone().is_nonnullish() { false.into() } else { Value::Undefined }
                 }))).unwrap());
                 if network_id.clone().is_nonnullish() {
-                    let mut network_length: usize = network_id.len();
+                    let mut network_length: Value = Value::from(network_id.len());
                     network_id = network_id.slice(Value::from(1), network_length.clone() - Value::from(1));
                     let mut network_code: Value = self.network_id_to_code(network_id.clone(), Value::Undefined);
                     deposit_withdraw_fees.get(code.clone()).get(Value::from("networks")).set(network_code.clone(), Value::Json(normalize(&Value::Json(json!({
@@ -1078,7 +1079,9 @@ pub trait Whitebit : Exchange {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
         // Fetch both currencies and fees data for comprehensive funding limits
-        let (mut currencies_data, mut fees_data) = shift_2(Promise::all(Value::Json(serde_json::Value::Array(vec![<Self as Whitebit>::fetch_currencies(self, Value::Undefined).into(), self.dispatch("v4PublicGetFee".into(), params.clone(), Value::Undefined).await.into()]))).await);
+        let mut _currencies_promise: Value = <Self as Whitebit>::fetch_currencies(self, Value::Undefined).await;
+        let mut _fees_promise: Value = self.dispatch("v4PublicGetFee".into(), params.clone(), Value::Undefined).await;
+        let (mut currencies_data, mut fees_data) = shift_2(Promise::all(Value::Json(serde_json::Value::Array(vec![_currencies_promise.clone().into(), _fees_promise.clone().into()]))).await);
         //
         // Currencies response structure (from fetchCurrencies):
         //     {
@@ -1360,7 +1363,6 @@ pub trait Whitebit : Exchange {
                 i += 1;
             };
             // catch block omitted (no exception support in Value runtime)
-;
         };
         // Try executed orders (if enabled)
         if check_executed.is_truthy() {
@@ -1384,7 +1386,6 @@ pub trait Whitebit : Exchange {
                 i += 1;
             };
             // catch block omitted (no exception support in Value runtime)
-;
         };
         // If both checks failed or were disabled, throw OrderNotFound
         panic!(r###"OrderNotFound::new(self.get("id".into()) + Value::from(" fetchOrder() order not found: ") + id.clone())"###);
@@ -1924,12 +1925,14 @@ pub trait Whitebit : Exchange {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
         // Fetch both open and closed orders in parallel
-        let (mut open_orders, mut closed_orders) = shift_2(Promise::all(Value::Json(serde_json::Value::Array(vec![<Self as Whitebit>::fetch_open_orders(self, symbol.clone(), since.clone(), limit.clone(), params.clone()).into(), <Self as Whitebit>::fetch_closed_orders(self, symbol.clone(), since.clone(), limit.clone(), params.clone()).into()]))).await);
+        let mut _open_promise: Value = <Self as Whitebit>::fetch_open_orders(self, symbol.clone(), since.clone(), limit.clone(), params.clone()).await;
+        let mut _closed_promise: Value = <Self as Whitebit>::fetch_closed_orders(self, symbol.clone(), since.clone(), limit.clone(), params.clone()).await;
+        let (mut open_orders, mut closed_orders) = shift_2(Promise::all(Value::Json(serde_json::Value::Array(vec![_open_promise.clone().into(), _closed_promise.clone().into()]))).await);
         let mut all_orders: Value = self.array_concat(open_orders.clone(), closed_orders.clone());
         // Sort by timestamp (most recent first)
-        let mut sorted_orders: Value = self.sort_by(all_orders.clone(), Value::from("timestamp"), true.into(), Value::Undefined);
+        let mut sorted_orders: Value = self.sort_by(all_orders.clone(), Value::from("timestamp"), Value::from(true), Value::Undefined);
         // Apply limit if specified (since and symbol filtering already handled by individual methods)
-        if limit.clone().is_nonnullish() && sorted_orders.len() > limit.clone().into() {
+        if limit.clone().is_nonnullish() && sorted_orders.len() > limit.clone().unwrap_usize() {
             return sorted_orders.slice(Value::from(0), limit.clone());
         };
         return sorted_orders.clone();
@@ -2497,7 +2500,7 @@ pub trait Whitebit : Exchange {
                     accounts.push(Value::Json(normalize(&Value::Json(json!({
                         "id": account_id,
                         "type": "subaccount",
-                        "name": account_name.is_truthy() || Value::from("SubAccount ") + account_id.clone(),
+                        "name": if account_name.is_truthy() { account_name.clone() } else { Value::from("SubAccount ") + account_id.clone() },
                         "code": Value::Undefined,
                         "info": sub_account
                     }))).unwrap()));

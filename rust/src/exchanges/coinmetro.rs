@@ -1,4 +1,5 @@
 #![allow(clippy::all)]
+#![allow(non_snake_case)]
 #![allow(dead_code)]
 #![allow(unreachable_code)]
 #![allow(unused_imports)]
@@ -530,15 +531,15 @@ pub trait Coinmetro : Exchange {
         let mut quote_id: Value = Value::Undefined;
         let mut currency_ids: Value = self.safe_value(self.get("options".into()), Value::from("currencyIdsListForParseMarket"), Value::new_array());
         // Bubble sort by length (longest first)
-        let mut currency_ids_length: usize = currency_ids.len();
+        let mut currency_ids_length: Value = Value::from(currency_ids.len());
         let mut i: usize = 0;
-        while i < currency_ids_length.clone().into() {
+        while i < currency_ids_length.clone() {
             let mut j: usize = 0;
             while j < currency_ids_length.clone() - Value::from(i) - Value::from(1) {
                 let mut a: Value = currency_ids.get(j.into());
                 let mut b: Value = currency_ids.get(Value::from(j) + Value::from(1).clone());
                 if a.len() < b.len() {
-                    currency_ids.set(j.clone(), b.clone());
+                    currency_ids.set(Value::from(j), b.clone());
                     currency_ids.set(Value::from(j) + Value::from(1), a.clone());
                 };
                 j += 1;

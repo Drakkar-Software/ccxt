@@ -1,4 +1,5 @@
 #![allow(clippy::all)]
+#![allow(non_snake_case)]
 #![allow(dead_code)]
 #![allow(unreachable_code)]
 #![allow(unused_imports)]
@@ -553,7 +554,7 @@ pub trait Coincatch : Exchange {
         let mut step: Value = self.safe_integer(config.clone(), Value::from("step"), Value::Undefined);
         let mut cost: Value = self.safe_integer(config.clone(), Value::from("cost"), Value::from(1));
         let mut orders: Value = self.safe_list_2(params.clone(), Value::from("orderList"), Value::from("orderDataList"), Value::new_array());
-        let mut orders_length: usize = orders.len();
+        let mut orders_length: Value = Value::from(orders.len());
         if step.clone().is_nonnullish() && orders_length.clone() > step.clone() {
             let mut number_of_steps: Value = Math::ceil(orders_length.clone() / step.clone());
             return cost.clone() * number_of_steps.clone();
@@ -708,7 +709,7 @@ pub trait Coincatch : Exchange {
         // }
         //
         let mut chains: Value = self.safe_list(fee.clone(), Value::from("chains"), Value::new_array());
-        let mut chains_length: usize = chains.len();
+        let mut chains_length: Value = Value::from(chains.len());
         let mut result: Value = Value::Json(normalize(&Value::Json(json!({
             "info": fee,
             "withdraw": Value::Json(normalize(&Value::Json(json!({
@@ -722,7 +723,7 @@ pub trait Coincatch : Exchange {
             "networks": Value::new_object()
         }))).unwrap());
         let mut i: usize = 0;
-        while i < chains_length.clone().into() {
+        while Value::from(i) < chains_length.clone() {
             let mut chain: Value = chains.get(i.into());
             let mut network_id: Value = self.safe_string(chain.clone(), Value::from("chain"), Value::Undefined);
             let mut currency_code: Value = self.safe_string(currency.clone(), Value::from("code"), Value::Undefined);
@@ -739,7 +740,7 @@ pub trait Coincatch : Exchange {
             }))).unwrap()));
             if chains_length.clone() == Value::from(1) {
                 result.get(Value::from("withdraw")).set("fee".into(), self.safe_number(chain.clone(), Value::from("withdrawFee"), Value::Undefined));
-                result.get(Value::from("withdraw")).set("percentage".into(), false.into());
+                result.get(Value::from("withdraw")).set("percentage".into(), Value::from(false));
             };
             i += 1;
         };
@@ -1310,7 +1311,7 @@ pub trait Coincatch : Exchange {
             panic!(r###"ArgumentsRequired::new(self.get("id".into()) + Value::from(" fetchFundingRateHistory() requires a symbol argument"))"###);
         };
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        let mut max_entries_per_request: usize = 100;
+        let mut max_entries_per_request: Value = Value::from(100);
         let mut market: Value = self.market(symbol.clone());
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
             "symbol": market.get(Value::from("id"))
@@ -2201,7 +2202,7 @@ pub trait Coincatch : Exchange {
             panic!(r###"NotSupported::new(self.get("id".into()) + Value::from(" ") + method_name.clone() + Value::from("() is supported for swap markets only"))"###);
         };
         params.set("methodName".into(), method_name.clone());
-        return Exchange::create_order_with_take_profit_and_stop_loss(self, symbol.clone(), r#type.clone(), side.clone(), amount.clone(), price.clone(), take_profit.clone(), stop_loss.clone(), params.clone());
+        return Exchange::create_order_with_take_profit_and_stop_loss(self, symbol.clone(), r#type.clone(), side.clone(), amount.clone(), price.clone(), take_profit.clone(), stop_loss.clone(), params.clone()).await;
     }
 
     fn encode_time_in_force(&mut self, mut time_in_force: Value) -> Value {
@@ -2246,7 +2247,7 @@ pub trait Coincatch : Exchange {
             i += 1;
         };
         symbols = self.unique(symbols.clone());
-        let mut symbols_length: usize = symbols.len();
+        let mut symbols_length: Value = Value::from(symbols.len());
         if symbols_length.clone() != Value::from(1) {
             panic!(r###"BadRequest::new(self.get("id".into()) + Value::from(" createOrders() requires all orders to be of the same symbol"))"###);
         };
@@ -2795,7 +2796,7 @@ pub trait Coincatch : Exchange {
         if symbol.clone().is_nullish() {
             panic!(r###"ArgumentsRequired::new(self.get("id".into()) + Value::from(" ") + method_name.clone() + Value::from(" () requires a symbol argument for spot markets"))"###);
         };
-        let mut max_limit: usize = 500;
+        let mut max_limit: Value = Value::from(500);
         self.load_markets(Value::Undefined, Value::Undefined).await;
         let mut market: Value = self.market(symbol.clone());
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
@@ -3627,7 +3628,7 @@ pub trait Coincatch : Exchange {
         let mut response: Value = Value::Undefined;
         let mut request_limit: Value = limit.clone();
         if market_type.clone() == Value::from("spot") {
-            let mut max_spot_limit: usize = 500;
+            let mut max_spot_limit: Value = Value::from(500);
             if since.clone().is_nonnullish() {
                 request_limit = max_spot_limit.clone();
             };
@@ -4067,7 +4068,7 @@ pub trait Coincatch : Exchange {
         let mut side: Value = Value::from("long");
         (side, params) = shift_2(self.handle_option_and_params(params.clone(), method_name.clone(), Value::from("side"), Value::Undefined));
         let mut positions: Value = <Self as Coincatch>::fetch_positions_for_symbol(self, symbol.clone(), params.clone()).await;
-        let mut array_length: usize = positions.len();
+        let mut array_length: Value = Value::from(positions.len());
         if array_length.clone() > Value::from(1) {
             let mut i: usize = 0;
             while i < positions.len() {
@@ -4142,7 +4143,7 @@ pub trait Coincatch : Exchange {
                 i += 1;
             };
             product_types = self.unique(product_types.clone());
-            let mut array_length: usize = product_types.len();
+            let mut array_length: Value = Value::from(product_types.len());
             if array_length.clone() > Value::from(1) {
                 panic!(r###"BadSymbol::new(self.get("id".into()) + Value::from(" ") + method_name.clone() + Value::from("() requires all symbols to belong to the same product type (umcbl or dmcbl)"))"###);
             } else {
@@ -4274,7 +4275,6 @@ pub trait Coincatch : Exchange {
     fn safe_market_custom(&self, mut market_id: Value, mut market: Value, mut settle_id: Value) -> Value {
                 market = self.safe_market(market_id.clone(), market.clone(), Value::Undefined, Value::Undefined);
         // catch block omitted (no exception support in Value runtime)
-;
         // dmcbl markets have the same id and market type but different settleId
         // so we need to resolve the market by settleId
         // if settleId is not provided, return the first market with the current id

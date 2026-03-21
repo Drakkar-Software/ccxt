@@ -1,4 +1,5 @@
 #![allow(clippy::all)]
+#![allow(non_snake_case)]
 #![allow(dead_code)]
 #![allow(unreachable_code)]
 #![allow(unused_imports)]
@@ -1665,7 +1666,7 @@ pub trait Bitmart : Exchange {
                 request.set("orderMode".into(), Value::from("iso_margin"));
             };
             let mut options: Value = self.safe_dict(self.get("options".into()), Value::from("fetchMyTrades"), Value::new_object());
-            let mut max_limit: usize = 200;
+            let mut max_limit: Value = Value::from(200);
             let mut default_limit: Value = self.safe_integer(options.clone(), Value::from("limit"), max_limit.clone());
             if limit.clone().is_nullish() {
                 limit = default_limit.clone();
@@ -4057,7 +4058,7 @@ pub trait Bitmart : Exchange {
         let mut market: Value = Value::Undefined;
         let mut symbols_length: Value = Value::Undefined;
         if symbols.clone().is_nonnullish() {
-            symbols_length = symbols.len().into();
+            symbols_length = Value::from(symbols.len());
             let mut first: Value = self.safe_string(symbols.clone(), Value::from(0), Value::Undefined);
             market = self.market(first.clone());
         };

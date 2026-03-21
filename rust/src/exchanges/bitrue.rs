@@ -1,4 +1,5 @@
 #![allow(clippy::all)]
+#![allow(non_snake_case)]
 #![allow(dead_code)]
 #![allow(unreachable_code)]
 #![allow(unused_imports)]
@@ -2524,7 +2525,7 @@ pub trait Bitrue : Exchange {
         //   }
         //
         let mut chain_details: Value = self.safe_list(fee.clone(), Value::from("chainDetail"), Value::new_array());
-        let mut chain_detail_length: usize = chain_details.len();
+        let mut chain_detail_length: Value = Value::from(chain_details.len());
         let mut result: Value = Value::Json(normalize(&Value::Json(json!({
             "info": fee,
             "withdraw": Value::Json(normalize(&Value::Json(json!({
@@ -2539,7 +2540,7 @@ pub trait Bitrue : Exchange {
         }))).unwrap());
         if chain_detail_length.clone() != Value::from(0) {
             let mut i: usize = 0;
-            while i < chain_detail_length.clone().into() {
+            while i < chain_detail_length.clone() {
                 let mut chain_detail: Value = chain_details.get(i.into());
                 let mut network_id: Value = self.safe_string(chain_detail.clone(), Value::from("chain"), Value::Undefined);
                 let mut currency_code: Value = self.safe_string(currency.clone(), Value::from("code"), Value::Undefined);

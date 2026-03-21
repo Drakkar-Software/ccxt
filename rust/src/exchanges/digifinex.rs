@@ -1,4 +1,5 @@
 #![allow(clippy::all)]
+#![allow(non_snake_case)]
 #![allow(dead_code)]
 #![allow(unreachable_code)]
 #![allow(unused_imports)]
@@ -911,7 +912,7 @@ pub trait Digifinex : Exchange {
                 "swap": swap,
                 "future": false,
                 "option": false,
-                "active": if is_allowed.is_truthy() { true.into() } else { false.into() },
+                "active": if is_allowed.is_truthy() { Value::from(true) } else { Value::from(false) },
                 "contract": swap,
                 "linear": is_linear,
                 "inverse": is_inverse,
@@ -1852,7 +1853,7 @@ pub trait Digifinex : Exchange {
         //
         if market_type.clone() == Value::from("spot") || market_type.clone() == Value::from("margin") {
             let mut canceled_orders: Value = self.safe_value(response.clone(), Value::from("success"), Value::new_array());
-            let mut num_canceled_orders: usize = canceled_orders.len();
+            let mut num_canceled_orders: Value = Value::from(canceled_orders.len());
             if num_canceled_orders.clone() != Value::from(1) {
                 panic!(r###"OrderNotFound::new(self.get("id".into()) + Value::from(" cancelOrder() ") + id.clone() + Value::from(" not found"))"###);
             };
@@ -1867,7 +1868,7 @@ pub trait Digifinex : Exchange {
         Value::Undefined
     }
 
-    fn parse_cancel_orders(&self, mut response: Value) -> Value {
+    fn parse_cancel_orders(&mut self, mut response: Value) -> Value {
         let mut success: Value = self.safe_list(response.clone(), Value::from("success"), Value::Undefined);
         let mut error: Value = self.safe_list(response.clone(), Value::from("error"), Value::Undefined);
         let mut result: Value = Value::new_array();
@@ -2037,7 +2038,7 @@ pub trait Digifinex : Exchange {
             last_trade_timestamp = self.safe_timestamp(order.clone(), Value::from("finished_date"), Value::Undefined);
             if side.clone().is_nonnullish() {
                 let mut parts: Value = side.split(Value::from("_"));
-                let mut num_parts: usize = parts.len();
+                let mut num_parts: Value = Value::from(parts.len());
                 if num_parts.clone() > Value::from(1) {
                     side = parts.get(Value::from(0));
                     r#type = parts.get(Value::from(1));
@@ -3266,7 +3267,7 @@ pub trait Digifinex : Exchange {
         if symbols.clone().is_nonnullish() {
             let mut symbol: Value = Value::Undefined;
             if Array::is_array(symbols.clone()).is_truthy() {
-                let mut symbols_length: usize = symbols.len();
+                let mut symbols_length: Value = Value::from(symbols.len());
                 if symbols_length.clone() > Value::from(1) {
                     panic!(r###"BadRequest::new(self.get("id".into()) + Value::from(" fetchPositions() symbols argument cannot contain more than 1 symbol"))"###);
                 };

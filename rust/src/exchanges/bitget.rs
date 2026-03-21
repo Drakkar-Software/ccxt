@@ -1,4 +1,5 @@
 #![allow(clippy::all)]
+#![allow(non_snake_case)]
 #![allow(dead_code)]
 #![allow(unreachable_code)]
 #![allow(unused_imports)]
@@ -1606,12 +1607,12 @@ pub trait Bitget : Exchange {
                 let mut price_step: Value = self.safe_string(market.clone(), Value::from("priceEndStep"), Value::Undefined);
                 let mut amount_step: Value = self.safe_string(market.clone(), Value::from("sizeMultiplier"), Value::Undefined);
                 let mut precise: Value = Precise::new(price_step);
-                precise.set("decimals".into(), Math::max(precise.get(decimals.clone()), price_decimals.clone()));
+                precise.set("decimals".into(), Math::max(precise.get("decimals".into()), price_decimals.clone()));
                 precise.reduce();
                 let mut price_string: Value = precise.to_string();
                 price_precision = self.parse_number(price_string.clone(), Value::Undefined);
                 let mut precise_amount: Value = Precise::new(amount_step);
-                precise_amount.set("decimals".into(), Math::max(precise_amount.get(decimals.clone()), amount_decimals.clone()));
+                precise_amount.set("decimals".into(), Math::max(precise_amount.get("decimals".into()), amount_decimals.clone()));
                 precise_amount.reduce();
                 let mut amount_string: Value = precise_amount.to_string();
                 amount_precision = self.parse_number(amount_string.clone(), Value::Undefined);
@@ -1990,13 +1991,13 @@ pub trait Bitget : Exchange {
             let mut networks: Value = Value::new_object();
             let mut withdraw: Value = Value::Undefined;
             let mut deposit: Value = Value::Undefined;
-            let mut chains_length: usize = chains.len();
+            let mut chains_length: Value = Value::from(chains.len());
             if chains_length.clone() == Value::from(0) {
                 withdraw = false.into();
                 deposit = false.into();
             };
             let mut j: usize = 0;
-            while j < chains_length.clone().into() {
+            while j < chains.len() {
                 let mut chain: Value = chains.get(j.into());
                 let mut network_id: Value = self.safe_string(chain.clone(), Value::from("chain"), Value::Undefined);
                 let mut network: Value = self.network_id_to_code(network_id.clone(), code.clone());
@@ -2228,7 +2229,7 @@ pub trait Bitget : Exchange {
         //     }
         //
         let mut tiers: Value = Value::new_array();
-        let mut min_notional: usize = 0;
+        let mut min_notional: Value = Value::from(0);
         let mut i: usize = 0;
         while i < info.len() {
             let mut item: Value = info.get(i.into());
@@ -4065,7 +4066,7 @@ pub trait Bitget : Exchange {
         let mut trailing_trigger_price: Value = self.safe_string(params.clone(), Value::from("trailingTriggerPrice"), self.number_to_string(price.clone()));
         let mut trailing_percent: Value = self.safe_string_2(params.clone(), Value::from("trailingPercent"), Value::from("callbackRatio"), Value::Undefined);
         let mut is_trailing_percent_order: Value = (trailing_percent.clone().is_nonnullish()).into();
-        if self.sum(is_trigger_order.clone(), is_stop_loss_trigger_order.clone(), is_take_profit_trigger_order.clone(), is_trailing_percent_order.clone()) > Value::from(1) {
+        if self.sum(self.sum(self.sum(is_trigger_order.clone(), is_stop_loss_trigger_order.clone()), is_take_profit_trigger_order.clone()), is_trailing_percent_order.clone()) > Value::from(1) {
             panic!(r###"ExchangeError::new(self.get("id".into()) + Value::from(" createOrder() params can only contain one of triggerPrice, stopLossPrice, takeProfitPrice, trailingPercent"))"###);
         };
         if r#type.clone() == Value::from("limit") {
@@ -4420,7 +4421,7 @@ pub trait Bitget : Exchange {
         let mut trailing_trigger_price: Value = self.safe_string(params.clone(), Value::from("trailingTriggerPrice"), self.number_to_string(price.clone()));
         let mut trailing_percent: Value = self.safe_string_2(params.clone(), Value::from("trailingPercent"), Value::from("newCallbackRatio"), Value::Undefined);
         let mut is_trailing_percent_order: Value = (trailing_percent.clone().is_nonnullish()).into();
-        if self.sum(is_trigger_order.clone(), is_stop_loss_order.clone(), is_take_profit_order.clone(), is_trailing_percent_order.clone()) > Value::from(1) {
+        if self.sum(self.sum(self.sum(is_trigger_order.clone(), is_stop_loss_order.clone()), is_take_profit_order.clone()), is_trailing_percent_order.clone()) > Value::from(1) {
             panic!(r###"ExchangeError::new(self.get("id".into()) + Value::from(" editOrder() params can only contain one of triggerPrice, stopLossPrice, takeProfitPrice, trailingPercent"))"###);
         };
         params = self.omit(params.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("stopPrice").into(), Value::from("triggerType").into(), Value::from("stopLossPrice").into(), Value::from("takeProfitPrice").into(), Value::from("stopLoss").into(), Value::from("takeProfit").into(), Value::from("clientOrderId").into(), Value::from("trailingTriggerPrice").into(), Value::from("trailingPercent").into()])));
@@ -7766,7 +7767,7 @@ pub trait Bitget : Exchange {
         //     }
         //
         let mut chains: Value = self.safe_value(fee.clone(), Value::from("chains"), Value::new_array());
-        let mut chains_length: usize = chains.len();
+        let mut chains_length: Value = Value::from(chains.len());
         let mut result: Value = Value::Json(normalize(&Value::Json(json!({
             "info": fee,
             "withdraw": Value::Json(normalize(&Value::Json(json!({
@@ -7780,7 +7781,7 @@ pub trait Bitget : Exchange {
             "networks": Value::new_object()
         }))).unwrap());
         let mut i: usize = 0;
-        while i < chains_length.clone().into() {
+        while i < chains.len() {
             let mut chain: Value = chains.get(i.into());
             let mut network_id: Value = self.safe_string(chain.clone(), Value::from("chain"), Value::Undefined);
             let mut currency_code: Value = self.safe_string(currency.clone(), Value::from("code"), Value::Undefined);

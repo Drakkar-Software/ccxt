@@ -1,4 +1,5 @@
 #![allow(clippy::all)]
+#![allow(non_snake_case)]
 #![allow(dead_code)]
 #![allow(unreachable_code)]
 #![allow(unused_imports)]
@@ -499,9 +500,9 @@ pub trait Paradex : Exchange {
         //  }
         //
         let mut asset_kind: Value = self.safe_string(market.clone(), Value::from("asset_kind"), Value::Undefined);
-        let mut is_option: Value = (asset_kind.clone() == Value::from("PERP_OPTION")).into();
+        let mut is_option: Value = Value::from(asset_kind.clone() == Value::from("PERP_OPTION"));
         let mut r#type: Value = if is_option.is_truthy() { Value::from("option") } else { Value::from("swap") };
-        let mut is_swap: Value = (r#type.clone() == Value::from("swap")).into();
+        let mut is_swap: Value = Value::from(r#type.clone() == Value::from("swap"));
         let mut market_id: Value = self.safe_string(market.clone(), Value::from("symbol"), Value::Undefined);
         let mut quote_id: Value = self.safe_string(market.clone(), Value::from("quote_currency"), Value::Undefined);
         let mut base_id: Value = self.safe_string(market.clone(), Value::from("base_currency"), Value::Undefined);
@@ -822,7 +823,7 @@ pub trait Paradex : Exchange {
         let mut amount_string: Value = self.safe_string(trade.clone(), Value::from("size"), Value::Undefined);
         let mut side: Value = self.safe_string_lower(trade.clone(), Value::from("side"), Value::Undefined);
         let mut liability: Value = self.safe_string_lower(trade.clone(), Value::from("liquidity"), Value::from("taker"));
-        let mut is_taker: Value = (liability.clone() == Value::from("taker")).into();
+        let mut is_taker: Value = Value::from(liability.clone() == Value::from("taker"));
         let mut taker_or_maker: Value = if is_taker.is_truthy() { Value::from("taker") } else { Value::from("maker") };
         let mut currency_id: Value = self.safe_string(trade.clone(), Value::from("fee_currency"), Value::Undefined);
         let mut code: Value = self.safe_currency_code(currency_id.clone(), Value::Undefined);
@@ -929,7 +930,9 @@ pub trait Paradex : Exchange {
     }
 
     fn sign_message(&mut self, mut message: Value, mut private_key: Value) -> Value {
-        return <Self as Paradex>::sign_hash(self, <Self as Paradex>::hash_message(self, message.clone()), private_key.slice(Value::from(64).neg(), Value::Undefined));
+        let mut hashed: Value = <Self as Paradex>::hash_message(self, message.clone());
+        let mut pk_slice: Value = private_key.slice(Value::from(64).neg(), Value::Undefined);
+        return <Self as Paradex>::sign_hash(self, hashed.clone(), pk_slice.clone());
     }
 
     async fn get_system_config(&mut self) -> Value {
@@ -971,9 +974,9 @@ pub trait Paradex : Exchange {
     }
 
     async fn prepare_paradex_domain(&mut self, mut l1: Value) -> Value {
-        l1 = l1.or_default(false.into());
+        l1 = l1.or_default(Value::from(false));
         let mut system_config: Value = <Self as Paradex>::get_system_config(self).await;
-        if l1.clone() == true.into() {
+        if l1.clone() == Value::from(true) {
             let mut l1_d: Value = Value::Json(normalize(&Value::Json(json!({
                 "name": "Paradex",
                 "chainId": system_config.get(Value::from("l1_chain_id")),
@@ -996,7 +999,7 @@ pub trait Paradex : Exchange {
         };
         self.check_required_credentials(Value::Undefined);
         let mut system_config: Value = <Self as Paradex>::get_system_config(self).await;
-        let mut domain: Value = <Self as Paradex>::prepare_paradex_domain(self, true.into()).await;
+        let mut domain: Value = <Self as Paradex>::prepare_paradex_domain(self, Value::from(true)).await;
         let mut message_types: Value = Value::Json(normalize(&Value::Json(json!({
             "Constant": Value::Json(serde_json::Value::Array(vec![Value::Json(normalize(&Value::Json(json!({
                 "name": "action",
@@ -1008,7 +1011,11 @@ pub trait Paradex : Exchange {
         }))).unwrap());
         let mut msg: Value = self.eth_encode_structured_data(domain.clone(), message_types.clone(), message.clone());
         let mut signature: Value = <Self as Paradex>::sign_message(self, msg.clone(), self.get("privateKey".into()));
-        let mut account: Value = self.retrieve_stark_account(signature.clone(), system_config.get(Value::from("paraclear_account_hash")), system_config.get(Value::from("paraclear_account_proxy_hash")));
+        let mut account: Value = self.retrieve_stark_account(Value::Json(normalize(&Value::Json(json!({
+            "signature": signature,
+            "paraclear_account_hash": system_config.get(Value::from("paraclear_account_hash")),
+            "paraclear_account_proxy_hash": system_config.get(Value::from("paraclear_account_proxy_hash"))
+        }))).unwrap()));
         self.get("options".into()).set("paradexAccount".into(), account.clone());
         return account.clone();
     }
@@ -1146,7 +1153,7 @@ pub trait Paradex : Exchange {
         let mut flags: Value = self.safe_list(order.clone(), Value::from("flags"), Value::new_array());
         let mut reduce_only: Value = Value::Undefined;
         if flags.contains_key(Value::from("REDUCE_ONLY")) {
-            reduce_only = true.into();
+            reduce_only = Value::from(true);
         };
         return self.safe_order(Value::Json(normalize(&Value::Json(json!({
             "id": order_id,
@@ -1238,10 +1245,10 @@ pub trait Paradex : Exchange {
         let mut trigger_price: Value = self.safe_string_2(params.clone(), Value::from("triggerPrice"), Value::from("stopPrice"), Value::Undefined);
         let mut stop_loss_price: Value = self.safe_string(params.clone(), Value::from("stopLossPrice"), Value::Undefined);
         let mut take_profit_price: Value = self.safe_string(params.clone(), Value::from("takeProfitPrice"), Value::Undefined);
-        let mut is_market: Value = (order_type.clone() == Value::from("MARKET")).into();
-        let mut is_take_profit_order: Value = (take_profit_price.clone().is_nonnullish()).into();
-        let mut is_stop_loss_order: Value = (stop_loss_price.clone().is_nonnullish()).into();
-        let mut is_stop_order: Value = (trigger_price.clone().is_nonnullish() || is_take_profit_order.is_truthy() || is_stop_loss_order.is_truthy()).into();
+        let mut is_market: Value = Value::from(order_type.clone() == Value::from("MARKET"));
+        let mut is_take_profit_order: Value = Value::from(take_profit_price.clone().is_nonnullish());
+        let mut is_stop_loss_order: Value = Value::from(stop_loss_price.clone().is_nonnullish());
+        let mut is_stop_order: Value = Value::from(trigger_price.clone().is_nonnullish() || is_take_profit_order.is_truthy() || is_stop_loss_order.is_truthy());
         let mut time_in_force: Value = self.safe_string_upper(params.clone(), Value::from("timeInForce"), Value::Undefined);
         let mut post_only: Value = self.is_post_only(is_market.clone(), Value::Undefined, params.clone());
         if !is_market.is_truthy() {
@@ -1265,11 +1272,11 @@ pub trait Paradex : Exchange {
             if is_market.is_truthy() {
                 if is_stop_loss_order.is_truthy() {
                     stop_price = self.price_to_precision(symbol.clone(), stop_loss_price.clone());
-                    reduce_only = true.into();
+                    reduce_only = Value::from(true);
                     request.set("type".into(), Value::from("STOP_LOSS_MARKET"));
                 } else if is_take_profit_order.is_truthy() {
                     stop_price = self.price_to_precision(symbol.clone(), take_profit_price.clone());
-                    reduce_only = true.into();
+                    reduce_only = Value::from(true);
                     request.set("type".into(), Value::from("TAKE_PROFIT_MARKET"));
                 } else {
                     stop_price = self.price_to_precision(symbol.clone(), trigger_price.clone());
@@ -1279,11 +1286,11 @@ pub trait Paradex : Exchange {
             } else {
                 if is_stop_loss_order.is_truthy() {
                     stop_price = self.price_to_precision(symbol.clone(), stop_loss_price.clone());
-                    reduce_only = true.into();
+                    reduce_only = Value::from(true);
                     request.set("type".into(), Value::from("STOP_LOSS_LIMIT"));
                 } else if is_take_profit_order.is_truthy() {
                     stop_price = self.price_to_precision(symbol.clone(), take_profit_price.clone());
-                    reduce_only = true.into();
+                    reduce_only = Value::from(true);
                     request.set("type".into(), Value::from("TAKE_PROFIT_LIMIT"));
                 } else {
                     stop_price = self.price_to_precision(symbol.clone(), trigger_price.clone());
@@ -1459,7 +1466,7 @@ pub trait Paradex : Exchange {
         params = params.or_default(Value::new_object());
         <Self as Paradex>::authenticate_rest(self, Value::Undefined).await;
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        let mut paginate: Value = false.into();
+        let mut paginate: Value = Value::from(false);
         (paginate, params) = shift_2(self.handle_option_and_params(params.clone(), Value::from("fetchOrders"), Value::from("paginate"), Value::Undefined));
         if paginate.is_truthy() {
             return self.fetch_paginated_call_cursor(Value::from("fetchOrders"), symbol.clone(), since.clone(), limit.clone(), params.clone(), Value::from("next"), Value::from("cursor"), Value::Undefined, Value::from(50)).await;
@@ -1514,7 +1521,7 @@ pub trait Paradex : Exchange {
         //
         let mut orders: Value = self.safe_list(response.clone(), Value::from("results"), Value::new_array());
         let mut pagination_cursor: Value = self.safe_string(response.clone(), Value::from("next"), Value::Undefined);
-        let mut orders_length: usize = orders.len();
+        let mut orders_length: Value = Value::from(orders.len());
         if pagination_cursor.clone().is_nonnullish() && orders_length.clone() > Value::from(0) {
             let mut first: Value = orders.get(Value::from(0));
             first.set("next".into(), pagination_cursor.clone());
@@ -1611,7 +1618,7 @@ pub trait Paradex : Exchange {
         params = params.or_default(Value::new_object());
         <Self as Paradex>::authenticate_rest(self, Value::Undefined).await;
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        let mut paginate: Value = false.into();
+        let mut paginate: Value = Value::from(false);
         (paginate, params) = shift_2(self.handle_option_and_params(params.clone(), Value::from("fetchMyTrades"), Value::from("paginate"), Value::Undefined));
         if paginate.is_truthy() {
             return self.fetch_paginated_call_cursor(Value::from("fetchMyTrades"), symbol.clone(), since.clone(), limit.clone(), params.clone(), Value::from("next"), Value::from("cursor"), Value::Undefined, Value::from(100)).await;
@@ -1816,7 +1823,7 @@ pub trait Paradex : Exchange {
         params = params.or_default(Value::new_object());
         <Self as Paradex>::authenticate_rest(self, Value::Undefined).await;
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        let mut paginate: Value = false.into();
+        let mut paginate: Value = Value::from(false);
         (paginate, params) = shift_2(self.handle_option_and_params(params.clone(), Value::from("fetchDeposits"), Value::from("paginate"), Value::Undefined));
         if paginate.is_truthy() {
             return self.fetch_paginated_call_cursor(Value::from("fetchDeposits"), code.clone(), since.clone(), limit.clone(), params.clone(), Value::from("next"), Value::from("cursor"), Value::Undefined, Value::from(100)).await;
@@ -1868,7 +1875,7 @@ pub trait Paradex : Exchange {
         params = params.or_default(Value::new_object());
         <Self as Paradex>::authenticate_rest(self, Value::Undefined).await;
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        let mut paginate: Value = false.into();
+        let mut paginate: Value = Value::from(false);
         (paginate, params) = shift_2(self.handle_option_and_params(params.clone(), Value::from("fetchWithdrawals"), Value::from("paginate"), Value::Undefined));
         if paginate.is_truthy() {
             return self.fetch_paginated_call_cursor(Value::from("fetchWithdrawals"), code.clone(), since.clone(), limit.clone(), params.clone(), Value::from("next"), Value::from("cursor"), Value::Undefined, Value::from(100)).await;

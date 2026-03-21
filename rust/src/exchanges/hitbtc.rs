@@ -1,4 +1,5 @@
 #![allow(clippy::all)]
+#![allow(non_snake_case)]
 #![allow(dead_code)]
 #![allow(unreachable_code)]
 #![allow(unused_imports)]
@@ -2207,7 +2208,7 @@ pub trait Hitbtc : Exchange {
         }))).unwrap());
     }
 
-    async fn convert_currency_network(&self, mut code: Value, mut amount: Value, mut from_network: Value, mut to_network: Value, mut params: Value) -> Value {
+    async fn convert_currency_network(&mut self, mut code: Value, mut amount: Value, mut from_network: Value, mut to_network: Value, mut params: Value) -> Value {
         self.load_markets(Value::Undefined, Value::Undefined).await;
         if code.clone() != Value::from("USDT") {
             panic!(r###"ExchangeError::new(self.get("id".into()) + Value::from(" convertCurrencyNetwork() only supports USDT currently"))"###);

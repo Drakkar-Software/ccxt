@@ -1,4 +1,5 @@
 #![allow(clippy::all)]
+#![allow(non_snake_case)]
 #![allow(dead_code)]
 #![allow(unreachable_code)]
 #![allow(unused_imports)]
@@ -2341,7 +2342,7 @@ pub trait Woo : Exchange {
             return currency.clone();
         } else {
             let mut parts: Value = networkized_code.split(Value::from("_"));
-            let mut parts_length: usize = parts.len();
+            let mut parts_length: Value = Value::from(parts.len());
             let mut first_part: Value = self.safe_string(parts.clone(), Value::from(0), Value::Undefined);
             let mut currency_id: Value = self.safe_string(parts.clone(), Value::from(1), first_part.clone());
             if parts_length.clone() > Value::from(2) {
@@ -2379,7 +2380,7 @@ pub trait Woo : Exchange {
         return self.parse_transactions(rows.clone(), currency.clone(), since.clone(), limit.clone(), params.clone());
     }
 
-    fn parse_transaction(&self, mut transaction: Value, mut currency: Value) -> Value {
+    fn parse_transaction(&mut self, mut transaction: Value, mut currency: Value) -> Value {
         //
         //     {
         //         "createdTime": "1734964440.523",

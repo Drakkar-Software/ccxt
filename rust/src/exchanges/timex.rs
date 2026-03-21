@@ -1,4 +1,5 @@
 #![allow(clippy::all)]
+#![allow(non_snake_case)]
 #![allow(dead_code)]
 #![allow(unreachable_code)]
 #![allow(unused_imports)]
@@ -544,7 +545,7 @@ pub trait Timex : Exchange {
         return Value::Undefined;
     }
 
-    fn parse_transaction(&self, mut transaction: Value, mut currency: Value) -> Value {
+    fn parse_transaction(&mut self, mut transaction: Value, mut currency: Value) -> Value {
         //
         //     {
         //         "from": "0x1134cc86b45039cc211c6d1d2e4b3c77f60207ed",
@@ -1305,7 +1306,7 @@ pub trait Timex : Exchange {
         let mut trade_decimals: Value = self.safe_integer(currency.clone(), Value::from("tradeDecimals"), Value::Undefined);
         let mut fee: Value = Value::Undefined;
         if fee_string.clone().is_nonnullish() && trade_decimals.clone().is_nonnullish() {
-            let mut fee_string_len: usize = fee_string.len();
+            let mut fee_string_len: Value = Value::from(fee_string.len());
             let mut dot_index: Value = fee_string_len.clone() - trade_decimals.clone();
             if dot_index.clone() > Value::from(0) {
                 let mut whole: Value = fee_string.slice(Value::from(0), dot_index.clone());

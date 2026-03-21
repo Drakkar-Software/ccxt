@@ -1,4 +1,5 @@
 #![allow(clippy::all)]
+#![allow(non_snake_case)]
 #![allow(dead_code)]
 #![allow(unreachable_code)]
 #![allow(unused_imports)]
@@ -1823,7 +1824,7 @@ pub trait Arkham : Exchange {
         //
         let mut base: Value = self.safe_string(position.clone(), Value::from("base"), Value::Undefined);
         let mut base_abs: Value = Precise::string_abs(base.clone());
-        let mut is_long: Value = Precise::string_ge(base.clone(), Value::from("0"));
+        let mut is_long: Value = Value::from(Precise::string_ge(base.clone(), Value::from("0")));
         let mut side: Value = if is_long.is_truthy() { Value::from("long") } else { Value::from("short") };
         let mut market_id: Value = self.safe_string(position.clone(), Value::from("symbol"), Value::Undefined);
         let mut notional: Value = self.safe_string(position.clone(), Value::from("value"), Value::Undefined);
@@ -1985,7 +1986,7 @@ pub trait Arkham : Exchange {
     fn parse_market_leverage_tiers(&self, mut info: Value, mut market: Value) -> Value {
         let mut tiers: Value = Value::new_array();
         let mut brackets: Value = info.clone();
-        let mut min_notional: usize = 0;
+        let mut min_notional: Value = Value::from(0);
         let mut i: usize = 0;
         while i < brackets.len() {
             let mut tier: Value = brackets.get(i.into());

@@ -1,4 +1,5 @@
 #![allow(clippy::all)]
+#![allow(non_snake_case)]
 #![allow(dead_code)]
 #![allow(unreachable_code)]
 #![allow(unused_imports)]
@@ -530,7 +531,7 @@ pub trait Deribit : Exchange {
     }
 
     fn safe_market(&self, mut market_id: Value, mut market: Value, mut delimiter: Value, mut market_type: Value) -> Value {
-        let mut is_option: Value = (market_id.clone().is_nonnullish() && market_id.ends_with(Value::from("-C")).is_truthy() || market_id.ends_with(Value::from("-P")).is_truthy()).into();
+        let mut is_option: Value = Value::from(market_id.clone().is_nonnullish() && market_id.ends_with(Value::from("-C")).is_truthy() || market_id.ends_with(Value::from("-P")).is_truthy());
         if is_option.is_truthy() && !self.get("markets_by_id".into()).contains_key(market_id.clone()) {
             // handle expired option contracts
             return <Self as Deribit>::create_expired_option_market(self, market_id.clone());
@@ -1377,7 +1378,7 @@ pub trait Deribit : Exchange {
         };
         let mut last_trade_timestamp: Value = Value::Undefined;
         if filled_string.clone().is_nonnullish() {
-            let mut is_filled_positive: Value = Precise::string_gt(filled_string.clone(), Value::from("0"));
+            let mut is_filled_positive: Value = Value::from(Precise::string_gt(filled_string.clone(), Value::from("0")));
             if is_filled_positive.is_truthy() {
                 last_trade_timestamp = last_update.clone();
             };
@@ -1495,19 +1496,19 @@ pub trait Deribit : Exchange {
         // only take profit buy orders are allowed when price crossed from below
         let mut take_profit_price: Value = self.safe_value(params.clone(), Value::from("takeProfitPrice"), Value::Undefined);
         let mut trailing_amount: Value = self.safe_string_2(params.clone(), Value::from("trailingAmount"), Value::from("trigger_offset"), Value::Undefined);
-        let mut is_trailing_amount_order: Value = (trailing_amount.clone().is_nonnullish()).into();
-        let mut is_stop_limit: Value = (r#type.clone() == Value::from("stop_limit")).into();
-        let mut is_stop_market: Value = (r#type.clone() == Value::from("stop_market")).into();
-        let mut is_take_limit: Value = (r#type.clone() == Value::from("take_limit")).into();
-        let mut is_take_market: Value = (r#type.clone() == Value::from("take_market")).into();
-        let mut is_stop_loss_order: Value = (is_stop_limit.is_truthy() || is_stop_market.is_truthy() || stop_loss_price.clone().is_nonnullish()).into();
-        let mut is_take_profit_order: Value = (is_take_limit.is_truthy() || is_take_market.is_truthy() || take_profit_price.clone().is_nonnullish()).into();
+        let mut is_trailing_amount_order: Value = Value::from(trailing_amount.clone().is_nonnullish());
+        let mut is_stop_limit: Value = Value::from(r#type.clone() == Value::from("stop_limit"));
+        let mut is_stop_market: Value = Value::from(r#type.clone() == Value::from("stop_market"));
+        let mut is_take_limit: Value = Value::from(r#type.clone() == Value::from("take_limit"));
+        let mut is_take_market: Value = Value::from(r#type.clone() == Value::from("take_market"));
+        let mut is_stop_loss_order: Value = Value::from(is_stop_limit.is_truthy() || is_stop_market.is_truthy() || stop_loss_price.clone().is_nonnullish());
+        let mut is_take_profit_order: Value = Value::from(is_take_limit.is_truthy() || is_take_market.is_truthy() || take_profit_price.clone().is_nonnullish());
         if is_stop_loss_order.is_truthy() && is_take_profit_order.is_truthy() {
             panic!(r###"InvalidOrder::new(self.get("id".into()) + Value::from(" createOrder () only allows one of stopLossPrice or takeProfitPrice to be specified"))"###);
         };
-        let mut is_stop_order: Value = (is_stop_loss_order.is_truthy() || is_take_profit_order.is_truthy()).into();
-        let mut is_limit_order: Value = (r#type.clone() == Value::from("limit") || is_stop_limit.is_truthy() || is_take_limit.is_truthy()).into();
-        let mut is_market_order: Value = (r#type.clone() == Value::from("market") || is_stop_market.is_truthy() || is_take_market.is_truthy()).into();
+        let mut is_stop_order: Value = Value::from(is_stop_loss_order.is_truthy() || is_take_profit_order.is_truthy());
+        let mut is_limit_order: Value = Value::from(r#type.clone() == Value::from("limit") || is_stop_limit.is_truthy() || is_take_limit.is_truthy());
+        let mut is_market_order: Value = Value::from(r#type.clone() == Value::from("market") || is_stop_market.is_truthy() || is_take_market.is_truthy());
         let mut exchange_specific_post_only: Value = self.safe_value(params.clone(), Value::from("post_only"), Value::Undefined);
         let mut post_only: Value = self.is_post_only(is_market_order.clone(), exchange_specific_post_only.clone(), params.clone());
         if is_limit_order.is_truthy() {
@@ -1543,11 +1544,11 @@ pub trait Deribit : Exchange {
             };
         };
         if reduce_only.is_truthy() {
-            request.set("reduce_only".into(), true.into());
+            request.set("reduce_only".into(), Value::from(true));
         };
         if post_only.is_truthy() {
-            request.set("post_only".into(), true.into());
-            request.set("reject_post_only".into(), true.into());
+            request.set("post_only".into(), Value::from(true));
+            request.set("reject_post_only".into(), Value::from(true));
         };
         if time_in_force.clone().is_nonnullish() {
             if time_in_force.clone() == Value::from("GTC") {
@@ -1645,7 +1646,7 @@ pub trait Deribit : Exchange {
             request.set("price".into(), self.price_to_precision(symbol.clone(), price.clone()));
         };
         let mut trailing_amount: Value = self.safe_string_2(params.clone(), Value::from("trailingAmount"), Value::from("trigger_offset"), Value::Undefined);
-        let mut is_trailing_amount_order: Value = (trailing_amount.clone().is_nonnullish()).into();
+        let mut is_trailing_amount_order: Value = Value::from(trailing_amount.clone().is_nonnullish());
         if is_trailing_amount_order.is_truthy() {
             request.set("trigger_offset".into(), self.parse_to_numeric(trailing_amount.clone(), Value::Undefined));
             params = self.omit(params.clone(), Value::from("trigger_offset"));
@@ -2464,9 +2465,9 @@ pub trait Deribit : Exchange {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
         let mut market: Value = self.market(symbol.clone());
-        let mut paginate: Value = false.into();
+        let mut paginate: Value = Value::from(false);
         (paginate, params) = shift_2(self.handle_option_and_params(params.clone(), Value::from("fetchFundingRateHistory"), Value::from("paginate"), Value::Undefined));
-        let mut max_entries_per_request: usize = 744;
+        let mut max_entries_per_request: Value = Value::from(744);
         // seems exchange returns max 744 items per request
         let mut each_item_duration: Value = Value::from("1h");
         if paginate.is_truthy() {
@@ -2574,7 +2575,7 @@ pub trait Deribit : Exchange {
     async fn fetch_liquidations(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        let mut paginate: Value = false.into();
+        let mut paginate: Value = Value::from(false);
         (paginate, params) = shift_2(self.handle_option_and_params(params.clone(), Value::from("fetchLiquidations"), Value::from("paginate"), Value::Undefined));
         if paginate.is_truthy() {
             return self.fetch_paginated_call_cursor(Value::from("fetchLiquidations"), symbol.clone(), since.clone(), limit.clone(), params.clone(), Value::from("continuation"), Value::from("continuation"), Value::Undefined, Value::Undefined).await;
@@ -2627,7 +2628,7 @@ pub trait Deribit : Exchange {
 
     fn add_pagination_cursor_to_result(&mut self, mut cursor: Value, mut data: Value) -> Value {
         if cursor.clone().is_nonnullish() {
-            let mut data_length: usize = data.len();
+            let mut data_length: Value = Value::from(data.len());
             if data_length.clone() > Value::from(0) {
                 let mut first: Value = data.get(Value::from(0));
                 let mut last: Value = data.get(data_length.clone() - Value::from(1).clone());

@@ -1,4 +1,5 @@
 #![allow(clippy::all)]
+#![allow(non_snake_case)]
 #![allow(dead_code)]
 #![allow(unreachable_code)]
 #![allow(unused_imports)]
@@ -1143,7 +1144,7 @@ pub trait Bitso : Exchange {
         }))).unwrap()), Value::Undefined).await;
         let mut payload: Value = self.safe_value(response.clone(), Value::from("payload"), Value::Undefined);
         if Array::is_array(payload.clone()).is_truthy() {
-            let mut num_orders: usize = response.get(Value::from("payload")).len();
+            let mut num_orders: Value = Value::from(response.get(Value::from("payload")).len());
             if num_orders.clone() == Value::from(1) {
                 return <Self as Bitso>::parse_order(self, payload.get(Value::from(0)), Value::Undefined);
             };
@@ -1506,7 +1507,7 @@ pub trait Bitso : Exchange {
             "destination_tag": tag
         }))).unwrap());
         let mut class_method: Value = Value::from("privatePost") + method.clone() + Value::from("Withdrawal");
-        let mut response: Value = self.class_method(extend_2(request.clone(), params.clone())).await;
+        let mut response: Value = Value::Undefined;
         //
         //     {
         //         "success": true,

@@ -1,4 +1,5 @@
 #![allow(clippy::all)]
+#![allow(non_snake_case)]
 #![allow(dead_code)]
 #![allow(unreachable_code)]
 #![allow(unused_imports)]
@@ -1025,8 +1026,8 @@ pub trait Bybit : Exchange {
             //
             let mut result: Value = self.safe_dict(response.clone(), Value::from("result"), Value::new_object());
             let mut account_result: Value = self.safe_dict(account_info.clone(), Value::from("result"), Value::new_object());
-            self.get("options".into()).set("enableUnifiedMargin".into(), self.safe_integer(result.clone(), Value::from("unified"), Value::Undefined) == Value::from(1));
-            self.get("options".into()).set("enableUnifiedAccount".into(), self.safe_integer(result.clone(), Value::from("uta"), Value::Undefined) == Value::from(1));
+            self.get("options".into()).set("enableUnifiedMargin".into(), Value::from(self.safe_integer(result.clone(), Value::from("unified"), Value::Undefined) == Value::from(1)));
+            self.get("options".into()).set("enableUnifiedAccount".into(), Value::from(self.safe_integer(result.clone(), Value::from("uta"), Value::Undefined) == Value::from(1)));
             self.get("options".into()).set("unifiedMarginStatus".into(), self.safe_integer(account_result.clone(), Value::from("unifiedMarginStatus"), Value::from(6)));
         };
         // default to uta 2.0 pro if not found
@@ -3517,7 +3518,7 @@ pub trait Bybit : Exchange {
             let mut code: Value = codes.get(i.into());
             let mut ret_code: Value = self.safe_integer(code.clone(), Value::from("code"), Value::Undefined);
             if ret_code.clone() != Value::from(0) {
-                data.set(i.clone(), extend_2(data.get(i.into()), code.clone()));
+                data.set(Value::from(i), extend_2(data.get(i.into()), code.clone()));
             };
             i += 1;
         };
@@ -3703,7 +3704,7 @@ pub trait Bybit : Exchange {
             let mut code: Value = codes.get(i.into());
             let mut ret_code: Value = self.safe_integer(code.clone(), Value::from("code"), Value::Undefined);
             if ret_code.clone() != Value::from(0) {
-                data.set(i.clone(), extend_2(data.get(i.into()), code.clone()));
+                data.set(Value::from(i), extend_2(data.get(i.into()), code.clone()));
             };
             i += 1;
         };
@@ -4969,7 +4970,7 @@ pub trait Bybit : Exchange {
             };
         } else {
             if since.clone().is_nonnullish() {
-                request.set("start_date".into(), self.yyyymmdd(since.clone()));
+                request.set("start_date".into(), self.yyyymmdd(since.clone(), Value::from("-")));
             };
         };
         if code.clone().is_nonnullish() {
@@ -6468,7 +6469,7 @@ pub trait Bybit : Exchange {
         //    }
         //
         let mut chains: Value = self.safe_list(fee.clone(), Value::from("chains"), Value::new_array());
-        let mut chains_length: usize = chains.len();
+        let mut chains_length: Value = Value::from(chains.len());
         let mut result: Value = Value::Json(normalize(&Value::Json(json!({
             "info": fee,
             "withdraw": Value::Json(normalize(&Value::Json(json!({
@@ -6483,7 +6484,7 @@ pub trait Bybit : Exchange {
         }))).unwrap());
         if chains_length.clone() != Value::from(0) {
             let mut i: usize = 0;
-            while i < chains_length.clone().into() {
+            while i < chains.len() {
                 let mut chain: Value = chains.get(i.into());
                 let mut network_id: Value = self.safe_string(chain.clone(), Value::from("chain"), Value::Undefined);
                 let mut currency_code: Value = self.safe_string(currency.clone(), Value::from("code"), Value::Undefined);
@@ -7051,7 +7052,7 @@ pub trait Bybit : Exchange {
         return <Self as Bybit>::parse_leverage_tiers(self, data.clone(), symbols.clone(), Value::from("symbol"));
     }
 
-    fn parse_leverage_tiers(&self, mut response: Value, mut symbols: Value, mut market_id_key: Value) -> Value {
+    fn parse_leverage_tiers(&mut self, mut response: Value, mut symbols: Value, mut market_id_key: Value) -> Value {
         //
         //  [
         //      {
