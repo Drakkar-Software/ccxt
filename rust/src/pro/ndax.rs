@@ -11,7 +11,16 @@ use async_trait::async_trait;
 use std::str::FromStr;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, JSON, Array, Object, Math, parse_int, shift_2, extend_2, normalize};
+use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, BoolExt, JSON, Array, Object, Math, Promise, parse_int, shift_2, extend_2, normalize};
+// Crypto hash identifiers
+fn sha256() -> Value { Value::from("sha256") }
+fn sha384() -> Value { Value::from("sha384") }
+fn sha512() -> Value { Value::from("sha512") }
+fn md5() -> Value { Value::from("md5") }
+fn ed25519() -> Value { Value::from("ed25519") }
+fn rsa(msg: Value, secret: Value, _hash: Value) -> Value { msg }
+fn eddsa(msg: Value, secret: Value, _curve: Value) -> Value { msg }
+fn secp256k1() -> Value { Value::from("secp256k1") }
 
 use crate::exchange::{PRECISE_BASE, TRUNCATE, ROUND, ROUND_UP, ROUND_DOWN};
 use crate::exchange::{DECIMAL_PLACES, SIGNIFICANT_DIGITS, TICK_SIZE, NO_PADDING, PAD_WITH_ZERO};
@@ -437,7 +446,7 @@ pub trait Ndax : Exchange {
         let mut request_id: Value = <Self as Ndax>::request_id(self);
         let mut payload: Value = Value::Json(normalize(&Value::Json(json!({
             "OMSId": oms_id,
-            "InstrumentId": parse_int(market.get(Value::from("id")))
+            "InstrumentId": parse_int(market.get(Value::from("id")), Value::Undefined)
         }))).unwrap());
         // conditionally optional
         // 'Symbol': market['info']['symbol'], // conditionally optional
@@ -501,7 +510,7 @@ pub trait Ndax : Exchange {
         let mut request_id: Value = <Self as Ndax>::request_id(self);
         let mut payload: Value = Value::Json(normalize(&Value::Json(json!({
             "OMSId": oms_id,
-            "InstrumentId": parse_int(market.get(Value::from("id"))),
+            "InstrumentId": parse_int(market.get(Value::from("id")), Value::Undefined),
             "IncludeLastCount": 100
         }))).unwrap());
         // the number of previous trades to retrieve in the immediate snapshot, 100 by default
@@ -547,7 +556,7 @@ pub trait Ndax : Exchange {
         while i < payload.len() {
             let mut trade: Value = self.parse_trade(payload.get(i.into()), Value::Undefined);
             let mut symbol: Value = trade.get(Value::from("symbol"));
-            let mut trades_array: Value = self.safe_value(self.get("trades".into()), symbol.clone());
+            let mut trades_array: Value = self.safe_value(self.get("trades".into()), symbol.clone(), Value::Undefined);
             if trades_array.clone().is_nullish() {
                 let mut limit: Value = self.safe_integer(self.get("options".into()), Value::from("tradesLimit"), Value::from(1000));
                 trades_array = ArrayCache::new(limit);
@@ -557,13 +566,13 @@ pub trait Ndax : Exchange {
             updates.set(symbol.clone(), true.into());
             i += 1;
         };
-        let mut symbols: Value = Object::keys(updates.clone());
+        let mut symbols: Value = updates.clone().keys();
         let mut i: usize = 0;
         while i < symbols.len() {
             let mut symbol: Value = symbols.get(i.into());
             let mut market: Value = self.market(symbol.clone());
             let mut message_hash: Value = name.clone() + Value::from(":") + market.get(Value::from("id"));
-            let mut trades_array: Value = self.safe_value(self.get("trades".into()), symbol.clone());
+            let mut trades_array: Value = self.safe_value(self.get("trades".into()), symbol.clone(), Value::Undefined);
             client.resolve(trades_array.clone(), message_hash.clone());
             i += 1;
         };
@@ -583,8 +592,8 @@ pub trait Ndax : Exchange {
         let mut request_id: Value = <Self as Ndax>::request_id(self);
         let mut payload: Value = Value::Json(normalize(&Value::Json(json!({
             "OMSId": oms_id,
-            "InstrumentId": parse_int(market.get(Value::from("id"))),
-            "Interval": parse_int(self.safe_string(self.get("timeframes".into()), timeframe.clone(), timeframe.clone())),
+            "InstrumentId": parse_int(market.get(Value::from("id")), Value::Undefined),
+            "Interval": parse_int(self.safe_string(self.get("timeframes".into()), timeframe.clone(), timeframe.clone()), Value::Undefined),
             "IncludeLastCount": 100
         }))).unwrap());
         // the number of previous candles to retrieve in the immediate snapshot, 100 by default
@@ -633,19 +642,19 @@ pub trait Ndax : Exchange {
         let mut i: usize = 0;
         while i < payload.len() {
             let mut ohlcv: Value = payload.get(i.into());
-            let mut market_id: Value = self.safe_string(ohlcv.clone(), Value::from(8));
+            let mut market_id: Value = self.safe_string(ohlcv.clone(), Value::from(8), Value::Undefined);
             let mut market: Value = self.safe_market(market_id.clone(), Value::Undefined, Value::Undefined, Value::Undefined);
             let mut symbol: Value = market.get(Value::from("symbol"));
             updates.set(market_id.clone(), Value::new_object());
             self.get("ohlcvs".into()).set(symbol.clone(), self.safe_value(self.get("ohlcvs".into()), symbol.clone(), Value::new_object()));
-            let mut keys: Value = Object::keys(self.get("timeframes".into()));
+            let mut keys: Value = self.get("timeframes".into()).keys();
             let mut j: usize = 0;
             while j < keys.len() {
                 let mut timeframe: Value = keys.get(j.into());
                 let mut interval: Value = self.safe_string(self.get("timeframes".into()), timeframe.clone(), timeframe.clone());
-                let mut duration: Value = parse_int(interval.clone()) * Value::from(1000);
-                let mut timestamp: Value = self.safe_integer(ohlcv.clone(), Value::from(0));
-                let mut parsed: Value = Value::Json(serde_json::Value::Array(vec![self.parse_to_int(timestamp.clone() / duration.clone() * duration.clone()).into(), self.safe_float(ohlcv.clone(), Value::from(3)).into(), self.safe_float(ohlcv.clone(), Value::from(1)).into(), self.safe_float(ohlcv.clone(), Value::from(2)).into(), self.safe_float(ohlcv.clone(), Value::from(4)).into(), self.safe_float(ohlcv.clone(), Value::from(5)).into()]));
+                let mut duration: Value = parse_int(interval.clone(), Value::Undefined) * Value::from(1000);
+                let mut timestamp: Value = self.safe_integer(ohlcv.clone(), Value::from(0), Value::Undefined);
+                let mut parsed: Value = Value::Json(serde_json::Value::Array(vec![self.parse_to_int(timestamp.clone() / duration.clone() * duration.clone(), Value::Undefined).into(), self.safe_float(ohlcv.clone(), Value::from(3), Value::Undefined).into(), self.safe_float(ohlcv.clone(), Value::from(1), Value::Undefined).into(), self.safe_float(ohlcv.clone(), Value::from(2), Value::Undefined).into(), self.safe_float(ohlcv.clone(), Value::from(4), Value::Undefined).into(), self.safe_float(ohlcv.clone(), Value::from(5), Value::Undefined).into()]));
                 let mut stored: Value = self.safe_value(self.get("ohlcvs".into()).get(symbol.clone()), timeframe.clone(), Value::new_array());
                 let mut length: usize = stored.len();
                 if length.is_truthy() && parsed.get(Value::from(0)) == stored.get(Value::from(length) - Value::from(1).clone()).get(Value::from(0)) {
@@ -670,11 +679,11 @@ pub trait Ndax : Exchange {
             i += 1;
         };
         let mut name: Value = Value::from("SubscribeTicker");
-        let mut market_ids: Value = Object::keys(updates.clone());
+        let mut market_ids: Value = updates.clone().keys();
         let mut i: usize = 0;
         while i < market_ids.length {
             let mut market_id: Value = market_ids.get(i.into());
-            let mut timeframes: Value = Object::keys(updates.get(market_id.clone()));
+            let mut timeframes: Value = updates.get(market_id.clone()).keys();
             let mut j: usize = 0;
             while j < timeframes.length {
                 let mut timeframe: Value = timeframes.get(j.into());
@@ -703,7 +712,7 @@ pub trait Ndax : Exchange {
         limit = if limit.clone().is_nullish() { Value::from(100) } else { limit.clone() };
         let mut payload: Value = Value::Json(normalize(&Value::Json(json!({
             "OMSId": oms_id,
-            "InstrumentId": parse_int(market.get(Value::from("id"))),
+            "InstrumentId": parse_int(market.get(Value::from("id")), Value::Undefined),
             "Depth": limit
         }))).unwrap());
         // 'Symbol': market['info']['symbol'], // conditionally optional
@@ -755,13 +764,13 @@ pub trait Ndax : Exchange {
         //     ],
         //
         let mut first_bid_ask: Value = self.safe_value(payload.clone(), Value::from(0), Value::new_array());
-        let mut market_id: Value = self.safe_string(first_bid_ask.clone(), Value::from(7));
+        let mut market_id: Value = self.safe_string(first_bid_ask.clone(), Value::from(7), Value::Undefined);
         if market_id.clone().is_nullish() {
             return Value::Undefined;
         };
         let mut market: Value = self.safe_market(market_id.clone(), Value::Undefined, Value::Undefined, Value::Undefined);
         let mut symbol: Value = market.get(Value::from("symbol"));
-        let mut orderbook: Value = self.safe_value(self.get("orderbooks".into()), symbol.clone());
+        let mut orderbook: Value = self.safe_value(self.get("orderbooks".into()), symbol.clone(), Value::Undefined);
         if orderbook.clone().is_nullish() {
             return Value::Undefined;
         };
@@ -771,22 +780,22 @@ pub trait Ndax : Exchange {
         while i < payload.len() {
             let mut bidask: Value = payload.get(i.into());
             if timestamp.clone().is_nullish() {
-                timestamp = self.safe_integer(bidask.clone(), Value::from(2));
+                timestamp = self.safe_integer(bidask.clone(), Value::from(2), Value::Undefined);
             } else {
-                let mut new_timestamp: Value = self.safe_integer(bidask.clone(), Value::from(2));
+                let mut new_timestamp: Value = self.safe_integer(bidask.clone(), Value::from(2), Value::Undefined);
                 timestamp = Math::max(timestamp.clone(), new_timestamp.clone());
             };
             if nonce.clone().is_nullish() {
-                nonce = self.safe_integer(bidask.clone(), Value::from(0));
+                nonce = self.safe_integer(bidask.clone(), Value::from(0), Value::Undefined);
             } else {
-                let mut new_nonce: Value = self.safe_integer(bidask.clone(), Value::from(0));
+                let mut new_nonce: Value = self.safe_integer(bidask.clone(), Value::from(0), Value::Undefined);
                 nonce = Math::max(nonce.clone(), new_nonce.clone());
             };
             // 0 new, 1 update, 2 remove
-            let mut r#type: Value = self.safe_integer(bidask.clone(), Value::from(3));
-            let mut price: Value = self.safe_float(bidask.clone(), Value::from(6));
-            let mut amount: Value = self.safe_float(bidask.clone(), Value::from(8));
-            let mut side: Value = self.safe_integer(bidask.clone(), Value::from(9));
+            let mut r#type: Value = self.safe_integer(bidask.clone(), Value::from(3), Value::Undefined);
+            let mut price: Value = self.safe_float(bidask.clone(), Value::from(6), Value::Undefined);
+            let mut amount: Value = self.safe_float(bidask.clone(), Value::from(8), Value::Undefined);
+            let mut side: Value = self.safe_integer(bidask.clone(), Value::from(9), Value::Undefined);
             // 0 buy, 1 sell, 2 short reserved for future use, 3 unknown
             let mut orderbook_side: Value = if side.clone() == Value::from(0) { orderbook.get(Value::from("bids")) } else { orderbook.get(Value::from("asks")) };
             // 0 new, 1 update, 2 remove
@@ -835,12 +844,12 @@ pub trait Ndax : Exchange {
         //         ],
         //     ]
         //
-        let mut symbol: Value = self.safe_string(subscription.clone(), Value::from("symbol"));
-        let mut snapshot: Value = self.parse_order_book(payload.clone(), symbol.clone(), Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined);
-        let mut limit: Value = self.safe_integer(subscription.clone(), Value::from("limit"));
+        let mut symbol: Value = self.safe_string(subscription.clone(), Value::from("symbol"), Value::Undefined);
+        let mut snapshot: Value = self.parse_order_book(payload.clone(), symbol.clone(), Value::Undefined, Value::Undefined, Value::Undefined);
+        let mut limit: Value = self.safe_integer(subscription.clone(), Value::from("limit"), Value::Undefined);
         let mut orderbook: Value = self.order_book(snapshot.clone(), limit.clone());
         self.get("orderbooks".into()).set(symbol.clone(), orderbook.clone());
-        let mut message_hash: Value = self.safe_string(subscription.clone(), Value::from("messageHash"));
+        let mut message_hash: Value = self.safe_string(subscription.clone(), Value::from("messageHash"), Value::Undefined);
         client.resolve(orderbook.clone(), message_hash.clone());
         Value::Undefined
     }
@@ -855,10 +864,10 @@ pub trait Ndax : Exchange {
         //     }
         //
         let mut subscriptions_by_id: Value = self.index_by(client.get(subscriptions.clone()), Value::from("id"));
-        let mut id: Value = self.safe_integer(message.clone(), Value::from("i"));
-        let mut subscription: Value = self.safe_value(subscriptions_by_id.clone(), id.clone());
+        let mut id: Value = self.safe_integer(message.clone(), Value::from("i"), Value::Undefined);
+        let mut subscription: Value = self.safe_value(subscriptions_by_id.clone(), id.clone(), Value::Undefined);
         if subscription.clone().is_nonnullish() {
-            let mut method: Value = self.safe_value(subscription.clone(), Value::from("method"));
+            let mut method: Value = self.safe_value(subscription.clone(), Value::from("method"), Value::Undefined);
             if method.clone().is_nonnullish() {
                 method.call(self, client.clone(), message.clone(), subscription.clone());
             };
@@ -889,11 +898,11 @@ pub trait Ndax : Exchange {
         //         "o": "[[2,1,1608208308265,0,20782.49,1,25000,8,1,1]]"
         //     }
         //
-        let mut payload: Value = self.safe_string(message.clone(), Value::from("o"));
+        let mut payload: Value = self.safe_string(message.clone(), Value::from("o"), Value::Undefined);
         if payload.clone().is_nullish() {
             return Value::Undefined;
         };
-        message.set("o".into(), JSON::parse(payload.clone()));
+        message.set("o".into(), self.parse_json(payload.clone()));
         let mut methods: Value = Value::Json(normalize(&Value::Json(json!({
             "SubscribeLevel2": self.get("handleSubscriptionStatus".into()),
             "SubscribeLevel1": self.get("handleTicker".into()),
@@ -904,8 +913,8 @@ pub trait Ndax : Exchange {
             "SubscribeTicker": self.get("handleOHLCV".into()),
             "TickerDataUpdateEvent": self.get("handleOHLCV".into())
         }))).unwrap());
-        let mut event: Value = self.safe_string(message.clone(), Value::from("n"));
-        let mut method: Value = self.safe_value(methods.clone(), event.clone());
+        let mut event: Value = self.safe_string(message.clone(), Value::from("n"), Value::Undefined);
+        let mut method: Value = self.safe_value(methods.clone(), event.clone(), Value::Undefined);
         if method.clone().is_nonnullish() {
             method.call(self, client.clone(), message.clone());
         };
@@ -1046,8 +1055,8 @@ impl ValueTrait for NdaxImpl {
     fn push(&mut self, value: Value) { self.0.push(value) }
     fn split(&self, separator: Value) -> Value { self.0.split(separator) }
     fn contains_key(&self, key: Value) -> bool { self.0.contains_key(key) }
-    fn keys(&self) -> Vec<Value> { self.0.keys() }
-    fn values(&self) -> Vec<Value> { self.0.values() }
+    fn keys(&self) -> Value { self.0.keys() }
+    fn values(&self) -> Value { self.0.values() }
     fn to_array(&self, x: Value) -> Value { self.0.to_array(x) }
     fn index_of(&self, x: Value) -> Value { self.0.index_of(x) }
     fn join(&self, glue: Value) -> Value { self.0.join(glue) }

@@ -11,7 +11,16 @@ use async_trait::async_trait;
 use std::str::FromStr;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, JSON, Array, Object, Math, parse_int, shift_2, extend_2, normalize};
+use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, BoolExt, JSON, Array, Object, Math, Promise, parse_int, shift_2, extend_2, normalize};
+// Crypto hash identifiers
+fn sha256() -> Value { Value::from("sha256") }
+fn sha384() -> Value { Value::from("sha384") }
+fn sha512() -> Value { Value::from("sha512") }
+fn md5() -> Value { Value::from("md5") }
+fn ed25519() -> Value { Value::from("ed25519") }
+fn rsa(msg: Value, secret: Value, _hash: Value) -> Value { msg }
+fn eddsa(msg: Value, secret: Value, _curve: Value) -> Value { msg }
+fn secp256k1() -> Value { Value::from("secp256k1") }
 
 use crate::exchange::{PRECISE_BASE, TRUNCATE, ROUND, ROUND_UP, ROUND_DOWN};
 use crate::exchange::{DECIMAL_PLACES, SIGNIFICANT_DIGITS, TICK_SIZE, NO_PADDING, PAD_WITH_ZERO};
@@ -422,7 +431,7 @@ pub trait Gemini : Exchange {
         let mut trades: Value = <Self as Gemini>::helper_for_watch_multiple_construct(self, Value::from("trades"), symbols.clone(), params.clone()).await;
         if self.get("newUpdates".into()).is_truthy() {
             let mut first: Value = self.safe_list(trades.clone(), Value::from(0), Value::Undefined);
-            let mut trade_symbol: Value = self.safe_string(first.clone(), Value::from("symbol"));
+            let mut trade_symbol: Value = self.safe_string(first.clone(), Value::from("symbol"), Value::Undefined);
             limit = trades.get_limit(trade_symbol.clone(), limit.clone());
         };
         return self.filter_by_since_limit(trades.clone(), since.clone(), limit.clone(), Value::from("timestamp"), true.into());
@@ -453,20 +462,20 @@ pub trait Gemini : Exchange {
         //        "makerSide": "bid"
         //    }
         //
-        let mut timestamp: Value = self.safe_integer(trade.clone(), Value::from("timestamp"));
-        let mut id: Value = self.safe_string_2(trade.clone(), Value::from("event_id"), Value::from("tid"));
-        let mut price_string: Value = self.safe_string(trade.clone(), Value::from("price"));
-        let mut amount_string: Value = self.safe_string_2(trade.clone(), Value::from("quantity"), Value::from("amount"));
-        let mut side: Value = self.safe_string_lower(trade.clone(), Value::from("side"));
+        let mut timestamp: Value = self.safe_integer(trade.clone(), Value::from("timestamp"), Value::Undefined);
+        let mut id: Value = self.safe_string_2(trade.clone(), Value::from("event_id"), Value::from("tid"), Value::Undefined);
+        let mut price_string: Value = self.safe_string(trade.clone(), Value::from("price"), Value::Undefined);
+        let mut amount_string: Value = self.safe_string_2(trade.clone(), Value::from("quantity"), Value::from("amount"), Value::Undefined);
+        let mut side: Value = self.safe_string_lower(trade.clone(), Value::from("side"), Value::Undefined);
         if side.clone().is_nullish() {
-            let mut market_side: Value = self.safe_string_lower(trade.clone(), Value::from("makerSide"));
+            let mut market_side: Value = self.safe_string_lower(trade.clone(), Value::from("makerSide"), Value::Undefined);
             if market_side.clone() == Value::from("bid") {
                 side = Value::from("sell");
             } else if market_side.clone() == Value::from("ask") {
                 side = Value::from("buy");
             };
         };
-        let mut market_id: Value = self.safe_string_lower(trade.clone(), Value::from("symbol"));
+        let mut market_id: Value = self.safe_string_lower(trade.clone(), Value::from("symbol"), Value::Undefined);
         let mut symbol: Value = self.safe_symbol(market_id.clone(), market.clone(), Value::Undefined, Value::Undefined);
         return self.safe_trade(Value::Json(normalize(&Value::Json(json!({
             "id": id,
@@ -500,7 +509,7 @@ pub trait Gemini : Exchange {
         let mut trade: Value = <Self as Gemini>::parse_ws_trade(self, message.clone(), Value::Undefined);
         let mut symbol: Value = trade.get(Value::from("symbol"));
         let mut trades_limit: Value = self.safe_integer(self.get("options".into()), Value::from("tradesLimit"), Value::from(1000));
-        let mut stored: Value = self.safe_value(self.get("trades".into()), symbol.clone());
+        let mut stored: Value = self.safe_value(self.get("trades".into()), symbol.clone(), Value::Undefined);
         if stored.clone().is_nullish() {
             stored = ArrayCache::new(trades_limit);
             self.get("trades".into()).set(symbol.clone(), stored.clone());
@@ -549,13 +558,13 @@ pub trait Gemini : Exchange {
         //         ]
         //     }
         //
-        let mut market_id: Value = self.safe_string_lower(message.clone(), Value::from("symbol"));
+        let mut market_id: Value = self.safe_string_lower(message.clone(), Value::from("symbol"), Value::Undefined);
         let mut market: Value = self.safe_market(market_id.clone(), Value::Undefined, Value::Undefined, Value::Undefined);
-        let mut trades: Value = self.safe_value(message.clone(), Value::from("trades"));
+        let mut trades: Value = self.safe_value(message.clone(), Value::from("trades"), Value::Undefined);
         if trades.clone().is_nonnullish() {
             let mut symbol: Value = market.get(Value::from("symbol"));
             let mut trades_limit: Value = self.safe_integer(self.get("options".into()), Value::from("tradesLimit"), Value::from(1000));
-            let mut stored: Value = self.safe_value(self.get("trades".into()), symbol.clone());
+            let mut stored: Value = self.safe_value(self.get("trades".into()), symbol.clone(), Value::Undefined);
             if stored.clone().is_nullish() {
                 stored = ArrayCache::new(trades_limit);
                 self.get("trades".into()).set(symbol.clone(), stored.clone());
@@ -584,7 +593,7 @@ pub trait Gemini : Exchange {
                 let mut trade: Value = <Self as Gemini>::parse_ws_trade(self, trades.get(i.into()), market.clone());
                 trade.set("timestamp".into(), timestamp.clone());
                 trade.set("datetime".into(), self.iso8601(timestamp.clone()));
-                let mut stored: Value = self.safe_value(self.get("trades".into()), symbol.clone());
+                let mut stored: Value = self.safe_value(self.get("trades".into()), symbol.clone(), Value::Undefined);
                 if stored.clone().is_nullish() {
                     stored = ArrayCache::new(trades_limit);
                     self.get("trades".into()).set(symbol.clone(), stored.clone());
@@ -593,7 +602,7 @@ pub trait Gemini : Exchange {
                 stores_for_symbols.set(symbol.clone(), stored.clone());
                 i += 1;
             };
-            let mut symbols: Value = Object::keys(stores_for_symbols.clone());
+            let mut symbols: Value = stores_for_symbols.clone().keys();
             let mut i: usize = 0;
             while i < symbols.len() {
                 let mut symbol: Value = symbols.get(i.into());
@@ -663,11 +672,11 @@ pub trait Gemini : Exchange {
         let mut symbol: Value = self.safe_symbol(market_id.clone(), market.clone(), Value::Undefined, Value::Undefined);
         let mut changes: Value = self.safe_value(message.clone(), Value::from("changes"), Value::new_array());
         let mut timeframe: Value = self.find_timeframe(timeframe_id.clone(), Value::Undefined);
-        let mut ohlcvs_by_symbol: Value = self.safe_value(self.get("ohlcvs".into()), symbol.clone());
+        let mut ohlcvs_by_symbol: Value = self.safe_value(self.get("ohlcvs".into()), symbol.clone(), Value::Undefined);
         if ohlcvs_by_symbol.clone().is_nullish() {
             self.get("ohlcvs".into()).set(symbol.clone(), Value::new_object());
         };
-        let mut stored: Value = self.safe_value(self.get("ohlcvs".into()).get(symbol.clone()), timeframe.clone());
+        let mut stored: Value = self.safe_value(self.get("ohlcvs".into()).get(symbol.clone()), timeframe.clone(), Value::Undefined);
         if stored.clone().is_nullish() {
             let mut limit: Value = self.safe_integer(self.get("options".into()), Value::from("OHLCVLimit"), Value::from(1000));
             stored = ArrayCacheByTimestamp::new(limit);
@@ -708,7 +717,7 @@ pub trait Gemini : Exchange {
 
     fn handle_order_book(&mut self, mut client: Value, mut message: Value) -> Value {
         let mut changes: Value = self.safe_value(message.clone(), Value::from("changes"), Value::new_array());
-        let mut market_id: Value = self.safe_string_lower(message.clone(), Value::from("symbol"));
+        let mut market_id: Value = self.safe_string_lower(message.clone(), Value::from("symbol"), Value::Undefined);
         let mut market: Value = self.safe_market(market_id.clone(), Value::Undefined, Value::Undefined, Value::Undefined);
         let mut symbol: Value = market.get(Value::from("symbol"));
         let mut message_hash: Value = Value::from("orderbook:") + symbol.clone();
@@ -786,9 +795,9 @@ pub trait Gemini : Exchange {
         let mut i: usize = 0;
         while i < raw_bid_ask_changes.len() {
             let mut entry: Value = raw_bid_ask_changes.get(i.into());
-            let mut raw_side: Value = self.safe_string(entry.clone(), Value::from("side"));
+            let mut raw_side: Value = self.safe_string(entry.clone(), Value::from("side"), Value::Undefined);
             let mut price: Value = self.safe_number(entry.clone(), Value::from("price"), Value::Undefined);
-            let mut size_string: Value = self.safe_string(entry.clone(), Value::from("remaining"));
+            let mut size_string: Value = self.safe_string(entry.clone(), Value::from("remaining"), Value::Undefined);
             if Precise::string_eq(size_string.clone(), Value::from("0")) {
                 continue;
             };
@@ -878,7 +887,7 @@ pub trait Gemini : Exchange {
             let mut entry: Value = raw_order_book_changes.get(i.into());
             let mut price: Value = self.safe_number(entry.clone(), Value::from("price"), Value::Undefined);
             let mut size: Value = self.safe_number(entry.clone(), Value::from("remaining"), Value::Undefined);
-            let mut raw_side: Value = self.safe_string(entry.clone(), Value::from("side"));
+            let mut raw_side: Value = self.safe_string(entry.clone(), Value::from("side"), Value::Undefined);
             if raw_side.clone() == Value::from("bid") {
                 bids.store(price.clone(), size.clone());
             } else {
@@ -1050,11 +1059,11 @@ pub trait Gemini : Exchange {
         //         "socket_sequence": 139
         //     }
         //
-        let mut timestamp: Value = self.safe_integer(order.clone(), Value::from("timestampms"));
-        let mut status: Value = self.safe_string(order.clone(), Value::from("type"));
-        let mut market_id: Value = self.safe_string(order.clone(), Value::from("symbol"));
-        let mut type_id: Value = self.safe_string(order.clone(), Value::from("order_type"));
-        let mut behavior: Value = self.safe_string(order.clone(), Value::from("behavior"));
+        let mut timestamp: Value = self.safe_integer(order.clone(), Value::from("timestampms"), Value::Undefined);
+        let mut status: Value = self.safe_string(order.clone(), Value::from("type"), Value::Undefined);
+        let mut market_id: Value = self.safe_string(order.clone(), Value::from("symbol"), Value::Undefined);
+        let mut type_id: Value = self.safe_string(order.clone(), Value::from("order_type"), Value::Undefined);
+        let mut behavior: Value = self.safe_string(order.clone(), Value::from("behavior"), Value::Undefined);
         let mut time_in_force: Value = Value::from("GTC");
         let mut post_only: Value = false.into();
         if behavior.clone() == Value::from("immediate-or-cancel") {
@@ -1066,8 +1075,8 @@ pub trait Gemini : Exchange {
             post_only = true.into();
         };
         return self.safe_order(Value::Json(normalize(&Value::Json(json!({
-            "id": self.safe_string(order.clone(), Value::from("order_id")),
-            "clientOrderId": self.safe_string(order.clone(), Value::from("client_order_id")),
+            "id": self.safe_string(order.clone(), Value::from("order_id"), Value::Undefined),
+            "clientOrderId": self.safe_string(order.clone(), Value::from("client_order_id"), Value::Undefined),
             "info": order,
             "timestamp": timestamp,
             "datetime": self.iso8601(timestamp.clone()),
@@ -1077,7 +1086,7 @@ pub trait Gemini : Exchange {
             "type": <Self as Gemini>::parse_ws_order_type(self, type_id.clone()),
             "timeInForce": time_in_force,
             "postOnly": post_only,
-            "side": self.safe_string(order.clone(), Value::from("side")),
+            "side": self.safe_string(order.clone(), Value::from("side"), Value::Undefined),
             "price": self.safe_number(order.clone(), Value::from("price"), Value::Undefined),
             "stopPrice": Value::Undefined,
             "average": self.safe_number(order.clone(), Value::from("avg_execution_price"), Value::Undefined),
@@ -1163,7 +1172,7 @@ pub trait Gemini : Exchange {
             <Self as Gemini>::handle_order(self, client.clone(), message.clone());
             return Value::Undefined;
         };
-        let mut reason: Value = self.safe_string(message.clone(), Value::from("reason"));
+        let mut reason: Value = self.safe_string(message.clone(), Value::from("reason"), Value::Undefined);
         if reason.clone() == Value::from("error") {
             <Self as Gemini>::handle_error(self, client.clone(), message.clone());
         };
@@ -1178,14 +1187,14 @@ pub trait Gemini : Exchange {
             <Self as Gemini>::handle_ohlcv(self, client.clone(), message.clone());
             return Value::Undefined;
         };
-        let mut method: Value = self.safe_value(methods.clone(), r#type.clone());
+        let mut method: Value = self.safe_value(methods.clone(), r#type.clone(), Value::Undefined);
         if method.clone().is_nonnullish() {
             method.call(self, client.clone(), message.clone());
         };
         // handle multimarketdata
         if r#type.clone() == Value::from("update") {
             let mut ts: Value = self.safe_integer(message.clone(), Value::from("timestampms"), self.milliseconds());
-            let mut event_id: Value = self.safe_integer(message.clone(), Value::from("eventId"));
+            let mut event_id: Value = self.safe_integer(message.clone(), Value::from("eventId"), Value::Undefined);
             let mut events: Value = self.safe_list(message.clone(), Value::from("events"), Value::Undefined);
             let mut order_book_items: Value = Value::new_array();
             let mut bidask_items: Value = Value::new_array();
@@ -1194,9 +1203,9 @@ pub trait Gemini : Exchange {
             let mut i: usize = 0;
             while i < events.len() {
                 let mut event: Value = events.get(i.into());
-                let mut event_type: Value = self.safe_string(event.clone(), Value::from("type"));
+                let mut event_type: Value = self.safe_string(event.clone(), Value::from("type"), Value::Undefined);
                 let mut is_order_book: Value = (event_type.clone() == Value::from("change") && event.contains_key(Value::from("side")) && self.in_array(event.get(Value::from("side")), Value::Json(serde_json::Value::Array(vec![Value::from("ask").into(), Value::from("bid").into()]))).is_truthy()).into();
-                let mut event_reason: Value = self.safe_string(event.clone(), Value::from("reason"));
+                let mut event_reason: Value = self.safe_string(event.clone(), Value::from("reason"), Value::Undefined);
                 let mut is_bid_ask: Value = (event_reason.clone() == Value::from("top-of-book") || is_order_book.is_truthy() && event_reason.clone() == Value::from("initial") && events_length.clone() == Value::from(2)).into();
                 if is_bid_ask.is_truthy() {
                     bidask_items.push(event.clone());
@@ -1225,7 +1234,7 @@ pub trait Gemini : Exchange {
 
     async fn authenticate(&mut self, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
-        let mut url: Value = self.safe_string(params.clone(), Value::from("url"));
+        let mut url: Value = self.safe_string(params.clone(), Value::from("url"), Value::Undefined);
         if self.get("clients".into()).is_nonnullish() && self.get("clients".into()).contains_key(url.clone()) {
             return Value::Undefined;
         };
@@ -1358,8 +1367,8 @@ impl ValueTrait for GeminiImpl {
     fn push(&mut self, value: Value) { self.0.push(value) }
     fn split(&self, separator: Value) -> Value { self.0.split(separator) }
     fn contains_key(&self, key: Value) -> bool { self.0.contains_key(key) }
-    fn keys(&self) -> Vec<Value> { self.0.keys() }
-    fn values(&self) -> Vec<Value> { self.0.values() }
+    fn keys(&self) -> Value { self.0.keys() }
+    fn values(&self) -> Value { self.0.values() }
     fn to_array(&self, x: Value) -> Value { self.0.to_array(x) }
     fn index_of(&self, x: Value) -> Value { self.0.index_of(x) }
     fn join(&self, glue: Value) -> Value { self.0.join(glue) }

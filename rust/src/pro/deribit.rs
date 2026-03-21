@@ -11,7 +11,16 @@ use async_trait::async_trait;
 use std::str::FromStr;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, JSON, Array, Object, Math, parse_int, shift_2, extend_2, normalize};
+use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, BoolExt, JSON, Array, Object, Math, Promise, parse_int, shift_2, extend_2, normalize};
+// Crypto hash identifiers
+fn sha256() -> Value { Value::from("sha256") }
+fn sha384() -> Value { Value::from("sha384") }
+fn sha512() -> Value { Value::from("sha512") }
+fn md5() -> Value { Value::from("md5") }
+fn ed25519() -> Value { Value::from("ed25519") }
+fn rsa(msg: Value, secret: Value, _hash: Value) -> Value { msg }
+fn eddsa(msg: Value, secret: Value, _curve: Value) -> Value { msg }
+fn secp256k1() -> Value { Value::from("secp256k1") }
 
 use crate::exchange::{PRECISE_BASE, TRUNCATE, ROUND, ROUND_UP, ROUND_DOWN};
 use crate::exchange::{DECIMAL_PLACES, SIGNIFICANT_DIGITS, TICK_SIZE, NO_PADDING, PAD_WITH_ZERO};
@@ -541,7 +550,7 @@ pub trait Deribit : Exchange {
         let mut params: Value = self.safe_value(message.clone(), Value::from("params"), Value::new_object());
         let mut data: Value = self.safe_value(params.clone(), Value::from("data"), Value::new_object());
         self.get("balance".into()).set("info".into(), data.clone());
-        let mut currency_id: Value = self.safe_string(data.clone(), Value::from("currency"));
+        let mut currency_id: Value = self.safe_string(data.clone(), Value::from("currency"), Value::Undefined);
         let mut currency_code: Value = self.safe_currency_code(currency_id.clone(), Value::Undefined);
         let mut balance: Value = self.parse_balance(data.clone());
         self.get("balance".into()).set(currency_code.clone(), balance.clone());
@@ -559,7 +568,7 @@ pub trait Deribit : Exchange {
         params = self.omit(params.clone(), Value::from("interval"));
         self.load_markets(Value::Undefined, Value::Undefined).await;
         if interval.clone() == Value::from("raw") {
-            <Self as Deribit>::authenticate(self, Value::Undefined).await;
+            <Self as Deribit>::authenticate(self).await;
         };
         let mut channel: Value = Value::from("ticker.") + market.get(Value::from("id")) + Value::from(".") + interval.clone();
         let mut message: Value = Value::Json(normalize(&Value::Json(json!({
@@ -583,7 +592,7 @@ pub trait Deribit : Exchange {
         params = self.omit(params.clone(), Value::from("interval"));
         self.load_markets(Value::Undefined, Value::Undefined).await;
         if interval.clone() == Value::from("raw") {
-            <Self as Deribit>::authenticate(self, Value::Undefined).await;
+            <Self as Deribit>::authenticate(self).await;
         };
         let mut channels: Value = Value::new_array();
         let mut i: usize = 0;
@@ -642,10 +651,10 @@ pub trait Deribit : Exchange {
         //
         let mut params: Value = self.safe_value(message.clone(), Value::from("params"), Value::new_object());
         let mut data: Value = self.safe_value(params.clone(), Value::from("data"), Value::new_object());
-        let mut market_id: Value = self.safe_string(data.clone(), Value::from("instrument_name"));
+        let mut market_id: Value = self.safe_string(data.clone(), Value::from("instrument_name"), Value::Undefined);
         let mut symbol: Value = self.safe_symbol(market_id.clone(), Value::Undefined, Value::Undefined, Value::Undefined);
         let mut ticker: Value = self.parse_ticker(data.clone(), Value::Undefined);
-        let mut message_hash: Value = self.safe_string(params.clone(), Value::from("channel"));
+        let mut message_hash: Value = self.safe_string(params.clone(), Value::from("channel"), Value::Undefined);
         self.get("tickers".into()).set(symbol.clone(), ticker.clone());
         client.resolve(ticker.clone(), message_hash.clone());
         Value::Undefined
@@ -701,27 +710,27 @@ pub trait Deribit : Exchange {
         //
         let mut params: Value = self.safe_dict(message.clone(), Value::from("params"), Value::new_object());
         let mut data: Value = self.safe_dict(params.clone(), Value::from("data"), Value::new_object());
-        let mut ticker: Value = <Self as Deribit>::parse_ws_bid_ask(self, data.clone(), Value::Undefined);
+        let mut ticker: Value = <Self as Deribit>::parse_ws_bid_ask(self, data.clone());
         let mut symbol: Value = ticker.get(Value::from("symbol"));
         self.get("bidsasks".into()).set(symbol.clone(), ticker.clone());
-        let mut message_hash: Value = self.safe_string(params.clone(), Value::from("channel"));
+        let mut message_hash: Value = self.safe_string(params.clone(), Value::from("channel"), Value::Undefined);
         client.resolve(ticker.clone(), message_hash.clone());
         Value::Undefined
     }
 
     fn parse_ws_bid_ask(&self, mut ticker: Value, mut market: Value) -> Value {
-        let mut market_id: Value = self.safe_string(ticker.clone(), Value::from("instrument_name"));
+        let mut market_id: Value = self.safe_string(ticker.clone(), Value::from("instrument_name"), Value::Undefined);
         market = self.safe_market(market_id.clone(), market.clone(), Value::Undefined, Value::Undefined);
-        let mut symbol: Value = self.safe_string(market.clone(), Value::from("symbol"));
-        let mut timestamp: Value = self.safe_integer(ticker.clone(), Value::from("timestamp"));
+        let mut symbol: Value = self.safe_string(market.clone(), Value::from("symbol"), Value::Undefined);
+        let mut timestamp: Value = self.safe_integer(ticker.clone(), Value::from("timestamp"), Value::Undefined);
         return self.safe_ticker(Value::Json(normalize(&Value::Json(json!({
             "symbol": symbol,
             "timestamp": timestamp,
             "datetime": self.iso8601(timestamp.clone()),
-            "ask": self.safe_string(ticker.clone(), Value::from("best_ask_price")),
-            "askVolume": self.safe_string(ticker.clone(), Value::from("best_ask_amount")),
-            "bid": self.safe_string(ticker.clone(), Value::from("best_bid_price")),
-            "bidVolume": self.safe_string(ticker.clone(), Value::from("best_bid_amount")),
+            "ask": self.safe_string(ticker.clone(), Value::from("best_ask_price"), Value::Undefined),
+            "askVolume": self.safe_string(ticker.clone(), Value::from("best_ask_amount"), Value::Undefined),
+            "bid": self.safe_string(ticker.clone(), Value::from("best_bid_price"), Value::Undefined),
+            "bidVolume": self.safe_string(ticker.clone(), Value::from("best_bid_amount"), Value::Undefined),
             "info": ticker
         }))).unwrap()), market.clone());
     }
@@ -737,12 +746,12 @@ pub trait Deribit : Exchange {
         let mut interval: Value = Value::Undefined;
         (interval, params) = shift_2(self.handle_option_and_params(params.clone(), Value::from("watchTradesForSymbols"), Value::from("interval"), Value::from("100ms")));
         if interval.clone() == Value::from("raw") {
-            <Self as Deribit>::authenticate(self, Value::Undefined).await;
+            <Self as Deribit>::authenticate(self).await;
         };
         let mut trades: Value = <Self as Deribit>::watch_multiple_wrapper(self, Value::from("trades"), interval.clone(), symbols.clone(), params.clone()).await;
         if self.get("newUpdates".into()).is_truthy() {
             let mut first: Value = self.safe_dict(trades.clone(), Value::from(0), Value::Undefined);
-            let mut trade_symbol: Value = self.safe_string(first.clone(), Value::from("symbol"));
+            let mut trade_symbol: Value = self.safe_string(first.clone(), Value::from("symbol"), Value::Undefined);
             limit = trades.get_limit(trade_symbol.clone(), limit.clone());
         };
         return self.filter_by_since_limit(trades.clone(), since.clone(), limit.clone(), Value::from("timestamp"), true.into());
@@ -773,12 +782,12 @@ pub trait Deribit : Exchange {
         let mut params: Value = self.safe_dict(message.clone(), Value::from("params"), Value::new_object());
         let mut channel: Value = self.safe_string(params.clone(), Value::from("channel"), Value::from(""));
         let mut parts: Value = channel.split(Value::from("."));
-        let mut market_id: Value = self.safe_string(parts.clone(), Value::from(1));
-        let mut interval: Value = self.safe_string(parts.clone(), Value::from(2));
+        let mut market_id: Value = self.safe_string(parts.clone(), Value::from(1), Value::Undefined);
+        let mut interval: Value = self.safe_string(parts.clone(), Value::from(2), Value::Undefined);
         let mut symbol: Value = self.safe_symbol(market_id.clone(), Value::Undefined, Value::Undefined, Value::Undefined);
         let mut market: Value = self.safe_market(market_id.clone(), Value::Undefined, Value::Undefined, Value::Undefined);
         let mut trades: Value = self.safe_list(params.clone(), Value::from("data"), Value::new_array());
-        if self.safe_value(self.get("trades".into()), symbol.clone()).is_nullish() {
+        if self.safe_value(self.get("trades".into()), symbol.clone(), Value::Undefined).is_nullish() {
             let mut limit: Value = self.safe_integer(self.get("options".into()), Value::from("tradesLimit"), Value::from(1000));
             self.get("trades".into()).set(symbol.clone(), ArrayCache::new(limit));
         };
@@ -886,7 +895,7 @@ pub trait Deribit : Exchange {
         let mut interval: Value = Value::Undefined;
         (interval, params) = shift_2(self.handle_option_and_params(params.clone(), Value::from("watchOrderBookForSymbols"), Value::from("interval"), Value::from("100ms")));
         if interval.clone() == Value::from("raw") {
-            <Self as Deribit>::authenticate(self, Value::Undefined).await;
+            <Self as Deribit>::authenticate(self).await;
         };
         let mut descriptor: Value = Value::from("");
         let mut use_depth_endpoint: Value = Value::Undefined;
@@ -953,23 +962,23 @@ pub trait Deribit : Exchange {
         //
         let mut params: Value = self.safe_value(message.clone(), Value::from("params"), Value::new_object());
         let mut data: Value = self.safe_value(params.clone(), Value::from("data"), Value::new_object());
-        let mut channel: Value = self.safe_string(params.clone(), Value::from("channel"));
+        let mut channel: Value = self.safe_string(params.clone(), Value::from("channel"), Value::Undefined);
         let mut parts: Value = channel.split(Value::from("."));
         let mut descriptor: Value = Value::from("");
         let mut parts_length: usize = parts.len();
         let mut is_detailed: Value = (parts_length.clone() == Value::from(5)).into();
         if is_detailed.is_truthy() {
-            let mut group: Value = self.safe_string(parts.clone(), Value::from(2));
-            let mut depth: Value = self.safe_string(parts.clone(), Value::from(3));
-            let mut interval: Value = self.safe_string(parts.clone(), Value::from(4));
+            let mut group: Value = self.safe_string(parts.clone(), Value::from(2), Value::Undefined);
+            let mut depth: Value = self.safe_string(parts.clone(), Value::from(3), Value::Undefined);
+            let mut interval: Value = self.safe_string(parts.clone(), Value::from(4), Value::Undefined);
             descriptor = group.clone() + Value::from(".") + depth.clone() + Value::from(".") + interval.clone();
         } else {
-            let mut interval: Value = self.safe_string(parts.clone(), Value::from(2));
+            let mut interval: Value = self.safe_string(parts.clone(), Value::from(2), Value::Undefined);
             descriptor = interval.clone();
         };
-        let mut market_id: Value = self.safe_string(data.clone(), Value::from("instrument_name"));
+        let mut market_id: Value = self.safe_string(data.clone(), Value::from("instrument_name"), Value::Undefined);
         let mut symbol: Value = self.safe_symbol(market_id.clone(), Value::Undefined, Value::Undefined, Value::Undefined);
-        let mut timestamp: Value = self.safe_integer(data.clone(), Value::from("timestamp"));
+        let mut timestamp: Value = self.safe_integer(data.clone(), Value::from("timestamp"), Value::Undefined);
         if !self.get("orderbooks".into()).contains_key(symbol.clone()) {
             self.get("orderbooks".into()).set(symbol.clone(), self.counted_order_book(Value::Undefined, Value::Undefined));
         };
@@ -1039,7 +1048,7 @@ pub trait Deribit : Exchange {
         let mut currency: Value = self.safe_string(params.clone(), Value::from("currency"), Value::from("any"));
         let mut interval: Value = self.safe_string(params.clone(), Value::from("interval"), Value::from("raw"));
         let mut kind: Value = self.safe_string(params.clone(), Value::from("kind"), Value::from("any"));
-        params = self.omit(params.clone(), Value::from("interval"), Value::from("currency"), Value::from("kind"));
+        params = self.omit(params.clone(), Value::from("interval"));
         let mut channel: Value = Value::from("user.orders.") + kind.clone() + Value::from(".") + currency.clone() + Value::from(".") + interval.clone();
         let mut message: Value = Value::Json(normalize(&Value::Json(json!({
             "jsonrpc": "2.0",
@@ -1161,15 +1170,15 @@ pub trait Deribit : Exchange {
         let mut params: Value = self.safe_dict(message.clone(), Value::from("params"), Value::new_object());
         let mut channel: Value = self.safe_string(params.clone(), Value::from("channel"), Value::from(""));
         let mut parts: Value = channel.split(Value::from("."));
-        let mut market_id: Value = self.safe_string(parts.clone(), Value::from(2));
-        let mut raw_timeframe: Value = self.safe_string(parts.clone(), Value::from(3));
+        let mut market_id: Value = self.safe_string(parts.clone(), Value::from(2), Value::Undefined);
+        let mut raw_timeframe: Value = self.safe_string(parts.clone(), Value::from(3), Value::Undefined);
         let mut market: Value = self.safe_market(market_id.clone(), Value::Undefined, Value::Undefined, Value::Undefined);
         let mut symbol: Value = market.get(Value::from("symbol"));
         let mut ws_options: Value = self.safe_dict(self.get("options".into()), Value::from("ws"), Value::new_object());
         let mut timeframes: Value = self.safe_dict(ws_options.clone(), Value::from("timeframes"), Value::new_object());
         let mut unified_timeframe: Value = self.find_timeframe(raw_timeframe.clone(), timeframes.clone());
         self.get("ohlcvs".into()).set(symbol.clone(), self.safe_dict(self.get("ohlcvs".into()), symbol.clone(), Value::new_object()));
-        if self.safe_value(self.get("ohlcvs".into()).get(symbol.clone()), unified_timeframe.clone()).is_nullish() {
+        if self.safe_value(self.get("ohlcvs".into()).get(symbol.clone()), unified_timeframe.clone(), Value::Undefined).is_nullish() {
             let mut limit: Value = self.safe_integer(self.get("options".into()), Value::from("OHLCVLimit"), Value::from(1000));
             self.get("ohlcvs".into()).get(symbol.clone()).set(unified_timeframe.clone(), ArrayCacheByTimestamp::new(limit));
         };
@@ -1197,7 +1206,7 @@ pub trait Deribit : Exchange {
         //        "t": 1696687440000
         //    }
         //
-        return Value::Json(serde_json::Value::Array(vec![self.safe_integer(ohlcv.clone(), Value::from("tick")).into(), self.safe_number(ohlcv.clone(), Value::from("open"), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from("high"), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from("low"), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from("close"), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from("volume"), Value::Undefined).into()]));
+        return Value::Json(serde_json::Value::Array(vec![self.safe_integer(ohlcv.clone(), Value::from("tick"), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from("open"), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from("high"), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from("low"), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from("close"), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from("volume"), Value::Undefined).into()]));
     }
 
     async fn watch_multiple_wrapper(&mut self, mut channel_name: Value, mut channel_descriptor: Value, mut symbols_array: Value, mut params: Value) -> Value {
@@ -1304,15 +1313,15 @@ pub trait Deribit : Exchange {
         //         }
         //     }
         //
-        let mut error: Value = self.safe_value(message.clone(), Value::from("error"));
+        let mut error: Value = self.safe_value(message.clone(), Value::from("error"), Value::Undefined);
         if error.clone().is_nonnullish() {
             panic!(r###"ExchangeError::new(self.get("id".into()) + Value::from(" ") + self.json(error.clone()))"###);
         };
-        let mut params: Value = self.safe_value(message.clone(), Value::from("params"));
-        let mut channel: Value = self.safe_string(params.clone(), Value::from("channel"));
+        let mut params: Value = self.safe_value(message.clone(), Value::from("params"), Value::Undefined);
+        let mut channel: Value = self.safe_string(params.clone(), Value::from("channel"), Value::Undefined);
         if channel.clone().is_nonnullish() {
             let mut parts: Value = channel.split(Value::from("."));
-            let mut channel_id: Value = self.safe_string(parts.clone(), Value::from(0));
+            let mut channel_id: Value = self.safe_string(parts.clone(), Value::from(0), Value::Undefined);
             let mut user_handlers: Value = Value::Json(normalize(&Value::Json(json!({
                 "trades": self.get("handleMyTrades".into()),
                 "portfolio": self.get("handleBalance".into()),
@@ -1324,9 +1333,9 @@ pub trait Deribit : Exchange {
                 "book": self.get("handleOrderBook".into()),
                 "trades": self.get("handleTrades".into()),
                 "chart": self.get("handleOHLCV".into()),
-                "user": self.safe_value(user_handlers.clone(), self.safe_string(parts.clone(), Value::from(1)))
+                "user": self.safe_value(user_handlers.clone(), self.safe_string(parts.clone(), Value::from(1), Value::Undefined), Value::Undefined)
             }))).unwrap());
-            let mut handler: Value = self.safe_value(handlers.clone(), channel_id.clone());
+            let mut handler: Value = self.safe_value(handlers.clone(), channel_id.clone(), Value::Undefined);
             if handler.clone().is_nonnullish() {
                 handler.call(self, client.clone(), message.clone());
                 return Value::Undefined;
@@ -1334,7 +1343,7 @@ pub trait Deribit : Exchange {
             panic!(r###"NotSupported::new(self.get("id".into()) + Value::from(" no handler found for this message ") + self.json(message.clone()))"###);
         };
         let mut result: Value = self.safe_value(message.clone(), Value::from("result"), Value::new_object());
-        let mut access_token: Value = self.safe_string(result.clone(), Value::from("access_token"));
+        let mut access_token: Value = self.safe_string(result.clone(), Value::from("access_token"), Value::Undefined);
         if access_token.clone().is_nonnullish() {
             <Self as Deribit>::handle_authentication_message(self, client.clone(), message.clone());
         };
@@ -1372,14 +1381,14 @@ pub trait Deribit : Exchange {
         let mut time_string: Value = self.number_to_string(time.clone());
         let mut nonce: Value = time_string.clone();
         let mut message_hash: Value = Value::from("authenticated");
-        let mut future: Value = self.safe_value(client.get(subscriptions.clone()), message_hash.clone());
+        let mut future: Value = self.safe_value(client.get(subscriptions.clone()), message_hash.clone(), Value::Undefined);
         if future.clone().is_nullish() {
             self.check_required_credentials(Value::Undefined);
             let mut request_id: Value = <Self as Deribit>::request_id(self);
             let mut line_break: Value = Value::from("
 ");
             // eslint-disable-line quotes
-            let mut signature: Value = self.hmac(self.encode(time_string.clone() + line_break.clone() + nonce.clone() + line_break.clone()), self.encode(self.get("secret".into())), sha256.clone());
+            let mut signature: Value = self.hmac(self.encode(time_string.clone() + line_break.clone() + nonce.clone() + line_break.clone()), self.encode(self.get("secret".into())), sha256.clone(), Value::Undefined);
             let mut request: Value = Value::Json(normalize(&Value::Json(json!({
                 "jsonrpc": "2.0",
                 "id": request_id,
@@ -1562,8 +1571,8 @@ impl ValueTrait for DeribitImpl {
     fn push(&mut self, value: Value) { self.0.push(value) }
     fn split(&self, separator: Value) -> Value { self.0.split(separator) }
     fn contains_key(&self, key: Value) -> bool { self.0.contains_key(key) }
-    fn keys(&self) -> Vec<Value> { self.0.keys() }
-    fn values(&self) -> Vec<Value> { self.0.values() }
+    fn keys(&self) -> Value { self.0.keys() }
+    fn values(&self) -> Value { self.0.values() }
     fn to_array(&self, x: Value) -> Value { self.0.to_array(x) }
     fn index_of(&self, x: Value) -> Value { self.0.index_of(x) }
     fn join(&self, glue: Value) -> Value { self.0.join(glue) }

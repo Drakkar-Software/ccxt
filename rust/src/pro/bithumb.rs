@@ -11,7 +11,16 @@ use async_trait::async_trait;
 use std::str::FromStr;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, JSON, Array, Object, Math, parse_int, shift_2, extend_2, normalize};
+use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, BoolExt, JSON, Array, Object, Math, Promise, parse_int, shift_2, extend_2, normalize};
+// Crypto hash identifiers
+fn sha256() -> Value { Value::from("sha256") }
+fn sha384() -> Value { Value::from("sha384") }
+fn sha512() -> Value { Value::from("sha512") }
+fn md5() -> Value { Value::from("md5") }
+fn ed25519() -> Value { Value::from("ed25519") }
+fn rsa(msg: Value, secret: Value, _hash: Value) -> Value { msg }
+fn eddsa(msg: Value, secret: Value, _curve: Value) -> Value { msg }
+fn secp256k1() -> Value { Value::from("secp256k1") }
 
 use crate::exchange::{PRECISE_BASE, TRUNCATE, ROUND, ROUND_UP, ROUND_DOWN};
 use crate::exchange::{DECIMAL_PLACES, SIGNIFICANT_DIGITS, TICK_SIZE, NO_PADDING, PAD_WITH_ZERO};
@@ -389,9 +398,9 @@ pub trait Bithumb : Exchange {
         //    }
         //
         let mut content: Value = self.safe_dict(message.clone(), Value::from("content"), Value::new_object());
-        let mut market_id: Value = self.safe_string(content.clone(), Value::from("symbol"));
+        let mut market_id: Value = self.safe_string(content.clone(), Value::from("symbol"), Value::Undefined);
         let mut symbol: Value = self.safe_symbol(market_id.clone(), Value::Undefined, Value::from("_"), Value::Undefined);
-        let mut ticker: Value = <Self as Bithumb>::parse_ws_ticker(self, content.clone(), Value::Undefined);
+        let mut ticker: Value = <Self as Bithumb>::parse_ws_ticker(self, content.clone());
         let mut message_hash: Value = Value::from("ticker:") + symbol.clone();
         self.get("tickers".into()).set(symbol.clone(), ticker.clone());
         client.resolve(self.get("tickers".into()).get(symbol.clone()), message_hash.clone());
@@ -422,27 +431,27 @@ pub trait Bithumb : Exchange {
         let mut date: Value = self.safe_string(ticker.clone(), Value::from("date"), Value::from(""));
         let mut time: Value = self.safe_string(ticker.clone(), Value::from("time"), Value::from(""));
         let mut datetime: Value = date.slice(Value::from(0), Value::from(4)) + Value::from("-") + date.slice(Value::from(4), Value::from(6)) + Value::from("-") + date.slice(Value::from(6), Value::from(8)) + Value::from("T") + time.slice(Value::from(0), Value::from(2)) + Value::from(":") + time.slice(Value::from(2), Value::from(4)) + Value::from(":") + time.slice(Value::from(4), Value::from(6));
-        let mut market_id: Value = self.safe_string(ticker.clone(), Value::from("symbol"));
+        let mut market_id: Value = self.safe_string(ticker.clone(), Value::from("symbol"), Value::Undefined);
         return self.safe_ticker(Value::Json(normalize(&Value::Json(json!({
             "symbol": self.safe_symbol(market_id.clone(), market.clone(), Value::from("_"), Value::Undefined),
             "timestamp": self.parse8601(datetime.clone()),
             "datetime": datetime,
-            "high": self.safe_string(ticker.clone(), Value::from("highPrice")),
-            "low": self.safe_string(ticker.clone(), Value::from("lowPrice")),
+            "high": self.safe_string(ticker.clone(), Value::from("highPrice"), Value::Undefined),
+            "low": self.safe_string(ticker.clone(), Value::from("lowPrice"), Value::Undefined),
             "bid": Value::Undefined,
-            "bidVolume": self.safe_string(ticker.clone(), Value::from("buyVolume")),
+            "bidVolume": self.safe_string(ticker.clone(), Value::from("buyVolume"), Value::Undefined),
             "ask": Value::Undefined,
-            "askVolume": self.safe_string(ticker.clone(), Value::from("sellVolume")),
+            "askVolume": self.safe_string(ticker.clone(), Value::from("sellVolume"), Value::Undefined),
             "vwap": Value::Undefined,
-            "open": self.safe_string(ticker.clone(), Value::from("openPrice")),
-            "close": self.safe_string(ticker.clone(), Value::from("closePrice")),
+            "open": self.safe_string(ticker.clone(), Value::from("openPrice"), Value::Undefined),
+            "close": self.safe_string(ticker.clone(), Value::from("closePrice"), Value::Undefined),
             "last": Value::Undefined,
-            "previousClose": self.safe_string(ticker.clone(), Value::from("prevClosePrice")),
-            "change": self.safe_string(ticker.clone(), Value::from("chgAmt")),
-            "percentage": self.safe_string(ticker.clone(), Value::from("chgRate")),
+            "previousClose": self.safe_string(ticker.clone(), Value::from("prevClosePrice"), Value::Undefined),
+            "change": self.safe_string(ticker.clone(), Value::from("chgAmt"), Value::Undefined),
+            "percentage": self.safe_string(ticker.clone(), Value::from("chgRate"), Value::Undefined),
             "average": Value::Undefined,
-            "baseVolume": self.safe_string(ticker.clone(), Value::from("volume")),
-            "quoteVolume": self.safe_string(ticker.clone(), Value::from("value")),
+            "baseVolume": self.safe_string(ticker.clone(), Value::from("volume"), Value::Undefined),
+            "quoteVolume": self.safe_string(ticker.clone(), Value::from("value"), Value::Undefined),
             "info": ticker
         }))).unwrap()), market.clone());
     }
@@ -489,10 +498,10 @@ pub trait Bithumb : Exchange {
         let mut content: Value = self.safe_dict(message.clone(), Value::from("content"), Value::new_object());
         let mut list: Value = self.safe_list(content.clone(), Value::from("list"), Value::new_array());
         let mut first: Value = self.safe_dict(list.clone(), Value::from(0), Value::new_object());
-        let mut market_id: Value = self.safe_string(first.clone(), Value::from("symbol"));
+        let mut market_id: Value = self.safe_string(first.clone(), Value::from("symbol"), Value::Undefined);
         let mut symbol: Value = self.safe_symbol(market_id.clone(), Value::Undefined, Value::from("_"), Value::Undefined);
-        let mut timestamp_str: Value = self.safe_string(content.clone(), Value::from("datetime"));
-        let mut timestamp: Value = self.parse_to_int(timestamp_str.slice(Value::from(0), Value::from(13)));
+        let mut timestamp_str: Value = self.safe_string(content.clone(), Value::from("datetime"), Value::Undefined);
+        let mut timestamp: Value = self.parse_to_int(timestamp_str.slice(Value::from(0), Value::from(13)), Value::Undefined);
         if !self.get("orderbooks".into()).contains_key(symbol.clone()) {
             let mut ob: Value = self.order_book(Value::Undefined, Value::Undefined);
             ob.set("symbol".into(), symbol.clone());
@@ -517,9 +526,9 @@ pub trait Bithumb : Exchange {
         //        total: "0",
         //    }
         //
-        let mut side_id: Value = self.safe_string(delta.clone(), Value::from("orderType"));
+        let mut side_id: Value = self.safe_string(delta.clone(), Value::from("orderType"), Value::Undefined);
         let mut side: Value = if side_id.clone() == Value::from("bid") { Value::from("bids") } else { Value::from("asks") };
-        let mut bid_ask: Value = self.parse_bid_ask(delta.clone(), Value::from("price"), Value::from("quantity"), Value::Undefined);
+        let mut bid_ask: Value = self.parse_bid_ask(delta.clone(), Value::from("price"), Value::from("quantity"));
         let mut orderbook_side: Value = orderbook.get(side.clone());
         orderbook_side.store_array(bid_ask.clone());
         Value::Undefined
@@ -576,7 +585,7 @@ pub trait Bithumb : Exchange {
         let mut i: usize = 0;
         while i < raw_trades.len() {
             let mut raw_trade: Value = raw_trades.get(i.into());
-            let mut market_id: Value = self.safe_string(raw_trade.clone(), Value::from("symbol"));
+            let mut market_id: Value = self.safe_string(raw_trade.clone(), Value::from("symbol"), Value::Undefined);
             let mut symbol: Value = self.safe_symbol(market_id.clone(), Value::Undefined, Value::from("_"), Value::Undefined);
             if !self.get("trades".into()).contains_key(symbol.clone()) {
                 let mut limit: Value = self.safe_integer(self.get("options".into()), Value::from("tradesLimit"), Value::from(1000));
@@ -605,11 +614,11 @@ pub trait Bithumb : Exchange {
         //        "updn" : "dn"
         //    }
         //
-        let mut market_id: Value = self.safe_string(trade.clone(), Value::from("symbol"));
-        let mut datetime: Value = self.safe_string(trade.clone(), Value::from("contDtm"));
+        let mut market_id: Value = self.safe_string(trade.clone(), Value::from("symbol"), Value::Undefined);
+        let mut datetime: Value = self.safe_string(trade.clone(), Value::from("contDtm"), Value::Undefined);
         // that date is not UTC iso8601, but exchange's local time, -9hr difference
         let mut timestamp: Value = self.parse8601(datetime.clone()) - Value::from(32400000);
-        let mut side_id: Value = self.safe_string(trade.clone(), Value::from("buySellGb"));
+        let mut side_id: Value = self.safe_string(trade.clone(), Value::from("buySellGb"), Value::Undefined);
         return self.safe_trade(Value::Json(normalize(&Value::Json(json!({
             "id": Value::Undefined,
             "info": trade,
@@ -620,9 +629,9 @@ pub trait Bithumb : Exchange {
             "type": Value::Undefined,
             "side": if side_id.clone() == Value::from("1") { Value::from("buy") } else { Value::from("sell") },
             "takerOrMaker": Value::Undefined,
-            "price": self.safe_string(trade.clone(), Value::from("contPrice")),
-            "amount": self.safe_string(trade.clone(), Value::from("contQty")),
-            "cost": self.safe_string(trade.clone(), Value::from("contAmt")),
+            "price": self.safe_string(trade.clone(), Value::from("contPrice"), Value::Undefined),
+            "amount": self.safe_string(trade.clone(), Value::from("contQty"), Value::Undefined),
+            "cost": self.safe_string(trade.clone(), Value::from("contAmt"), Value::Undefined),
             "fee": Value::Undefined
         }))).unwrap()), market.clone());
     }
@@ -637,9 +646,9 @@ pub trait Bithumb : Exchange {
         if !message.contains_key(Value::from("status")) {
             return true.into();
         };
-        let mut error_code: Value = self.safe_string(message.clone(), Value::from("status"));
+        let mut error_code: Value = self.safe_string(message.clone(), Value::from("status"), Value::Undefined);
                 if error_code.clone() != Value::from("0000") {
-            let mut msg: Value = self.safe_string(message.clone(), Value::from("resmsg"));
+            let mut msg: Value = self.safe_string(message.clone(), Value::from("resmsg"), Value::Undefined);
             panic!(r###"ExchangeError::new(self.get("id".into()) + Value::from(" ") + msg.clone())"###);
         };
         return true.into();
@@ -651,7 +660,7 @@ pub trait Bithumb : Exchange {
     async fn watch_balance(&mut self, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        <Self as Bithumb>::authenticate(self, Value::Undefined).await;
+        <Self as Bithumb>::authenticate(self).await;
         let mut url: Value = self.get("urls".into()).get(Value::from("api")).get(Value::from("ws")).get(Value::from("privateV2"));
         let mut message_hash: Value = Value::from("myAsset");
         let mut request: Value = Value::Json(serde_json::Value::Array(vec![Value::Json(normalize(&Value::Json(json!({
@@ -687,16 +696,16 @@ pub trait Bithumb : Exchange {
         let mut i: usize = 0;
         while i < assets.len() {
             let mut asset: Value = assets.get(i.into());
-            let mut currency_id: Value = self.safe_string(asset.clone(), Value::from("currency"));
+            let mut currency_id: Value = self.safe_string(asset.clone(), Value::from("currency"), Value::Undefined);
             let mut code: Value = self.safe_currency_code(currency_id.clone(), Value::Undefined);
             let mut account: Value = self.account();
-            account.set("free".into(), self.safe_string(asset.clone(), Value::from("balance")));
-            account.set("used".into(), self.safe_string(asset.clone(), Value::from("locked")));
+            account.set("free".into(), self.safe_string(asset.clone(), Value::from("balance"), Value::Undefined));
+            account.set("used".into(), self.safe_string(asset.clone(), Value::from("locked"), Value::Undefined));
             self.get("balance".into()).set(code.clone(), account.clone());
             i += 1;
         };
         self.get("balance".into()).set("info".into(), message.clone());
-        let mut timestamp: Value = self.safe_integer(message.clone(), Value::from("timestamp"));
+        let mut timestamp: Value = self.safe_integer(message.clone(), Value::from("timestamp"), Value::Undefined);
         self.get("balance".into()).set("timestamp".into(), timestamp.clone());
         self.get("balance".into()).set("datetime".into(), self.iso8601(timestamp.clone()));
         self.set("balance".into(), self.safe_balance(self.get("balance".into())));
@@ -708,14 +717,14 @@ pub trait Bithumb : Exchange {
         params = params.or_default(Value::new_object());
         self.check_required_credentials(Value::Undefined);
         let mut ws_options: Value = self.safe_dict(self.get("options".into()), Value::from("ws"), Value::new_object());
-        let mut authenticated: Value = self.safe_string(ws_options.clone(), Value::from("token"));
+        let mut authenticated: Value = self.safe_string(ws_options.clone(), Value::from("token"), Value::Undefined);
         if authenticated.clone().is_nullish() {
             let mut payload: Value = Value::Json(normalize(&Value::Json(json!({
                 "access_key": self.get("apiKey".into()),
                 "nonce": self.uuid(),
                 "timestamp": self.milliseconds()
             }))).unwrap());
-            let mut jwt_token: Value = jwt(payload.clone(), self.encode(self.get("secret".into())), sha256.clone());
+            let mut jwt_token: Value = jwt(payload.clone(), self.encode(self.get("secret".into())), sha256.clone(), Value::Undefined);
             ws_options.set("token".into(), jwt_token.clone());
             ws_options.set("options".into(), Value::Json(normalize(&Value::Json(json!({
                 "headers": Value::Json(normalize(&Value::Json(json!({
@@ -732,7 +741,7 @@ pub trait Bithumb : Exchange {
     async fn watch_orders(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        <Self as Bithumb>::authenticate(self, Value::Undefined).await;
+        <Self as Bithumb>::authenticate(self).await;
         let mut url: Value = self.get("urls".into()).get(Value::from("api")).get(Value::from("ws")).get(Value::from("privateV2"));
         let mut message_hash: Value = Value::from("myOrder");
         let mut codes: Value = self.safe_list(params.clone(), Value::from("codes"), Value::new_array());
@@ -781,7 +790,7 @@ pub trait Bithumb : Exchange {
         //
         let mut message_hash: Value = Value::from("myOrder");
         let mut parsed: Value = <Self as Bithumb>::parse_ws_order(self, message.clone(), Value::Undefined);
-        let mut symbol: Value = self.safe_string(parsed.clone(), Value::from("symbol"));
+        let mut symbol: Value = self.safe_string(parsed.clone(), Value::from("symbol"), Value::Undefined);
         // const orderId = this.safeString (parsed, 'id');
         if self.get("orders".into()).is_nullish() {
             let mut limit: Value = self.safe_integer(self.get("options".into()), Value::from("ordersLimit"), Value::from(1000));
@@ -820,12 +829,12 @@ pub trait Bithumb : Exchange {
         //        "stream_type": "REALTIME"
         //    }
         //
-        let mut market_id: Value = self.safe_string(order.clone(), Value::from("code"));
+        let mut market_id: Value = self.safe_string(order.clone(), Value::from("code"), Value::Undefined);
         let mut symbol: Value = self.safe_symbol(market_id.clone(), market.clone(), Value::from("-"), Value::Undefined);
-        let mut timestamp: Value = self.safe_integer(order.clone(), Value::from("order_timestamp"));
-        let mut side_id: Value = self.safe_string(order.clone(), Value::from("ask_bid"));
+        let mut timestamp: Value = self.safe_integer(order.clone(), Value::from("order_timestamp"), Value::Undefined);
+        let mut side_id: Value = self.safe_string(order.clone(), Value::from("ask_bid"), Value::Undefined);
         let mut side: Value = if side_id.clone() == Value::from("BID") { Value::from("buy") } else { Value::from("sell") };
-        let mut type_id: Value = self.safe_string(order.clone(), Value::from("order_type"));
+        let mut type_id: Value = self.safe_string(order.clone(), Value::from("order_type"), Value::Undefined);
         let mut r#type: Value = Value::Undefined;
         if type_id.clone() == Value::from("limit") {
             r#type = Value::from("limit");
@@ -834,7 +843,7 @@ pub trait Bithumb : Exchange {
         } else if type_id.clone() == Value::from("market") {
             r#type = Value::from("market");
         };
-        let mut state_id: Value = self.safe_string(order.clone(), Value::from("state"));
+        let mut state_id: Value = self.safe_string(order.clone(), Value::from("state"), Value::Undefined);
         let mut status: Value = Value::Undefined;
         if state_id.clone() == Value::from("wait") {
             status = Value::from("open");
@@ -845,16 +854,16 @@ pub trait Bithumb : Exchange {
         } else if state_id.clone() == Value::from("cancel") {
             status = Value::from("canceled");
         };
-        let mut price: Value = self.safe_string(order.clone(), Value::from("price"));
-        let mut amount: Value = self.safe_string(order.clone(), Value::from("volume"));
-        let mut remaining: Value = self.safe_string(order.clone(), Value::from("remaining_volume"));
-        let mut filled: Value = self.safe_string(order.clone(), Value::from("executed_volume"));
-        let mut cost: Value = self.safe_string(order.clone(), Value::from("executed_funds"));
-        let mut fee_cost: Value = self.safe_string(order.clone(), Value::from("paid_fee"));
+        let mut price: Value = self.safe_string(order.clone(), Value::from("price"), Value::Undefined);
+        let mut amount: Value = self.safe_string(order.clone(), Value::from("volume"), Value::Undefined);
+        let mut remaining: Value = self.safe_string(order.clone(), Value::from("remaining_volume"), Value::Undefined);
+        let mut filled: Value = self.safe_string(order.clone(), Value::from("executed_volume"), Value::Undefined);
+        let mut cost: Value = self.safe_string(order.clone(), Value::from("executed_funds"), Value::Undefined);
+        let mut fee_cost: Value = self.safe_string(order.clone(), Value::from("paid_fee"), Value::Undefined);
         let mut fee: Value = Value::Undefined;
         if fee_cost.clone().is_nonnullish() {
             let mut market_for_fee: Value = self.safe_market(market_id.clone(), market.clone(), Value::Undefined, Value::Undefined);
-            let mut fee_currency: Value = self.safe_string(market_for_fee.clone(), Value::from("quote"));
+            let mut fee_currency: Value = self.safe_string(market_for_fee.clone(), Value::from("quote"), Value::Undefined);
             fee = Value::Json(normalize(&Value::Json(json!({
                 "cost": fee_cost,
                 "currency": fee_currency
@@ -862,11 +871,11 @@ pub trait Bithumb : Exchange {
         };
         return self.safe_order(Value::Json(normalize(&Value::Json(json!({
             "info": order,
-            "id": self.safe_string(order.clone(), Value::from("uuid")),
+            "id": self.safe_string(order.clone(), Value::from("uuid"), Value::Undefined),
             "clientOrderId": Value::Undefined,
             "timestamp": timestamp,
             "datetime": self.iso8601(timestamp.clone()),
-            "lastTradeTimestamp": self.safe_integer(order.clone(), Value::from("trade_timestamp")),
+            "lastTradeTimestamp": self.safe_integer(order.clone(), Value::from("trade_timestamp"), Value::Undefined),
             "symbol": symbol,
             "type": r#type,
             "timeInForce": Value::Undefined,
@@ -890,7 +899,7 @@ pub trait Bithumb : Exchange {
         if !<Self as Bithumb>::handle_error_message(self, client.clone(), message.clone()).is_truthy() {
             return Value::Undefined;
         };
-        let mut topic: Value = self.safe_string(message.clone(), Value::from("type"));
+        let mut topic: Value = self.safe_string(message.clone(), Value::from("type"), Value::Undefined);
         if topic.clone().is_nonnullish() {
             let mut methods: Value = Value::Json(normalize(&Value::Json(json!({
                 "ticker": self.get("handleTicker".into()),
@@ -899,7 +908,7 @@ pub trait Bithumb : Exchange {
                 "myAsset": self.get("handleBalance".into()),
                 "myOrder": self.get("handleOrders".into())
             }))).unwrap());
-            let mut method: Value = self.safe_value(methods.clone(), topic.clone());
+            let mut method: Value = self.safe_value(methods.clone(), topic.clone(), Value::Undefined);
             if method.clone().is_nonnullish() {
                 method.call(self, client.clone(), message.clone());
             };
@@ -976,8 +985,8 @@ impl ValueTrait for BithumbImpl {
     fn push(&mut self, value: Value) { self.0.push(value) }
     fn split(&self, separator: Value) -> Value { self.0.split(separator) }
     fn contains_key(&self, key: Value) -> bool { self.0.contains_key(key) }
-    fn keys(&self) -> Vec<Value> { self.0.keys() }
-    fn values(&self) -> Vec<Value> { self.0.values() }
+    fn keys(&self) -> Value { self.0.keys() }
+    fn values(&self) -> Value { self.0.values() }
     fn to_array(&self, x: Value) -> Value { self.0.to_array(x) }
     fn index_of(&self, x: Value) -> Value { self.0.index_of(x) }
     fn join(&self, glue: Value) -> Value { self.0.join(glue) }

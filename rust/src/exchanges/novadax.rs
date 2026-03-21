@@ -11,7 +11,16 @@ use async_trait::async_trait;
 use std::str::FromStr;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, JSON, Array, Object, Math, parse_int, shift_2, extend_2, normalize};
+use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, BoolExt, JSON, Array, Object, Math, Promise, parse_int, shift_2, extend_2, normalize};
+// Crypto hash identifiers
+fn sha256() -> Value { Value::from("sha256") }
+fn sha384() -> Value { Value::from("sha384") }
+fn sha512() -> Value { Value::from("sha512") }
+fn md5() -> Value { Value::from("md5") }
+fn ed25519() -> Value { Value::from("ed25519") }
+fn rsa(msg: Value, secret: Value, _hash: Value) -> Value { msg }
+fn eddsa(msg: Value, secret: Value, _curve: Value) -> Value { msg }
+fn secp256k1() -> Value { Value::from("secp256k1") }
 
 use crate::exchange::{PRECISE_BASE, TRUNCATE, ROUND, ROUND_UP, ROUND_DOWN};
 use crate::exchange::{DECIMAL_PLACES, SIGNIFICANT_DIGITS, TICK_SIZE, NO_PADDING, PAD_WITH_ZERO};
@@ -344,39 +353,15 @@ pub trait Novadax : Exchange {
     }
 
 
-    async fn fetch_markets(&mut self, mut params: Value) -> Value {
-        params = params.or_default(Value::new_object());
-        let mut response: Value = self.public_get_common_symbols(params.clone()).await;
-        //
-        //     {
-        //         "code":"A10000",
-        //         "data":[
-        //             {
-        //                 "amountPrecision":8,
-        //                 "baseCurrency":"BTC",
-        //                 "minOrderAmount":"0.001",
-        //                 "minOrderValue":"25",
-        //                 "pricePrecision":2,
-        //                 "quoteCurrency":"BRL",
-        //                 "status":"ONLINE",
-        //                 "symbol":"BTC_BRL",
-        //                 "valuePrecision":2
-        //             },
-        //         ],
-        //         "message":"Success"
-        //     }
-        //
-        let mut data: Value = self.safe_value(response.clone(), Value::from("data"), Value::new_array());
-        return self.parse_markets(data.clone());
-    }
+    
 
     fn parse_market(&self, mut market: Value) -> Value {
-        let mut base_id: Value = self.safe_string(market.clone(), Value::from("baseCurrency"));
-        let mut quote_id: Value = self.safe_string(market.clone(), Value::from("quoteCurrency"));
-        let mut id: Value = self.safe_string(market.clone(), Value::from("symbol"));
+        let mut base_id: Value = self.safe_string(market.clone(), Value::from("baseCurrency"), Value::Undefined);
+        let mut quote_id: Value = self.safe_string(market.clone(), Value::from("quoteCurrency"), Value::Undefined);
+        let mut id: Value = self.safe_string(market.clone(), Value::from("symbol"), Value::Undefined);
         let mut base: Value = self.safe_currency_code(base_id.clone(), Value::Undefined);
         let mut quote: Value = self.safe_currency_code(quote_id.clone(), Value::Undefined);
-        let mut status: Value = self.safe_string(market.clone(), Value::from("status"));
+        let mut status: Value = self.safe_string(market.clone(), Value::from("status"), Value::Undefined);
         return Value::Json(normalize(&Value::Json(json!({
             "id": id,
             "symbol": base.clone() + Value::from("/") + quote.clone(),
@@ -402,8 +387,8 @@ pub trait Novadax : Exchange {
             "strike": Value::Undefined,
             "optionType": Value::Undefined,
             "precision": Value::Json(normalize(&Value::Json(json!({
-                "amount": self.parse_number(self.parse_precision(self.safe_string(market.clone(), Value::from("amountPrecision"))), Value::Undefined),
-                "price": self.parse_number(self.parse_precision(self.safe_string(market.clone(), Value::from("pricePrecision"))), Value::Undefined)
+                "amount": self.parse_number(self.parse_precision(self.safe_string(market.clone(), Value::from("amountPrecision"), Value::Undefined)), Value::Undefined),
+                "price": self.parse_number(self.parse_precision(self.safe_string(market.clone(), Value::from("pricePrecision"), Value::Undefined)), Value::Undefined)
             }))).unwrap()),
             "limits": Value::Json(normalize(&Value::Json(json!({
                 "leverage": Value::Json(normalize(&Value::Json(json!({
@@ -445,22 +430,22 @@ pub trait Novadax : Exchange {
         //         "timestamp":1599091115090
         //     }
         //
-        let mut timestamp: Value = self.safe_integer(ticker.clone(), Value::from("timestamp"));
-        let mut market_id: Value = self.safe_string(ticker.clone(), Value::from("symbol"));
+        let mut timestamp: Value = self.safe_integer(ticker.clone(), Value::from("timestamp"), Value::Undefined);
+        let mut market_id: Value = self.safe_string(ticker.clone(), Value::from("symbol"), Value::Undefined);
         let mut symbol: Value = self.safe_symbol(market_id.clone(), market.clone(), Value::from("_"), Value::Undefined);
-        let mut open: Value = self.safe_string(ticker.clone(), Value::from("open24h"));
-        let mut last: Value = self.safe_string(ticker.clone(), Value::from("lastPrice"));
-        let mut base_volume: Value = self.safe_string(ticker.clone(), Value::from("baseVolume24h"));
-        let mut quote_volume: Value = self.safe_string(ticker.clone(), Value::from("quoteVolume24h"));
+        let mut open: Value = self.safe_string(ticker.clone(), Value::from("open24h"), Value::Undefined);
+        let mut last: Value = self.safe_string(ticker.clone(), Value::from("lastPrice"), Value::Undefined);
+        let mut base_volume: Value = self.safe_string(ticker.clone(), Value::from("baseVolume24h"), Value::Undefined);
+        let mut quote_volume: Value = self.safe_string(ticker.clone(), Value::from("quoteVolume24h"), Value::Undefined);
         return self.safe_ticker(Value::Json(normalize(&Value::Json(json!({
             "symbol": symbol,
             "timestamp": timestamp,
             "datetime": self.iso8601(timestamp.clone()),
-            "high": self.safe_string(ticker.clone(), Value::from("high24h")),
-            "low": self.safe_string(ticker.clone(), Value::from("low24h")),
-            "bid": self.safe_string(ticker.clone(), Value::from("bid")),
+            "high": self.safe_string(ticker.clone(), Value::from("high24h"), Value::Undefined),
+            "low": self.safe_string(ticker.clone(), Value::from("low24h"), Value::Undefined),
+            "bid": self.safe_string(ticker.clone(), Value::from("bid"), Value::Undefined),
             "bidVolume": Value::Undefined,
-            "ask": self.safe_string(ticker.clone(), Value::from("ask")),
+            "ask": self.safe_string(ticker.clone(), Value::from("ask"), Value::Undefined),
             "askVolume": Value::Undefined,
             "vwap": Value::Undefined,
             "open": open,
@@ -611,22 +596,22 @@ pub trait Novadax : Exchange {
         //          "timestamp": 1565171053345
         //       }
         //
-        let mut id: Value = self.safe_string(trade.clone(), Value::from("id"));
-        let mut order_id: Value = self.safe_string(trade.clone(), Value::from("orderId"));
-        let mut timestamp: Value = self.safe_integer(trade.clone(), Value::from("timestamp"));
-        let mut side: Value = self.safe_string_lower(trade.clone(), Value::from("side"));
-        let mut price_string: Value = self.safe_string(trade.clone(), Value::from("price"));
-        let mut amount_string: Value = self.safe_string(trade.clone(), Value::from("amount"));
-        let mut market_id: Value = self.safe_string(trade.clone(), Value::from("symbol"));
+        let mut id: Value = self.safe_string(trade.clone(), Value::from("id"), Value::Undefined);
+        let mut order_id: Value = self.safe_string(trade.clone(), Value::from("orderId"), Value::Undefined);
+        let mut timestamp: Value = self.safe_integer(trade.clone(), Value::from("timestamp"), Value::Undefined);
+        let mut side: Value = self.safe_string_lower(trade.clone(), Value::from("side"), Value::Undefined);
+        let mut price_string: Value = self.safe_string(trade.clone(), Value::from("price"), Value::Undefined);
+        let mut amount_string: Value = self.safe_string(trade.clone(), Value::from("amount"), Value::Undefined);
+        let mut market_id: Value = self.safe_string(trade.clone(), Value::from("symbol"), Value::Undefined);
         let mut symbol: Value = self.safe_symbol(market_id.clone(), market.clone(), Value::from("_"), Value::Undefined);
-        let mut taker_or_maker: Value = self.safe_string_lower(trade.clone(), Value::from("role"));
-        let mut fee_string: Value = self.safe_string(trade.clone(), Value::from("fee"));
+        let mut taker_or_maker: Value = self.safe_string_lower(trade.clone(), Value::from("role"), Value::Undefined);
+        let mut fee_string: Value = self.safe_string(trade.clone(), Value::from("fee"), Value::Undefined);
         let mut fee: Value = Value::Undefined;
         if fee_string.clone().is_nonnullish() {
-            let mut fee_currency_id: Value = self.safe_string(trade.clone(), Value::from("feeCurrency"));
+            let mut fee_currency_id: Value = self.safe_string(trade.clone(), Value::from("feeCurrency"), Value::Undefined);
             let mut fee_currency_code: Value = self.safe_currency_code(fee_currency_id.clone(), Value::Undefined);
             fee = Value::Json(normalize(&Value::Json(json!({
-                "cost": self.safe_string(trade.clone(), Value::from("feeAmount")),
+                "cost": self.safe_string(trade.clone(), Value::from("feeAmount"), Value::Undefined),
                 "currency": fee_currency_code
             }))).unwrap());
         };
@@ -713,7 +698,7 @@ pub trait Novadax : Exchange {
         let mut options: Value = self.safe_value(self.get("options".into()), Value::from("fetchOHLCV"), Value::new_object());
         let mut volume_field: Value = self.safe_string(options.clone(), Value::from("volume"), Value::from("amount"));
         // or vol
-        return Value::Json(serde_json::Value::Array(vec![self.safe_timestamp(ohlcv.clone(), Value::from("score")).into(), self.safe_number(ohlcv.clone(), Value::from("openPrice"), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from("highPrice"), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from("lowPrice"), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from("closePrice"), Value::Undefined).into(), self.safe_number(ohlcv.clone(), volume_field.clone(), Value::Undefined).into()]));
+        return Value::Json(serde_json::Value::Array(vec![self.safe_timestamp(ohlcv.clone(), Value::from("score"), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from("openPrice"), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from("highPrice"), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from("lowPrice"), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from("closePrice"), Value::Undefined).into(), self.safe_number(ohlcv.clone(), volume_field.clone(), Value::Undefined).into()]));
     }
 
     fn parse_balance(&self, mut response: Value) -> Value {
@@ -726,12 +711,12 @@ pub trait Novadax : Exchange {
         let mut i: usize = 0;
         while i < data.len() {
             let mut balance: Value = data.get(i.into());
-            let mut currency_id: Value = self.safe_string(balance.clone(), Value::from("currency"));
+            let mut currency_id: Value = self.safe_string(balance.clone(), Value::from("currency"), Value::Undefined);
             let mut code: Value = self.safe_currency_code(currency_id.clone(), Value::Undefined);
             let mut account: Value = self.account();
-            account.set("total".into(), self.safe_string(balance.clone(), Value::from("balance")));
-            account.set("free".into(), self.safe_string(balance.clone(), Value::from("available")));
-            account.set("used".into(), self.safe_string(balance.clone(), Value::from("hold")));
+            account.set("total".into(), self.safe_string(balance.clone(), Value::from("balance"), Value::Undefined));
+            account.set("free".into(), self.safe_string(balance.clone(), Value::from("available"), Value::Undefined));
+            account.set("used".into(), self.safe_string(balance.clone(), Value::from("hold"), Value::Undefined));
             result.set(code.clone(), account.clone());
             i += 1;
         };
@@ -741,7 +726,7 @@ pub trait Novadax : Exchange {
     async fn fetch_balance(&mut self, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        let mut response: Value = self.private_get_account_get_balance(params.clone()).await;
+        let mut response: Value = self.dispatch("privateGetAccountGetBalance".into(), params.clone(), Value::Undefined).await;
         //
         //     {
         //         "code": "A10000",
@@ -775,7 +760,7 @@ pub trait Novadax : Exchange {
         // "operator": "" // for stop orders, can be found in order introduction
         // "stopPrice": this.priceToPrecision (symbol, stopPrice),
         // "accountId": "...", // subaccount id, optional
-        let mut trigger_price: Value = self.safe_value_2(params.clone(), Value::from("triggerPrice"), Value::from("stopPrice"));
+        let mut trigger_price: Value = self.safe_value_2(params.clone(), Value::from("triggerPrice"), Value::from("stopPrice"), Value::Undefined);
         if trigger_price.clone().is_nullish() {
             if uppercase_type.clone() == Value::from("STOP_LIMIT") || uppercase_type.clone() == Value::from("STOP_MARKET") {
                 panic!(r###"ArgumentsRequired::new(self.get("id".into()) + Value::from(" createOrder() requires a stopPrice parameter for ") + uppercase_type.clone() + Value::from(" orders"))"###);
@@ -821,7 +806,7 @@ pub trait Novadax : Exchange {
             };
         };
         request.set("type".into(), uppercase_type.clone());
-        let mut response: Value = self.private_post_orders_create(extend_2(request.clone(), params.clone())).await;
+        let mut response: Value = self.dispatch("privatePostOrdersCreate".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         //
         //     {
         //         "code": "A10000",
@@ -855,7 +840,7 @@ pub trait Novadax : Exchange {
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
             "id": id
         }))).unwrap());
-        let mut response: Value = self.private_post_orders_cancel(extend_2(request.clone(), params.clone())).await;
+        let mut response: Value = self.dispatch("privatePostOrdersCancel".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         //
         //     {
         //         "code": "A10000",
@@ -875,7 +860,7 @@ pub trait Novadax : Exchange {
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
             "id": id
         }))).unwrap());
-        let mut response: Value = self.private_get_orders_get(extend_2(request.clone(), params.clone())).await;
+        let mut response: Value = self.dispatch("privateGetOrdersGet".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         //
         //     {
         //         "code": "A10000",
@@ -924,7 +909,7 @@ pub trait Novadax : Exchange {
         if since.clone().is_nonnullish() {
             request.set("fromTimestamp".into(), since.clone());
         };
-        let mut response: Value = self.private_get_orders_list(extend_2(request.clone(), params.clone())).await;
+        let mut response: Value = self.dispatch("privateGetOrdersList".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         //
         //     {
         //         "code": "A10000",
@@ -974,7 +959,7 @@ pub trait Novadax : Exchange {
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
             "id": id
         }))).unwrap());
-        let mut response: Value = self.private_get_orders_fill(extend_2(request.clone(), params.clone())).await;
+        let mut response: Value = self.dispatch("privateGetOrdersFill".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         let mut market: Value = Value::Undefined;
         if symbol.clone().is_nonnullish() {
             market = self.market(symbol.clone());
@@ -1045,16 +1030,16 @@ pub trait Novadax : Exchange {
         //         "result": true
         //     }
         //
-        let mut id: Value = self.safe_string(order.clone(), Value::from("id"));
-        let mut amount: Value = self.safe_string(order.clone(), Value::from("amount"));
-        let mut price: Value = self.safe_string(order.clone(), Value::from("price"));
-        let mut cost: Value = self.safe_string_2(order.clone(), Value::from("filledValue"), Value::from("value"));
-        let mut r#type: Value = self.safe_string_lower(order.clone(), Value::from("type"));
-        let mut side: Value = self.safe_string_lower(order.clone(), Value::from("side"));
-        let mut status: Value = <Self as Novadax>::parse_order_status(self, self.safe_string(order.clone(), Value::from("status")));
-        let mut timestamp: Value = self.safe_integer(order.clone(), Value::from("timestamp"));
-        let mut average: Value = self.safe_string(order.clone(), Value::from("averagePrice"));
-        let mut filled: Value = self.safe_string(order.clone(), Value::from("filledAmount"));
+        let mut id: Value = self.safe_string(order.clone(), Value::from("id"), Value::Undefined);
+        let mut amount: Value = self.safe_string(order.clone(), Value::from("amount"), Value::Undefined);
+        let mut price: Value = self.safe_string(order.clone(), Value::from("price"), Value::Undefined);
+        let mut cost: Value = self.safe_string_2(order.clone(), Value::from("filledValue"), Value::from("value"), Value::Undefined);
+        let mut r#type: Value = self.safe_string_lower(order.clone(), Value::from("type"), Value::Undefined);
+        let mut side: Value = self.safe_string_lower(order.clone(), Value::from("side"), Value::Undefined);
+        let mut status: Value = <Self as Novadax>::parse_order_status(self, self.safe_string(order.clone(), Value::from("status"), Value::Undefined));
+        let mut timestamp: Value = self.safe_integer(order.clone(), Value::from("timestamp"), Value::Undefined);
+        let mut average: Value = self.safe_string(order.clone(), Value::from("averagePrice"), Value::Undefined);
+        let mut filled: Value = self.safe_string(order.clone(), Value::from("filledAmount"), Value::Undefined);
         let mut fee: Value = Value::Undefined;
         let mut fee_cost: Value = self.safe_number(order.clone(), Value::from("filledFee"), Value::Undefined);
         if fee_cost.clone().is_nonnullish() {
@@ -1063,7 +1048,7 @@ pub trait Novadax : Exchange {
                 "currency": Value::Undefined
             }))).unwrap());
         };
-        let mut market_id: Value = self.safe_string(order.clone(), Value::from("symbol"));
+        let mut market_id: Value = self.safe_string(order.clone(), Value::from("symbol"), Value::Undefined);
         let mut symbol: Value = self.safe_symbol(market_id.clone(), market.clone(), Value::from("_"), Value::Undefined);
         return self.safe_order(Value::Json(normalize(&Value::Json(json!({
             "id": id,
@@ -1106,7 +1091,7 @@ pub trait Novadax : Exchange {
             "subId": if r#type.clone() == Value::from("master-transfer-in") { to_account.clone() } else { from_account.clone() },
             "transferType": r#type
         }))).unwrap());
-        let mut response: Value = self.private_post_account_subs_transfer(extend_2(request.clone(), params.clone())).await;
+        let mut response: Value = self.dispatch("privatePostAccountSubsTransfer".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         //
         //    {
         //        "code":"A10000",
@@ -1133,8 +1118,8 @@ pub trait Novadax : Exchange {
         //        "data":40
         //    }
         //
-        let mut id: Value = self.safe_string(transfer.clone(), Value::from("data"));
-        let mut status: Value = self.safe_string(transfer.clone(), Value::from("message"));
+        let mut id: Value = self.safe_string(transfer.clone(), Value::from("data"), Value::Undefined);
+        let mut status: Value = self.safe_string(transfer.clone(), Value::from("message"), Value::Undefined);
         let mut currency_code: Value = self.safe_currency_code(Value::Undefined, currency.clone());
         return Value::Json(normalize(&Value::Json(json!({
             "info": transfer,
@@ -1169,7 +1154,7 @@ pub trait Novadax : Exchange {
         if tag.clone().is_nonnullish() {
             request.set("tag".into(), tag.clone());
         };
-        let mut response: Value = self.private_post_account_withdraw_coin(extend_2(request.clone(), params.clone())).await;
+        let mut response: Value = self.dispatch("privatePostAccountWithdrawCoin".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         //
         //     {
         //         "code":"A10000",
@@ -1182,7 +1167,7 @@ pub trait Novadax : Exchange {
 
     async fn fetch_accounts(&mut self, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
-        let mut response: Value = self.private_get_account_subs(params.clone()).await;
+        let mut response: Value = self.dispatch("privateGetAccountSubs".into(), params.clone(), Value::Undefined).await;
         //
         //     {
         //         "code": "A10000",
@@ -1202,8 +1187,8 @@ pub trait Novadax : Exchange {
         let mut i: usize = 0;
         while i < data.len() {
             let mut account: Value = data.get(i.into());
-            let mut account_id: Value = self.safe_string(account.clone(), Value::from("subId"));
-            let mut r#type: Value = self.safe_string(account.clone(), Value::from("subAccount"));
+            let mut account_id: Value = self.safe_string(account.clone(), Value::from("subId"), Value::Undefined);
+            let mut r#type: Value = self.safe_string(account.clone(), Value::from("subAccount"), Value::Undefined);
             result.push(Value::Json(normalize(&Value::Json(json!({
                 "id": account_id,
                 "type": r#type,
@@ -1248,7 +1233,7 @@ pub trait Novadax : Exchange {
         if limit.clone().is_nonnullish() {
             request.set("size".into(), limit.clone());
         };
-        let mut response: Value = self.private_get_wallet_query_deposit_withdraw(extend_2(request.clone(), params.clone())).await;
+        let mut response: Value = self.dispatch("privateGetWalletQueryDepositWithdraw".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         //
         //     {
         //         "code": "A10000",
@@ -1316,23 +1301,23 @@ pub trait Novadax : Exchange {
         //         "updatedAt": 1601371273000
         //     }
         //
-        let mut id: Value = self.safe_string_2(transaction.clone(), Value::from("id"), Value::from("data"));
-        let mut r#type: Value = self.safe_string(transaction.clone(), Value::from("type"));
+        let mut id: Value = self.safe_string_2(transaction.clone(), Value::from("id"), Value::from("data"), Value::Undefined);
+        let mut r#type: Value = self.safe_string(transaction.clone(), Value::from("type"), Value::Undefined);
         if r#type.clone() == Value::from("COIN_IN") {
             r#type = Value::from("deposit");
         } else if r#type.clone() == Value::from("COIN_OUT") {
             r#type = Value::from("withdraw");
         };
         let mut amount: Value = self.safe_number(transaction.clone(), Value::from("amount"), Value::Undefined);
-        let mut address: Value = self.safe_string(transaction.clone(), Value::from("address"));
-        let mut tag: Value = self.safe_string(transaction.clone(), Value::from("addressTag"));
-        let mut txid: Value = self.safe_string(transaction.clone(), Value::from("txHash"));
-        let mut timestamp: Value = self.safe_integer(transaction.clone(), Value::from("createdAt"));
-        let mut updated: Value = self.safe_integer(transaction.clone(), Value::from("updatedAt"));
-        let mut currency_id: Value = self.safe_string(transaction.clone(), Value::from("currency"));
+        let mut address: Value = self.safe_string(transaction.clone(), Value::from("address"), Value::Undefined);
+        let mut tag: Value = self.safe_string(transaction.clone(), Value::from("addressTag"), Value::Undefined);
+        let mut txid: Value = self.safe_string(transaction.clone(), Value::from("txHash"), Value::Undefined);
+        let mut timestamp: Value = self.safe_integer(transaction.clone(), Value::from("createdAt"), Value::Undefined);
+        let mut updated: Value = self.safe_integer(transaction.clone(), Value::from("updatedAt"), Value::Undefined);
+        let mut currency_id: Value = self.safe_string(transaction.clone(), Value::from("currency"), Value::Undefined);
         let mut code: Value = self.safe_currency_code(currency_id.clone(), currency.clone());
-        let mut status: Value = <Self as Novadax>::parse_transaction_status(self, self.safe_string(transaction.clone(), Value::from("state")));
-        let mut network: Value = self.safe_string(transaction.clone(), Value::from("chain"));
+        let mut status: Value = <Self as Novadax>::parse_transaction_status(self, self.safe_string(transaction.clone(), Value::from("state"), Value::Undefined));
+        let mut network: Value = self.safe_string(transaction.clone(), Value::from("chain"), Value::Undefined);
         return Value::Json(normalize(&Value::Json(json!({
             "info": transaction,
             "id": id,
@@ -1384,7 +1369,7 @@ pub trait Novadax : Exchange {
         if since.clone().is_nonnullish() {
             request.set("fromTimestamp".into(), since.clone());
         };
-        let mut response: Value = self.private_get_orders_fills(extend_2(request.clone(), params.clone())).await;
+        let mut response: Value = self.dispatch("privateGetOrdersFills".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         //
         //      {
         //          "code": "A10000",
@@ -1410,68 +1395,9 @@ pub trait Novadax : Exchange {
         return self.parse_trades(data.clone(), market.clone(), since.clone(), limit.clone(), Value::Undefined);
     }
 
-    fn sign(&mut self, mut path: Value, mut api: Value, mut method: Value, mut params: Value, mut headers: Value, mut body: Value) -> Value {
-        api = api.or_default(Value::from("public"));
-        method = method.or_default(Value::from("GET"));
-        params = params.or_default(Value::new_object());
-        let mut request: Value = Value::from("/") + self.get("version".into()) + Value::from("/") + self.implode_params(path.clone(), params.clone());
-        let mut url: Value = self.get("urls".into()).get(Value::from("api")).get(api.clone()) + request.clone();
-        let mut query: Value = self.omit(params.clone(), self.extract_params(path.clone()));
-        if api.clone() == Value::from("public") {
-            if Object::keys(query.clone()).len() > 0 {
-                url = url +  Value::from("?") + self.urlencode(query.clone());
-            };
-        } else if api.clone() == Value::from("private") {
-            self.check_required_credentials(Value::Undefined);
-            let mut timestamp: Value = self.milliseconds().to_string();
-            headers = Value::Json(normalize(&Value::Json(json!({
-                "X-Nova-Access-Key": self.get("apiKey".into()),
-                "X-Nova-Timestamp": timestamp
-            }))).unwrap());
-            let mut query_string: Value = Value::Undefined;
-            if method.clone() == Value::from("POST") {
-                body = self.json(query.clone());
-                query_string = self.hash(self.encode(body.clone()), md5.clone());
-                headers.set("Content-Type".into(), Value::from("application/json"));
-            } else {
-                if Object::keys(query.clone()).len() > 0 {
-                    url = url +  Value::from("?") + self.urlencode(query.clone());
-                };
-                query_string = self.urlencode(self.keysort(query.clone()));
-            };
-            let mut auth: Value = method.clone() + Value::from("
-") + request.clone() + Value::from("
-") + query_string.clone() + Value::from("
-") + timestamp.clone();
-            // eslint-disable-line quotes
-            headers.set("X-Nova-Signature".into(), self.hmac(self.encode(auth.clone()), self.encode(self.get("secret".into())), sha256.clone()));
-        };
-        return Value::Json(normalize(&Value::Json(json!({
-            "url": url,
-            "method": method,
-            "body": body,
-            "headers": headers
-        }))).unwrap());
-    }
+    
 
-    fn handle_errors(&mut self, mut code: Value, mut reason: Value, mut url: Value, mut method: Value, mut headers: Value, mut body: Value, mut response: Value, mut request_headers: Value, mut request_body: Value) -> Value {
-        if response.clone().is_nullish() {
-            return Value::Undefined;
-        };
-        //
-        //     {"code":"A10003","data":[],"message":"Authentication failed, Invalid accessKey."}
-        //
-        let mut error_code: Value = self.safe_string(response.clone(), Value::from("code"));
-        if error_code.clone() != Value::from("A10000") {
-            let mut message: Value = self.safe_string(response.clone(), Value::from("message"));
-            let mut feedback: Value = self.get("id".into()) + Value::from(" ") + body.clone();
-            self.throw_exactly_matched_exception(self.get("exceptions".into()).get(Value::from("exact")), error_code.clone(), feedback.clone());
-            self.throw_broadly_matched_exception(self.get("exceptions".into()).get(Value::from("broad")), message.clone(), feedback.clone());
-            panic!(r###"ExchangeError::new(feedback)"###);
-        };
-        // unknown message
-        return Value::Undefined;
-    }
+    
 
     
     async fn dispatch(&mut self, method: Value, params: Value, context: Value) -> Value {
@@ -1539,8 +1465,8 @@ impl ValueTrait for NovadaxImpl {
     fn push(&mut self, value: Value) { self.0.push(value) }
     fn split(&self, separator: Value) -> Value { self.0.split(separator) }
     fn contains_key(&self, key: Value) -> bool { self.0.contains_key(key) }
-    fn keys(&self) -> Vec<Value> { self.0.keys() }
-    fn values(&self) -> Vec<Value> { self.0.values() }
+    fn keys(&self) -> Value { self.0.keys() }
+    fn values(&self) -> Value { self.0.values() }
     fn to_array(&self, x: Value) -> Value { self.0.to_array(x) }
     fn index_of(&self, x: Value) -> Value { self.0.index_of(x) }
     fn join(&self, glue: Value) -> Value { self.0.join(glue) }

@@ -1145,8 +1145,8 @@ fn test_value_keys_values() {
     let keys = obj.keys();
     assert_eq!(keys.len(), 2);
     // BTreeMap guarantees sorted order
-    assert_eq!(keys[0], Value::from("a"));
-    assert_eq!(keys[1], Value::from("b"));
+    assert_eq!(keys.get(Value::from(0)), Value::from("a"));
+    assert_eq!(keys.get(Value::from(1)), Value::from("b"));
 
     let vals = obj.values();
     assert_eq!(vals.len(), 2);

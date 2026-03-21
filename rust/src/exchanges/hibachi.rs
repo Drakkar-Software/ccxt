@@ -11,7 +11,16 @@ use async_trait::async_trait;
 use std::str::FromStr;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, JSON, Array, Object, Math, parse_int, shift_2, extend_2, normalize};
+use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, BoolExt, JSON, Array, Object, Math, Promise, parse_int, shift_2, extend_2, normalize};
+// Crypto hash identifiers
+fn sha256() -> Value { Value::from("sha256") }
+fn sha384() -> Value { Value::from("sha384") }
+fn sha512() -> Value { Value::from("sha512") }
+fn md5() -> Value { Value::from("md5") }
+fn ed25519() -> Value { Value::from("ed25519") }
+fn rsa(msg: Value, secret: Value, _hash: Value) -> Value { msg }
+fn eddsa(msg: Value, secret: Value, _curve: Value) -> Value { msg }
+fn secp256k1() -> Value { Value::from("secp256k1") }
 
 use crate::exchange::{PRECISE_BASE, TRUNCATE, ROUND, ROUND_UP, ROUND_DOWN};
 use crate::exchange::{DECIMAL_PLACES, SIGNIFICANT_DIGITS, TICK_SIZE, NO_PADDING, PAD_WITH_ZERO};
@@ -319,19 +328,19 @@ pub trait Hibachi : Exchange {
 
     fn get_account_id(&mut self) -> Value {
         self.check_required_credentials(Value::Undefined);
-        let mut id: Value = self.parse_to_int(self.get("accountId".into()));
+        let mut id: Value = self.parse_to_int(self.get("accountId".into()), Value::Undefined);
         return id.clone();
     }
 
     fn parse_market(&self, mut market: Value) -> Value {
-        let mut market_id: Value = self.safe_string(market.clone(), Value::from("symbol"));
+        let mut market_id: Value = self.safe_string(market.clone(), Value::from("symbol"), Value::Undefined);
         let mut numeric_id: Value = self.safe_number(market.clone(), Value::from("id"), Value::Undefined);
         let mut market_type: Value = Value::from("swap");
-        let mut base_id: Value = self.safe_string(market.clone(), Value::from("underlyingSymbol"));
-        let mut quote_id: Value = self.safe_string(market.clone(), Value::from("settlementSymbol"));
+        let mut base_id: Value = self.safe_string(market.clone(), Value::from("underlyingSymbol"), Value::Undefined);
+        let mut quote_id: Value = self.safe_string(market.clone(), Value::from("settlementSymbol"), Value::Undefined);
         let mut base: Value = self.safe_currency_code(base_id.clone(), Value::Undefined);
         let mut quote: Value = self.safe_currency_code(quote_id.clone(), Value::Undefined);
-        let mut settle_id: Value = self.safe_string(market.clone(), Value::from("settlementSymbol"));
+        let mut settle_id: Value = self.safe_string(market.clone(), Value::from("settlementSymbol"), Value::Undefined);
         let mut settle: Value = self.safe_currency_code(settle_id.clone(), Value::Undefined);
         let mut symbol: Value = base.clone() + Value::from("/") + quote.clone() + Value::from(":") + settle.clone();
         let mut created: Value = self.safe_integer_product(market.clone(), Value::from("marketCreationTimestamp"), Value::from(1000));
@@ -351,7 +360,7 @@ pub trait Hibachi : Exchange {
             "swap": true,
             "future": false,
             "option": false,
-            "active": self.safe_string(market.clone(), Value::from("status")) == Value::from("LIVE"),
+            "active": self.safe_string(market.clone(), Value::from("status"), Value::Undefined) == Value::from("LIVE"),
             "contract": true,
             "linear": true,
             "inverse": false,
@@ -361,7 +370,7 @@ pub trait Hibachi : Exchange {
             "strike": Value::Undefined,
             "optionType": Value::Undefined,
             "precision": Value::Json(normalize(&Value::Json(json!({
-                "amount": self.parse_number(self.parse_precision(self.safe_string(market.clone(), Value::from("underlyingDecimals"))), Value::Undefined),
+                "amount": self.parse_number(self.parse_precision(self.safe_string(market.clone(), Value::from("underlyingDecimals"), Value::Undefined)), Value::Undefined),
                 "price": self.parse_number(self.safe_list(market.clone(), Value::from("orderbookGranularities"), Value::Undefined).get(Value::from(0)), Value::Undefined) / Value::from(10000)
             }))).unwrap()),
             "limits": Value::Json(normalize(&Value::Json(json!({
@@ -387,37 +396,7 @@ pub trait Hibachi : Exchange {
         }))).unwrap());
     }
 
-    async fn fetch_markets(&mut self, mut params: Value) -> Value {
-        params = params.or_default(Value::new_object());
-        let mut response: Value = self.public_get_market_exchange_info(params.clone()).await;
-        // {
-        //     "displayName": "ETH/USDT Perps",
-        //     "id": 1,
-        //     "maintenanceFactorForPositions": "0.030000",
-        //     "marketCloseTimestamp": null,
-        //     "marketOpenTimestamp": null,
-        //     "minNotional": "1",
-        //     "minOrderSize": "0.000000001",
-        //     "orderbookGranularities": [
-        //         "0.01",
-        //         "0.1",
-        //         "1",
-        //         "10"
-        //     ],
-        //     "riskFactorForOrders": "0.066667",
-        //     "riskFactorForPositions": "0.030000",
-        //     "settlementDecimals": 6,
-        //     "settlementSymbol": "USDT",
-        //     "status": "LIVE",
-        //     "stepSize": "0.000000001",
-        //     "symbol": "ETH/USDT-P",
-        //     "tickSize": "0.000001",
-        //     "underlyingDecimals": 9,
-        //     "underlyingSymbol": "ETH"
-        // },
-        let mut rows: Value = self.safe_list(response.clone(), Value::from("futureContracts"), Value::Undefined);
-        return self.parse_markets(rows.clone());
-    }
+    
 
     fn hardcoded_currencies(&mut self) -> Value {
         // Hibachi only supports USDT on Arbitrum at this time
@@ -477,8 +456,8 @@ pub trait Hibachi : Exchange {
         // Hibachi only supports USDT on Arbitrum at this time
         let mut code: Value = self.safe_currency_code(Value::from("USDT"), Value::Undefined);
         let mut account: Value = self.account();
-        account.set("total".into(), self.safe_string(response.clone(), Value::from("balance")));
-        account.set("free".into(), self.safe_string(response.clone(), Value::from("maximalWithdraw")));
+        account.set("total".into(), self.safe_string(response.clone(), Value::from("balance"), Value::Undefined));
+        account.set("free".into(), self.safe_string(response.clone(), Value::from("maximalWithdraw"), Value::Undefined));
         result.set(code.clone(), account.clone());
         return self.safe_balance(result.clone());
     }
@@ -488,7 +467,7 @@ pub trait Hibachi : Exchange {
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
             "accountId": <Self as Hibachi>::get_account_id(self)
         }))).unwrap());
-        let mut response: Value = self.private_get_trade_account_info(extend_2(request.clone(), params.clone())).await;
+        let mut response: Value = self.dispatch("privateGetTradeAccountInfo".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         //
         // {
         //     assets: [ { quantity: '3.000000', symbol: 'USDT' } ],
@@ -566,12 +545,12 @@ pub trait Hibachi : Exchange {
         //          "symbol": "BTC/USDT-P",
         //          "timestamp": 1752543391
         //      }
-        let mut market_id: Value = self.safe_string(trade.clone(), Value::from("symbol"));
+        let mut market_id: Value = self.safe_string(trade.clone(), Value::from("symbol"), Value::Undefined);
         market = self.safe_market(market_id.clone(), market.clone(), Value::Undefined, Value::Undefined);
         let mut symbol: Value = market.get(Value::from("symbol"));
-        let mut id: Value = self.safe_string(trade.clone(), Value::from("id"));
-        let mut price: Value = self.safe_string(trade.clone(), Value::from("price"));
-        let mut amount: Value = self.safe_string(trade.clone(), Value::from("quantity"));
+        let mut id: Value = self.safe_string(trade.clone(), Value::from("id"), Value::Undefined);
+        let mut price: Value = self.safe_string(trade.clone(), Value::from("price"), Value::Undefined);
+        let mut amount: Value = self.safe_string(trade.clone(), Value::from("quantity"), Value::Undefined);
         let mut timestamp: Value = self.safe_integer_product(trade.clone(), Value::from("timestamp"), Value::from(1000));
         let mut cost: Value = Precise::string_mul(price.clone(), amount.clone());
         let mut side: Value = Value::Undefined;
@@ -581,20 +560,20 @@ pub trait Hibachi : Exchange {
         let mut taker_or_maker: Value = Value::Undefined;
         if id.clone().is_nullish() {
             // public trades
-            side = self.safe_string_lower(trade.clone(), Value::from("takerSide"));
+            side = self.safe_string_lower(trade.clone(), Value::from("takerSide"), Value::Undefined);
             taker_or_maker = Value::from("taker");
         } else {
             // private trades
-            side = self.safe_string_lower(trade.clone(), Value::from("side"));
+            side = self.safe_string_lower(trade.clone(), Value::from("side"), Value::Undefined);
             fee = Value::Json(normalize(&Value::Json(json!({
-                "cost": self.safe_string(trade.clone(), Value::from("fee")),
+                "cost": self.safe_string(trade.clone(), Value::from("fee"), Value::Undefined),
                 "currency": "USDT"
             }))).unwrap());
-            order_type = self.safe_string_lower(trade.clone(), Value::from("orderType"));
+            order_type = self.safe_string_lower(trade.clone(), Value::from("orderType"), Value::Undefined);
             if side.clone() == Value::from("buy") {
-                order_id = self.safe_string(trade.clone(), Value::from("bidOrderId"));
+                order_id = self.safe_string(trade.clone(), Value::from("bidOrderId"), Value::Undefined);
             } else {
-                order_id = self.safe_string(trade.clone(), Value::from("askOrderId"));
+                order_id = self.safe_string(trade.clone(), Value::from("askOrderId"), Value::Undefined);
             };
         };
         return self.safe_trade(Value::Json(normalize(&Value::Json(json!({
@@ -674,28 +653,28 @@ pub trait Hibachi : Exchange {
     }
 
     fn parse_order(&mut self, mut order: Value, mut market: Value) -> Value {
-        let mut market_id: Value = self.safe_string(order.clone(), Value::from("symbol"));
+        let mut market_id: Value = self.safe_string(order.clone(), Value::from("symbol"), Value::Undefined);
         market = self.safe_market(market_id.clone(), market.clone(), Value::Undefined, Value::Undefined);
-        let mut status: Value = self.safe_string(order.clone(), Value::from("status"));
-        let mut r#type: Value = self.safe_string_lower(order.clone(), Value::from("orderType"));
-        let mut price: Value = self.safe_string(order.clone(), Value::from("price"));
-        let mut raw_side: Value = self.safe_string(order.clone(), Value::from("side"));
+        let mut status: Value = self.safe_string(order.clone(), Value::from("status"), Value::Undefined);
+        let mut r#type: Value = self.safe_string_lower(order.clone(), Value::from("orderType"), Value::Undefined);
+        let mut price: Value = self.safe_string(order.clone(), Value::from("price"), Value::Undefined);
+        let mut raw_side: Value = self.safe_string(order.clone(), Value::from("side"), Value::Undefined);
         let mut side: Value = Value::Undefined;
         if raw_side.clone() == Value::from("BID") {
             side = Value::from("buy");
         } else if raw_side.clone() == Value::from("ASK") {
             side = Value::from("sell");
         };
-        let mut amount: Value = self.safe_string(order.clone(), Value::from("totalQuantity"));
-        let mut remaining: Value = self.safe_string(order.clone(), Value::from("availableQuantity"));
-        let mut total_quantity: Value = self.safe_string(order.clone(), Value::from("totalQuantity"));
-        let mut available_quantity: Value = self.safe_string(order.clone(), Value::from("availableQuantity"));
+        let mut amount: Value = self.safe_string(order.clone(), Value::from("totalQuantity"), Value::Undefined);
+        let mut remaining: Value = self.safe_string(order.clone(), Value::from("availableQuantity"), Value::Undefined);
+        let mut total_quantity: Value = self.safe_string(order.clone(), Value::from("totalQuantity"), Value::Undefined);
+        let mut available_quantity: Value = self.safe_string(order.clone(), Value::from("availableQuantity"), Value::Undefined);
         let mut filled: Value = Value::Undefined;
         if total_quantity.clone().is_nonnullish() && available_quantity.clone().is_nonnullish() {
             filled = Precise::string_sub(total_quantity.clone(), available_quantity.clone());
         };
         let mut time_in_force: Value = Value::from("GTC");
-        let mut order_flags: Value = self.safe_value(order.clone(), Value::from("orderFlags"));
+        let mut order_flags: Value = self.safe_value(order.clone(), Value::from("orderFlags"), Value::Undefined);
         let mut post_only: Value = false.into();
         let mut reduce_only: Value = false.into();
         if order_flags.clone() == Value::from("POST_ONLY") {
@@ -708,7 +687,7 @@ pub trait Hibachi : Exchange {
         };
         return self.safe_order(Value::Json(normalize(&Value::Json(json!({
             "info": order,
-            "id": self.safe_string(order.clone(), Value::from("orderId")),
+            "id": self.safe_string(order.clone(), Value::from("orderId"), Value::Undefined),
             "clientOrderId": Value::Undefined,
             "datetime": Value::Undefined,
             "timestamp": Value::Undefined,
@@ -744,7 +723,7 @@ pub trait Hibachi : Exchange {
             "orderId": id,
             "accountId": <Self as Hibachi>::get_account_id(self)
         }))).unwrap());
-        let mut response: Value = self.private_get_trade_order(extend_2(request.clone(), params.clone())).await;
+        let mut response: Value = self.dispatch("privateGetTradeOrder".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         return <Self as Hibachi>::parse_order(self, response.clone(), market.clone());
     }
 
@@ -754,7 +733,7 @@ pub trait Hibachi : Exchange {
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
             "accountId": <Self as Hibachi>::get_account_id(self)
         }))).unwrap());
-        let mut response: Value = self.private_get_trade_account_info(extend_2(request.clone(), params.clone())).await;
+        let mut response: Value = self.dispatch("privateGetTradeAccountInfo".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         //    {
         //        "tradeMakerFeeRate": "0.00000000",
         //        "tradeTakerFeeRate": "0.00020000"
@@ -788,11 +767,11 @@ pub trait Hibachi : Exchange {
         // - Quantity: Internal = External * (10^underlyingDecimals)
         // - Price: Internal = External * (2^32) * (10^(settlementDecimals-underlyingDecimals))
         // - FeeRate: Internal = External * (10^8)
-        let mut amount_str: Value = self.amount_to_precision(self.safe_string(market.clone(), Value::from("symbol")), amount.clone());
+        let mut amount_str: Value = self.amount_to_precision(self.safe_string(market.clone(), Value::from("symbol"), Value::Undefined), amount.clone());
         let mut fee_rate_str: Value = self.number_to_string(fee_rate.clone());
         let mut info: Value = self.safe_dict(market.clone(), Value::from("info"), Value::Undefined);
-        let mut underlying: Value = Value::from("1e") + self.safe_string(info.clone(), Value::from("underlyingDecimals"));
-        let mut settlement: Value = Value::from("1e") + self.safe_string(info.clone(), Value::from("settlementDecimals"));
+        let mut underlying: Value = Value::from("1e") + self.safe_string(info.clone(), Value::from("underlyingDecimals"), Value::Undefined);
+        let mut settlement: Value = Value::from("1e") + self.safe_string(info.clone(), Value::from("settlementDecimals"), Value::Undefined);
         let mut one: Value = Value::from("1");
         let mut fee_rate_factor: Value = Value::from("100000000");
         // 10^8
@@ -804,23 +783,23 @@ pub trait Hibachi : Exchange {
         let mut nonce16: Value = self.int_to_base16(nonce.clone());
         let mut nonce_padded: Value = nonce16.pad_start(Value::from(16), Value::from("0"));
         let mut encoded_nonce: Value = self.base16_to_binary(nonce_padded.clone());
-        let mut numeric_id: Value = self.int_to_base16(self.safe_integer(market.clone(), Value::from("numericId")));
+        let mut numeric_id: Value = self.int_to_base16(self.safe_integer(market.clone(), Value::from("numericId"), Value::Undefined));
         let mut numeric_id_padded: Value = numeric_id.pad_start(Value::from(8), Value::from("0"));
         let mut encoded_market_id: Value = self.base16_to_binary(numeric_id_padded.clone());
-        let mut quantity16: Value = self.int_to_base16(self.parse_to_int(quantity_internal.clone()));
+        let mut quantity16: Value = self.int_to_base16(self.parse_to_int(quantity_internal.clone(), Value::Undefined));
         let mut quantity_padded: Value = quantity16.pad_start(Value::from(16), Value::from("0"));
         let mut encoded_quantity: Value = self.base16_to_binary(quantity_padded.clone());
         let mut side_internal16: Value = self.int_to_base16(side_internal.clone());
         let mut side_padded: Value = side_internal16.pad_start(Value::from(8), Value::from("0"));
         let mut encoded_side: Value = self.base16_to_binary(side_padded.clone());
-        let mut fee_rate_internal16: Value = self.int_to_base16(self.parse_to_int(fee_rate_internal.clone()));
+        let mut fee_rate_internal16: Value = self.int_to_base16(self.parse_to_int(fee_rate_internal.clone(), Value::Undefined));
         let mut fee_rate_padded: Value = fee_rate_internal16.pad_start(Value::from(16), Value::from("0"));
         let mut encoded_fee_rate: Value = self.base16_to_binary(fee_rate_padded.clone());
         let mut encoded_price: Value = self.binary_concat();
         if r#type.clone() == Value::from("limit") {
-            let mut price_str: Value = self.price_to_precision(self.safe_string(market.clone(), Value::from("symbol")), price.clone());
+            let mut price_str: Value = self.price_to_precision(self.safe_string(market.clone(), Value::from("symbol"), Value::Undefined), price.clone());
             let mut price_internal: Value = Precise::string_div(Precise::string_div(Precise::string_mul(Precise::string_mul(price_str.clone(), price_factor.clone()), settlement.clone()), underlying.clone(), Value::Undefined), one.clone(), Value::from(0));
-            let mut price16: Value = self.int_to_base16(self.parse_to_int(price_internal.clone()));
+            let mut price16: Value = self.int_to_base16(self.parse_to_int(price_internal.clone(), Value::Undefined));
             let mut price_padded: Value = price16.pad_start(Value::from(16), Value::from("0"));
             encoded_price = self.base16_to_binary(price_padded.clone());
         };
@@ -845,7 +824,7 @@ pub trait Hibachi : Exchange {
         let mut message: Value = <Self as Hibachi>::order_message(self, market.clone(), nonce.clone(), fee_rate.clone(), r#type.clone(), side.clone(), amount.clone(), price.clone());
         let mut signature: Value = <Self as Hibachi>::sign_message(self, message.clone(), self.get("privateKey".into()));
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
-            "symbol": self.safe_string(market.clone(), Value::from("id")),
+            "symbol": self.safe_string(market.clone(), Value::from("id"), Value::Undefined),
             "nonce": nonce,
             "side": side_internal,
             "orderType": r#type.to_upper_case(),
@@ -856,8 +835,8 @@ pub trait Hibachi : Exchange {
         }))).unwrap());
         let mut post_only: Value = self.is_post_only((r#type.to_upper_case() == Value::from("MARKET")).into(), Value::Undefined, params.clone());
         let mut reduce_only: Value = self.safe_bool_2(params.clone(), Value::from("reduceOnly"), Value::from("reduce_only"), Value::Undefined);
-        let mut time_in_force: Value = self.safe_string_lower(params.clone(), Value::from("timeInForce"));
-        let mut trigger_price: Value = self.safe_string_2(params.clone(), Value::from("triggerPrice"), Value::from("stopPrice"));
+        let mut time_in_force: Value = self.safe_string_lower(params.clone(), Value::from("timeInForce"), Value::Undefined);
+        let mut trigger_price: Value = self.safe_string_2(params.clone(), Value::from("triggerPrice"), Value::from("stopPrice"), Value::Undefined);
         if post_only.is_truthy() {
             request.set("orderFlags".into(), Value::from("POST_ONLY"));
         } else if time_in_force.clone() == Value::from("ioc") {
@@ -878,14 +857,14 @@ pub trait Hibachi : Exchange {
         let mut nonce: Value = <Self as Hibachi>::nonce(self);
         let mut request: Value = <Self as Hibachi>::create_order_request(self, nonce.clone(), symbol.clone(), r#type.clone(), side.clone(), amount.clone(), price.clone(), params.clone());
         request.set("accountId".into(), <Self as Hibachi>::get_account_id(self));
-        let mut response: Value = self.private_post_trade_order(request.clone()).await;
+        let mut response: Value = self.dispatch("privatePostTradeOrder".into(), request.clone(), Value::Undefined).await;
         //
         // {
         //     "orderId": "578721673790138368"
         // }
         //
         return self.safe_order(Value::Json(normalize(&Value::Json(json!({
-            "id": self.safe_string(response.clone(), Value::from("orderId")),
+            "id": self.safe_string(response.clone(), Value::from("orderId"), Value::Undefined),
             "status": "pending"
         }))).unwrap()), Value::Undefined);
     }
@@ -898,11 +877,11 @@ pub trait Hibachi : Exchange {
         let mut i: usize = 0;
         while i < orders.len() {
             let mut raw_order: Value = orders.get(i.into());
-            let mut symbol: Value = self.safe_string(raw_order.clone(), Value::from("symbol"));
-            let mut r#type: Value = self.safe_string(raw_order.clone(), Value::from("type"));
-            let mut side: Value = self.safe_string(raw_order.clone(), Value::from("side"));
-            let mut amount: Value = self.safe_value(raw_order.clone(), Value::from("amount"));
-            let mut price: Value = self.safe_value(raw_order.clone(), Value::from("price"));
+            let mut symbol: Value = self.safe_string(raw_order.clone(), Value::from("symbol"), Value::Undefined);
+            let mut r#type: Value = self.safe_string(raw_order.clone(), Value::from("type"), Value::Undefined);
+            let mut side: Value = self.safe_string(raw_order.clone(), Value::from("side"), Value::Undefined);
+            let mut amount: Value = self.safe_value(raw_order.clone(), Value::from("amount"), Value::Undefined);
+            let mut price: Value = self.safe_value(raw_order.clone(), Value::from("price"), Value::Undefined);
             let mut order_params: Value = self.safe_dict(raw_order.clone(), Value::from("params"), Value::new_object());
             let mut order_request: Value = <Self as Hibachi>::create_order_request(self, nonce.clone() + Value::from(i), symbol.clone(), r#type.clone(), side.clone(), amount.clone(), price.clone(), order_params.clone());
             order_request.set("action".into(), Value::from("place"));
@@ -913,7 +892,7 @@ pub trait Hibachi : Exchange {
             "accountId": <Self as Hibachi>::get_account_id(self),
             "orders": request_orders
         }))).unwrap());
-        let mut response: Value = self.private_post_trade_orders(extend_2(request.clone(), params.clone())).await;
+        let mut response: Value = self.dispatch("privatePostTradeOrders".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         //
         // { "orders": [ { nonce: '1754349993908', orderId: '589642085255349248' } ] }
         //
@@ -924,7 +903,7 @@ pub trait Hibachi : Exchange {
             let mut response_order: Value = response_orders.get(i.into());
             ret.push(self.safe_order(Value::Json(normalize(&Value::Json(json!({
                 "info": response_order,
-                "id": self.safe_string(response_order.clone(), Value::from("orderId")),
+                "id": self.safe_string(response_order.clone(), Value::from("orderId"), Value::Undefined),
                 "status": "pending"
             }))).unwrap()), Value::Undefined));
             i += 1;
@@ -955,7 +934,7 @@ pub trait Hibachi : Exchange {
         let mut nonce: Value = <Self as Hibachi>::nonce(self);
         let mut request: Value = <Self as Hibachi>::edit_order_request(self, nonce.clone(), id.clone(), symbol.clone(), r#type.clone(), side.clone(), amount.clone(), price.clone(), params.clone());
         request.set("accountId".into(), <Self as Hibachi>::get_account_id(self));
-        self.private_put_trade_order(request.clone()).await;
+        self.dispatch("privatePutTradeOrder".into(), request.clone(), Value::Undefined).await;
         // At this time the response body is empty. A 200 response means the update request is accepted and sent to process
         //
         // {}
@@ -974,12 +953,12 @@ pub trait Hibachi : Exchange {
         let mut i: usize = 0;
         while i < orders.len() {
             let mut raw_order: Value = orders.get(i.into());
-            let mut id: Value = self.safe_string(raw_order.clone(), Value::from("id"));
-            let mut symbol: Value = self.safe_string(raw_order.clone(), Value::from("symbol"));
-            let mut r#type: Value = self.safe_string(raw_order.clone(), Value::from("type"));
-            let mut side: Value = self.safe_string(raw_order.clone(), Value::from("side"));
-            let mut amount: Value = self.safe_value(raw_order.clone(), Value::from("amount"));
-            let mut price: Value = self.safe_value(raw_order.clone(), Value::from("price"));
+            let mut id: Value = self.safe_string(raw_order.clone(), Value::from("id"), Value::Undefined);
+            let mut symbol: Value = self.safe_string(raw_order.clone(), Value::from("symbol"), Value::Undefined);
+            let mut r#type: Value = self.safe_string(raw_order.clone(), Value::from("type"), Value::Undefined);
+            let mut side: Value = self.safe_string(raw_order.clone(), Value::from("side"), Value::Undefined);
+            let mut amount: Value = self.safe_value(raw_order.clone(), Value::from("amount"), Value::Undefined);
+            let mut price: Value = self.safe_value(raw_order.clone(), Value::from("price"), Value::Undefined);
             let mut order_params: Value = self.safe_dict(raw_order.clone(), Value::from("params"), Value::new_object());
             let mut order_request: Value = <Self as Hibachi>::edit_order_request(self, nonce.clone() + Value::from(i), id.clone(), symbol.clone(), r#type.clone(), side.clone(), amount.clone(), price.clone(), order_params.clone());
             order_request.set("action".into(), Value::from("modify"));
@@ -990,7 +969,7 @@ pub trait Hibachi : Exchange {
             "accountId": <Self as Hibachi>::get_account_id(self),
             "orders": request_orders
         }))).unwrap());
-        let mut response: Value = self.private_post_trade_orders(extend_2(request.clone(), params.clone())).await;
+        let mut response: Value = self.dispatch("privatePostTradeOrders".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         //
         // { "orders": [ { "orderId": "589636801329628160" } ] }
         //
@@ -1001,7 +980,7 @@ pub trait Hibachi : Exchange {
             let mut response_order: Value = response_orders.get(i.into());
             ret.push(self.safe_order(Value::Json(normalize(&Value::Json(json!({
                 "info": response_order,
-                "id": self.safe_string(response_order.clone(), Value::from("orderId")),
+                "id": self.safe_string(response_order.clone(), Value::from("orderId"), Value::Undefined),
                 "status": "pending"
             }))).unwrap()), Value::Undefined));
             i += 1;
@@ -1025,7 +1004,7 @@ pub trait Hibachi : Exchange {
         params = params.or_default(Value::new_object());
         let mut request: Value = <Self as Hibachi>::cancel_order_request(self, id.clone());
         request.set("accountId".into(), <Self as Hibachi>::get_account_id(self));
-        let mut response: Value = self.private_delete_trade_order(extend_2(request.clone(), params.clone())).await;
+        let mut response: Value = self.dispatch("privateDeleteTradeOrder".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         // At this time the response body is empty. A 200 response means the cancel request is accepted and sent to cancel
         //
         // {}
@@ -1051,7 +1030,7 @@ pub trait Hibachi : Exchange {
             "accountId": <Self as Hibachi>::get_account_id(self),
             "orders": orders
         }))).unwrap());
-        let mut response: Value = self.private_post_trade_orders(extend_2(request.clone(), params.clone())).await;
+        let mut response: Value = self.dispatch("privatePostTradeOrders".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         //
         // { "orders": [ { "orderId": "589636801329628160" } ] }
         //
@@ -1062,7 +1041,7 @@ pub trait Hibachi : Exchange {
             let mut response_order: Value = response_orders.get(i.into());
             ret.push(self.safe_order(Value::Json(normalize(&Value::Json(json!({
                 "info": response_order,
-                "id": self.safe_string(response_order.clone(), Value::from("orderId")),
+                "id": self.safe_string(response_order.clone(), Value::from("orderId"), Value::Undefined),
                 "status": "canceled"
             }))).unwrap()), Value::Undefined));
             i += 1;
@@ -1085,9 +1064,9 @@ pub trait Hibachi : Exchange {
         }))).unwrap());
         if symbol.clone().is_nonnullish() {
             let mut market: Value = self.market(symbol.clone());
-            request.set("contractId".into(), self.safe_integer(market.clone(), Value::from("numericId")));
+            request.set("contractId".into(), self.safe_integer(market.clone(), Value::from("numericId"), Value::Undefined));
         };
-        let mut response: Value = self.private_delete_trade_orders(extend_2(request.clone(), params.clone())).await;
+        let mut response: Value = self.dispatch("privateDeleteTradeOrders".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         // At this time the response body is empty. A 200 response means the cancel request is accepted and sent to process
         //
         // {}
@@ -1113,10 +1092,10 @@ pub trait Hibachi : Exchange {
         let mut usdt_asset16: Value = self.int_to_base16(Value::from(USDTAssetId));
         let mut usdt_asset_padded: Value = usdt_asset16.pad_start(Value::from(8), Value::from("0"));
         let mut encoded_asset_id: Value = self.base16_to_binary(usdt_asset_padded.clone());
-        let mut quantity16: Value = self.int_to_base16(self.parse_to_int(quantity_internal.clone()));
+        let mut quantity16: Value = self.int_to_base16(self.parse_to_int(quantity_internal.clone(), Value::Undefined));
         let mut quantity_padded: Value = quantity16.pad_start(Value::from(16), Value::from("0"));
         let mut encoded_quantity: Value = self.base16_to_binary(quantity_padded.clone());
-        let mut max_fees16: Value = self.int_to_base16(self.parse_to_int(max_fees_internal.clone()));
+        let mut max_fees16: Value = self.int_to_base16(self.parse_to_int(max_fees_internal.clone(), Value::Undefined));
         let mut max_fees_padded: Value = max_fees16.pad_start(Value::from(16), Value::from("0"));
         let mut encoded_max_fees: Value = self.base16_to_binary(max_fees_padded.clone());
         let mut encoded_address: Value = self.base16_to_binary(address.clone());
@@ -1128,7 +1107,7 @@ pub trait Hibachi : Exchange {
         params = params.or_default(Value::new_object());
         let mut withdraw_address: Value = address.slice(Value::from(40).neg());
         // Get the withdraw fees
-        let mut exchange_info: Value = self.public_get_market_exchange_info(params.clone()).await;
+        let mut exchange_info: Value = self.dispatch("publicGetMarketExchangeInfo".into(), params.clone(), Value::Undefined).await;
         // {
         //      "feeConfig": {
         //          "depositFees": "0.004518",
@@ -1153,7 +1132,7 @@ pub trait Hibachi : Exchange {
             "maxFees": self.number_to_string(max_fees.clone()),
             "signature": signature
         }))).unwrap());
-        self.private_post_capital_withdraw(extend_2(request.clone(), params.clone())).await;
+        self.dispatch("privatePostCapitalWithdraw".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         // At this time the response body is empty. A 200 response means the withdraw request is accepted and sent to process
         //
         // {}
@@ -1247,7 +1226,7 @@ pub trait Hibachi : Exchange {
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
             "accountId": <Self as Hibachi>::get_account_id(self)
         }))).unwrap());
-        let mut response: Value = self.private_get_trade_account_trades(extend_2(request.clone(), params.clone())).await;
+        let mut response: Value = self.dispatch("privateGetTradeAccountTrades".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         //
         // {
         //     "trades": [
@@ -1300,7 +1279,7 @@ pub trait Hibachi : Exchange {
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
             "accountId": <Self as Hibachi>::get_account_id(self)
         }))).unwrap());
-        let mut response: Value = self.private_get_trade_orders(extend_2(request.clone(), params.clone())).await;
+        let mut response: Value = self.dispatch("privateGetTradeOrders".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         // [
         //     {
         //         "accountId": 12452,
@@ -1374,7 +1353,7 @@ pub trait Hibachi : Exchange {
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
             "accountId": <Self as Hibachi>::get_account_id(self)
         }))).unwrap());
-        let mut response: Value = self.private_get_trade_account_info(extend_2(request.clone(), params.clone())).await;
+        let mut response: Value = self.dispatch("privateGetTradeAccountInfo".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         //
         // {
         //     "assets": [
@@ -1433,11 +1412,11 @@ pub trait Hibachi : Exchange {
         //     "unrealizedTradingPnl": "0.077204"
         // }
         //
-        let mut market_id: Value = self.safe_string(position.clone(), Value::from("symbol"));
+        let mut market_id: Value = self.safe_string(position.clone(), Value::from("symbol"), Value::Undefined);
         market = self.safe_market(market_id.clone(), market.clone(), Value::Undefined, Value::Undefined);
         let mut symbol: Value = market.get(Value::from("symbol"));
-        let mut side: Value = self.safe_string_lower(position.clone(), Value::from("direction"));
-        let mut quantity: Value = self.safe_string(position.clone(), Value::from("quantity"));
+        let mut side: Value = self.safe_string_lower(position.clone(), Value::from("direction"), Value::Undefined);
+        let mut quantity: Value = self.safe_string(position.clone(), Value::from("quantity"), Value::Undefined);
         let mut unrealized_funding: Value = self.safe_string(position.clone(), Value::from("unrealizedFundingPnl"), Value::from("0"));
         let mut unrealized_trading: Value = self.safe_string(position.clone(), Value::from("unrealizedTradingPnl"), Value::from("0"));
         let mut unrealized_pnl: Value = Precise::string_add(unrealized_funding.clone(), unrealized_trading.clone());
@@ -1445,9 +1424,9 @@ pub trait Hibachi : Exchange {
             "info": position,
             "id": Value::Undefined,
             "symbol": symbol,
-            "entryPrice": self.safe_string(position.clone(), Value::from("average_entry_price")),
+            "entryPrice": self.safe_string(position.clone(), Value::from("average_entry_price"), Value::Undefined),
             "markPrice": Value::Undefined,
-            "notional": self.safe_string(position.clone(), Value::from("notionalValue")),
+            "notional": self.safe_string(position.clone(), Value::from("notionalValue"), Value::Undefined),
             "collateral": Value::Undefined,
             "unrealizedPnl": unrealized_pnl,
             "side": side,
@@ -1468,60 +1447,9 @@ pub trait Hibachi : Exchange {
         }))).unwrap()));
     }
 
-    fn sign(&mut self, mut path: Value, mut api: Value, mut method: Value, mut params: Value, mut headers: Value, mut body: Value) -> Value {
-        api = api.or_default(Value::from("public"));
-        method = method.or_default(Value::from("GET"));
-        params = params.or_default(Value::new_object());
-        let mut endpoint: Value = Value::from("/") + self.implode_params(path.clone(), params.clone());
-        let mut url: Value = self.get("urls".into()).get(Value::from("api")).get(api.clone()) + endpoint.clone();
-        headers = Value::Json(normalize(&Value::Json(json!({
-            "Hibachi-Client": "HibachiCCXT/unversioned"
-        }))).unwrap());
-        if method.clone() == Value::from("GET") {
-            let mut request: Value = self.omit(params.clone(), self.extract_params(path.clone()));
-            let mut query: Value = self.urlencode(request.clone());
-            if query.len() != 0 {
-                url = url +  Value::from("?") + query.clone();
-            };
-        };
-        if method.clone() == Value::from("POST") || method.clone() == Value::from("PUT") || method.clone() == Value::from("DELETE") {
-            headers.set("Content-Type".into(), Value::from("application/json"));
-            body = self.json(params.clone());
-        };
-        if api.clone() == Value::from("private") {
-            self.check_required_credentials(Value::Undefined);
-            headers.set("Authorization".into(), self.get("apiKey".into()));
-        };
-        return Value::Json(normalize(&Value::Json(json!({
-            "url": url,
-            "method": method,
-            "body": body,
-            "headers": headers
-        }))).unwrap());
-    }
+    
 
-    fn handle_errors(&mut self, mut http_code: Value, mut reason: Value, mut url: Value, mut method: Value, mut headers: Value, mut body: Value, mut response: Value, mut request_headers: Value, mut request_body: Value) -> Value {
-        if response.clone().is_nullish() {
-            return Value::Undefined;
-        };
-        // fallback to default error handler
-        if response.contains_key(Value::from("status")) {
-            //
-            //     {"errorCode":4,"message":"Invalid input: Invalid quantity: 0","status":"failed"}
-            //
-            let mut status: Value = self.safe_string(response.clone(), Value::from("status"));
-            if status.clone() == Value::from("failed") {
-                let mut code: Value = self.safe_string(response.clone(), Value::from("errorCode"));
-                let mut feedback: Value = self.get("id".into()) + Value::from(" ") + body.clone();
-                self.throw_broadly_matched_exception(self.get("exceptions".into()).get(Value::from("broad")), body.clone(), feedback.clone());
-                self.throw_exactly_matched_exception(self.get("exceptions".into()).get(Value::from("exact")), code.clone(), feedback.clone());
-                let mut message: Value = self.safe_string(response.clone(), Value::from("message"));
-                self.throw_exactly_matched_exception(self.get("exceptions".into()).get(Value::from("exact")), message.clone(), feedback.clone());
-                panic!(r###"ExchangeError::new(feedback)"###);
-            };
-        };
-        return Value::Undefined;
-    }
+    
 
     fn parse_transaction_type(&self, mut r#type: Value) -> Value {
         let mut types: Value = Value::Json(normalize(&Value::Json(json!({
@@ -1544,7 +1472,7 @@ pub trait Hibachi : Exchange {
     }
 
     fn parse_ledger_entry(&self, mut item: Value, mut currency: Value) -> Value {
-        let mut transaction_type: Value = self.safe_string(item.clone(), Value::from("transactionType"));
+        let mut transaction_type: Value = self.safe_string(item.clone(), Value::from("transactionType"), Value::Undefined);
         let mut timestamp: Value = Value::Undefined;
         let mut r#type: Value = Value::Undefined;
         let mut direction: Value = Value::Undefined;
@@ -1557,7 +1485,7 @@ pub trait Hibachi : Exchange {
             // response from TradeAccountTradingHistory
             timestamp = self.safe_integer_product(item.clone(), Value::from("timestamp"), Value::from(1000));
             r#type = Value::from("trade");
-            let mut amount_str: Value = self.safe_string(item.clone(), Value::from("realizedPnl"));
+            let mut amount_str: Value = self.safe_string(item.clone(), Value::from("realizedPnl"), Value::Undefined);
             if Precise::string_lt(amount_str.clone(), Value::from("0")) {
                 direction = Value::from("out");
                 amount_str = Precise::string_neg(amount_str.clone());
@@ -1576,16 +1504,16 @@ pub trait Hibachi : Exchange {
             amount = self.safe_number(item.clone(), Value::from("quantity"), Value::Undefined);
             direction = if transaction_type.clone() == Value::from("deposit") || transaction_type.clone() == Value::from("transfer-in") { Value::from("in") } else { Value::from("out") };
             r#type = <Self as Hibachi>::parse_transaction_type(self, transaction_type.clone());
-            status = <Self as Hibachi>::parse_transaction_status(self, self.safe_string(item.clone(), Value::from("status")));
+            status = <Self as Hibachi>::parse_transaction_status(self, self.safe_string(item.clone(), Value::from("status"), Value::Undefined));
             if transaction_type.clone() == Value::from("transfer-in") {
-                reference_account = self.safe_string(item.clone(), Value::from("srcAccountId"));
+                reference_account = self.safe_string(item.clone(), Value::from("srcAccountId"), Value::Undefined);
             } else if transaction_type.clone() == Value::from("transfer-out") {
-                reference_account = self.safe_string(item.clone(), Value::from("receivingAccountId"));
+                reference_account = self.safe_string(item.clone(), Value::from("receivingAccountId"), Value::Undefined);
             };
-            reference_id = self.safe_string(item.clone(), Value::from("transactionHash"));
+            reference_id = self.safe_string(item.clone(), Value::from("transactionHash"), Value::Undefined);
         };
         return self.safe_ledger_entry(Value::Json(normalize(&Value::Json(json!({
-            "id": self.safe_string(item.clone(), Value::from("id")),
+            "id": self.safe_string(item.clone(), Value::from("id"), Value::Undefined),
             "currency": self.currency(Value::from("USDT")),
             "account": self.number_to_string(self.get("accountId".into())),
             "referenceAccount": reference_account,
@@ -1610,7 +1538,7 @@ pub trait Hibachi : Exchange {
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
             "accountId": <Self as Hibachi>::get_account_id(self)
         }))).unwrap());
-        let mut raw_promises: Value = Value::Json(serde_json::Value::Array(vec![self.private_get_capital_history(extend_2(request.clone(), params.clone())).into(), self.private_get_trade_account_trading_history(extend_2(request.clone(), params.clone())).into()]));
+        let mut raw_promises: Value = Value::Json(serde_json::Value::Array(vec![self.dispatch("privateGetCapitalHistory".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await.into(), self.dispatch("privateGetTradeAccountTradingHistory".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await.into()]));
         let mut promises: Value = Promise::all(raw_promises.clone()).await;
         let mut response_capital_history: Value = promises.get(Value::from(0));
         //
@@ -1702,10 +1630,10 @@ pub trait Hibachi : Exchange {
     async fn fetch_deposit_address(&mut self, mut code: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
-            "publicKey": self.safe_string(params.clone(), Value::from("publicKey")),
+            "publicKey": self.safe_string(params.clone(), Value::from("publicKey"), Value::Undefined),
             "accountId": <Self as Hibachi>::get_account_id(self)
         }))).unwrap());
-        let mut response: Value = self.private_get_capital_deposit_info(extend_2(request.clone(), params.clone())).await;
+        let mut response: Value = self.dispatch("privateGetCapitalDepositInfo".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         // {
         //     "depositAddressEvm": "0x0b95d90b9345dadf1460bd38b9f4bb0d2f4ed788"
         // }
@@ -1713,22 +1641,22 @@ pub trait Hibachi : Exchange {
             "info": response,
             "currency": "USDT",
             "network": "ARBITRUM",
-            "address": self.safe_string(response.clone(), Value::from("depositAddressEvm")),
+            "address": self.safe_string(response.clone(), Value::from("depositAddressEvm"), Value::Undefined),
             "tag": Value::Undefined
         }))).unwrap());
     }
 
     fn parse_transaction(&self, mut transaction: Value, mut currency: Value) -> Value {
         let mut timestamp: Value = self.safe_integer_product(transaction.clone(), Value::from("timestampSec"), Value::from(1000));
-        let mut address: Value = self.safe_string(transaction.clone(), Value::from("withdrawalAddress"));
-        let mut transaction_type: Value = self.safe_string(transaction.clone(), Value::from("transactionType"));
+        let mut address: Value = self.safe_string(transaction.clone(), Value::from("withdrawalAddress"), Value::Undefined);
+        let mut transaction_type: Value = self.safe_string(transaction.clone(), Value::from("transactionType"), Value::Undefined);
         if transaction_type.clone() != Value::from("deposit") && transaction_type.clone() != Value::from("withdrawal") {
             transaction_type = <Self as Hibachi>::parse_transaction_type(self, transaction_type.clone());
         };
         return Value::Json(normalize(&Value::Json(json!({
             "info": transaction,
-            "id": self.safe_string(transaction.clone(), Value::from("id")),
-            "txid": self.safe_string(transaction.clone(), Value::from("transactionHash")),
+            "id": self.safe_string(transaction.clone(), Value::from("id"), Value::Undefined),
+            "txid": self.safe_string(transaction.clone(), Value::from("transactionHash"), Value::Undefined),
             "timestamp": timestamp,
             "datetime": self.iso8601(timestamp.clone()),
             "network": "ARBITRUM",
@@ -1741,7 +1669,7 @@ pub trait Hibachi : Exchange {
             "type": transaction_type,
             "amount": self.safe_number(transaction.clone(), Value::from("quantity"), Value::Undefined),
             "currency": "USDT",
-            "status": <Self as Hibachi>::parse_transaction_status(self, self.safe_string(transaction.clone(), Value::from("status"))),
+            "status": <Self as Hibachi>::parse_transaction_status(self, self.safe_string(transaction.clone(), Value::from("status"), Value::Undefined)),
             "updated": Value::Undefined,
             "internal": Value::Undefined,
             "comment": Value::Undefined,
@@ -1755,7 +1683,7 @@ pub trait Hibachi : Exchange {
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
             "accountId": <Self as Hibachi>::get_account_id(self)
         }))).unwrap());
-        let mut response: Value = self.private_get_capital_history(extend_2(request.clone(), params.clone())).await;
+        let mut response: Value = self.dispatch("privateGetCapitalHistory".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         // {
         //     "transactions": [
         //         {
@@ -1792,7 +1720,7 @@ pub trait Hibachi : Exchange {
         let mut i: usize = 0;
         while i < transactions.len() {
             let mut transaction: Value = transactions.get(i.into());
-            if self.safe_string(transaction.clone(), Value::from("transactionType")) == Value::from("deposit") {
+            if self.safe_string(transaction.clone(), Value::from("transactionType"), Value::Undefined) == Value::from("deposit") {
                 deposits.push(transaction.clone());
             };
             i += 1;
@@ -1806,7 +1734,7 @@ pub trait Hibachi : Exchange {
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
             "accountId": <Self as Hibachi>::get_account_id(self)
         }))).unwrap());
-        let mut response: Value = self.private_get_capital_history(extend_2(request.clone(), params.clone())).await;
+        let mut response: Value = self.dispatch("privateGetCapitalHistory".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         // {
         //     "transactions": [
         //         {
@@ -1843,7 +1771,7 @@ pub trait Hibachi : Exchange {
         let mut i: usize = 0;
         while i < transactions.len() {
             let mut transaction: Value = transactions.get(i.into());
-            if self.safe_string(transaction.clone(), Value::from("transactionType")) == Value::from("withdrawal") {
+            if self.safe_string(transaction.clone(), Value::from("transactionType"), Value::Undefined) == Value::from("withdrawal") {
                 withdrawals.push(transaction.clone());
             };
             i += 1;
@@ -1868,14 +1796,14 @@ pub trait Hibachi : Exchange {
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
             "symbol": market.get(Value::from("id"))
         }))).unwrap());
-        let mut response: Value = self.public_get_market_data_open_interest(extend_2(request.clone(), params.clone())).await;
+        let mut response: Value = self.dispatch("publicGetMarketDataOpenInterest".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         //
         //   { "totalQuantity" : "2.3299770166" }
         //
         let mut timestamp: Value = self.milliseconds();
         return self.safe_open_interest(Value::Json(normalize(&Value::Json(json!({
             "symbol": symbol,
-            "openInterestAmount": self.safe_string(response.clone(), Value::from("totalQuantity")),
+            "openInterestAmount": self.safe_string(response.clone(), Value::from("totalQuantity"), Value::Undefined),
             "openInterestValue": Value::Undefined,
             "timestamp": timestamp,
             "datetime": self.iso8601(timestamp.clone()),
@@ -1890,7 +1818,7 @@ pub trait Hibachi : Exchange {
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
             "symbol": market.get(Value::from("id"))
         }))).unwrap());
-        let mut response: Value = self.public_get_market_data_prices(extend_2(request.clone(), params.clone())).await;
+        let mut response: Value = self.dispatch("publicGetMarketDataPrices".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         //
         // {
         //     "askPrice": "3514.650296",
@@ -1937,7 +1865,7 @@ pub trait Hibachi : Exchange {
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
             "symbol": market.get(Value::from("id"))
         }))).unwrap());
-        let mut response: Value = self.public_get_market_data_funding_rates(extend_2(request.clone(), params.clone())).await;
+        let mut response: Value = self.dispatch("publicGetMarketDataFundingRates".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         //
         // {
         //     "data": [
@@ -1965,7 +1893,7 @@ pub trait Hibachi : Exchange {
             }))).unwrap()));
             i += 1;
         };
-        let mut sorted: Value = self.sort_by(rates.clone(), Value::from("timestamp"));
+        let mut sorted: Value = self.sort_by(rates.clone(), Value::from("timestamp"), Value::Undefined, Value::Undefined);
         return self.filter_by_symbol_since_limit(sorted.clone(), symbol.clone(), since.clone(), limit.clone(), Value::Undefined);
     }
 
@@ -2032,8 +1960,8 @@ impl ValueTrait for HibachiImpl {
     fn push(&mut self, value: Value) { self.0.push(value) }
     fn split(&self, separator: Value) -> Value { self.0.split(separator) }
     fn contains_key(&self, key: Value) -> bool { self.0.contains_key(key) }
-    fn keys(&self) -> Vec<Value> { self.0.keys() }
-    fn values(&self) -> Vec<Value> { self.0.values() }
+    fn keys(&self) -> Value { self.0.keys() }
+    fn values(&self) -> Value { self.0.values() }
     fn to_array(&self, x: Value) -> Value { self.0.to_array(x) }
     fn index_of(&self, x: Value) -> Value { self.0.index_of(x) }
     fn join(&self, glue: Value) -> Value { self.0.join(glue) }

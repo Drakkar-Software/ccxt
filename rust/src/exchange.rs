@@ -235,17 +235,23 @@ impl Value {
         }
     }
 
-    pub fn keys(&self) -> Vec<Value> {
+    pub fn keys(&self) -> Value {
         match self {
-            Value::Json(JSON::Object(o)) => o.keys().map(|k| Value::from(k.as_str())).collect(),
-            _ => vec![],
+            Value::Json(JSON::Object(o)) => {
+                let arr: Vec<JSON> = o.keys().map(|k| JSON::String(k.clone())).collect();
+                Value::Json(JSON::Array(arr))
+            }
+            _ => Value::new_array(),
         }
     }
 
-    pub fn values(&self) -> Vec<Value> {
+    pub fn values(&self) -> Value {
         match self {
-            Value::Json(JSON::Object(o)) => o.values().cloned().map(Value::Json).collect(),
-            _ => vec![],
+            Value::Json(JSON::Object(o)) => {
+                let arr: Vec<JSON> = o.values().cloned().collect();
+                Value::Json(JSON::Array(arr))
+            }
+            _ => Value::new_array(),
         }
     }
 
@@ -545,6 +551,26 @@ fn coerce_to_i64(v: &Value) -> Option<i64> {
     }
 }
 
+impl IntoIterator for Value {
+    type Item = Value;
+    type IntoIter = std::vec::IntoIter<Value>;
+    fn into_iter(self) -> Self::IntoIter {
+        match self {
+            Value::Json(JSON::Array(arr)) => arr.into_iter().map(Value::Json).collect::<Vec<_>>().into_iter(),
+            Value::Json(JSON::Object(obj)) => obj.keys().map(|k| Value::from(k.as_str())).collect::<Vec<Value>>().into_iter(),
+            _ => vec![].into_iter(),
+        }
+    }
+}
+
+impl std::ops::Not for Value {
+    type Output = Value;
+    fn not(self) -> Value {
+        (!self.is_truthy()).into()
+    }
+}
+
+
 impl std::ops::Add for Value {
     type Output = Value;
     fn add(self, rhs: Value) -> Value {
@@ -657,6 +683,7 @@ impl BoolExt for bool {
 pub struct Precise;
 
 impl Precise {
+    pub fn new(v: Value) -> Value { v }
     pub fn string_add(a: Value, b: Value) -> Value { a + b }
     pub fn string_sub(a: Value, b: Value) -> Value { a - b }
     pub fn string_mul(a: Value, b: Value) -> Value { a * b }
@@ -672,6 +699,12 @@ impl Precise {
     pub fn string_le(a: Value, b: Value) -> bool { a <= b }
     pub fn string_min(a: Value, b: Value) -> Value { if a <= b { a } else { b } }
     pub fn string_max(a: Value, b: Value) -> Value { if a >= b { a } else { b } }
+}
+
+pub struct Promise;
+
+impl Promise {
+    pub async fn all(values: Value) -> Value { values }
 }
 
 pub struct Math;
@@ -765,8 +798,8 @@ pub trait ValueTrait {
     fn push(&mut self, value: Value);
     fn split(&self, separator: Value) -> Value;
     fn contains_key(&self, key: Value) -> bool;
-    fn keys(&self) -> Vec<Value>;
-    fn values(&self) -> Vec<Value>;
+    fn keys(&self) -> Value;
+    fn values(&self) -> Value;
     fn to_array(&self, x: Value) -> Value;
     fn index_of(&self, x: Value) -> Value;
     fn join(&self, glue: Value) -> Value;
@@ -1357,6 +1390,24 @@ pub trait Exchange: ValueTrait {
     }
 
     // ---------------------------------------------------------------------------
+    // Methods stubbed due to transpilation issues (borrow checker, type inference).
+    // They exist in Exchange.js but their transpiled output doesn't compile yet.
+    // ---------------------------------------------------------------------------
+    async fn fetch_markets(&mut self, _params: Value) -> Value { Value::Undefined }
+    async fn fetch_my_dust_trades(&mut self, _symbol: Value, _since: Value, _limit: Value, _params: Value) -> Value { Value::Undefined }
+    fn parse_account_position(&self, _position: Value, _market: Value) -> Value { Value::Undefined }
+    fn parse_position_risk(&self, _position: Value, _market: Value) -> Value { Value::Undefined }
+    async fn set_margin_mode(&mut self, _margin_mode: Value, _symbol: Value, _params: Value) -> Value { Value::Undefined }
+    fn get_network_code_by_network_url(&self, _currency_code: Value, _url: Value) -> Value { Value::Undefined }
+    fn get_base_domain_from_url(&self, _url: Value) -> Value { Value::Undefined }
+    fn sign(&self, _path: Value, _api: Value, _method: Value, _params: Value, _headers: Value, _body: Value) -> Value { Value::new_object() }
+    fn handle_errors(&mut self, _code: Value, _reason: Value, _url: Value, _method: Value, _headers: Value, _body: Value, _response: Value, _request_headers: Value, _request_body: Value) -> Value { Value::Undefined }
+    async fn fetch_convert_trade(&mut self, _id: Value, _code: Value, _since: Value, _limit: Value, _params: Value) -> Value { Value::Undefined }
+    async fn fetch_convert_trade_history(&mut self, _code: Value, _since: Value, _limit: Value, _params: Value) -> Value { Value::Undefined }
+    async fn fetch_all_greeks(&mut self, _underlying: Value, _params: Value) -> Value { Value::Undefined }
+    async fn fetch_option_positions(&mut self, _symbols: Value, _params: Value) -> Value { Value::Undefined }
+
+    // ---------------------------------------------------------------------------
     // Runtime methods — defined before the delimiter in Exchange.js, so the
     // transpiler doesn't see them.  Stub implementations here; replace with
     // real logic as the runtime grows.
@@ -1369,7 +1420,7 @@ pub trait Exchange: ValueTrait {
     fn parse8601(&self, _s: Value) -> Value { Value::Undefined }
     fn milliseconds(&self) -> Value { Value::Undefined }
     fn number_to_string(&self, v: Value) -> Value { v.to_string() }
-    fn in_array(&self, _needle: Value, _haystack: Value) -> bool { false }
+    fn in_array(&self, _needle: Value, _haystack: Value) -> Value { false.into() }
     fn decimal_to_precision(&self, v: Value, _r: Value, _p: Value, _c: Value, _pad: Value) -> Value { v }
     fn uuid22(&self) -> Value { Value::from("") }
     fn yymmdd(&self, _ts: Value, _sep: Value) -> Value { Value::from("") }
@@ -1390,6 +1441,10 @@ pub trait Exchange: ValueTrait {
     fn hmac(&self, _msg: Value, _sec: Value, _hash: Value, _enc: Value) -> Value { Value::from("") }
     fn array_concat(&self, a: Value, b: Value) -> Value { a.concat(b) }
     fn sum(&self, a: Value, b: Value) -> Value { a + b }
+    fn parse_json(&self, body: Value) -> Value { body }
+    fn check_address(&mut self, _address: Value) -> Value { Value::Undefined }
+    fn network_id_to_code(&self, _network_id: Value, _currency_code: Value) -> Value { Value::Undefined }
+    fn deposit_withdraw_fee(&self, fee: Value) -> Value { fee }
 
     // ---------------------------------------------------------------------------
     // METHODS BELOW THIS LINE ARE TRANSPILED FROM JAVASCRIPT
@@ -1483,8 +1538,7 @@ pub trait Exchange: ValueTrait {
     fn check_conflicting_proxies(&mut self, mut proxy_agent_set: Value, mut proxy_url_set: Value) -> Value { Value::Undefined }
 
 
-    fn check_address(&mut self, mut address: Value) -> Value { Value::Undefined }
-
+    
 
     fn find_message_hashes(&mut self, mut client: Value, mut element: Value) -> Value { Value::Undefined }
 
@@ -1502,8 +1556,7 @@ pub trait Exchange: ValueTrait {
     fn enable_demo_trading(&mut self, mut enable: Value) -> Value { Value::Undefined }
 
 
-    fn sign(&mut self, mut path: Value, mut api: Value, mut method: Value, mut params: Value, mut headers: Value, mut body: Value) -> Value { Value::Undefined }
-
+    
 
     async fn fetch_accounts(&mut self, mut params: Value) -> Value { Value::Undefined }
 
@@ -1663,7 +1716,7 @@ pub trait Exchange: ValueTrait {
     fn parse_ticker(&self, mut ticker: Value, mut market: Value) -> Value { Value::Undefined }
 
 
-    fn parse_deposit_address(&self, mut deposit_address: Value, mut currency: Value) -> Value { Value::Undefined }
+    fn parse_deposit_address(&mut self, mut deposit_address: Value, mut currency: Value) -> Value { Value::Undefined }
 
 
     fn parse_trade(&mut self, mut trade: Value, mut market: Value) -> Value { Value::Undefined }
@@ -1785,8 +1838,7 @@ pub trait Exchange: ValueTrait {
     async fn fetch_margin_adjustment_history(&mut self, mut symbol: Value, mut r#type: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
 
 
-    async fn set_margin_mode(&mut self, mut margin_mode: Value, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
-
+    
 
     async fn fetch_deposit_addresses_by_network(&mut self, mut code: Value, mut params: Value) -> Value { Value::Undefined }
 
@@ -2066,8 +2118,7 @@ pub trait Exchange: ValueTrait {
     ///
     /// * `networkId` {string} - exchange specific network id/title, like: TRON, Trc-20, usdt-erc20, etc
     /// * `currencyCode` {string|undefined} - unified currency code, but this argument is not required by default, unless there is an exchange (like huobi) that needs an override of the method to be able to pass currencyCode argument additionally
-    fn network_id_to_code(&mut self, mut network_id: Value, mut currency_code: Value) -> Value { Value::Undefined }
-
+    
 
     fn handle_network_code_and_params(&mut self, mut params: Value) -> Value { Value::Undefined }
 
@@ -2543,8 +2594,7 @@ pub trait Exchange: ValueTrait {
     fn find_broadly_matched_key(&mut self, mut broad: Value, mut string: Value) -> Value { Value::Undefined }
 
 
-    fn handle_errors(&mut self, mut status_code: Value, mut status_text: Value, mut url: Value, mut method: Value, mut response_headers: Value, mut response_body: Value, mut response: Value, mut request_headers: Value, mut request_body: Value) -> Value { Value::Undefined }
-
+    
 
     fn calculate_rate_limiter_cost(&mut self, mut api: Value, mut method: Value, mut path: Value, mut params: Value, mut config: Value) -> Value { Value::Undefined }
 
@@ -2660,11 +2710,9 @@ pub trait Exchange: ValueTrait {
     async fn create_convert_trade(&mut self, mut id: Value, mut from_code: Value, mut to_code: Value, mut amount: Value, mut params: Value) -> Value { Value::Undefined }
 
 
-    async fn fetch_convert_trade(&mut self, mut id: Value, mut code: Value, mut params: Value) -> Value { Value::Undefined }
+    
 
-
-    async fn fetch_convert_trade_history(&mut self, mut code: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
-
+    
 
     async fn fetch_position_mode(&mut self, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
 
@@ -3026,8 +3074,7 @@ pub trait Exchange: ValueTrait {
     async fn fetch_greeks(&mut self, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
 
 
-    async fn fetch_all_greeks(&mut self, mut symbols: Value, mut params: Value) -> Value { Value::Undefined }
-
+    
 
     async fn fetch_option_chain(&mut self, mut code: Value, mut params: Value) -> Value { Value::Undefined }
 
@@ -3096,7 +3143,7 @@ pub trait Exchange: ValueTrait {
     fn market(&self, mut symbol: Value) -> Value { Value::Undefined }
 
 
-    fn create_expired_option_market(&mut self, mut symbol: Value) -> Value { Value::Undefined }
+    fn create_expired_option_market(&self, mut symbol: Value) -> Value { Value::Undefined }
 
 
     fn is_leveraged_currency(&mut self, mut currency_code: Value, mut check_base_coin: Value, mut existing_currencies: Value) -> Value { Value::Undefined }
@@ -3447,14 +3494,13 @@ pub trait Exchange: ValueTrait {
     /// * `response` {object[]|object} - unparsed response from the exchange
     /// * `codes` {string[]|undefined} - the unified currency codes to fetch transactions fees for, returns all currencies when undefined
     /// * `currencyIdKey` {str} - *should only be undefined when response is a dictionary* the object key that corresponds to the currency id
-    fn parse_deposit_withdraw_fees(&self, mut response: Value, mut codes: Value, mut currency_id_key: Value) -> Value { Value::Undefined }
+    fn parse_deposit_withdraw_fees(&mut self, mut response: Value, mut codes: Value, mut currency_id_key: Value) -> Value { Value::Undefined }
 
 
-    fn parse_deposit_withdraw_fee(&self, mut fee: Value, mut currency: Value) -> Value { Value::Undefined }
+    fn parse_deposit_withdraw_fee(&mut self, mut fee: Value, mut currency: Value) -> Value { Value::Undefined }
 
 
-    fn deposit_withdraw_fee(&mut self, mut info: Value) -> Value { Value::Undefined }
-
+    
 
     /// Returns a deposit withdraw fee structure
     ///

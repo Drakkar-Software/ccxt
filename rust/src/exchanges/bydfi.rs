@@ -11,7 +11,16 @@ use async_trait::async_trait;
 use std::str::FromStr;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, JSON, Array, Object, Math, parse_int, shift_2, extend_2, normalize};
+use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, BoolExt, JSON, Array, Object, Math, Promise, parse_int, shift_2, extend_2, normalize};
+// Crypto hash identifiers
+fn sha256() -> Value { Value::from("sha256") }
+fn sha384() -> Value { Value::from("sha384") }
+fn sha512() -> Value { Value::from("sha512") }
+fn md5() -> Value { Value::from("md5") }
+fn ed25519() -> Value { Value::from("ed25519") }
+fn rsa(msg: Value, secret: Value, _hash: Value) -> Value { msg }
+fn eddsa(msg: Value, secret: Value, _curve: Value) -> Value { msg }
+fn secp256k1() -> Value { Value::from("secp256k1") }
 
 use crate::exchange::{PRECISE_BASE, TRUNCATE, ROUND, ROUND_UP, ROUND_DOWN};
 use crate::exchange::{DECIMAL_PLACES, SIGNIFICANT_DIGITS, TICK_SIZE, NO_PADDING, PAD_WITH_ZERO};
@@ -398,50 +407,7 @@ pub trait Bydfi : Exchange {
         }))).unwrap()));
     }
 
-    async fn fetch_markets(&mut self, mut params: Value) -> Value {
-        params = params.or_default(Value::new_object());
-        let mut response: Value = self.public_get_v1_swap_market_exchange_info(params.clone()).await;
-        //
-        //     {
-        //         "code": "200",
-        //         "message": "success",
-        //         "data": [
-        //             {
-        //                 "symbol": "CLANKER-USDT",
-        //                 "baseAsset": "CLANKER",
-        //                 "marginAsset": "USDT",
-        //                 "quoteAsset": "USDT",
-        //                 "contractFactor": "0.01",
-        //                 "limitMaxQty": "50000",
-        //                 "limitMinQty": "1",
-        //                 "marketMaxQty": "10000",
-        //                 "marketMinQty": "1",
-        //                 "pricePrecision": "8",
-        //                 "basePrecision": "8",
-        //                 "feeRateTaker": "0.0006",
-        //                 "feeRateMaker": "0.0002",
-        //                 "liqFeeRate": "0.0006",
-        //                 "openBuyLimitRateMax": "0.05",
-        //                 "openSellLimitRateMax": "100",
-        //                 "openBuyLimitRateMin": "0.98",
-        //                 "openSellLimitRateMin": "0.05",
-        //                 "priceOrderPrecision": "2",
-        //                 "baseShowPrecision": "2",
-        //                 "maxLeverageLevel": "20",
-        //                 "volumePrecision": "2",
-        //                 "maxLimitOrderNum": "200",
-        //                 "maxPlanOrderNum": "10",
-        //                 "reverse": false,
-        //                 "onboardTime": "1763373600000",
-        //                 "status": "NORMAL"
-        //             },
-        //             ...
-        //         ],
-        //         "success": true
-        //     }
-        let mut data: Value = self.safe_list(response.clone(), Value::from("data"), Value::new_array());
-        return self.parse_markets(data.clone());
-    }
+    
 
     fn parse_market(&self, mut market: Value) -> Value {
         //
@@ -475,30 +441,30 @@ pub trait Bydfi : Exchange {
         //         "status": "NORMAL"
         //     }
         //
-        let mut id: Value = self.safe_string(market.clone(), Value::from("symbol"));
-        let mut base_id: Value = self.safe_string(market.clone(), Value::from("baseAsset"));
-        let mut quote_id: Value = self.safe_string(market.clone(), Value::from("quoteAsset"));
-        let mut settle_id: Value = self.safe_string(market.clone(), Value::from("marginAsset"));
+        let mut id: Value = self.safe_string(market.clone(), Value::from("symbol"), Value::Undefined);
+        let mut base_id: Value = self.safe_string(market.clone(), Value::from("baseAsset"), Value::Undefined);
+        let mut quote_id: Value = self.safe_string(market.clone(), Value::from("quoteAsset"), Value::Undefined);
+        let mut settle_id: Value = self.safe_string(market.clone(), Value::from("marginAsset"), Value::Undefined);
         let mut base: Value = self.safe_currency_code(base_id.clone(), Value::Undefined);
         let mut quote: Value = self.safe_currency_code(quote_id.clone(), Value::Undefined);
         let mut settle: Value = self.safe_currency_code(settle_id.clone(), Value::Undefined);
         let mut symbol: Value = base.clone() + Value::from("/") + quote.clone() + Value::from(":") + settle.clone();
         let mut inverse: Value = self.safe_bool(market.clone(), Value::from("reverse"), Value::Undefined);
-        let mut limit_max_qty: Value = self.safe_string(market.clone(), Value::from("limitMaxQty"));
-        let mut market_max_qty: Value = self.safe_string(market.clone(), Value::from("marketMaxQty"));
+        let mut limit_max_qty: Value = self.safe_string(market.clone(), Value::from("limitMaxQty"), Value::Undefined);
+        let mut market_max_qty: Value = self.safe_string(market.clone(), Value::from("marketMaxQty"), Value::Undefined);
         let mut max_amount_string: Value = Precise::string_max(limit_max_qty.clone(), market_max_qty.clone());
-        let mut market_min_qty: Value = self.safe_string(market.clone(), Value::from("marketMinQty"));
-        let mut limit_min_qty: Value = self.safe_string(market.clone(), Value::from("limitMinQty"));
+        let mut market_min_qty: Value = self.safe_string(market.clone(), Value::from("marketMinQty"), Value::Undefined);
+        let mut limit_min_qty: Value = self.safe_string(market.clone(), Value::from("limitMinQty"), Value::Undefined);
         let mut min_amount_string: Value = Precise::string_min(market_min_qty.clone(), limit_min_qty.clone());
-        let mut contract_size: Value = self.safe_string(market.clone(), Value::from("contractFactor"));
-        let mut price_precision: Value = self.parse_precision(self.safe_string(market.clone(), Value::from("priceOrderPrecision")));
-        let mut raw_amount_precision: Value = self.parse_precision(self.safe_string(market.clone(), Value::from("volumePrecision")));
+        let mut contract_size: Value = self.safe_string(market.clone(), Value::from("contractFactor"), Value::Undefined);
+        let mut price_precision: Value = self.parse_precision(self.safe_string(market.clone(), Value::from("priceOrderPrecision"), Value::Undefined));
+        let mut raw_amount_precision: Value = self.parse_precision(self.safe_string(market.clone(), Value::from("volumePrecision"), Value::Undefined));
         let mut amount_precision: Value = Precise::string_div(raw_amount_precision.clone(), contract_size.clone(), Value::Undefined);
-        let mut base_precision: Value = self.parse_precision(self.safe_string(market.clone(), Value::from("basePrecision")));
+        let mut base_precision: Value = self.parse_precision(self.safe_string(market.clone(), Value::from("basePrecision"), Value::Undefined));
         let mut taker: Value = self.safe_number(market.clone(), Value::from("feeRateTaker"), Value::Undefined);
         let mut maker: Value = self.safe_number(market.clone(), Value::from("feeRateMaker"), Value::Undefined);
         let mut max_leverage: Value = self.safe_number(market.clone(), Value::from("maxLeverageLevel"), Value::Undefined);
-        let mut status: Value = self.safe_string(market.clone(), Value::from("status"));
+        let mut status: Value = self.safe_string(market.clone(), Value::from("status"), Value::Undefined);
         return self.safe_market_structure(Value::Json(normalize(&Value::Json(json!({
             "id": id,
             "symbol": symbol,
@@ -548,7 +514,7 @@ pub trait Bydfi : Exchange {
                     "max": Value::Undefined
                 }))).unwrap())
             }))).unwrap()),
-            "created": self.parse8601(self.safe_string(market.clone(), Value::from("createdAt"))),
+            "created": self.parse8601(self.safe_string(market.clone(), Value::from("createdAt"), Value::Undefined)),
             "info": market
         }))).unwrap()));
     }
@@ -624,7 +590,7 @@ pub trait Bydfi : Exchange {
                 "paginationDirection": "backward"
             }))).unwrap()));
             let mut paginated_response: Value = self.fetch_paginated_call_dynamic(Value::from("fetchMyTrades"), symbol.clone(), since.clone(), limit.clone(), params.clone(), max_limit.clone(), true.into()).await;
-            return self.sort_by(paginated_response.clone(), Value::from("timestamp"));
+            return self.sort_by(paginated_response.clone(), Value::from("timestamp"), Value::Undefined, Value::Undefined);
         };
         let mut contract_type: Value = Value::from("FUTURE");
         (contract_type, params) = shift_2(self.handle_option_and_params(params.clone(), Value::from("fetchMyTrades"), Value::from("contractType"), contract_type.clone()));
@@ -702,37 +668,37 @@ pub trait Bydfi : Exchange {
         //         "leverageLevel": 1
         //     }
         //
-        let mut market_id: Value = self.safe_string(trade.clone(), Value::from("symbol"));
+        let mut market_id: Value = self.safe_string(trade.clone(), Value::from("symbol"), Value::Undefined);
         market = self.safe_market(market_id.clone(), market.clone(), Value::Undefined, Value::Undefined);
-        let mut timestamp: Value = self.safe_integer(trade.clone(), Value::from("time"));
+        let mut timestamp: Value = self.safe_integer(trade.clone(), Value::from("time"), Value::Undefined);
         let mut fee: Value = Value::Undefined;
-        let mut raw_type: Value = self.safe_string(trade.clone(), Value::from("type"));
-        let mut fee_cost: Value = self.safe_string(trade.clone(), Value::from("fee"));
+        let mut raw_type: Value = self.safe_string(trade.clone(), Value::from("type"), Value::Undefined);
+        let mut fee_cost: Value = self.safe_string(trade.clone(), Value::from("fee"), Value::Undefined);
         if fee_cost.clone().is_nonnullish() {
             fee = Value::Json(normalize(&Value::Json(json!({
                 "cost": fee_cost,
                 "currency": market.get(Value::from("settle"))
             }))).unwrap());
         };
-        let mut order_id: Value = self.safe_string(trade.clone(), Value::from("orderId"));
+        let mut order_id: Value = self.safe_string(trade.clone(), Value::from("orderId"), Value::Undefined);
         let mut side: Value = Value::Undefined;
         // fetchMyTrades always returns side BUY
         if order_id.clone().is_nullish() {
             // from fetchTrades
-            side = self.safe_string_lower(trade.clone(), Value::from("side"));
+            side = self.safe_string_lower(trade.clone(), Value::from("side"), Value::Undefined);
         };
         return self.safe_trade(Value::Json(normalize(&Value::Json(json!({
             "info": trade,
             "timestamp": timestamp,
             "datetime": self.iso8601(timestamp.clone()),
             "symbol": market.get(Value::from("symbol")),
-            "id": self.safe_string(trade.clone(), Value::from("id")),
+            "id": self.safe_string(trade.clone(), Value::from("id"), Value::Undefined),
             "order": order_id,
             "type": <Self as Bydfi>::parse_trade_type(self, raw_type.clone()),
             "side": side,
             "takerOrMaker": Value::Undefined,
-            "price": self.safe_string_2(trade.clone(), Value::from("price"), Value::from("dealPrice")),
-            "amount": self.safe_string_2(trade.clone(), Value::from("quantity"), Value::from("dealVolume")),
+            "price": self.safe_string_2(trade.clone(), Value::from("price"), Value::from("dealPrice"), Value::Undefined),
+            "amount": self.safe_string_2(trade.clone(), Value::from("quantity"), Value::from("dealVolume"), Value::Undefined),
             "cost": Value::Undefined,
             "fee": fee
         }))).unwrap()), market.clone());
@@ -794,7 +760,7 @@ pub trait Bydfi : Exchange {
         //         "v": "20358.000000000000000000"
         //     }
         //
-        return Value::Json(serde_json::Value::Array(vec![self.safe_integer(ohlcv.clone(), Value::from("t")).into(), self.safe_number(ohlcv.clone(), Value::from("o"), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from("h"), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from("l"), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from("c"), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from("v"), Value::Undefined).into()]));
+        return Value::Json(serde_json::Value::Array(vec![self.safe_integer(ohlcv.clone(), Value::from("t"), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from("o"), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from("h"), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from("l"), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from("c"), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from("v"), Value::Undefined).into()]));
     }
 
     async fn fetch_tickers(&mut self, mut symbols: Value, mut params: Value) -> Value {
@@ -870,29 +836,29 @@ pub trait Bydfi : Exchange {
         //         "time": 1766169423872
         //     }
         //
-        let mut market_id: Value = self.safe_string_2(ticker.clone(), Value::from("symbol"), Value::from("s"));
+        let mut market_id: Value = self.safe_string_2(ticker.clone(), Value::from("symbol"), Value::from("s"), Value::Undefined);
         market = self.safe_market(market_id.clone(), market.clone(), Value::Undefined, Value::Undefined);
-        let mut timestamp: Value = self.safe_integer_2(ticker.clone(), Value::from("time"), Value::from("E"));
-        let mut last: Value = self.safe_string_2(ticker.clone(), Value::from("last"), Value::from("c"));
+        let mut timestamp: Value = self.safe_integer_2(ticker.clone(), Value::from("time"), Value::from("E"), Value::Undefined);
+        let mut last: Value = self.safe_string_2(ticker.clone(), Value::from("last"), Value::from("c"), Value::Undefined);
         return self.safe_ticker(Value::Json(normalize(&Value::Json(json!({
             "symbol": self.safe_symbol(market_id.clone(), market.clone(), Value::Undefined, Value::Undefined),
             "timestamp": timestamp,
             "datetime": self.iso8601(timestamp.clone()),
-            "high": self.safe_string_2(ticker.clone(), Value::from("high"), Value::from("h")),
-            "low": self.safe_string_2(ticker.clone(), Value::from("low"), Value::from("l")),
+            "high": self.safe_string_2(ticker.clone(), Value::from("high"), Value::from("h"), Value::Undefined),
+            "low": self.safe_string_2(ticker.clone(), Value::from("low"), Value::from("l"), Value::Undefined),
             "bid": Value::Undefined,
             "bidVolume": Value::Undefined,
             "ask": Value::Undefined,
             "askVolume": Value::Undefined,
             "vwap": Value::Undefined,
-            "open": self.safe_string_2(ticker.clone(), Value::from("open"), Value::from("o")),
+            "open": self.safe_string_2(ticker.clone(), Value::from("open"), Value::from("o"), Value::Undefined),
             "close": last,
             "last": last,
             "previousClose": Value::Undefined,
             "change": Value::Undefined,
             "percentage": Value::Undefined,
             "average": Value::Undefined,
-            "baseVolume": self.safe_string_2(ticker.clone(), Value::from("vol"), Value::from("v")),
+            "baseVolume": self.safe_string_2(ticker.clone(), Value::from("vol"), Value::from("v"), Value::Undefined),
             "quoteVolume": Value::Undefined,
             "markPrice": Value::Undefined,
             "indexPrice": Value::Undefined,
@@ -934,10 +900,10 @@ pub trait Bydfi : Exchange {
         //         "time": "1766170665007"
         //     }
         //
-        let mut market_id: Value = self.safe_string(contract.clone(), Value::from("symbol"));
+        let mut market_id: Value = self.safe_string(contract.clone(), Value::from("symbol"), Value::Undefined);
         let mut symbol: Value = self.safe_symbol(market_id.clone(), market.clone(), Value::Undefined, Value::Undefined);
-        let mut timestamp: Value = self.safe_integer(contract.clone(), Value::from("time"));
-        let mut next_funding_timestamp: Value = self.safe_integer(contract.clone(), Value::from("nextFundingTime"));
+        let mut timestamp: Value = self.safe_integer(contract.clone(), Value::from("time"), Value::Undefined);
+        let mut next_funding_timestamp: Value = self.safe_integer(contract.clone(), Value::from("nextFundingTime"), Value::Undefined);
         return Value::Json(normalize(&Value::Json(json!({
             "info": contract,
             "symbol": symbol,
@@ -1010,8 +976,8 @@ pub trait Bydfi : Exchange {
         //         "markPrice": "3083.2"
         //     }
         //
-        let mut market_id: Value = self.safe_string(contract.clone(), Value::from("symbol"));
-        let mut timestamp: Value = self.safe_integer(contract.clone(), Value::from("fundingTime"));
+        let mut market_id: Value = self.safe_string(contract.clone(), Value::from("symbol"), Value::Undefined);
+        let mut timestamp: Value = self.safe_integer(contract.clone(), Value::from("fundingTime"), Value::Undefined);
         return Value::Json(normalize(&Value::Json(json!({
             "info": contract,
             "symbol": self.safe_symbol(market_id.clone(), market.clone(), Value::Undefined, Value::Undefined),
@@ -1085,11 +1051,11 @@ pub trait Bydfi : Exchange {
         // 'callbackRate': DECIMAL Trailing stop callback rate, can range from [0.1, 5], where 1 represents 1%, only required for TRAILING_STOP_MARKET
         // 'timeInForce': STRING Validity method GTC / FOK / POST_ONLY / IOC / TRAILING_STOP
         // 'workingType': STRING stopPrice trigger type: MARK_PRICE(marking price), CONTRACT_PRICE(latest contract price). Default CONTRACT_PRICE
-        let mut stop_loss_price: Value = self.safe_string(params.clone(), Value::from("stopLossPrice"));
+        let mut stop_loss_price: Value = self.safe_string(params.clone(), Value::from("stopLossPrice"), Value::Undefined);
         let mut is_stop_loss_order: Value = (stop_loss_price.clone().is_nonnullish()).into();
-        let mut take_profit_price: Value = self.safe_string(params.clone(), Value::from("takeProfitPrice"));
+        let mut take_profit_price: Value = self.safe_string(params.clone(), Value::from("takeProfitPrice"), Value::Undefined);
         let mut is_take_profit_order: Value = (take_profit_price.clone().is_nonnullish()).into();
-        let mut trailing_percent: Value = self.safe_string(params.clone(), Value::from("trailingPercent"));
+        let mut trailing_percent: Value = self.safe_string(params.clone(), Value::from("trailingPercent"), Value::Undefined);
         let mut is_tailing_stop_order: Value = (trailing_percent.clone().is_nonnullish()).into();
         let mut stop_price: Value = Value::Undefined;
         if is_stop_loss_order.is_truthy() || is_take_profit_order.is_truthy() {
@@ -1188,9 +1154,9 @@ pub trait Bydfi : Exchange {
         let mut i: usize = 0;
         while i < orders.length {
             let mut raw_order: Value = orders.get(i.into());
-            let mut symbol: Value = self.safe_string(raw_order.clone(), Value::from("symbol"));
-            let mut r#type: Value = self.safe_string(raw_order.clone(), Value::from("type"));
-            let mut side: Value = self.safe_string(raw_order.clone(), Value::from("side"));
+            let mut symbol: Value = self.safe_string(raw_order.clone(), Value::from("symbol"), Value::Undefined);
+            let mut r#type: Value = self.safe_string(raw_order.clone(), Value::from("type"), Value::Undefined);
+            let mut side: Value = self.safe_string(raw_order.clone(), Value::from("side"), Value::Undefined);
             let mut amount: Value = self.safe_number(raw_order.clone(), Value::from("amount"), Value::Undefined);
             let mut price: Value = self.safe_number(raw_order.clone(), Value::from("price"), Value::Undefined);
             let mut order_params: Value = self.safe_dict(raw_order.clone(), Value::from("params"), Value::new_object());
@@ -1232,9 +1198,9 @@ pub trait Bydfi : Exchange {
         let mut i: usize = 0;
         while i < orders.length {
             let mut raw_order: Value = orders.get(i.into());
-            let mut id: Value = self.safe_string(raw_order.clone(), Value::from("id"));
-            let mut symbol: Value = self.safe_string(raw_order.clone(), Value::from("symbol"));
-            let mut side: Value = self.safe_string(raw_order.clone(), Value::from("side"));
+            let mut id: Value = self.safe_string(raw_order.clone(), Value::from("id"), Value::Undefined);
+            let mut symbol: Value = self.safe_string(raw_order.clone(), Value::from("symbol"), Value::Undefined);
+            let mut side: Value = self.safe_string(raw_order.clone(), Value::from("side"), Value::Undefined);
             let mut amount: Value = self.safe_number(raw_order.clone(), Value::from("amount"), Value::Undefined);
             let mut price: Value = self.safe_number(raw_order.clone(), Value::from("price"), Value::Undefined);
             let mut order_params: Value = self.safe_dict(raw_order.clone(), Value::from("params"), Value::new_object());
@@ -1255,7 +1221,7 @@ pub trait Bydfi : Exchange {
 
     fn create_edit_order_request(&mut self, mut id: Value, mut symbol: Value, mut r#type: Value, mut side: Value, mut amount: Value, mut price: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
-        let mut client_order_id: Value = self.safe_string(params.clone(), Value::from("clientOrderId"));
+        let mut client_order_id: Value = self.safe_string(params.clone(), Value::from("clientOrderId"), Value::Undefined);
         let mut request: Value = Value::new_object();
         if id.clone().is_nullish() && client_order_id.clone().is_nullish() {
             panic!(r###"ArgumentsRequired::new(self.get("id".into()) + Value::from(" editOrder() requires an id argument or a clientOrderId parameter"))"###);
@@ -1393,7 +1359,7 @@ pub trait Bydfi : Exchange {
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
             "symbol": market.get(Value::from("id"))
         }))).unwrap());
-        let mut client_order_id: Value = self.safe_string(params.clone(), Value::from("clientOrderId"));
+        let mut client_order_id: Value = self.safe_string(params.clone(), Value::from("clientOrderId"), Value::Undefined);
         if id.clone().is_nullish() && client_order_id.clone().is_nullish() {
             panic!(r###"ArgumentsRequired::new(self.get("id".into()) + Value::from(" fetchOpenOrder() requires an id argument or a clientOrderId parameter"))"###);
         } else if id.clone().is_nonnullish() {
@@ -1426,7 +1392,7 @@ pub trait Bydfi : Exchange {
                 "paginationDirection": "backward"
             }))).unwrap()));
             let mut paginated_response: Value = self.fetch_paginated_call_dynamic(Value::from("fetchCanceledAndClosedOrders"), symbol.clone(), since.clone(), limit.clone(), params.clone(), max_limit.clone(), true.into()).await;
-            return self.sort_by(paginated_response.clone(), Value::from("timestamp"));
+            return self.sort_by(paginated_response.clone(), Value::from("timestamp"), Value::Undefined, Value::Undefined);
         };
         let mut contract_type: Value = Value::from("FUTURE");
         (contract_type, params) = shift_2(self.handle_option_and_params(params.clone(), Value::from("fetchCanceledAndClosedOrders"), Value::from("contractType"), contract_type.clone()));
@@ -1590,20 +1556,20 @@ pub trait Bydfi : Exchange {
         //         "activationPrice": null
         //     }
         //
-        let mut market_id: Value = self.safe_string(order.clone(), Value::from("symbol"));
+        let mut market_id: Value = self.safe_string(order.clone(), Value::from("symbol"), Value::Undefined);
         market = self.safe_market(market_id.clone(), market.clone(), Value::Undefined, Value::Undefined);
-        let mut timestamp: Value = self.safe_integer_2(order.clone(), Value::from("createTime"), Value::from("ctime"));
-        let mut raw_type: Value = self.safe_string(order.clone(), Value::from("orderType"));
-        let mut stop_price: Value = self.safe_string_n(order.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("stopPrice").into(), Value::from("activatePrice").into(), Value::from("triggerPrice").into()])));
+        let mut timestamp: Value = self.safe_integer_2(order.clone(), Value::from("createTime"), Value::from("ctime"), Value::Undefined);
+        let mut raw_type: Value = self.safe_string(order.clone(), Value::from("orderType"), Value::Undefined);
+        let mut stop_price: Value = self.safe_string_n(order.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("stopPrice").into(), Value::from("activatePrice").into(), Value::from("triggerPrice").into()])), Value::Undefined);
         let mut is_stop_loss_order: Value = (raw_type.clone() == Value::from("STOP") || raw_type.clone() == Value::from("STOP_MARKET") || raw_type.clone() == Value::from("TRAILING_STOP_MARKET")).into();
         let mut is_take_profit_order: Value = (raw_type.clone() == Value::from("TAKE_PROFIT") || raw_type.clone() == Value::from("TAKE_PROFIT_MARKET")).into();
-        let mut raw_time_in_force: Value = self.safe_string(order.clone(), Value::from("timeInForce"));
+        let mut raw_time_in_force: Value = self.safe_string(order.clone(), Value::from("timeInForce"), Value::Undefined);
         let mut time_in_force: Value = <Self as Bydfi>::parse_order_time_in_force(self, raw_time_in_force.clone());
         let mut post_only: Value = Value::Undefined;
         if time_in_force.clone() == Value::from("PO") {
             post_only = true.into();
         };
-        let mut raw_status: Value = self.safe_string(order.clone(), Value::from("status"));
+        let mut raw_status: Value = self.safe_string(order.clone(), Value::from("status"), Value::Undefined);
         let mut fee: Value = Value::new_object();
         let mut quote_fee: Value = self.safe_number(order.clone(), Value::from("quoteFee"), Value::Undefined);
         if quote_fee.clone().is_nonnullish() {
@@ -1612,30 +1578,30 @@ pub trait Bydfi : Exchange {
         };
         return self.safe_order(Value::Json(normalize(&Value::Json(json!({
             "info": order,
-            "id": self.safe_string(order.clone(), Value::from("orderId")),
-            "clientOrderId": self.safe_string(order.clone(), Value::from("clientOrderId")),
+            "id": self.safe_string(order.clone(), Value::from("orderId"), Value::Undefined),
+            "clientOrderId": self.safe_string(order.clone(), Value::from("clientOrderId"), Value::Undefined),
             "timestamp": timestamp,
             "datetime": self.iso8601(timestamp.clone()),
             "lastTradeTimestamp": Value::Undefined,
-            "lastUpdateTimestamp": self.safe_integer_2(order.clone(), Value::from("updateTime"), Value::from("mtime")),
+            "lastUpdateTimestamp": self.safe_integer_2(order.clone(), Value::from("updateTime"), Value::from("mtime"), Value::Undefined),
             "status": <Self as Bydfi>::parse_order_status(self, raw_status.clone()),
             "symbol": market.get(Value::from("symbol")),
             "type": <Self as Bydfi>::parse_order_type(self, raw_type.clone()),
             "timeInForce": time_in_force,
             "postOnly": post_only,
             "reduceOnly": self.safe_bool(order.clone(), Value::from("reduceOnly"), Value::Undefined),
-            "side": self.safe_string_lower(order.clone(), Value::from("side")),
-            "price": self.safe_string(order.clone(), Value::from("price")),
+            "side": self.safe_string_lower(order.clone(), Value::from("side"), Value::Undefined),
+            "price": self.safe_string(order.clone(), Value::from("price"), Value::Undefined),
             "triggerPrice": stop_price,
             "stopLossPrice": if is_stop_loss_order.is_truthy() { stop_price.clone() } else { Value::Undefined },
             "takeProfitPrice": if is_take_profit_order.is_truthy() { stop_price.clone() } else { Value::Undefined },
-            "amount": self.safe_string(order.clone(), Value::from("origQty")),
-            "filled": self.safe_string(order.clone(), Value::from("executedQty")),
+            "amount": self.safe_string(order.clone(), Value::from("origQty"), Value::Undefined),
+            "filled": self.safe_string(order.clone(), Value::from("executedQty"), Value::Undefined),
             "remaining": Value::Undefined,
             "cost": Value::Undefined,
             "trades": Value::Undefined,
             "fee": fee,
-            "average": self.omit_zero(self.safe_string(order.clone(), Value::from("avgPrice")))
+            "average": self.omit_zero(self.safe_string(order.clone(), Value::from("avgPrice"), Value::Undefined))
         }))).unwrap()), market.clone());
     }
 
@@ -1727,13 +1693,13 @@ pub trait Bydfi : Exchange {
     }
 
     fn parse_leverage(&self, mut leverage: Value, mut market: Value) -> Value {
-        let mut market_id: Value = self.safe_string(leverage.clone(), Value::from("symbol"));
+        let mut market_id: Value = self.safe_string(leverage.clone(), Value::from("symbol"), Value::Undefined);
         return Value::Json(normalize(&Value::Json(json!({
             "info": leverage,
             "symbol": self.safe_symbol(market_id.clone(), market.clone(), Value::Undefined, Value::Undefined),
             "marginMode": Value::Undefined,
-            "longLeverage": self.safe_integer(leverage.clone(), Value::from("leverage")),
-            "shortLeverage": self.safe_integer(leverage.clone(), Value::from("leverage"))
+            "longLeverage": self.safe_integer(leverage.clone(), Value::from("leverage"), Value::Undefined),
+            "shortLeverage": self.safe_integer(leverage.clone(), Value::from("leverage"), Value::Undefined)
         }))).unwrap());
     }
 
@@ -1839,10 +1805,10 @@ pub trait Bydfi : Exchange {
         //         "createTime": "1766423985842"
         //     }
         //
-        let mut market_id: Value = self.safe_string(position.clone(), Value::from("symbol"));
+        let mut market_id: Value = self.safe_string(position.clone(), Value::from("symbol"), Value::Undefined);
         market = self.safe_market(market_id.clone(), market.clone(), Value::Undefined, Value::Undefined);
-        let mut buy_or_sell: Value = self.safe_string(position.clone(), Value::from("side"));
-        let mut raw_position_side: Value = self.safe_string_lower(position.clone(), Value::from("positionSide"));
+        let mut buy_or_sell: Value = self.safe_string(position.clone(), Value::from("side"), Value::Undefined);
+        let mut raw_position_side: Value = self.safe_string_lower(position.clone(), Value::from("positionSide"), Value::Undefined);
         let mut position_side: Value = <Self as Bydfi>::parse_position_side(self, buy_or_sell.clone());
         let mut hedged: Value = Value::Undefined;
         let mut is_fetch_positions_history: Value = false.into();
@@ -1855,37 +1821,37 @@ pub trait Bydfi : Exchange {
                 hedged = false.into();
             };
         };
-        let mut contract_size: Value = self.safe_string(market.clone(), Value::from("contractSize"));
-        let mut contracts: Value = self.safe_string_2(position.clone(), Value::from("volume"), Value::from("openPositionVolume"));
+        let mut contract_size: Value = self.safe_string(market.clone(), Value::from("contractSize"), Value::Undefined);
+        let mut contracts: Value = self.safe_string_2(position.clone(), Value::from("volume"), Value::from("openPositionVolume"), Value::Undefined);
         if !is_fetch_positions_history.is_truthy() {
             // in fetchPositions, the 'volume' is in base currency units, need to convert to contracts
             contracts = Precise::string_div(contracts.clone(), contract_size.clone(), Value::Undefined);
         };
-        let mut timestamp: Value = self.safe_integer(position.clone(), Value::from("createTime"));
+        let mut timestamp: Value = self.safe_integer(position.clone(), Value::from("createTime"), Value::Undefined);
         return self.safe_position(Value::Json(normalize(&Value::Json(json!({
             "info": position,
-            "id": self.safe_string(position.clone(), Value::from("id")),
+            "id": self.safe_string(position.clone(), Value::from("id"), Value::Undefined),
             "symbol": market.get(Value::from("symbol")),
-            "entryPrice": self.parse_number(self.safe_string_2(position.clone(), Value::from("avgOpenPositionPrice"), Value::from("avgPrice")), Value::Undefined),
-            "markPrice": self.parse_number(self.safe_string(position.clone(), Value::from("markPrice")), Value::Undefined),
-            "lastPrice": self.parse_number(self.safe_string(position.clone(), Value::from("avgClosePositionPrice")), Value::Undefined),
-            "notional": self.parse_number(self.safe_string(position.clone(), Value::from("closePositionCost")), Value::Undefined),
+            "entryPrice": self.parse_number(self.safe_string_2(position.clone(), Value::from("avgOpenPositionPrice"), Value::from("avgPrice"), Value::Undefined), Value::Undefined),
+            "markPrice": self.parse_number(self.safe_string(position.clone(), Value::from("markPrice"), Value::Undefined), Value::Undefined),
+            "lastPrice": self.parse_number(self.safe_string(position.clone(), Value::from("avgClosePositionPrice"), Value::Undefined), Value::Undefined),
+            "notional": self.parse_number(self.safe_string(position.clone(), Value::from("closePositionCost"), Value::Undefined), Value::Undefined),
             "collateral": Value::Undefined,
-            "unrealizedPnl": self.parse_number(self.safe_string(position.clone(), Value::from("unPnl")), Value::Undefined),
-            "realizedPnl": self.parse_number(self.safe_string(position.clone(), Value::from("positionProfits")), Value::Undefined),
+            "unrealizedPnl": self.parse_number(self.safe_string(position.clone(), Value::from("unPnl"), Value::Undefined), Value::Undefined),
+            "realizedPnl": self.parse_number(self.safe_string(position.clone(), Value::from("positionProfits"), Value::Undefined), Value::Undefined),
             "side": position_side,
             "contracts": self.parse_number(contracts.clone(), Value::Undefined),
             "contractSize": self.parse_number(contract_size.clone(), Value::Undefined),
             "timestamp": timestamp,
             "datetime": self.iso8601(timestamp.clone()),
-            "lastUpdateTimestamp": self.safe_integer(position.clone(), Value::from("updateTime")),
+            "lastUpdateTimestamp": self.safe_integer(position.clone(), Value::from("updateTime"), Value::Undefined),
             "hedged": hedged,
-            "maintenanceMargin": self.parse_number(self.safe_string(position.clone(), Value::from("mm")), Value::Undefined),
+            "maintenanceMargin": self.parse_number(self.safe_string(position.clone(), Value::from("mm"), Value::Undefined), Value::Undefined),
             "maintenanceMarginPercentage": Value::Undefined,
-            "initialMargin": self.parse_number(self.safe_string(position.clone(), Value::from("im")), Value::Undefined),
+            "initialMargin": self.parse_number(self.safe_string(position.clone(), Value::from("im"), Value::Undefined), Value::Undefined),
             "initialMarginPercentage": Value::Undefined,
-            "leverage": self.parse_number(self.safe_string(position.clone(), Value::from("leverage")), Value::Undefined),
-            "liquidationPrice": self.parse_number(self.safe_string(position.clone(), Value::from("liqPrice")), Value::Undefined),
+            "leverage": self.parse_number(self.safe_string(position.clone(), Value::from("leverage"), Value::Undefined), Value::Undefined),
+            "liquidationPrice": self.parse_number(self.safe_string(position.clone(), Value::from("liqPrice"), Value::Undefined), Value::Undefined),
             "marginRatio": Value::Undefined,
             "marginMode": Value::Undefined,
             "percentage": Value::Undefined
@@ -2013,37 +1979,15 @@ pub trait Bydfi : Exchange {
     }
 
     fn parse_margin_mode(&self, mut margin_mode: Value, mut market: Value) -> Value {
-        let mut market_id: Value = self.safe_string(margin_mode.clone(), Value::from("symbol"));
+        let mut market_id: Value = self.safe_string(margin_mode.clone(), Value::from("symbol"), Value::Undefined);
         return Value::Json(normalize(&Value::Json(json!({
             "info": margin_mode,
             "symbol": self.safe_symbol(market_id.clone(), market.clone(), Value::Undefined, Value::Undefined),
-            "marginMode": self.safe_string_lower(margin_mode.clone(), Value::from("marginType"))
+            "marginMode": self.safe_string_lower(margin_mode.clone(), Value::from("marginType"), Value::Undefined)
         }))).unwrap());
     }
 
-    async fn set_margin_mode(&mut self, mut margin_mode: Value, mut symbol: Value, mut params: Value) -> Value {
-        params = params.or_default(Value::new_object());
-        if symbol.clone().is_nullish() {
-            panic!(r###"ArgumentsRequired::new(self.get("id".into()) + Value::from(" setMarginMode() requires a symbol argument"))"###);
-        };
-        margin_mode = margin_mode.to_lower_case();
-        if margin_mode.clone() != Value::from("isolated") && margin_mode.clone() != Value::from("cross") {
-            panic!(r###"BadRequest::new(self.get("id".into()) + Value::from(" setMarginMode() marginMode argument should be isolated or cross"))"###);
-        };
-        self.load_markets(Value::Undefined, Value::Undefined).await;
-        let mut market: Value = self.market(symbol.clone());
-        let mut contract_type: Value = Value::from("FUTURE");
-        (contract_type, params) = shift_2(self.handle_option_and_params(params.clone(), Value::from("fetchMarginMode"), Value::from("contractType"), contract_type.clone()));
-        let mut wallet: Value = Value::from("W001");
-        (wallet, params) = shift_2(self.handle_option_and_params(params.clone(), Value::from("fetchMarginMode"), Value::from("wallet"), wallet.clone()));
-        let mut request: Value = Value::Json(normalize(&Value::Json(json!({
-            "contractType": contract_type,
-            "symbol": market.get(Value::from("id")),
-            "marginType": margin_mode.to_upper_case(),
-            "wallet": wallet
-        }))).unwrap());
-        return self.private_post_v1_swap_user_data_margin_type(extend_2(request.clone(), params.clone())).await;
-    }
+    
 
     async fn set_position_mode(&mut self, mut hedged: Value, mut symbol: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
@@ -2112,7 +2056,7 @@ pub trait Bydfi : Exchange {
         //     }
         //
         let mut data: Value = self.safe_dict(response.clone(), Value::from("data"), Value::new_object());
-        let mut hedged: Value = (self.safe_string(data.clone(), Value::from("positionType")) == Value::from("HEDGE")).into();
+        let mut hedged: Value = (self.safe_string(data.clone(), Value::from("positionType"), Value::Undefined) == Value::from("HEDGE")).into();
         return Value::Json(normalize(&Value::Json(json!({
             "info": response,
             "hedged": hedged
@@ -2195,11 +2139,11 @@ pub trait Bydfi : Exchange {
         let mut i: usize = 0;
         while i < response.len() {
             let mut balance: Value = response.get(i.into());
-            let mut symbol: Value = self.safe_string(balance.clone(), Value::from("asset"));
+            let mut symbol: Value = self.safe_string(balance.clone(), Value::from("asset"), Value::Undefined);
             let mut code: Value = self.safe_currency_code(symbol.clone(), Value::Undefined);
             let mut account: Value = self.account();
-            account.set("total".into(), self.safe_string_2(balance.clone(), Value::from("total"), Value::from("balance")));
-            account.set("free".into(), self.safe_string_2(balance.clone(), Value::from("available"), Value::from("availableBalance")));
+            account.set("total".into(), self.safe_string_2(balance.clone(), Value::from("total"), Value::from("balance"), Value::Undefined));
+            account.set("free".into(), self.safe_string_2(balance.clone(), Value::from("available"), Value::from("availableBalance"), Value::Undefined));
             result.set(code.clone(), account.clone());
             i += 1;
         };
@@ -2257,7 +2201,7 @@ pub trait Bydfi : Exchange {
                 "paginationDirection": "backward"
             }))).unwrap()));
             let mut paginated_response: Value = self.fetch_paginated_call_dynamic(Value::from("fetchTransfers"), currency.get(Value::from("code")), since.clone(), limit.clone(), params.clone(), max_limit.clone(), true.into()).await;
-            return self.sort_by(paginated_response.clone(), Value::from("timestamp"));
+            return self.sort_by(paginated_response.clone(), Value::from("timestamp"), Value::Undefined, Value::Undefined);
         };
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
             "asset": currency.get(Value::from("id"))
@@ -2322,17 +2266,17 @@ pub trait Bydfi : Exchange {
         //         "timestamp": 1766413950000
         //     }
         //
-        let mut status: Value = self.safe_string_upper_2(transfer.clone(), Value::from("message"), Value::from("status"));
+        let mut status: Value = self.safe_string_upper_2(transfer.clone(), Value::from("message"), Value::from("status"), Value::Undefined);
         let mut accounts_by_id: Value = self.safe_dict(self.get("options".into()), Value::from("accountsById"), Value::new_object());
-        let mut from_id: Value = self.safe_string_upper(transfer.clone(), Value::from("sourceWallet"));
-        let mut to_id: Value = self.safe_string_upper(transfer.clone(), Value::from("targetWallet"));
+        let mut from_id: Value = self.safe_string_upper(transfer.clone(), Value::from("sourceWallet"), Value::Undefined);
+        let mut to_id: Value = self.safe_string_upper(transfer.clone(), Value::from("targetWallet"), Value::Undefined);
         let mut from_account: Value = self.safe_string(accounts_by_id.clone(), from_id.clone(), from_id.clone());
         let mut to_account: Value = self.safe_string(accounts_by_id.clone(), to_id.clone(), to_id.clone());
-        let mut timestamp: Value = self.safe_integer(transfer.clone(), Value::from("timestamp"));
-        let mut currency_id: Value = self.safe_string(transfer.clone(), Value::from("asset"));
+        let mut timestamp: Value = self.safe_integer(transfer.clone(), Value::from("timestamp"), Value::Undefined);
+        let mut currency_id: Value = self.safe_string(transfer.clone(), Value::from("asset"), Value::Undefined);
         return Value::Json(normalize(&Value::Json(json!({
             "info": transfer,
-            "id": self.safe_string(transfer.clone(), Value::from("txId")),
+            "id": self.safe_string(transfer.clone(), Value::from("txId"), Value::Undefined),
             "timestamp": timestamp,
             "datetime": self.iso8601(timestamp.clone()),
             "currency": self.safe_currency_code(currency_id.clone(), currency.clone()),
@@ -2377,7 +2321,7 @@ pub trait Bydfi : Exchange {
                 "paginationDirection": "backward"
             }))).unwrap()));
             let mut paginated_response: Value = self.fetch_paginated_call_dynamic(method_name.clone(), currency.get(Value::from("code")), since.clone(), limit.clone(), params.clone(), max_limit.clone(), true.into()).await;
-            return self.sort_by(paginated_response.clone(), Value::from("timestamp"));
+            return self.sort_by(paginated_response.clone(), Value::from("timestamp"), Value::Undefined, Value::Undefined);
         };
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
             "asset": currency.get(Value::from("id"))
@@ -2465,10 +2409,10 @@ pub trait Bydfi : Exchange {
         //         "createTime": 1766145344000
         //     }
         //
-        let mut currency_id: Value = self.safe_string(transaction.clone(), Value::from("asset"));
+        let mut currency_id: Value = self.safe_string(transaction.clone(), Value::from("asset"), Value::Undefined);
         let mut code: Value = self.safe_currency_code(currency_id.clone(), currency.clone());
-        let mut raw_status: Value = self.safe_string_lower(transaction.clone(), Value::from("status"));
-        let mut timestamp: Value = self.safe_integer(transaction.clone(), Value::from("createTime"));
+        let mut raw_status: Value = self.safe_string_lower(transaction.clone(), Value::from("status"), Value::Undefined);
+        let mut timestamp: Value = self.safe_integer(transaction.clone(), Value::from("createTime"), Value::Undefined);
         let mut fee: Value = Value::Undefined;
         let mut fee_cost: Value = self.safe_number(transaction.clone(), Value::from("fee"), Value::Undefined);
         if fee_cost.clone().is_nonnullish() {
@@ -2479,22 +2423,22 @@ pub trait Bydfi : Exchange {
         };
         return Value::Json(normalize(&Value::Json(json!({
             "info": transaction,
-            "id": self.safe_string(transaction.clone(), Value::from("orderId")),
-            "txid": self.safe_string(transaction.clone(), Value::from("txId")),
+            "id": self.safe_string(transaction.clone(), Value::from("orderId"), Value::Undefined),
+            "txid": self.safe_string(transaction.clone(), Value::from("txId"), Value::Undefined),
             "type": Value::Undefined,
             "currency": code,
-            "network": self.network_id_to_code(self.safe_string(transaction.clone(), Value::from("network")), Value::Undefined),
+            "network": self.network_id_to_code(self.safe_string(transaction.clone(), Value::from("network"), Value::Undefined), Value::Undefined),
             "amount": self.safe_number(transaction.clone(), Value::from("amount"), Value::Undefined),
             "status": <Self as Bydfi>::parse_transaction_status(self, raw_status.clone()),
             "timestamp": timestamp,
             "datetime": self.iso8601(timestamp.clone()),
-            "address": self.safe_string(transaction.clone(), Value::from("address")),
+            "address": self.safe_string(transaction.clone(), Value::from("address"), Value::Undefined),
             "addressFrom": Value::Undefined,
             "addressTo": Value::Undefined,
-            "tag": self.safe_string(transaction.clone(), Value::from("addressTag")),
+            "tag": self.safe_string(transaction.clone(), Value::from("addressTag"), Value::Undefined),
             "tagFrom": Value::Undefined,
             "tagTo": Value::Undefined,
-            "updated": self.safe_integer(transaction.clone(), Value::from("finishTime")),
+            "updated": self.safe_integer(transaction.clone(), Value::from("finishTime"), Value::Undefined),
             "comment": Value::Undefined,
             "fee": fee,
             "internal": false
@@ -2510,75 +2454,9 @@ pub trait Bydfi : Exchange {
         return self.safe_string(statuses.clone(), status.clone(), status.clone());
     }
 
-    fn sign(&mut self, mut path: Value, mut api: Value, mut method: Value, mut params: Value, mut headers: Value, mut body: Value) -> Value {
-        api = api.or_default(Value::from("public"));
-        method = method.or_default(Value::from("GET"));
-        params = params.or_default(Value::new_object());
-        let mut url: Value = self.get("urls".into()).get(Value::from("api")).get(api.clone());
-        let mut endpoint: Value = Value::from("/") + path.clone();
-        let mut query: Value = Value::from("");
-        let mut sorted_params: Value = self.keysort(params.clone());
-        if method.clone() == Value::from("GET") {
-            query = self.urlencode(sorted_params.clone());
-            if query.len() != 0 {
-                endpoint = endpoint +  Value::from("?") + query.clone();
-            };
-        };
-        if api.clone() == Value::from("private") {
-            self.check_required_credentials(Value::Undefined);
-            let mut timestamp: Value = self.milliseconds().to_string();
-            if method.clone() == Value::from("GET") {
-                let mut payload: Value = self.get("apiKey".into()) + timestamp.clone() + query.clone();
-                let mut signature: Value = self.hmac(self.encode(payload.clone()), self.encode(self.get("secret".into())), sha256.clone(), Value::from("hex"));
-                headers = Value::Json(normalize(&Value::Json(json!({
-                    "X-API-KEY": self.get("apiKey".into()),
-                    "X-API-TIMESTAMP": timestamp,
-                    "X-API-SIGNATURE": signature
-                }))).unwrap());
-            } else {
-                body = self.json(sorted_params.clone());
-                let mut payload: Value = self.get("apiKey".into()) + timestamp.clone() + body.clone();
-                let mut signature: Value = self.hmac(self.encode(payload.clone()), self.encode(self.get("secret".into())), sha256.clone(), Value::from("hex"));
-                headers = Value::Json(normalize(&Value::Json(json!({
-                    "Content-Type": "application/json",
-                    "X-API-KEY": self.get("apiKey".into()),
-                    "X-API-TIMESTAMP": timestamp,
-                    "X-API-SIGNATURE": signature
-                }))).unwrap());
-            };
-        };
-        url = url +  endpoint.clone();
-        return Value::Json(normalize(&Value::Json(json!({
-            "url": url,
-            "method": method,
-            "body": body,
-            "headers": headers
-        }))).unwrap());
-    }
+    
 
-    fn handle_errors(&mut self, mut http_code: Value, mut reason: Value, mut url: Value, mut method: Value, mut headers: Value, mut body: Value, mut response: Value, mut request_headers: Value, mut request_body: Value) -> Value {
-        if response.clone().is_nullish() {
-            return Value::Undefined;
-        };
-        // fallback to default error handler
-        //
-        //     {
-        //         "code": 101107,
-        //         "message": "Requires transaction permissions"
-        //     }
-        //
-        let mut code: Value = self.safe_string(response.clone(), Value::from("code"));
-        let mut message: Value = self.safe_string(response.clone(), Value::from("message"));
-        if code.clone() != Value::from("200") {
-            let mut feedback: Value = self.get("id".into()) + Value::from(" ") + body.clone();
-            self.throw_exactly_matched_exception(self.get("exceptions".into()).get(Value::from("exact")), message.clone(), feedback.clone());
-            self.throw_broadly_matched_exception(self.get("exceptions".into()).get(Value::from("broad")), message.clone(), feedback.clone());
-            self.throw_exactly_matched_exception(self.get("exceptions".into()).get(Value::from("exact")), code.clone(), feedback.clone());
-            panic!(r###"ExchangeError::new(feedback)"###);
-        };
-        // unknown message
-        return Value::Undefined;
-    }
+    
 
 }
 
@@ -2610,8 +2488,8 @@ impl ValueTrait for BydfiImpl {
     fn push(&mut self, value: Value) { self.0.push(value) }
     fn split(&self, separator: Value) -> Value { self.0.split(separator) }
     fn contains_key(&self, key: Value) -> bool { self.0.contains_key(key) }
-    fn keys(&self) -> Vec<Value> { self.0.keys() }
-    fn values(&self) -> Vec<Value> { self.0.values() }
+    fn keys(&self) -> Value { self.0.keys() }
+    fn values(&self) -> Value { self.0.values() }
     fn to_array(&self, x: Value) -> Value { self.0.to_array(x) }
     fn index_of(&self, x: Value) -> Value { self.0.index_of(x) }
     fn join(&self, glue: Value) -> Value { self.0.join(glue) }

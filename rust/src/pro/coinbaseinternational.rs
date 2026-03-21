@@ -11,7 +11,16 @@ use async_trait::async_trait;
 use std::str::FromStr;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, JSON, Array, Object, Math, parse_int, shift_2, extend_2, normalize};
+use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, BoolExt, JSON, Array, Object, Math, Promise, parse_int, shift_2, extend_2, normalize};
+// Crypto hash identifiers
+fn sha256() -> Value { Value::from("sha256") }
+fn sha384() -> Value { Value::from("sha384") }
+fn sha512() -> Value { Value::from("sha512") }
+fn md5() -> Value { Value::from("md5") }
+fn ed25519() -> Value { Value::from("ed25519") }
+fn rsa(msg: Value, secret: Value, _hash: Value) -> Value { msg }
+fn eddsa(msg: Value, secret: Value, _curve: Value) -> Value { msg }
+fn secp256k1() -> Value { Value::from("secp256k1") }
 
 use crate::exchange::{PRECISE_BASE, TRUNCATE, ROUND, ROUND_UP, ROUND_DOWN};
 use crate::exchange::{DECIMAL_PLACES, SIGNIFICANT_DIGITS, TICK_SIZE, NO_PADDING, PAD_WITH_ZERO};
@@ -530,7 +539,7 @@ pub trait Coinbaseinternational : Exchange {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
         let mut funding_rate: Value = <Self as Coinbaseinternational>::subscribe_multiple(self, Value::from("RISK"), symbols.clone(), params.clone()).await;
-        let mut symbol: Value = self.safe_string(funding_rate.clone(), Value::from("symbol"));
+        let mut symbol: Value = self.safe_string(funding_rate.clone(), Value::from("symbol"), Value::Undefined);
         if self.get("newUpdates".into()).is_truthy() {
             let mut result: Value = Value::new_object();
             result.set(symbol.clone(), funding_rate.clone());
@@ -602,8 +611,8 @@ pub trait Coinbaseinternational : Exchange {
         //        "channel":"INSTRUMENTS",
         //        "type":"SNAPSHOT"
         //    }
-        let mut ticker: Value = <Self as Coinbaseinternational>::parse_ws_instrument(self, message.clone(), Value::Undefined);
-        let mut channel: Value = self.safe_string(message.clone(), Value::from("channel"));
+        let mut ticker: Value = <Self as Coinbaseinternational>::parse_ws_instrument(self, message.clone());
+        let mut channel: Value = self.safe_string(message.clone(), Value::from("channel"), Value::Undefined);
         client.resolve(ticker.clone(), channel.clone());
         client.resolve(ticker.clone(), channel.clone() + Value::from("::") + ticker.get(Value::from("symbol")));
         Value::Undefined
@@ -663,8 +672,8 @@ pub trait Coinbaseinternational : Exchange {
         //       time: '2024-07-30T15:26:56.766Z',
         //   }
         //
-        let mut market_id: Value = self.safe_string(ticker.clone(), Value::from("product_id"));
-        let mut datetime: Value = self.safe_string(ticker.clone(), Value::from("time"));
+        let mut market_id: Value = self.safe_string(ticker.clone(), Value::from("product_id"), Value::Undefined);
+        let mut datetime: Value = self.safe_string(ticker.clone(), Value::from("time"), Value::Undefined);
         return self.safe_ticker(Value::Json(normalize(&Value::Json(json!({
             "info": ticker,
             "symbol": self.safe_symbol(market_id.clone(), market.clone(), Value::from("-"), Value::Undefined),
@@ -684,8 +693,8 @@ pub trait Coinbaseinternational : Exchange {
             "change": Value::Undefined,
             "percentage": Value::Undefined,
             "average": Value::Undefined,
-            "baseVolume": self.safe_string_2(ticker.clone(), Value::from("total_24_hour_quantity"), Value::from("total24_hour_quantity")),
-            "quoteVolume": self.safe_string_2(ticker.clone(), Value::from("total_24_hour_volume"), Value::from("total24_hour_volume"))
+            "baseVolume": self.safe_string_2(ticker.clone(), Value::from("total_24_hour_quantity"), Value::from("total24_hour_quantity"), Value::Undefined),
+            "quoteVolume": self.safe_string_2(ticker.clone(), Value::from("total_24_hour_volume"), Value::from("total24_hour_volume"), Value::Undefined)
         }))).unwrap()), Value::Undefined);
     }
 
@@ -714,8 +723,8 @@ pub trait Coinbaseinternational : Exchange {
         //       "type": "UPDATE"
         //    }
         //
-        let mut ticker: Value = <Self as Coinbaseinternational>::parse_ws_ticker(self, message.clone(), Value::Undefined);
-        let mut channel: Value = self.safe_string(message.clone(), Value::from("channel"));
+        let mut ticker: Value = <Self as Coinbaseinternational>::parse_ws_ticker(self, message.clone());
+        let mut channel: Value = self.safe_string(message.clone(), Value::from("channel"), Value::Undefined);
         client.resolve(ticker.clone(), channel.clone());
         client.resolve(ticker.clone(), channel.clone() + Value::from("::") + ticker.get(Value::from("symbol")));
         Value::Undefined
@@ -735,8 +744,8 @@ pub trait Coinbaseinternational : Exchange {
         //       "type": "UPDATE"
         //    }
         //
-        let mut datetime: Value = self.safe_string(ticker.clone(), Value::from("time"));
-        let mut market_id: Value = self.safe_string(ticker.clone(), Value::from("product_id"));
+        let mut datetime: Value = self.safe_string(ticker.clone(), Value::from("time"), Value::Undefined);
+        let mut market_id: Value = self.safe_string(ticker.clone(), Value::from("product_id"), Value::Undefined);
         return self.safe_ticker(Value::Json(normalize(&Value::Json(json!({
             "info": ticker,
             "symbol": self.safe_symbol(market_id.clone(), market.clone(), Value::Undefined, Value::Undefined),
@@ -795,13 +804,13 @@ pub trait Coinbaseinternational : Exchange {
         //     ]
         //  }
         //
-        let mut message_hash: Value = self.safe_string(message.clone(), Value::from("channel"));
-        let mut market_id: Value = self.safe_string(message.clone(), Value::from("product_id"));
+        let mut message_hash: Value = self.safe_string(message.clone(), Value::from("channel"), Value::Undefined);
+        let mut market_id: Value = self.safe_string(message.clone(), Value::from("product_id"), Value::Undefined);
         let mut market: Value = self.safe_market(market_id.clone(), Value::Undefined, Value::Undefined, Value::Undefined);
         let mut symbol: Value = market.get(Value::from("symbol"));
         let mut timeframe: Value = self.find_timeframe(message_hash.clone(), Value::Undefined);
         self.get("ohlcvs".into()).set(symbol.clone(), self.safe_value(self.get("ohlcvs".into()), symbol.clone(), Value::new_object()));
-        if self.safe_value(self.get("ohlcvs".into()).get(symbol.clone()), timeframe.clone()).is_nullish() {
+        if self.safe_value(self.get("ohlcvs".into()).get(symbol.clone()), timeframe.clone(), Value::Undefined).is_nullish() {
             let mut limit: Value = self.safe_integer(self.get("options".into()), Value::from("OHLCVLimit"), Value::from(1000));
             self.get("ohlcvs".into()).get(symbol.clone()).set(timeframe.clone(), ArrayCacheByTimestamp::new(limit));
         };
@@ -830,7 +839,7 @@ pub trait Coinbaseinternational : Exchange {
         let mut trades: Value = <Self as Coinbaseinternational>::subscribe_multiple(self, Value::from("MATCH"), symbols.clone(), params.clone()).await;
         if self.get("newUpdates".into()).is_truthy() {
             let mut first: Value = self.safe_dict(trades.clone(), Value::from(0), Value::Undefined);
-            let mut trade_symbol: Value = self.safe_string(first.clone(), Value::from("symbol"));
+            let mut trade_symbol: Value = self.safe_string(first.clone(), Value::from("symbol"), Value::Undefined);
             limit = trades.get_limit(trade_symbol.clone(), limit.clone());
         };
         return self.filter_by_since_limit(trades.clone(), since.clone(), limit.clone(), Value::from("timestamp"), true.into());
@@ -852,7 +861,7 @@ pub trait Coinbaseinternational : Exchange {
         //
         let mut trade: Value = <Self as Coinbaseinternational>::parse_ws_trade(self, message.clone(), Value::Undefined);
         let mut symbol: Value = trade.get(Value::from("symbol"));
-        let mut channel: Value = self.safe_string(message.clone(), Value::from("channel"));
+        let mut channel: Value = self.safe_string(message.clone(), Value::from("channel"), Value::Undefined);
         if !self.get("trades".into()).contains_key(symbol.clone()) {
             let mut limit: Value = self.safe_integer(self.get("options".into()), Value::from("tradesLimit"), Value::from(1000));
             let mut trades_array_cache: Value = ArrayCache::new(limit);
@@ -879,20 +888,20 @@ pub trait Coinbaseinternational : Exchange {
         //       "channel": "MATCH",
         //       "type": "UPDATE"
         //    }
-        let mut market_id: Value = self.safe_string_2(trade.clone(), Value::from("symbol"), Value::from("product_id"));
-        let mut datetime: Value = self.safe_string(trade.clone(), Value::from("time"));
+        let mut market_id: Value = self.safe_string_2(trade.clone(), Value::from("symbol"), Value::from("product_id"), Value::Undefined);
+        let mut datetime: Value = self.safe_string(trade.clone(), Value::from("time"), Value::Undefined);
         return self.safe_trade(Value::Json(normalize(&Value::Json(json!({
             "info": trade,
-            "id": self.safe_string(trade.clone(), Value::from("match_id")),
+            "id": self.safe_string(trade.clone(), Value::from("match_id"), Value::Undefined),
             "order": Value::Undefined,
             "timestamp": self.parse8601(datetime.clone()),
             "datetime": datetime,
             "symbol": self.safe_symbol(market_id.clone(), market.clone(), Value::Undefined, Value::Undefined),
             "type": Value::Undefined,
-            "side": self.safe_string_lower(trade.clone(), Value::from("agressor_side")),
+            "side": self.safe_string_lower(trade.clone(), Value::from("agressor_side"), Value::Undefined),
             "takerOrMaker": Value::Undefined,
-            "price": self.safe_string(trade.clone(), Value::from("trade_price")),
-            "amount": self.safe_string(trade.clone(), Value::from("trade_qty")),
+            "price": self.safe_string(trade.clone(), Value::from("trade_price"), Value::Undefined),
+            "amount": self.safe_string(trade.clone(), Value::from("trade_qty"), Value::Undefined),
             "cost": Value::Undefined,
             "fee": Value::Undefined
         }))).unwrap()), Value::Undefined);
@@ -945,25 +954,25 @@ pub trait Coinbaseinternational : Exchange {
         //       "type": "UPDATE"
         //    }
         //
-        let mut r#type: Value = self.safe_string(message.clone(), Value::from("type"));
-        let mut market_id: Value = self.safe_string(message.clone(), Value::from("product_id"));
+        let mut r#type: Value = self.safe_string(message.clone(), Value::from("type"), Value::Undefined);
+        let mut market_id: Value = self.safe_string(message.clone(), Value::from("product_id"), Value::Undefined);
         let mut symbol: Value = self.safe_symbol(market_id.clone(), Value::Undefined, Value::Undefined, Value::Undefined);
-        let mut datetime: Value = self.safe_string(message.clone(), Value::from("time"));
-        let mut channel: Value = self.safe_string(message.clone(), Value::from("channel"));
+        let mut datetime: Value = self.safe_string(message.clone(), Value::from("time"), Value::Undefined);
+        let mut channel: Value = self.safe_string(message.clone(), Value::from("channel"), Value::Undefined);
         if !self.get("orderbooks".into()).contains_key(symbol.clone()) {
             let mut limit: Value = self.safe_integer(self.get("options".into()), Value::from("watchOrderBookLimit"), Value::from(1000));
             self.get("orderbooks".into()).set(symbol.clone(), self.order_book(Value::new_object(), limit.clone()));
         };
         let mut orderbook: Value = self.get("orderbooks".into()).get(symbol.clone());
         if r#type.clone() == Value::from("SNAPSHOT") {
-            let mut parsed_snapshot: Value = self.parse_order_book(message.clone(), symbol.clone(), Value::Undefined, Value::from("bids"), Value::from("asks"), Value::Undefined, Value::Undefined, Value::Undefined);
+            let mut parsed_snapshot: Value = self.parse_order_book(message.clone(), symbol.clone(), Value::Undefined, Value::from("bids"), Value::from("asks"));
             orderbook.reset(parsed_snapshot.clone());
             orderbook.set("symbol".into(), symbol.clone());
         } else {
             let mut changes: Value = self.safe_list(message.clone(), Value::from("changes"), Value::new_array());
             <Self as Coinbaseinternational>::handle_deltas(self, orderbook.clone(), changes.clone());
         };
-        orderbook.set("nonce".into(), self.safe_integer(message.clone(), Value::from("sequence")));
+        orderbook.set("nonce".into(), self.safe_integer(message.clone(), Value::from("sequence"), Value::Undefined));
         orderbook.set("datetime".into(), datetime.clone());
         orderbook.set("timestamp".into(), self.parse8601(datetime.clone()));
         self.get("orderbooks".into()).set(symbol.clone(), orderbook.clone());
@@ -972,10 +981,10 @@ pub trait Coinbaseinternational : Exchange {
     }
 
     fn handle_delta(&mut self, mut orderbook: Value, mut delta: Value) -> Value {
-        let mut raw_side: Value = self.safe_string_lower(delta.clone(), Value::from(0));
+        let mut raw_side: Value = self.safe_string_lower(delta.clone(), Value::from(0), Value::Undefined);
         let mut side: Value = if raw_side.clone() == Value::from("buy") { Value::from("bids") } else { Value::from("asks") };
-        let mut price: Value = self.safe_float(delta.clone(), Value::from(1));
-        let mut amount: Value = self.safe_float(delta.clone(), Value::from(2));
+        let mut price: Value = self.safe_float(delta.clone(), Value::from(1), Value::Undefined);
+        let mut amount: Value = self.safe_float(delta.clone(), Value::from(2), Value::Undefined);
         let mut bookside: Value = orderbook.get(side.clone());
         bookside.store(price.clone(), amount.clone());
         Value::Undefined
@@ -1041,7 +1050,7 @@ pub trait Coinbaseinternational : Exchange {
         //       "type": "UPDATE"
         //    }
         //
-        let mut channel: Value = self.safe_string(message.clone(), Value::from("channel"));
+        let mut channel: Value = self.safe_string(message.clone(), Value::from("channel"), Value::Undefined);
         let mut funding_rate: Value = self.parse_funding_rate(message.clone(), Value::Undefined);
         self.get("fundingRates".into()).set(funding_rate.get(Value::from("symbol")), funding_rate.clone());
         client.resolve(funding_rate.clone(), channel.clone() + Value::from("::") + funding_rate.get(Value::from("symbol")));
@@ -1057,12 +1066,12 @@ pub trait Coinbaseinternational : Exchange {
         //        type: 'REJECT'
         //    }
         //
-        let mut r#type: Value = self.safe_string(message.clone(), Value::from("type"));
+        let mut r#type: Value = self.safe_string(message.clone(), Value::from("type"), Value::Undefined);
         if r#type.clone() != Value::from("REJECT") {
             return false.into();
         };
-        let mut reason: Value = self.safe_string(message.clone(), Value::from("reason"));
-        let mut err_msg: Value = self.safe_string(message.clone(), Value::from("message"));
+        let mut reason: Value = self.safe_string(message.clone(), Value::from("reason"), Value::Undefined);
+        let mut err_msg: Value = self.safe_string(message.clone(), Value::from("message"), Value::Undefined);
                 let mut feedback: Value = self.get("id".into()) + Value::from(" ") + err_msg.clone() + reason.clone();
         self.throw_exactly_matched_exception(self.get("exceptions".into()).get(Value::from("exact")), reason.clone(), feedback.clone());
         self.throw_broadly_matched_exception(self.get("exceptions".into()).get(Value::from("broad")), reason.clone(), feedback.clone());
@@ -1086,15 +1095,15 @@ pub trait Coinbaseinternational : Exchange {
             "FUNDING": self.get("handleFundingRate".into()),
             "RISK": self.get("handleTicker".into())
         }))).unwrap());
-        let mut r#type: Value = self.safe_string(message.clone(), Value::from("type"));
+        let mut r#type: Value = self.safe_string(message.clone(), Value::from("type"), Value::Undefined);
         if r#type.clone() == Value::from("error") {
-            let mut error_message: Value = self.safe_string(message.clone(), Value::from("message"));
+            let mut error_message: Value = self.safe_string(message.clone(), Value::from("message"), Value::Undefined);
             panic!(r###"ExchangeError::new(error_message)"###);
         };
         if channel.index_of(Value::from("CANDLES")) > Value::from(1).neg() {
             <Self as Coinbaseinternational>::handle_ohlcv(self, client.clone(), message.clone());
         };
-        let mut method: Value = self.safe_value(methods.clone(), channel.clone());
+        let mut method: Value = self.safe_value(methods.clone(), channel.clone(), Value::Undefined);
         if method.clone().is_nonnullish() {
             method.call(self, client.clone(), message.clone());
         };
@@ -1177,8 +1186,8 @@ impl ValueTrait for CoinbaseinternationalImpl {
     fn push(&mut self, value: Value) { self.0.push(value) }
     fn split(&self, separator: Value) -> Value { self.0.split(separator) }
     fn contains_key(&self, key: Value) -> bool { self.0.contains_key(key) }
-    fn keys(&self) -> Vec<Value> { self.0.keys() }
-    fn values(&self) -> Vec<Value> { self.0.values() }
+    fn keys(&self) -> Value { self.0.keys() }
+    fn values(&self) -> Value { self.0.values() }
     fn to_array(&self, x: Value) -> Value { self.0.to_array(x) }
     fn index_of(&self, x: Value) -> Value { self.0.index_of(x) }
     fn join(&self, glue: Value) -> Value { self.0.join(glue) }

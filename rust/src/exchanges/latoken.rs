@@ -11,7 +11,16 @@ use async_trait::async_trait;
 use std::str::FromStr;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, JSON, Array, Object, Math, parse_int, shift_2, extend_2, normalize};
+use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, BoolExt, JSON, Array, Object, Math, Promise, parse_int, shift_2, extend_2, normalize};
+// Crypto hash identifiers
+fn sha256() -> Value { Value::from("sha256") }
+fn sha384() -> Value { Value::from("sha384") }
+fn sha512() -> Value { Value::from("sha512") }
+fn md5() -> Value { Value::from("md5") }
+fn ed25519() -> Value { Value::from("ed25519") }
+fn rsa(msg: Value, secret: Value, _hash: Value) -> Value { msg }
+fn eddsa(msg: Value, secret: Value, _curve: Value) -> Value { msg }
+fn secp256k1() -> Value { Value::from("secp256k1") }
 
 use crate::exchange::{PRECISE_BASE, TRUNCATE, ROUND, ROUND_UP, ROUND_DOWN};
 use crate::exchange::{DECIMAL_PLACES, SIGNIFICANT_DIGITS, TICK_SIZE, NO_PADDING, PAD_WITH_ZERO};
@@ -372,106 +381,7 @@ pub trait Latoken : Exchange {
     }
 
 
-    async fn fetch_markets(&mut self, mut params: Value) -> Value {
-        params = params.or_default(Value::new_object());
-        let mut response: Value = self.dispatch("publicGetPair".into(), params.clone(), Value::Undefined).await;
-        //
-        //     [
-        //         {
-        //             "id":"dba4289b-6b46-4d94-bf55-49eec9a163ad",
-        //             "status":"PAIR_STATUS_ACTIVE", // CURRENCY_STATUS_INACTIVE
-        //             "baseCurrency":"fb9b53d6-bbf6-472f-b6ba-73cc0d606c9b",
-        //             "quoteCurrency":"620f2019-33c0-423b-8a9d-cde4d7f8ef7f",
-        //             "priceTick":"0.000000100000000000",
-        //             "priceDecimals":7,
-        //             "quantityTick":"0.010000000",
-        //             "quantityDecimals":2,
-        //             "costDisplayDecimals":7,
-        //             "created":1572957210501,
-        //             "minOrderQuantity":"0",
-        //             "maxOrderCostUsd":"999999999999999999",
-        //             "minOrderCostUsd":"0",
-        //             "externalSymbol":""
-        //         }
-        //     ]
-        //
-        if self.safe_bool(self.get("options".into()), Value::from("adjustForTimeDifference"), false.into()).is_truthy() {
-            self.load_time_difference(Value::Undefined).await;
-        };
-        let mut currencies: Value = self.safe_dict(self.get("options".into()), Value::from("cachedCurrencies"), Value::new_object());
-        let mut currencies_by_id: Value = self.index_by(currencies.clone(), Value::from("id"));
-        let mut result: Value = Value::new_array();
-        let mut i: usize = 0;
-        while i < response.len() {
-            let mut market: Value = response.get(i.into());
-            let mut id: Value = self.safe_string(market.clone(), Value::from("id"));
-            // the exchange shows them inverted
-            let mut base_id: Value = self.safe_string(market.clone(), Value::from("baseCurrency"));
-            let mut quote_id: Value = self.safe_string(market.clone(), Value::from("quoteCurrency"));
-            let mut base_currency: Value = self.safe_dict(currencies_by_id.clone(), base_id.clone(), Value::Undefined);
-            let mut quote_currency: Value = self.safe_dict(currencies_by_id.clone(), quote_id.clone(), Value::Undefined);
-            let mut base_currency_info: Value = self.safe_dict(base_currency.clone(), Value::from("info"), Value::Undefined);
-            let mut quote_currency_info: Value = self.safe_dict(quote_currency.clone(), Value::from("info"), Value::Undefined);
-            if base_currency_info.clone().is_nonnullish() && quote_currency_info.clone().is_nonnullish() {
-                let mut base: Value = self.safe_currency_code(self.safe_string(base_currency_info.clone(), Value::from("tag")), Value::Undefined);
-                let mut quote: Value = self.safe_currency_code(self.safe_string(quote_currency_info.clone(), Value::from("tag")), Value::Undefined);
-                let mut lowercase_quote: Value = quote.to_lower_case();
-                let mut capitalized_quote: Value = self.capitalize(lowercase_quote.clone());
-                let mut status: Value = self.safe_string(market.clone(), Value::from("status"));
-                result.push(Value::Json(normalize(&Value::Json(json!({
-                    "id": id,
-                    "symbol": base.clone() + Value::from("/") + quote.clone(),
-                    "base": base,
-                    "quote": quote,
-                    "settle": Value::Undefined,
-                    "baseId": base_id,
-                    "quoteId": quote_id,
-                    "settleId": Value::Undefined,
-                    "type": "spot",
-                    "spot": true,
-                    "margin": false,
-                    "swap": false,
-                    "future": false,
-                    "option": false,
-                    "active": status.clone() == Value::from("PAIR_STATUS_ACTIVE"),
-                    "contract": false,
-                    "linear": Value::Undefined,
-                    "inverse": Value::Undefined,
-                    "contractSize": Value::Undefined,
-                    "expiry": Value::Undefined,
-                    "expiryDatetime": Value::Undefined,
-                    "strike": Value::Undefined,
-                    "optionType": Value::Undefined,
-                    "precision": Value::Json(normalize(&Value::Json(json!({
-                        "amount": self.safe_number(market.clone(), Value::from("quantityTick"), Value::Undefined),
-                        "price": self.safe_number(market.clone(), Value::from("priceTick"), Value::Undefined)
-                    }))).unwrap()),
-                    "limits": Value::Json(normalize(&Value::Json(json!({
-                        "leverage": Value::Json(normalize(&Value::Json(json!({
-                            "min": Value::Undefined,
-                            "max": Value::Undefined
-                        }))).unwrap()),
-                        "amount": Value::Json(normalize(&Value::Json(json!({
-                            "min": self.safe_number(market.clone(), Value::from("minOrderQuantity"), Value::Undefined),
-                            "max": Value::Undefined
-                        }))).unwrap()),
-                        "price": Value::Json(normalize(&Value::Json(json!({
-                            "min": Value::Undefined,
-                            "max": Value::Undefined
-                        }))).unwrap()),
-                        "cost": Value::Json(normalize(&Value::Json(json!({
-                            "min": self.safe_number(market.clone(), Value::from("minOrderCost") + capitalized_quote.clone(), Value::Undefined),
-                            "max": self.safe_number(market.clone(), Value::from("maxOrderCost") + capitalized_quote.clone(), Value::Undefined)
-                        }))).unwrap())
-                    }))).unwrap()),
-                    "created": self.safe_integer(market.clone(), Value::from("created")),
-                    "info": market
-                }))).unwrap()));
-            };
-            i += 1;
-        };
-        return result.clone();
-    }
+    
 
     async fn fetch_currencies(&mut self, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
@@ -512,22 +422,22 @@ pub trait Latoken : Exchange {
         let mut i: usize = 0;
         while i < response.len() {
             let mut currency: Value = response.get(i.into());
-            let mut id: Value = self.safe_string(currency.clone(), Value::from("id"));
-            let mut tag: Value = self.safe_string(currency.clone(), Value::from("tag"));
+            let mut id: Value = self.safe_string(currency.clone(), Value::from("id"), Value::Undefined);
+            let mut tag: Value = self.safe_string(currency.clone(), Value::from("tag"), Value::Undefined);
             let mut code: Value = self.safe_currency_code(tag.clone(), Value::Undefined);
-            let mut currency_type: Value = self.safe_string(currency.clone(), Value::from("type"));
+            let mut currency_type: Value = self.safe_string(currency.clone(), Value::from("type"), Value::Undefined);
             let mut is_crypto: Value = (currency_type.clone() == Value::from("CURRENCY_TYPE_CRYPTO") || currency_type.clone() == Value::from("CURRENCY_TYPE_IEO")).into();
             result.set(code.clone(), self.safe_currency_structure(Value::Json(normalize(&Value::Json(json!({
                 "id": id,
                 "code": code,
                 "info": currency,
-                "name": self.safe_string(currency.clone(), Value::from("name")),
+                "name": self.safe_string(currency.clone(), Value::from("name"), Value::Undefined),
                 "type": if is_crypto.is_truthy() { Value::from("crypto") } else { Value::from("other") },
-                "active": self.safe_string(currency.clone(), Value::from("status")) == Value::from("CURRENCY_STATUS_ACTIVE"),
+                "active": self.safe_string(currency.clone(), Value::from("status"), Value::Undefined) == Value::from("CURRENCY_STATUS_ACTIVE"),
                 "deposit": Value::Undefined,
                 "withdraw": Value::Undefined,
                 "fee": self.safe_number(currency.clone(), Value::from("fee"), Value::Undefined),
-                "precision": self.parse_number(self.parse_precision(self.safe_string(currency.clone(), Value::from("decimals"))), Value::Undefined),
+                "precision": self.parse_number(self.parse_precision(self.safe_string(currency.clone(), Value::from("decimals"), Value::Undefined)), Value::Undefined),
                 "limits": Value::Json(normalize(&Value::Json(json!({
                     "amount": Value::Json(normalize(&Value::Json(json!({
                         "min": self.safe_number(currency.clone(), Value::from("minTransferAmount"), Value::Undefined),
@@ -548,7 +458,7 @@ pub trait Latoken : Exchange {
     async fn fetch_balance(&mut self, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        let mut response: Value = self.private_get_auth_account(params.clone()).await;
+        let mut response: Value = self.dispatch("privateGetAuthAccount".into(), params.clone(), Value::Undefined).await;
         //
         //     [
         //         {
@@ -586,8 +496,8 @@ pub trait Latoken : Exchange {
         let mut i: usize = 0;
         while i < balances.len() {
             let mut balance: Value = balances.get(i.into());
-            let mut currency_id: Value = self.safe_string(balance.clone(), Value::from("currency"));
-            let mut timestamp: Value = self.safe_integer(balance.clone(), Value::from("timestamp"));
+            let mut currency_id: Value = self.safe_string(balance.clone(), Value::from("currency"), Value::Undefined);
+            let mut timestamp: Value = self.safe_integer(balance.clone(), Value::from("timestamp"), Value::Undefined);
             if timestamp.clone().is_nonnullish() {
                 if max_timestamp.clone().is_nullish() {
                     max_timestamp = timestamp.clone();
@@ -597,8 +507,8 @@ pub trait Latoken : Exchange {
             };
             let mut code: Value = self.safe_currency_code(currency_id.clone(), Value::Undefined);
             let mut account: Value = self.account();
-            account.set("free".into(), self.safe_string(balance.clone(), Value::from("available")));
-            account.set("used".into(), self.safe_string(balance.clone(), Value::from("blocked")));
+            account.set("free".into(), self.safe_string(balance.clone(), Value::from("available"), Value::Undefined));
+            account.set("used".into(), self.safe_string(balance.clone(), Value::from("blocked"), Value::Undefined));
             result.set(code.clone(), account.clone());
             i += 1;
         };
@@ -660,8 +570,8 @@ pub trait Latoken : Exchange {
         //        "updateTimestamp": "1693965231406"
         //    }
         //
-        let mut market_id: Value = self.safe_string(ticker.clone(), Value::from("symbol"));
-        let mut last: Value = self.safe_string(ticker.clone(), Value::from("lastPrice"));
+        let mut market_id: Value = self.safe_string(ticker.clone(), Value::from("symbol"), Value::Undefined);
+        let mut last: Value = self.safe_string(ticker.clone(), Value::from("lastPrice"), Value::Undefined);
         let mut timestamp: Value = self.safe_integer_omit_zero(ticker.clone(), Value::from("updateTimestamp"), Value::Undefined);
         // sometimes latoken provided '0' ts from /ticker endpoint
         return self.safe_ticker(Value::Json(normalize(&Value::Json(json!({
@@ -670,20 +580,20 @@ pub trait Latoken : Exchange {
             "datetime": self.iso8601(timestamp.clone()),
             "low": Value::Undefined,
             "high": Value::Undefined,
-            "bid": self.safe_string(ticker.clone(), Value::from("bestBid")),
-            "bidVolume": self.safe_string(ticker.clone(), Value::from("bestBidQuantity")),
-            "ask": self.safe_string(ticker.clone(), Value::from("bestAsk")),
-            "askVolume": self.safe_string(ticker.clone(), Value::from("bestAskQuantity")),
+            "bid": self.safe_string(ticker.clone(), Value::from("bestBid"), Value::Undefined),
+            "bidVolume": self.safe_string(ticker.clone(), Value::from("bestBidQuantity"), Value::Undefined),
+            "ask": self.safe_string(ticker.clone(), Value::from("bestAsk"), Value::Undefined),
+            "askVolume": self.safe_string(ticker.clone(), Value::from("bestAskQuantity"), Value::Undefined),
             "vwap": Value::Undefined,
             "open": Value::Undefined,
             "close": last,
             "last": last,
             "previousClose": Value::Undefined,
             "change": Value::Undefined,
-            "percentage": self.safe_string(ticker.clone(), Value::from("change24h")),
+            "percentage": self.safe_string(ticker.clone(), Value::from("change24h"), Value::Undefined),
             "average": Value::Undefined,
-            "baseVolume": self.safe_string(ticker.clone(), Value::from("amount24h")),
-            "quoteVolume": self.safe_string(ticker.clone(), Value::from("volume24h")),
+            "baseVolume": self.safe_string(ticker.clone(), Value::from("amount24h"), Value::Undefined),
+            "quoteVolume": self.safe_string(ticker.clone(), Value::from("volume24h"), Value::Undefined),
             "info": ticker
         }))).unwrap()), market.clone());
     }
@@ -782,12 +692,12 @@ pub trait Latoken : Exchange {
         //     }
         //
         let mut r#type: Value = Value::Undefined;
-        let mut timestamp: Value = self.safe_integer(trade.clone(), Value::from("timestamp"));
-        let mut price_string: Value = self.safe_string(trade.clone(), Value::from("price"));
-        let mut amount_string: Value = self.safe_string(trade.clone(), Value::from("quantity"));
-        let mut cost_string: Value = self.safe_string(trade.clone(), Value::from("cost"));
-        let mut maker_buyer: Value = self.safe_value(trade.clone(), Value::from("makerBuyer"));
-        let mut side: Value = self.safe_string(trade.clone(), Value::from("direction"));
+        let mut timestamp: Value = self.safe_integer(trade.clone(), Value::from("timestamp"), Value::Undefined);
+        let mut price_string: Value = self.safe_string(trade.clone(), Value::from("price"), Value::Undefined);
+        let mut amount_string: Value = self.safe_string(trade.clone(), Value::from("quantity"), Value::Undefined);
+        let mut cost_string: Value = self.safe_string(trade.clone(), Value::from("cost"), Value::Undefined);
+        let mut maker_buyer: Value = self.safe_value(trade.clone(), Value::from("makerBuyer"), Value::Undefined);
+        let mut side: Value = self.safe_string(trade.clone(), Value::from("direction"), Value::Undefined);
         if side.clone().is_nullish() {
             side = if maker_buyer.is_truthy() { Value::from("sell") } else { Value::from("buy") };
         } else {
@@ -799,17 +709,17 @@ pub trait Latoken : Exchange {
         };
         let mut is_buy: Value = (side.clone() == Value::from("buy")).into();
         let mut taker_or_maker: Value = if maker_buyer.is_truthy() && is_buy.is_truthy() { Value::from("maker") } else { Value::from("taker") };
-        let mut base_id: Value = self.safe_string(trade.clone(), Value::from("baseCurrency"));
-        let mut quote_id: Value = self.safe_string(trade.clone(), Value::from("quoteCurrency"));
+        let mut base_id: Value = self.safe_string(trade.clone(), Value::from("baseCurrency"), Value::Undefined);
+        let mut quote_id: Value = self.safe_string(trade.clone(), Value::from("quoteCurrency"), Value::Undefined);
         let mut base: Value = self.safe_currency_code(base_id.clone(), Value::Undefined);
         let mut quote: Value = self.safe_currency_code(quote_id.clone(), Value::Undefined);
         let mut symbol: Value = base.clone() + Value::from("/") + quote.clone();
         if self.get("markets".into()).contains_key(symbol.clone()) {
             market = self.market(symbol.clone());
         };
-        let mut id: Value = self.safe_string(trade.clone(), Value::from("id"));
-        let mut order_id: Value = self.safe_string(trade.clone(), Value::from("order"));
-        let mut fee_cost: Value = self.safe_string(trade.clone(), Value::from("fee"));
+        let mut id: Value = self.safe_string(trade.clone(), Value::from("id"), Value::Undefined);
+        let mut order_id: Value = self.safe_string(trade.clone(), Value::from("order"), Value::Undefined);
+        let mut fee_cost: Value = self.safe_string(trade.clone(), Value::from("fee"), Value::Undefined);
         let mut fee: Value = Value::Undefined;
         if fee_cost.clone().is_nonnullish() {
             fee = Value::Json(normalize(&Value::Json(json!({
@@ -872,7 +782,7 @@ pub trait Latoken : Exchange {
             "currency": market.get(Value::from("baseId")),
             "quote": market.get(Value::from("quoteId"))
         }))).unwrap());
-        let mut response: Value = self.public_get_trade_fee_currency_quote(extend_2(request.clone(), params.clone())).await;
+        let mut response: Value = self.dispatch("publicGetTradeFeeCurrencyQuote".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         //
         //     {
         //         "makerFee": "0.004900000000000000",
@@ -899,7 +809,7 @@ pub trait Latoken : Exchange {
             "currency": market.get(Value::from("baseId")),
             "quote": market.get(Value::from("quoteId"))
         }))).unwrap());
-        let mut response: Value = self.private_get_auth_trade_fee_currency_quote(extend_2(request.clone(), params.clone())).await;
+        let mut response: Value = self.dispatch("privateGetAuthTradeFeeCurrencyQuote".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         //
         //     {
         //         "makerFee": "0.004900000000000000",
@@ -936,9 +846,9 @@ pub trait Latoken : Exchange {
             market = self.market(symbol.clone());
             request.set("currency".into(), market.get(Value::from("baseId")));
             request.set("quote".into(), market.get(Value::from("quoteId")));
-            response = self.private_get_auth_trade_pair_currency_quote(extend_2(request.clone(), params.clone())).await;
+            response = self.dispatch("privateGetAuthTradePairCurrencyQuote".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         } else {
-            response = self.private_get_auth_trade(extend_2(request.clone(), params.clone())).await;
+            response = self.dispatch("privateGetAuthTrade".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         };
         //
         //     [
@@ -1031,10 +941,10 @@ pub trait Latoken : Exchange {
         //         "id":"a631426d-3543-45ba-941e-75f7825afb0f"
         //     }
         //
-        let mut id: Value = self.safe_string(order.clone(), Value::from("id"));
-        let mut timestamp: Value = self.safe_integer(order.clone(), Value::from("timestamp"));
-        let mut base_id: Value = self.safe_string(order.clone(), Value::from("baseCurrency"));
-        let mut quote_id: Value = self.safe_string(order.clone(), Value::from("quoteCurrency"));
+        let mut id: Value = self.safe_string(order.clone(), Value::from("id"), Value::Undefined);
+        let mut timestamp: Value = self.safe_integer(order.clone(), Value::from("timestamp"), Value::Undefined);
+        let mut base_id: Value = self.safe_string(order.clone(), Value::from("baseCurrency"), Value::Undefined);
+        let mut quote_id: Value = self.safe_string(order.clone(), Value::from("quoteCurrency"), Value::Undefined);
         let mut base: Value = self.safe_currency_code(base_id.clone(), Value::Undefined);
         let mut quote: Value = self.safe_currency_code(quote_id.clone(), Value::Undefined);
         let mut symbol: Value = Value::Undefined;
@@ -1044,20 +954,20 @@ pub trait Latoken : Exchange {
                 market = self.market(symbol.clone());
             };
         };
-        let mut order_side: Value = self.safe_string(order.clone(), Value::from("side"));
+        let mut order_side: Value = self.safe_string(order.clone(), Value::from("side"), Value::Undefined);
         let mut side: Value = Value::Undefined;
         if order_side.clone().is_nonnullish() {
             let mut parts: Value = order_side.split(Value::from("_"));
             let mut parts_length: usize = parts.len();
-            side = self.safe_string_lower(parts.clone(), parts_length.clone() - Value::from(1));
+            side = self.safe_string_lower(parts.clone(), parts_length.clone() - Value::from(1), Value::Undefined);
         };
-        let mut r#type: Value = <Self as Latoken>::parse_order_type(self, self.safe_string(order.clone(), Value::from("type")));
-        let mut price: Value = self.safe_string(order.clone(), Value::from("price"));
-        let mut amount: Value = self.safe_string(order.clone(), Value::from("quantity"));
-        let mut filled: Value = self.safe_string(order.clone(), Value::from("filled"));
-        let mut cost: Value = self.safe_string(order.clone(), Value::from("cost"));
-        let mut status: Value = <Self as Latoken>::parse_order_status(self, self.safe_string(order.clone(), Value::from("status")));
-        let mut message: Value = self.safe_string(order.clone(), Value::from("message"));
+        let mut r#type: Value = <Self as Latoken>::parse_order_type(self, self.safe_string(order.clone(), Value::from("type"), Value::Undefined));
+        let mut price: Value = self.safe_string(order.clone(), Value::from("price"), Value::Undefined);
+        let mut amount: Value = self.safe_string(order.clone(), Value::from("quantity"), Value::Undefined);
+        let mut filled: Value = self.safe_string(order.clone(), Value::from("filled"), Value::Undefined);
+        let mut cost: Value = self.safe_string(order.clone(), Value::from("cost"), Value::Undefined);
+        let mut status: Value = <Self as Latoken>::parse_order_status(self, self.safe_string(order.clone(), Value::from("status"), Value::Undefined));
+        let mut message: Value = self.safe_string(order.clone(), Value::from("message"), Value::Undefined);
         if message.clone().is_nonnullish() {
             if message.index_of(Value::from("cancel")) >= Value::from(0) {
                 status = Value::from("canceled");
@@ -1065,8 +975,8 @@ pub trait Latoken : Exchange {
                 status = Value::from("open");
             };
         };
-        let mut client_order_id: Value = self.safe_string(order.clone(), Value::from("clientOrderId"));
-        let mut time_in_force: Value = <Self as Latoken>::parse_time_in_force(self, self.safe_string(order.clone(), Value::from("condition")));
+        let mut client_order_id: Value = self.safe_string(order.clone(), Value::from("clientOrderId"), Value::Undefined);
+        let mut time_in_force: Value = <Self as Latoken>::parse_time_in_force(self, self.safe_string(order.clone(), Value::from("condition"), Value::Undefined));
         return self.safe_order(Value::Json(normalize(&Value::Json(json!({
             "id": id,
             "clientOrderId": client_order_id,
@@ -1081,7 +991,7 @@ pub trait Latoken : Exchange {
             "postOnly": Value::Undefined,
             "side": side,
             "price": price,
-            "triggerPrice": self.safe_string(order.clone(), Value::from("stopPrice")),
+            "triggerPrice": self.safe_string(order.clone(), Value::from("stopPrice"), Value::Undefined),
             "cost": cost,
             "amount": amount,
             "filled": filled,
@@ -1099,7 +1009,7 @@ pub trait Latoken : Exchange {
         };
         self.load_markets(Value::Undefined, Value::Undefined).await;
         let mut response: Value = Value::Undefined;
-        let mut is_trigger: Value = self.safe_value_2(params.clone(), Value::from("trigger"), Value::from("stop"));
+        let mut is_trigger: Value = self.safe_value_2(params.clone(), Value::from("trigger"), Value::from("stop"), Value::Undefined);
         params = self.omit(params.clone(), Value::from("stop"));
         // privateGetAuthOrderActive doesn't work even though its listed at https://api.latoken.com/doc/v2/#tag/Order/operation/getMyActiveOrders
         let mut market: Value = self.market(symbol.clone());
@@ -1108,9 +1018,9 @@ pub trait Latoken : Exchange {
             "quote": market.get(Value::from("quoteId"))
         }))).unwrap());
         if is_trigger.is_truthy() {
-            response = self.private_get_auth_stop_order_pair_currency_quote_active(extend_2(request.clone(), params.clone())).await;
+            response = self.dispatch("privateGetAuthStopOrderPairCurrencyQuoteActive".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         } else {
-            response = self.private_get_auth_order_pair_currency_quote_active(extend_2(request.clone(), params.clone())).await;
+            response = self.dispatch("privateGetAuthOrderPairCurrencyQuoteActive".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         };
         //
         //     [
@@ -1146,7 +1056,7 @@ pub trait Latoken : Exchange {
         // 'from': this.milliseconds (),
         // 'limit': limit, // default '100'
         let mut market: Value = Value::Undefined;
-        let mut is_trigger: Value = self.safe_value_2(params.clone(), Value::from("trigger"), Value::from("stop"));
+        let mut is_trigger: Value = self.safe_value_2(params.clone(), Value::from("trigger"), Value::from("stop"), Value::Undefined);
         params = self.omit(params.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("stop").into(), Value::from("trigger").into()])));
         if limit.clone().is_nonnullish() {
             request.set("limit".into(), limit.clone());
@@ -1158,15 +1068,15 @@ pub trait Latoken : Exchange {
             request.set("currency".into(), market.get(Value::from("baseId")));
             request.set("quote".into(), market.get(Value::from("quoteId")));
             if is_trigger.is_truthy() {
-                response = self.private_get_auth_stop_order_pair_currency_quote(extend_2(request.clone(), params.clone())).await;
+                response = self.dispatch("privateGetAuthStopOrderPairCurrencyQuote".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
             } else {
-                response = self.private_get_auth_order_pair_currency_quote(extend_2(request.clone(), params.clone())).await;
+                response = self.dispatch("privateGetAuthOrderPairCurrencyQuote".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
             };
         } else {
             if is_trigger.is_truthy() {
-                response = self.private_get_auth_stop_order(extend_2(request.clone(), params.clone())).await;
+                response = self.dispatch("privateGetAuthStopOrder".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
             } else {
-                response = self.private_get_auth_order(extend_2(request.clone(), params.clone())).await;
+                response = self.dispatch("privateGetAuthOrder".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
             };
         };
         //
@@ -1200,13 +1110,13 @@ pub trait Latoken : Exchange {
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
             "id": id
         }))).unwrap());
-        let mut is_trigger: Value = self.safe_value_2(params.clone(), Value::from("trigger"), Value::from("stop"));
+        let mut is_trigger: Value = self.safe_value_2(params.clone(), Value::from("trigger"), Value::from("stop"), Value::Undefined);
         params = self.omit(params.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("stop").into(), Value::from("trigger").into()])));
         let mut response: Value = Value::Undefined;
         if is_trigger.is_truthy() {
-            response = self.private_get_auth_stop_order_get_order_id(extend_2(request.clone(), params.clone())).await;
+            response = self.dispatch("privateGetAuthStopOrderGetOrderId".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         } else {
-            response = self.private_get_auth_order_get_order_id(extend_2(request.clone(), params.clone())).await;
+            response = self.dispatch("privateGetAuthOrderGetOrderId".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         };
         //
         //     {
@@ -1251,14 +1161,14 @@ pub trait Latoken : Exchange {
         if uppercase_type.clone() == Value::from("LIMIT") {
             request.set("price".into(), self.price_to_precision(symbol.clone(), price.clone()));
         };
-        let mut trigger_price: Value = self.safe_string_2(params.clone(), Value::from("triggerPrice"), Value::from("stopPrice"));
+        let mut trigger_price: Value = self.safe_string_2(params.clone(), Value::from("triggerPrice"), Value::from("stopPrice"), Value::Undefined);
         params = self.omit(params.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("triggerPrice").into(), Value::from("stopPrice").into()])));
         let mut response: Value = Value::Undefined;
         if trigger_price.clone().is_nonnullish() {
             request.set("stopPrice".into(), self.price_to_precision(symbol.clone(), trigger_price.clone()));
-            response = self.private_post_auth_stop_order_place(extend_2(request.clone(), params.clone())).await;
+            response = self.dispatch("privatePostAuthStopOrderPlace".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         } else {
-            response = self.private_post_auth_order_place(extend_2(request.clone(), params.clone())).await;
+            response = self.dispatch("privatePostAuthOrderPlace".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         };
         //
         //    {
@@ -1281,13 +1191,13 @@ pub trait Latoken : Exchange {
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
             "id": id
         }))).unwrap());
-        let mut is_trigger: Value = self.safe_value_2(params.clone(), Value::from("trigger"), Value::from("stop"));
+        let mut is_trigger: Value = self.safe_value_2(params.clone(), Value::from("trigger"), Value::from("stop"), Value::Undefined);
         params = self.omit(params.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("stop").into(), Value::from("trigger").into()])));
         let mut response: Value = Value::Undefined;
         if is_trigger.is_truthy() {
-            response = self.private_post_auth_stop_order_cancel(extend_2(request.clone(), params.clone())).await;
+            response = self.dispatch("privatePostAuthStopOrderCancel".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         } else {
-            response = self.private_post_auth_order_cancel(extend_2(request.clone(), params.clone())).await;
+            response = self.dispatch("privatePostAuthOrderCancel".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         };
         //
         //     {
@@ -1308,7 +1218,7 @@ pub trait Latoken : Exchange {
         // 'currency': market['baseId'],
         // 'quote': market['quoteId'],
         let mut market: Value = Value::Undefined;
-        let mut is_trigger: Value = self.safe_value_2(params.clone(), Value::from("trigger"), Value::from("stop"));
+        let mut is_trigger: Value = self.safe_value_2(params.clone(), Value::from("trigger"), Value::from("stop"), Value::Undefined);
         params = self.omit(params.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("stop").into(), Value::from("trigger").into()])));
         let mut response: Value = Value::Undefined;
         if symbol.clone().is_nonnullish() {
@@ -1316,15 +1226,15 @@ pub trait Latoken : Exchange {
             request.set("currency".into(), market.get(Value::from("baseId")));
             request.set("quote".into(), market.get(Value::from("quoteId")));
             if is_trigger.is_truthy() {
-                response = self.private_post_auth_stop_order_cancel_all_currency_quote(extend_2(request.clone(), params.clone())).await;
+                response = self.dispatch("privatePostAuthStopOrderCancelAllCurrencyQuote".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
             } else {
-                response = self.private_post_auth_order_cancel_all_currency_quote(extend_2(request.clone(), params.clone())).await;
+                response = self.dispatch("privatePostAuthOrderCancelAllCurrencyQuote".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
             };
         } else {
             if is_trigger.is_truthy() {
-                response = self.private_post_auth_stop_order_cancel_all(extend_2(request.clone(), params.clone())).await;
+                response = self.dispatch("privatePostAuthStopOrderCancelAll".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
             } else {
-                response = self.private_post_auth_order_cancel_all(extend_2(request.clone(), params.clone())).await;
+                response = self.dispatch("privatePostAuthOrderCancelAll".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
             };
         };
         //
@@ -1344,7 +1254,7 @@ pub trait Latoken : Exchange {
         let mut request: Value = Value::new_object();
         // 'page': '1',
         // 'size': 100,
-        let mut response: Value = self.private_get_auth_transaction(extend_2(request.clone(), params.clone())).await;
+        let mut response: Value = self.dispatch("privateGetAuthTransaction".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         //
         //     {
         //         "hasNext":false,
@@ -1398,16 +1308,16 @@ pub trait Latoken : Exchange {
         //         "requiresCode":false
         //     }
         //
-        let mut id: Value = self.safe_string(transaction.clone(), Value::from("id"));
-        let mut timestamp: Value = self.safe_integer(transaction.clone(), Value::from("timestamp"));
-        let mut currency_id: Value = self.safe_string(transaction.clone(), Value::from("currency"));
+        let mut id: Value = self.safe_string(transaction.clone(), Value::from("id"), Value::Undefined);
+        let mut timestamp: Value = self.safe_integer(transaction.clone(), Value::from("timestamp"), Value::Undefined);
+        let mut currency_id: Value = self.safe_string(transaction.clone(), Value::from("currency"), Value::Undefined);
         let mut code: Value = self.safe_currency_code(currency_id.clone(), currency.clone());
-        let mut status: Value = <Self as Latoken>::parse_transaction_status(self, self.safe_string(transaction.clone(), Value::from("status")));
+        let mut status: Value = <Self as Latoken>::parse_transaction_status(self, self.safe_string(transaction.clone(), Value::from("status"), Value::Undefined));
         let mut amount: Value = self.safe_number(transaction.clone(), Value::from("amount"), Value::Undefined);
-        let mut address_from: Value = self.safe_string(transaction.clone(), Value::from("senderAddress"));
-        let mut address_to: Value = self.safe_string(transaction.clone(), Value::from("recipientAddress"));
-        let mut txid: Value = self.safe_string(transaction.clone(), Value::from("transactionHash"));
-        let mut tag_to: Value = self.safe_string(transaction.clone(), Value::from("memo"));
+        let mut address_from: Value = self.safe_string(transaction.clone(), Value::from("senderAddress"), Value::Undefined);
+        let mut address_to: Value = self.safe_string(transaction.clone(), Value::from("recipientAddress"), Value::Undefined);
+        let mut txid: Value = self.safe_string(transaction.clone(), Value::from("transactionHash"), Value::Undefined);
+        let mut tag_to: Value = self.safe_string(transaction.clone(), Value::from("memo"), Value::Undefined);
         let mut fee: Value = Value::Json(normalize(&Value::Json(json!({
             "currency": Value::Undefined,
             "cost": Value::Undefined,
@@ -1418,7 +1328,7 @@ pub trait Latoken : Exchange {
             fee.set("cost".into(), fee_cost.clone());
             fee.set("currency".into(), code.clone());
         };
-        let mut r#type: Value = <Self as Latoken>::parse_transaction_type(self, self.safe_string(transaction.clone(), Value::from("type")));
+        let mut r#type: Value = <Self as Latoken>::parse_transaction_type(self, self.safe_string(transaction.clone(), Value::from("type"), Value::Undefined));
         return Value::Json(normalize(&Value::Json(json!({
             "info": transaction,
             "id": id,
@@ -1467,7 +1377,7 @@ pub trait Latoken : Exchange {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
         let mut currency: Value = self.currency(code.clone());
-        let mut response: Value = self.private_get_auth_transfer(params.clone()).await;
+        let mut response: Value = self.dispatch("privateGetAuthTransfer".into(), params.clone(), Value::Undefined).await;
         //
         //     {
         //         "hasNext": true,
@@ -1514,11 +1424,11 @@ pub trait Latoken : Exchange {
         }))).unwrap());
         let mut response: Value = Value::Undefined;
         if to_account.index_of(Value::from("@")) >= Value::from(0) {
-            response = self.private_post_auth_transfer_email(extend_2(request.clone(), params.clone())).await;
+            response = self.dispatch("privatePostAuthTransferEmail".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         } else if to_account.len() == 36 {
-            response = self.private_post_auth_transfer_id(extend_2(request.clone(), params.clone())).await;
+            response = self.dispatch("privatePostAuthTransferId".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         } else {
-            response = self.private_post_auth_transfer_phone(extend_2(request.clone(), params.clone())).await;
+            response = self.dispatch("privatePostAuthTransferPhone".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         };
         //
         //     {
@@ -1568,18 +1478,18 @@ pub trait Latoken : Exchange {
         //         "fee": 0
         //     }
         //
-        let mut timestamp: Value = self.safe_timestamp(transfer.clone(), Value::from("timestamp"));
-        let mut currency_id: Value = self.safe_string(transfer.clone(), Value::from("currency"));
-        let mut status: Value = self.safe_string(transfer.clone(), Value::from("status"));
+        let mut timestamp: Value = self.safe_timestamp(transfer.clone(), Value::from("timestamp"), Value::Undefined);
+        let mut currency_id: Value = self.safe_string(transfer.clone(), Value::from("currency"), Value::Undefined);
+        let mut status: Value = self.safe_string(transfer.clone(), Value::from("status"), Value::Undefined);
         return Value::Json(normalize(&Value::Json(json!({
             "info": transfer,
-            "id": self.safe_string(transfer.clone(), Value::from("id")),
-            "timestamp": self.safe_integer(transfer.clone(), Value::from("timestamp")),
+            "id": self.safe_string(transfer.clone(), Value::from("id"), Value::Undefined),
+            "timestamp": self.safe_integer(transfer.clone(), Value::from("timestamp"), Value::Undefined),
             "datetime": self.iso8601(timestamp.clone()),
             "currency": self.safe_currency_code(currency_id.clone(), currency.clone()),
             "amount": self.safe_number(transfer.clone(), Value::from("transferringFunds"), Value::Undefined),
-            "fromAccount": self.safe_string(transfer.clone(), Value::from("fromAccount")),
-            "toAccount": self.safe_string(transfer.clone(), Value::from("toAccount")),
+            "fromAccount": self.safe_string(transfer.clone(), Value::from("fromAccount"), Value::Undefined),
+            "toAccount": self.safe_string(transfer.clone(), Value::from("toAccount"), Value::Undefined),
             "status": <Self as Latoken>::parse_transfer_status(self, status.clone())
         }))).unwrap());
     }
@@ -1595,68 +1505,9 @@ pub trait Latoken : Exchange {
         return self.safe_string(statuses.clone(), status.clone(), status.clone());
     }
 
-    fn sign(&mut self, mut path: Value, mut api: Value, mut method: Value, mut params: Value, mut headers: Value, mut body: Value) -> Value {
-        api = api.or_default(Value::from("public"));
-        method = method.or_default(Value::from("GET"));
-        let mut request: Value = Value::from("/") + self.get("version".into()) + Value::from("/") + self.implode_params(path.clone(), params.clone());
-        let mut request_string: Value = request.clone();
-        let mut query: Value = self.omit(params.clone(), self.extract_params(path.clone()));
-        let mut urlencoded_query: Value = self.urlencode(query.clone());
-        if method.clone() == Value::from("GET") {
-            if Object::keys(query.clone()).len() > 0 {
-                request_string = request_string +  Value::from("?") + urlencoded_query.clone();
-            };
-        };
-        if api.clone() == Value::from("private") {
-            self.check_required_credentials(Value::Undefined);
-            let mut auth: Value = method.clone() + request.clone() + urlencoded_query.clone();
-            let mut signature: Value = self.hmac(self.encode(auth.clone()), self.encode(self.get("secret".into())), sha512.clone());
-            headers = Value::Json(normalize(&Value::Json(json!({
-                "X-LA-APIKEY": self.get("apiKey".into()),
-                "X-LA-SIGNATURE": signature,
-                "X-LA-DIGEST": "HMAC-SHA512"
-            }))).unwrap());
-            // HMAC-SHA384, HMAC-SHA512, optional
-            if method.clone() == Value::from("POST") {
-                headers.set("Content-Type".into(), Value::from("application/json"));
-                body = self.json(query.clone());
-            };
-        };
-        let mut url: Value = self.get("urls".into()).get(Value::from("api")).get(Value::from("rest")) + request_string.clone();
-        return Value::Json(normalize(&Value::Json(json!({
-            "url": url,
-            "method": method,
-            "body": body,
-            "headers": headers
-        }))).unwrap());
-    }
+    
 
-    fn handle_errors(&mut self, mut code: Value, mut reason: Value, mut url: Value, mut method: Value, mut headers: Value, mut body: Value, mut response: Value, mut request_headers: Value, mut request_body: Value) -> Value {
-        if !response.is_truthy() {
-            return Value::Undefined;
-        };
-        //
-        // {"result":false,"message":"invalid API key, signature or digest","error":"BAD_REQUEST","status":"FAILURE"}
-        // {"result":false,"message":"request expired or bad <timeAlive>/<timestamp> format","error":"BAD_REQUEST","status":"FAILURE"}
-        // {"message":"Internal Server Error","error":"INTERNAL_ERROR","status":"FAILURE"}
-        // {"result":false,"message":"Internal error","error":"For input string: \"NaN\"","status":"FAILURE"}
-        //
-        let mut message: Value = self.safe_string(response.clone(), Value::from("message"));
-        let mut feedback: Value = self.get("id".into()) + Value::from(" ") + body.clone();
-        if message.clone().is_nonnullish() {
-            self.throw_exactly_matched_exception(self.get("exceptions".into()).get(Value::from("exact")), message.clone(), feedback.clone());
-            self.throw_broadly_matched_exception(self.get("exceptions".into()).get(Value::from("broad")), message.clone(), feedback.clone());
-        };
-        let mut error: Value = self.safe_value(response.clone(), Value::from("error"));
-        let mut error_message: Value = self.safe_string(error.clone(), Value::from("message"));
-        if error.clone().is_nonnullish() || error_message.clone().is_nonnullish() {
-            self.throw_exactly_matched_exception(self.get("exceptions".into()).get(Value::from("exact")), error.clone(), feedback.clone());
-            self.throw_broadly_matched_exception(self.get("exceptions".into()).get(Value::from("broad")), body.clone(), feedback.clone());
-            panic!(r###"ExchangeError::new(feedback)"###);
-        };
-        // unknown message
-        return Value::Undefined;
-    }
+    
 
     
     async fn dispatch(&mut self, method: Value, params: Value, context: Value) -> Value {
@@ -1751,8 +1602,8 @@ impl ValueTrait for LatokenImpl {
     fn push(&mut self, value: Value) { self.0.push(value) }
     fn split(&self, separator: Value) -> Value { self.0.split(separator) }
     fn contains_key(&self, key: Value) -> bool { self.0.contains_key(key) }
-    fn keys(&self) -> Vec<Value> { self.0.keys() }
-    fn values(&self) -> Vec<Value> { self.0.values() }
+    fn keys(&self) -> Value { self.0.keys() }
+    fn values(&self) -> Value { self.0.values() }
     fn to_array(&self, x: Value) -> Value { self.0.to_array(x) }
     fn index_of(&self, x: Value) -> Value { self.0.index_of(x) }
     fn join(&self, glue: Value) -> Value { self.0.join(glue) }

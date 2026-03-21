@@ -11,7 +11,16 @@ use async_trait::async_trait;
 use std::str::FromStr;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, JSON, Array, Object, Math, parse_int, shift_2, extend_2, normalize};
+use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, BoolExt, JSON, Array, Object, Math, Promise, parse_int, shift_2, extend_2, normalize};
+// Crypto hash identifiers
+fn sha256() -> Value { Value::from("sha256") }
+fn sha384() -> Value { Value::from("sha384") }
+fn sha512() -> Value { Value::from("sha512") }
+fn md5() -> Value { Value::from("md5") }
+fn ed25519() -> Value { Value::from("ed25519") }
+fn rsa(msg: Value, secret: Value, _hash: Value) -> Value { msg }
+fn eddsa(msg: Value, secret: Value, _curve: Value) -> Value { msg }
+fn secp256k1() -> Value { Value::from("secp256k1") }
 
 use crate::exchange::{PRECISE_BASE, TRUNCATE, ROUND, ROUND_UP, ROUND_DOWN};
 use crate::exchange::{DECIMAL_PLACES, SIGNIFICANT_DIGITS, TICK_SIZE, NO_PADDING, PAD_WITH_ZERO};
@@ -356,7 +365,7 @@ pub trait Derive : Exchange {
     async fn fetch_currencies(&mut self, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         let mut result: Value = Value::new_object();
-        let mut token_response: Value = self.public_get_get_all_currencies(params.clone()).await;
+        let mut token_response: Value = self.dispatch("publicGetGetAllCurrencies".into(), params.clone(), Value::Undefined).await;
         //
         //    {
         //        "result": [
@@ -409,7 +418,7 @@ pub trait Derive : Exchange {
         let mut i: usize = 0;
         while i < currencies.len() {
             let mut currency: Value = currencies.get(i.into());
-            let mut currency_id: Value = self.safe_string(currency.clone(), Value::from("currency"));
+            let mut currency_id: Value = self.safe_string(currency.clone(), Value::from("currency"), Value::Undefined);
             let mut code: Value = self.safe_currency_code(currency_id.clone(), Value::Undefined);
             result.set(code.clone(), self.safe_currency_structure(Value::Json(normalize(&Value::Json(json!({
                 "id": currency_id,
@@ -438,61 +447,7 @@ pub trait Derive : Exchange {
         return result.clone();
     }
 
-    async fn fetch_markets(&mut self, mut params: Value) -> Value {
-        params = params.or_default(Value::new_object());
-        let mut spot_markets_promise: Value = <Self as Derive>::fetch_spot_markets(self, params.clone());
-        let mut swap_markets_promise: Value = <Self as Derive>::fetch_swap_markets(self, params.clone());
-        let mut option_markets_promise: Value = <Self as Derive>::fetch_option_markets(self, params.clone());
-        let (mut spot_markets, mut swap_markets, mut option_markets) = shift_3(Promise::all(Value::Json(serde_json::Value::Array(vec![spot_markets_promise.clone().into(), swap_markets_promise.clone().into(), option_markets_promise.clone().into()]))).await);
-        //
-        // {
-        //     "result": {
-        //         "instruments": [
-        //             {
-        //                 "instrument_type": "perp",
-        //                 "instrument_name": "BTC-PERP",
-        //                 "scheduled_activation": 1701840228,
-        //                 "scheduled_deactivation": 9223372036854776000,
-        //                 "is_active": true,
-        //                 "tick_size": "0.1",
-        //                 "minimum_amount": "0.01",
-        //                 "maximum_amount": "10000",
-        //                 "amount_step": "0.001",
-        //                 "mark_price_fee_rate_cap": "0",
-        //                 "maker_fee_rate": "0.00005",
-        //                 "taker_fee_rate": "0.0003",
-        //                 "base_fee": "0.1",
-        //                 "base_currency": "BTC",
-        //                 "quote_currency": "USD",
-        //                 "option_details": null,
-        //                 "perp_details": {
-        //                     "index": "BTC-USD",
-        //                     "max_rate_per_hour": "0.004",
-        //                     "min_rate_per_hour": "-0.004",
-        //                     "static_interest_rate": "0.0000125",
-        //                     "aggregate_funding": "10538.574363381759146829",
-        //                     "funding_rate": "0.0000125"
-        //                 },
-        //                 "erc20_details": null,
-        //                 "base_asset_address": "0xDBa83C0C654DB1cd914FA2710bA743e925B53086",
-        //                 "base_asset_sub_id": "0",
-        //                 "pro_rata_fraction": "0",
-        //                 "fifo_min_allocation": "0",
-        //                 "pro_rata_amount_step": "0.1"
-        //             }
-        //         ],
-        //         "pagination": {
-        //             "num_pages": 1,
-        //             "count": 1
-        //         }
-        //     },
-        //     "id": "a06bc0b2-8e78-4536-a21f-f785f225b5a5"
-        // }
-        //
-        let mut result: Value = self.array_concat(spot_markets.clone(), swap_markets.clone());
-        result = self.array_concat(result.clone(), option_markets.clone());
-        return result.clone();
-    }
+    
 
     async fn fetch_spot_markets(&mut self, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
@@ -500,7 +455,7 @@ pub trait Derive : Exchange {
             "expired": false,
             "instrument_type": "erc20"
         }))).unwrap());
-        let mut response: Value = self.public_post_get_all_instruments(extend_2(request.clone(), params.clone())).await;
+        let mut response: Value = self.dispatch("publicPostGetAllInstruments".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         let mut result: Value = self.safe_dict(response.clone(), Value::from("result"), Value::new_object());
         let mut data: Value = self.safe_list(result.clone(), Value::from("instruments"), Value::new_array());
         return self.parse_markets(data.clone());
@@ -512,7 +467,7 @@ pub trait Derive : Exchange {
             "expired": false,
             "instrument_type": "perp"
         }))).unwrap());
-        let mut response: Value = self.public_post_get_all_instruments(extend_2(request.clone(), params.clone())).await;
+        let mut response: Value = self.dispatch("publicPostGetAllInstruments".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         let mut result: Value = self.safe_dict(response.clone(), Value::from("result"), Value::new_object());
         let mut data: Value = self.safe_list(result.clone(), Value::from("instruments"), Value::new_array());
         return self.parse_markets(data.clone());
@@ -524,14 +479,14 @@ pub trait Derive : Exchange {
             "expired": false,
             "instrument_type": "option"
         }))).unwrap());
-        let mut response: Value = self.public_post_get_all_instruments(extend_2(request.clone(), params.clone())).await;
+        let mut response: Value = self.dispatch("publicPostGetAllInstruments".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         let mut result: Value = self.safe_dict(response.clone(), Value::from("result"), Value::new_object());
         let mut data: Value = self.safe_list(result.clone(), Value::from("instruments"), Value::new_array());
         return self.parse_markets(data.clone());
     }
 
     fn parse_market(&self, mut market: Value) -> Value {
-        let mut r#type: Value = self.safe_string(market.clone(), Value::from("instrument_type"));
+        let mut r#type: Value = self.safe_string(market.clone(), Value::from("instrument_type"), Value::Undefined);
         let mut market_type: Value = Value::Undefined;
         let mut spot: Value = false.into();
         let mut margin: Value = true.into();
@@ -539,11 +494,11 @@ pub trait Derive : Exchange {
         let mut option: Value = false.into();
         let mut linear: Value = Value::Undefined;
         let mut inverse: Value = Value::Undefined;
-        let mut base_id: Value = self.safe_string(market.clone(), Value::from("base_currency"));
-        let mut quote_id: Value = self.safe_string(market.clone(), Value::from("quote_currency"));
+        let mut base_id: Value = self.safe_string(market.clone(), Value::from("base_currency"), Value::Undefined);
+        let mut quote_id: Value = self.safe_string(market.clone(), Value::from("quote_currency"), Value::Undefined);
         let mut base: Value = self.safe_currency_code(base_id.clone(), Value::Undefined);
         let mut quote: Value = self.safe_currency_code(quote_id.clone(), Value::Undefined);
-        let mut market_id: Value = self.safe_string(market.clone(), Value::from("instrument_name"));
+        let mut market_id: Value = self.safe_string(market.clone(), Value::from("instrument_name"), Value::Undefined);
         let mut symbol: Value = base.clone() + Value::from("/") + quote.clone();
         let mut settle_id: Value = Value::Undefined;
         let mut settle: Value = Value::Undefined;
@@ -570,10 +525,10 @@ pub trait Derive : Exchange {
             option = true.into();
             market_type = Value::from("option");
             let mut option_details: Value = self.safe_dict(market.clone(), Value::from("option_details"), Value::Undefined);
-            expiry = self.safe_timestamp(option_details.clone(), Value::from("expiry"));
-            strike = self.safe_integer(option_details.clone(), Value::from("strike"));
-            option_letter = self.safe_string(option_details.clone(), Value::from("option_type"));
-            symbol = base.clone() + Value::from("/") + quote.clone() + Value::from(":") + settle.clone() + Value::from("-") + self.yymmdd(expiry.clone()) + Value::from("-") + self.number_to_string(strike.clone()) + Value::from("-") + option_letter.clone();
+            expiry = self.safe_timestamp(option_details.clone(), Value::from("expiry"), Value::Undefined);
+            strike = self.safe_integer(option_details.clone(), Value::from("strike"), Value::Undefined);
+            option_letter = self.safe_string(option_details.clone(), Value::from("option_type"), Value::Undefined);
+            symbol = base.clone() + Value::from("/") + quote.clone() + Value::from(":") + settle.clone() + Value::from("-") + self.yymmdd(expiry.clone(), Value::Undefined) + Value::from("-") + self.number_to_string(strike.clone()) + Value::from("-") + option_letter.clone();
             if option_letter.clone() == Value::from("P") {
                 option_type = Value::from("put");
             } else {
@@ -722,21 +677,21 @@ pub trait Derive : Exchange {
         //     "max_price": "101535.1"
         // }
         //
-        let mut market_id: Value = self.safe_string(ticker.clone(), Value::from("instrument_name"));
+        let mut market_id: Value = self.safe_string(ticker.clone(), Value::from("instrument_name"), Value::Undefined);
         let mut timestamp: Value = self.safe_integer_omit_zero(ticker.clone(), Value::from("timestamp"), Value::Undefined);
         let mut symbol: Value = self.safe_symbol(market_id.clone(), market.clone(), Value::Undefined, Value::Undefined);
         let mut stats: Value = self.safe_dict(ticker.clone(), Value::from("stats"), Value::Undefined);
-        let mut change: Value = self.safe_string(stats.clone(), Value::from("percent_change"));
+        let mut change: Value = self.safe_string(stats.clone(), Value::from("percent_change"), Value::Undefined);
         return self.safe_ticker(Value::Json(normalize(&Value::Json(json!({
             "symbol": symbol,
             "timestamp": timestamp,
             "datetime": self.iso8601(timestamp.clone()),
-            "high": self.safe_string(stats.clone(), Value::from("high")),
-            "low": self.safe_string(stats.clone(), Value::from("low")),
-            "bid": self.safe_string(ticker.clone(), Value::from("best_bid_price")),
-            "bidVolume": self.safe_string(ticker.clone(), Value::from("best_bid_amount")),
-            "ask": self.safe_string(ticker.clone(), Value::from("best_ask_price")),
-            "askVolume": self.safe_string(ticker.clone(), Value::from("best_ask_amount")),
+            "high": self.safe_string(stats.clone(), Value::from("high"), Value::Undefined),
+            "low": self.safe_string(stats.clone(), Value::from("low"), Value::Undefined),
+            "bid": self.safe_string(ticker.clone(), Value::from("best_bid_price"), Value::Undefined),
+            "bidVolume": self.safe_string(ticker.clone(), Value::from("best_bid_amount"), Value::Undefined),
+            "ask": self.safe_string(ticker.clone(), Value::from("best_ask_price"), Value::Undefined),
+            "askVolume": self.safe_string(ticker.clone(), Value::from("best_ask_amount"), Value::Undefined),
             "vwap": Value::Undefined,
             "open": Value::Undefined,
             "close": Value::Undefined,
@@ -747,8 +702,8 @@ pub trait Derive : Exchange {
             "average": Value::Undefined,
             "baseVolume": Value::Undefined,
             "quoteVolume": Value::Undefined,
-            "indexPrice": self.safe_string(ticker.clone(), Value::from("index_price")),
-            "markPrice": self.safe_string(ticker.clone(), Value::from("mark_price")),
+            "indexPrice": self.safe_string(ticker.clone(), Value::from("index_price"), Value::Undefined),
+            "markPrice": self.safe_string(ticker.clone(), Value::from("mark_price"), Value::Undefined),
             "info": ticker
         }))).unwrap()), market.clone());
     }
@@ -792,23 +747,23 @@ pub trait Derive : Exchange {
         //     "transaction_id": "e18b9426-3fa5-41bb-99d3-8b54fb4d51bb"
         // }
         //
-        let mut market_id: Value = self.safe_string(trade.clone(), Value::from("instrument_name"));
+        let mut market_id: Value = self.safe_string(trade.clone(), Value::from("instrument_name"), Value::Undefined);
         let mut symbol: Value = self.safe_symbol(market_id.clone(), market.clone(), Value::Undefined, Value::Undefined);
-        let mut timestamp: Value = self.safe_integer(trade.clone(), Value::from("timestamp"));
+        let mut timestamp: Value = self.safe_integer(trade.clone(), Value::from("timestamp"), Value::Undefined);
         let mut fee: Value = Value::Json(normalize(&Value::Json(json!({
             "currency": "USDC",
-            "cost": self.safe_string(trade.clone(), Value::from("trade_fee"))
+            "cost": self.safe_string(trade.clone(), Value::from("trade_fee"), Value::Undefined)
         }))).unwrap());
         return self.safe_trade(Value::Json(normalize(&Value::Json(json!({
             "info": trade,
-            "id": self.safe_string(trade.clone(), Value::from("trade_id")),
-            "order": self.safe_string(trade.clone(), Value::from("order_id")),
+            "id": self.safe_string(trade.clone(), Value::from("trade_id"), Value::Undefined),
+            "order": self.safe_string(trade.clone(), Value::from("order_id"), Value::Undefined),
             "symbol": symbol,
-            "side": self.safe_string_lower(trade.clone(), Value::from("direction")),
+            "side": self.safe_string_lower(trade.clone(), Value::from("direction"), Value::Undefined),
             "type": Value::Undefined,
-            "takerOrMaker": self.safe_string(trade.clone(), Value::from("liquidity_role")),
-            "price": self.safe_string(trade.clone(), Value::from("trade_price")),
-            "amount": self.safe_string(trade.clone(), Value::from("trade_amount")),
+            "takerOrMaker": self.safe_string(trade.clone(), Value::from("liquidity_role"), Value::Undefined),
+            "price": self.safe_string(trade.clone(), Value::from("trade_price"), Value::Undefined),
+            "amount": self.safe_string(trade.clone(), Value::from("trade_amount"), Value::Undefined),
             "cost": Value::Undefined,
             "timestamp": timestamp,
             "datetime": self.iso8601(timestamp.clone()),
@@ -826,12 +781,12 @@ pub trait Derive : Exchange {
         if since.clone().is_nonnullish() {
             request.set("start_timestamp".into(), since.clone());
         };
-        let mut until: Value = self.safe_integer(params.clone(), Value::from("until"));
+        let mut until: Value = self.safe_integer(params.clone(), Value::from("until"), Value::Undefined);
         params = self.omit(params.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("until").into()])));
         if until.clone().is_nonnullish() {
             request.set("to_timestamp".into(), until.clone());
         };
-        let mut response: Value = self.public_post_get_funding_rate_history(extend_2(request.clone(), params.clone())).await;
+        let mut response: Value = self.dispatch("publicPostGetFundingRateHistory".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         //
         // {
         //     "result": {
@@ -851,7 +806,7 @@ pub trait Derive : Exchange {
         let mut i: usize = 0;
         while i < data.len() {
             let mut entry: Value = data.get(i.into());
-            let mut timestamp: Value = self.safe_integer(entry.clone(), Value::from("timestamp"));
+            let mut timestamp: Value = self.safe_integer(entry.clone(), Value::from("timestamp"), Value::Undefined);
             rates.push(Value::Json(normalize(&Value::Json(json!({
                 "info": entry,
                 "symbol": market.get(Value::from("symbol")),
@@ -861,7 +816,7 @@ pub trait Derive : Exchange {
             }))).unwrap()));
             i += 1;
         };
-        let mut sorted: Value = self.sort_by(rates.clone(), Value::from("timestamp"));
+        let mut sorted: Value = self.sort_by(rates.clone(), Value::from("timestamp"), Value::Undefined, Value::Undefined);
         return self.filter_by_symbol_since_limit(sorted.clone(), market.get(Value::from("symbol")), since.clone(), limit.clone(), Value::Undefined);
     }
 
@@ -887,8 +842,8 @@ pub trait Derive : Exchange {
     }
 
     fn parse_funding_rate(&self, mut contract: Value, mut market: Value) -> Value {
-        let mut symbol: Value = self.safe_string(contract.clone(), Value::from("symbol"));
-        let mut funding_timestamp: Value = self.safe_integer(contract.clone(), Value::from("timestamp"));
+        let mut symbol: Value = self.safe_string(contract.clone(), Value::from("symbol"), Value::Undefined);
+        let mut funding_timestamp: Value = self.safe_integer(contract.clone(), Value::from("timestamp"), Value::Undefined);
         return Value::Json(normalize(&Value::Json(json!({
             "info": contract,
             "symbol": symbol,
@@ -963,7 +918,7 @@ pub trait Derive : Exchange {
         (subaccount_id, params) = shift_2(<Self as Derive>::handle_derive_subaccount_id(self, Value::from("createOrder"), params.clone()));
         let mut test: Value = self.safe_bool(params.clone(), Value::from("test"), false.into());
         let mut reduce_only: Value = self.safe_bool_2(params.clone(), Value::from("reduceOnly"), Value::from("reduce_only"), Value::Undefined);
-        let mut time_in_force: Value = self.safe_string_lower_2(params.clone(), Value::from("timeInForce"), Value::from("time_in_force"));
+        let mut time_in_force: Value = self.safe_string_lower_2(params.clone(), Value::from("timeInForce"), Value::from("time_in_force"), Value::Undefined);
         let mut post_only: Value = self.safe_bool(params.clone(), Value::from("postOnly"), Value::Undefined);
         let mut order_type: Value = r#type.to_lower_case();
         let mut order_side: Value = side.to_lower_case();
@@ -981,7 +936,7 @@ pub trait Derive : Exchange {
         };
         let mut max_fee_string: Value = self.number_to_string(max_fee.clone());
         let mut amount_string: Value = self.number_to_string(amount.clone());
-        let mut trade_module_data_hash: Value = self.hash(self.eth_abi_encode(Value::Json(serde_json::Value::Array(vec![Value::from("address").into(), Value::from("uint").into(), Value::from("int").into(), Value::from("int").into(), Value::from("uint").into(), Value::from("uint").into(), Value::from("bool").into()])), Value::Json(serde_json::Value::Array(vec![market.get(Value::from("info")).get(Value::from("base_asset_address")).into(), self.parse_to_numeric(market.get(Value::from("info")).get(Value::from("base_asset_sub_id"))).into(), self.convert_to_big_int(<Self as Derive>::parse_units(self, price_string.clone(), Value::Undefined)).into(), self.convert_to_big_int(<Self as Derive>::parse_units(self, self.amount_to_precision(symbol.clone(), amount_string.clone()), Value::Undefined)).into(), self.convert_to_big_int(<Self as Derive>::parse_units(self, max_fee_string.clone(), Value::Undefined)).into(), subaccount_id.clone().into(), (order_side.clone() == Value::from("buy")).into().into()]))), keccak.clone(), Value::from("binary"));
+        let mut trade_module_data_hash: Value = self.hash(self.eth_abi_encode(Value::Json(serde_json::Value::Array(vec![Value::from("address").into(), Value::from("uint").into(), Value::from("int").into(), Value::from("int").into(), Value::from("uint").into(), Value::from("uint").into(), Value::from("bool").into()])), Value::Json(serde_json::Value::Array(vec![market.get(Value::from("info")).get(Value::from("base_asset_address")).into(), self.parse_to_numeric(market.get(Value::from("info")).get(Value::from("base_asset_sub_id")), Value::Undefined).into(), self.convert_to_big_int(<Self as Derive>::parse_units(self, price_string.clone(), Value::Undefined)).into(), self.convert_to_big_int(<Self as Derive>::parse_units(self, self.amount_to_precision(symbol.clone(), amount_string.clone()), Value::Undefined)).into(), self.convert_to_big_int(<Self as Derive>::parse_units(self, max_fee_string.clone(), Value::Undefined)).into(), subaccount_id.clone().into(), (order_side.clone() == Value::from("buy")).into().into()]))), keccak.clone(), Value::from("binary"));
         let mut derive_wallet_address: Value = Value::Undefined;
         (derive_wallet_address, params) = shift_2(<Self as Derive>::handle_derive_wallet_address(self, Value::from("createOrder"), params.clone()));
         let mut signature: Value = <Self as Derive>::sign_order(self, Value::Json(serde_json::Value::Array(vec![ACTION_TYPEHASH.into().into(), subaccount_id.clone().into(), nonce.clone().into(), TRADE_MODULE_ADDRESS.into().into(), trade_module_data_hash.clone().into(), signature_expiry.clone().into(), derive_wallet_address.clone().into(), self.get("walletAddress".into()).into()])), self.get("privateKey".into()));
@@ -1009,8 +964,8 @@ pub trait Derive : Exchange {
         } else if time_in_force.clone().is_nonnullish() {
             request.set("time_in_force".into(), time_in_force.clone());
         };
-        let mut stop_loss: Value = self.safe_value(params.clone(), Value::from("stopLoss"));
-        let mut take_profit: Value = self.safe_value(params.clone(), Value::from("takeProfit"));
+        let mut stop_loss: Value = self.safe_value(params.clone(), Value::from("stopLoss"), Value::Undefined);
+        let mut take_profit: Value = self.safe_value(params.clone(), Value::from("takeProfit"), Value::Undefined);
         let mut trigger_price_type: Value = self.safe_string(params.clone(), Value::from("trigger_price_type"), Value::from("mark"));
         if stop_loss.clone().is_nonnullish() {
             let mut stop_loss_price: Value = self.safe_string(stop_loss.clone(), Value::from("triggerPrice"), stop_loss.clone());
@@ -1023,7 +978,7 @@ pub trait Derive : Exchange {
             request.set("trigger_type".into(), Value::from("takeprofit"));
             request.set("trigger_price_type".into(), trigger_price_type.clone());
         };
-        let mut client_order_id: Value = self.safe_string(params.clone(), Value::from("clientOrderId"));
+        let mut client_order_id: Value = self.safe_string(params.clone(), Value::from("clientOrderId"), Value::Undefined);
         if client_order_id.clone().is_nonnullish() {
             request.set("label".into(), client_order_id.clone());
         };
@@ -1031,7 +986,7 @@ pub trait Derive : Exchange {
         params = self.omit(params.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("reduceOnly").into(), Value::from("reduce_only").into(), Value::from("timeInForce").into(), Value::from("time_in_force").into(), Value::from("postOnly").into(), Value::from("test").into(), Value::from("clientOrderId").into(), Value::from("stopPrice").into(), Value::from("triggerPrice").into(), Value::from("trigger_price").into(), Value::from("stopLoss").into(), Value::from("takeProfit").into(), Value::from("trigger_price_type").into()])));
         let mut response: Value = Value::Undefined;
         if test.is_truthy() {
-            response = self.private_post_order_debug(extend_2(request.clone(), params.clone())).await;
+            response = self.dispatch("privatePostOrderDebug".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         } else {
             response = self.dispatch("privatePostOrder".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         };
@@ -1119,7 +1074,7 @@ pub trait Derive : Exchange {
         let mut subaccount_id: Value = Value::Undefined;
         (subaccount_id, params) = shift_2(<Self as Derive>::handle_derive_subaccount_id(self, Value::from("editOrder"), params.clone()));
         let mut reduce_only: Value = self.safe_bool_2(params.clone(), Value::from("reduceOnly"), Value::from("reduce_only"), Value::Undefined);
-        let mut time_in_force: Value = self.safe_string_lower_2(params.clone(), Value::from("timeInForce"), Value::from("time_in_force"));
+        let mut time_in_force: Value = self.safe_string_lower_2(params.clone(), Value::from("timeInForce"), Value::from("time_in_force"), Value::Undefined);
         let mut post_only: Value = self.safe_bool(params.clone(), Value::from("postOnly"), Value::Undefined);
         let mut order_type: Value = r#type.to_lower_case();
         let mut order_side: Value = side.to_lower_case();
@@ -1132,7 +1087,7 @@ pub trait Derive : Exchange {
         let mut price_string: Value = self.number_to_string(price.clone());
         let mut max_fee_string: Value = self.safe_string(params.clone(), Value::from("max_fee"), Value::from("0"));
         let mut amount_string: Value = self.number_to_string(amount.clone());
-        let mut trade_module_data_hash: Value = self.hash(self.eth_abi_encode(Value::Json(serde_json::Value::Array(vec![Value::from("address").into(), Value::from("uint").into(), Value::from("int").into(), Value::from("int").into(), Value::from("uint").into(), Value::from("uint").into(), Value::from("bool").into()])), Value::Json(serde_json::Value::Array(vec![market.get(Value::from("info")).get(Value::from("base_asset_address")).into(), self.parse_to_numeric(market.get(Value::from("info")).get(Value::from("base_asset_sub_id"))).into(), self.convert_to_big_int(<Self as Derive>::parse_units(self, price_string.clone(), Value::Undefined)).into(), self.convert_to_big_int(<Self as Derive>::parse_units(self, self.amount_to_precision(symbol.clone(), amount_string.clone()), Value::Undefined)).into(), self.convert_to_big_int(<Self as Derive>::parse_units(self, max_fee_string.clone(), Value::Undefined)).into(), subaccount_id.clone().into(), (order_side.clone() == Value::from("buy")).into().into()]))), keccak.clone(), Value::from("binary"));
+        let mut trade_module_data_hash: Value = self.hash(self.eth_abi_encode(Value::Json(serde_json::Value::Array(vec![Value::from("address").into(), Value::from("uint").into(), Value::from("int").into(), Value::from("int").into(), Value::from("uint").into(), Value::from("uint").into(), Value::from("bool").into()])), Value::Json(serde_json::Value::Array(vec![market.get(Value::from("info")).get(Value::from("base_asset_address")).into(), self.parse_to_numeric(market.get(Value::from("info")).get(Value::from("base_asset_sub_id")), Value::Undefined).into(), self.convert_to_big_int(<Self as Derive>::parse_units(self, price_string.clone(), Value::Undefined)).into(), self.convert_to_big_int(<Self as Derive>::parse_units(self, self.amount_to_precision(symbol.clone(), amount_string.clone()), Value::Undefined)).into(), self.convert_to_big_int(<Self as Derive>::parse_units(self, max_fee_string.clone(), Value::Undefined)).into(), subaccount_id.clone().into(), (order_side.clone() == Value::from("buy")).into().into()]))), keccak.clone(), Value::from("binary"));
         let mut derive_wallet_address: Value = Value::Undefined;
         (derive_wallet_address, params) = shift_2(<Self as Derive>::handle_derive_wallet_address(self, Value::from("editOrder"), params.clone()));
         let mut signature: Value = <Self as Derive>::sign_order(self, Value::Json(serde_json::Value::Array(vec![ACTION_TYPEHASH.into().into(), subaccount_id.clone().into(), nonce.clone().into(), TRADE_MODULE_ADDRESS.into().into(), trade_module_data_hash.clone().into(), signature_expiry.clone().into(), derive_wallet_address.clone().into(), self.get("walletAddress".into()).into()])), self.get("privateKey".into()));
@@ -1160,7 +1115,7 @@ pub trait Derive : Exchange {
         } else if time_in_force.clone().is_nonnullish() {
             request.set("time_in_force".into(), time_in_force.clone());
         };
-        let mut client_order_id: Value = self.safe_string(params.clone(), Value::from("clientOrderId"));
+        let mut client_order_id: Value = self.safe_string(params.clone(), Value::from("clientOrderId"), Value::Undefined);
         if client_order_id.clone().is_nonnullish() {
             request.set("label".into(), client_order_id.clone());
         };
@@ -1262,18 +1217,18 @@ pub trait Derive : Exchange {
             "instrument_name": market.get(Value::from("id")),
             "subaccount_id": subaccount_id
         }))).unwrap());
-        let mut client_order_id_unified: Value = self.safe_string(params.clone(), Value::from("clientOrderId"));
+        let mut client_order_id_unified: Value = self.safe_string(params.clone(), Value::from("clientOrderId"), Value::Undefined);
         let mut client_order_id_exchange_specific: Value = self.safe_string(params.clone(), Value::from("label"), client_order_id_unified.clone());
         let mut is_by_client_order: Value = (client_order_id_exchange_specific.clone().is_nonnullish()).into();
         let mut response: Value = Value::Undefined;
         if is_by_client_order.is_truthy() {
             request.set("label".into(), client_order_id_exchange_specific.clone());
             params = self.omit(params.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("clientOrderId").into(), Value::from("label").into()])));
-            response = self.private_post_cancel_by_label(extend_2(request.clone(), params.clone())).await;
+            response = self.dispatch("privatePostCancelByLabel".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         } else {
             request.set("order_id".into(), id.clone());
             if is_trigger.is_truthy() {
-                response = self.private_post_cancel_trigger_order(extend_2(request.clone(), params.clone())).await;
+                response = self.dispatch("privatePostCancelTriggerOrder".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
             } else {
                 response = self.dispatch("privatePostCancel".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
             };
@@ -1346,9 +1301,9 @@ pub trait Derive : Exchange {
         let mut response: Value = Value::Undefined;
         if market.clone().is_nonnullish() {
             request.set("instrument_name".into(), market.get(Value::from("id")));
-            response = self.private_post_cancel_by_instrument(extend_2(request.clone(), params.clone())).await;
+            response = self.dispatch("privatePostCancelByInstrument".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         } else {
-            response = self.private_post_cancel_all(extend_2(request.clone(), params.clone())).await;
+            response = self.dispatch("privatePostCancelAll".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         };
         //
         // {
@@ -1396,7 +1351,7 @@ pub trait Derive : Exchange {
         if is_trigger.is_truthy() {
             request.set("status".into(), Value::from("untriggered"));
         };
-        let mut response: Value = self.private_post_get_orders(extend_2(request.clone(), params.clone())).await;
+        let mut response: Value = self.dispatch("privatePostGetOrders".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         //
         // {
         //     "result": {
@@ -1442,11 +1397,11 @@ pub trait Derive : Exchange {
         //     "id": "e5a88d4f-7ac7-40cd-aec9-e0e8152b8b92"
         // }
         //
-        let mut data: Value = self.safe_value(response.clone(), Value::from("result"));
-        let mut page: Value = self.safe_integer(params.clone(), Value::from("page"));
+        let mut data: Value = self.safe_value(response.clone(), Value::from("result"), Value::Undefined);
+        let mut page: Value = self.safe_integer(params.clone(), Value::from("page"), Value::Undefined);
         if page.clone().is_nonnullish() {
             let mut pagination: Value = self.safe_dict(data.clone(), Value::from("pagination"), Value::Undefined);
-            let mut current_page: Value = self.safe_integer(pagination.clone(), Value::from("num_pages"));
+            let mut current_page: Value = self.safe_integer(pagination.clone(), Value::from("num_pages"), Value::Undefined);
             if page.clone() > current_page.clone() {
                 return Value::new_array();
             };
@@ -1562,21 +1517,21 @@ pub trait Derive : Exchange {
         if order.clone().is_nullish() {
             order = raw_order.clone();
         };
-        let mut timestamp: Value = self.safe_integer_2(raw_order.clone(), Value::from("creation_timestamp"), Value::from("nonce"));
-        let mut order_id: Value = self.safe_string(order.clone(), Value::from("order_id"));
-        let mut market_id: Value = self.safe_string(order.clone(), Value::from("instrument_name"));
+        let mut timestamp: Value = self.safe_integer_2(raw_order.clone(), Value::from("creation_timestamp"), Value::from("nonce"), Value::Undefined);
+        let mut order_id: Value = self.safe_string(order.clone(), Value::from("order_id"), Value::Undefined);
+        let mut market_id: Value = self.safe_string(order.clone(), Value::from("instrument_name"), Value::Undefined);
         if market_id.clone().is_nonnullish() {
             market = self.safe_market(market_id.clone(), market.clone(), Value::Undefined, Value::Undefined);
         };
         let mut symbol: Value = market.get(Value::from("symbol"));
-        let mut price: Value = self.safe_string(order.clone(), Value::from("limit_price"));
-        let mut average: Value = self.safe_string(order.clone(), Value::from("average_price"));
-        let mut amount: Value = self.safe_string(order.clone(), Value::from("desired_amount"));
-        let mut filled: Value = self.safe_string(order.clone(), Value::from("filled_amount"));
-        let mut fee: Value = self.safe_string(order.clone(), Value::from("order_fee"));
-        let mut order_type: Value = self.safe_string_lower(order.clone(), Value::from("order_type"));
+        let mut price: Value = self.safe_string(order.clone(), Value::from("limit_price"), Value::Undefined);
+        let mut average: Value = self.safe_string(order.clone(), Value::from("average_price"), Value::Undefined);
+        let mut amount: Value = self.safe_string(order.clone(), Value::from("desired_amount"), Value::Undefined);
+        let mut filled: Value = self.safe_string(order.clone(), Value::from("filled_amount"), Value::Undefined);
+        let mut fee: Value = self.safe_string(order.clone(), Value::from("order_fee"), Value::Undefined);
+        let mut order_type: Value = self.safe_string_lower(order.clone(), Value::from("order_type"), Value::Undefined);
         let mut is_bid: Value = self.safe_bool(order.clone(), Value::from("is_bid"), Value::Undefined);
-        let mut side: Value = self.safe_string(order.clone(), Value::from("direction"));
+        let mut side: Value = self.safe_string(order.clone(), Value::from("direction"), Value::Undefined);
         if side.clone().is_nullish() {
             if is_bid.is_truthy() {
                 side = Value::from("buy");
@@ -1584,24 +1539,24 @@ pub trait Derive : Exchange {
                 side = Value::from("sell");
             };
         };
-        let mut trigger_type: Value = self.safe_string(order.clone(), Value::from("trigger_type"));
+        let mut trigger_type: Value = self.safe_string(order.clone(), Value::from("trigger_type"), Value::Undefined);
         let mut stop_loss_price: Value = Value::Undefined;
         let mut take_profit_price: Value = Value::Undefined;
         let mut trigger_price: Value = Value::Undefined;
         if trigger_type.clone().is_nonnullish() {
-            trigger_price = self.safe_string(order.clone(), Value::from("trigger_price"));
+            trigger_price = self.safe_string(order.clone(), Value::from("trigger_price"), Value::Undefined);
             if trigger_type.clone() == Value::from("stoploss") {
                 stop_loss_price = trigger_price.clone();
             } else {
                 take_profit_price = trigger_price.clone();
             };
         };
-        let mut last_update_timestamp: Value = self.safe_integer(raw_order.clone(), Value::from("last_update_timestamp"));
-        let mut status: Value = self.safe_string(order.clone(), Value::from("order_status"));
-        let mut time_in_force: Value = self.safe_string(order.clone(), Value::from("time_in_force"));
+        let mut last_update_timestamp: Value = self.safe_integer(raw_order.clone(), Value::from("last_update_timestamp"), Value::Undefined);
+        let mut status: Value = self.safe_string(order.clone(), Value::from("order_status"), Value::Undefined);
+        let mut time_in_force: Value = self.safe_string(order.clone(), Value::from("time_in_force"), Value::Undefined);
         return self.safe_order(Value::Json(normalize(&Value::Json(json!({
             "id": order_id,
-            "clientOrderId": self.safe_string(order.clone(), Value::from("label")),
+            "clientOrderId": self.safe_string(order.clone(), Value::from("label"), Value::Undefined),
             "timestamp": timestamp,
             "datetime": self.iso8601(timestamp.clone()),
             "lastTradeTimestamp": Value::Undefined,
@@ -1651,7 +1606,7 @@ pub trait Derive : Exchange {
         if since.clone().is_nonnullish() {
             request.set("from_timestamp".into(), since.clone());
         };
-        let mut response: Value = self.private_post_get_trade_history(extend_2(request.clone(), params.clone())).await;
+        let mut response: Value = self.dispatch("privatePostGetTradeHistory".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         //
         // {
         //     "result": {
@@ -1717,7 +1672,7 @@ pub trait Derive : Exchange {
         if since.clone().is_nonnullish() {
             request.set("from_timestamp".into(), since.clone());
         };
-        let mut response: Value = self.private_post_get_trade_history(extend_2(request.clone(), params.clone())).await;
+        let mut response: Value = self.dispatch("privatePostGetTradeHistory".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         //
         // {
         //     "result": {
@@ -1755,10 +1710,10 @@ pub trait Derive : Exchange {
         // }
         //
         let mut result: Value = self.safe_dict(response.clone(), Value::from("result"), Value::new_object());
-        let mut page: Value = self.safe_integer(params.clone(), Value::from("page"));
+        let mut page: Value = self.safe_integer(params.clone(), Value::from("page"), Value::Undefined);
         if page.clone().is_nonnullish() {
             let mut pagination: Value = self.safe_dict(result.clone(), Value::from("pagination"), Value::Undefined);
-            let mut current_page: Value = self.safe_integer(pagination.clone(), Value::from("num_pages"));
+            let mut current_page: Value = self.safe_integer(pagination.clone(), Value::from("num_pages"), Value::Undefined);
             if page.clone() > current_page.clone() {
                 return Value::new_array();
             };
@@ -1776,7 +1731,7 @@ pub trait Derive : Exchange {
             "subaccount_id": subaccount_id
         }))).unwrap());
         params = self.omit(params.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("subaccount_id").into()])));
-        let mut response: Value = self.private_post_get_positions(extend_2(request.clone(), params.clone())).await;
+        let mut response: Value = self.dispatch("privatePostGetPositions".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         //
         // {
         //     "result": {
@@ -1851,31 +1806,31 @@ pub trait Derive : Exchange {
         //     "creation_timestamp": 1738065303840
         // }
         //
-        let mut contract: Value = self.safe_string(position.clone(), Value::from("instrument_name"));
+        let mut contract: Value = self.safe_string(position.clone(), Value::from("instrument_name"), Value::Undefined);
         market = self.safe_market(contract.clone(), market.clone(), Value::Undefined, Value::Undefined);
-        let mut size: Value = self.safe_string(position.clone(), Value::from("amount"));
+        let mut size: Value = self.safe_string(position.clone(), Value::from("amount"), Value::Undefined);
         let mut side: Value = Value::Undefined;
         if Precise::string_gt(size.clone(), Value::from("0")) {
             side = Value::from("long");
         } else {
             side = Value::from("short");
         };
-        let mut contract_size: Value = self.safe_string(market.clone(), Value::from("contractSize"));
-        let mut mark_price: Value = self.safe_string(position.clone(), Value::from("mark_price"));
-        let mut timestamp: Value = self.safe_integer(position.clone(), Value::from("creation_timestamp"));
-        let mut unrealised_pnl: Value = self.safe_string(position.clone(), Value::from("unrealized_pnl"));
+        let mut contract_size: Value = self.safe_string(market.clone(), Value::from("contractSize"), Value::Undefined);
+        let mut mark_price: Value = self.safe_string(position.clone(), Value::from("mark_price"), Value::Undefined);
+        let mut timestamp: Value = self.safe_integer(position.clone(), Value::from("creation_timestamp"), Value::Undefined);
+        let mut unrealised_pnl: Value = self.safe_string(position.clone(), Value::from("unrealized_pnl"), Value::Undefined);
         size = Precise::string_abs(size.clone());
         let mut notional: Value = Precise::string_mul(size.clone(), mark_price.clone());
         return self.safe_position(Value::Json(normalize(&Value::Json(json!({
             "info": position,
             "id": Value::Undefined,
-            "symbol": self.safe_string(market.clone(), Value::from("symbol")),
+            "symbol": self.safe_string(market.clone(), Value::from("symbol"), Value::Undefined),
             "timestamp": timestamp,
             "datetime": self.iso8601(timestamp.clone()),
             "lastUpdateTimestamp": Value::Undefined,
-            "initialMargin": self.safe_string(position.clone(), Value::from("initial_margin")),
+            "initialMargin": self.safe_string(position.clone(), Value::from("initial_margin"), Value::Undefined),
             "initialMarginPercentage": Value::Undefined,
-            "maintenanceMargin": self.safe_string(position.clone(), Value::from("maintenance_margin")),
+            "maintenanceMargin": self.safe_string(position.clone(), Value::from("maintenance_margin"), Value::Undefined),
             "maintenanceMarginPercentage": Value::Undefined,
             "entryPrice": Value::Undefined,
             "notional": self.parse_number(notional.clone(), Value::Undefined),
@@ -1921,7 +1876,7 @@ pub trait Derive : Exchange {
         if limit.clone().is_nonnullish() {
             request.set("page_size".into(), limit.clone());
         };
-        let mut response: Value = self.private_post_get_funding_history(extend_2(request.clone(), params.clone())).await;
+        let mut response: Value = self.dispatch("privatePostGetFundingHistory".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         //
         // {
         //     "result": {
@@ -1954,10 +1909,10 @@ pub trait Derive : Exchange {
         // }
         //
         let mut result: Value = self.safe_dict(response.clone(), Value::from("result"), Value::new_object());
-        let mut page: Value = self.safe_integer(params.clone(), Value::from("page"));
+        let mut page: Value = self.safe_integer(params.clone(), Value::from("page"), Value::Undefined);
         if page.clone().is_nonnullish() {
             let mut pagination: Value = self.safe_dict(result.clone(), Value::from("pagination"), Value::Undefined);
-            let mut current_page: Value = self.safe_integer(pagination.clone(), Value::from("num_pages"));
+            let mut current_page: Value = self.safe_integer(pagination.clone(), Value::from("num_pages"), Value::Undefined);
             if page.clone() > current_page.clone() {
                 return Value::new_array();
             };
@@ -1975,11 +1930,11 @@ pub trait Derive : Exchange {
         //     "pnl": "-0.39547479770461644"
         // }
         //
-        let mut market_id: Value = self.safe_string(income.clone(), Value::from("instrument_name"));
+        let mut market_id: Value = self.safe_string(income.clone(), Value::from("instrument_name"), Value::Undefined);
         let mut symbol: Value = self.safe_symbol(market_id.clone(), market.clone(), Value::Undefined, Value::Undefined);
-        let mut rate: Value = self.safe_string(income.clone(), Value::from("funding"));
+        let mut rate: Value = self.safe_string(income.clone(), Value::from("funding"), Value::Undefined);
         let mut code: Value = self.safe_currency_code(Value::from("USDC"), Value::Undefined);
-        let mut timestamp: Value = self.safe_integer(income.clone(), Value::from("timestamp"));
+        let mut timestamp: Value = self.safe_integer(income.clone(), Value::from("timestamp"), Value::Undefined);
         return Value::Json(normalize(&Value::Json(json!({
             "info": income,
             "symbol": symbol,
@@ -2000,7 +1955,7 @@ pub trait Derive : Exchange {
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
             "wallet": derive_wallet_address
         }))).unwrap());
-        let mut response: Value = self.private_post_get_all_portfolios(extend_2(request.clone(), params.clone())).await;
+        let mut response: Value = self.dispatch("privatePostGetAllPortfolios".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         //
         // {
         //     "result": [{
@@ -2064,13 +2019,13 @@ pub trait Derive : Exchange {
             let mut j: usize = 0;
             while j < collaterals.len() {
                 let mut balance: Value = collaterals.get(j.into());
-                let mut code: Value = self.safe_currency_code(self.safe_string(balance.clone(), Value::from("currency")), Value::Undefined);
+                let mut code: Value = self.safe_currency_code(self.safe_string(balance.clone(), Value::from("currency"), Value::Undefined), Value::Undefined);
                 let mut account: Value = self.safe_dict(result.clone(), code.clone(), Value::Undefined);
                 if account.clone().is_nullish() {
                     account = self.account();
-                    account.set("total".into(), self.safe_string(balance.clone(), Value::from("amount")));
+                    account.set("total".into(), self.safe_string(balance.clone(), Value::from("amount"), Value::Undefined));
                 } else {
-                    let mut amount: Value = self.safe_string(balance.clone(), Value::from("amount"));
+                    let mut amount: Value = self.safe_string(balance.clone(), Value::from("amount"), Value::Undefined);
                     account.set("total".into(), Precise::string_add(account.get(Value::from("total")), amount.clone()));
                 };
                 result.set(code.clone(), account.clone());
@@ -2092,7 +2047,7 @@ pub trait Derive : Exchange {
         if since.clone().is_nonnullish() {
             request.set("start_timestamp".into(), since.clone());
         };
-        let mut response: Value = self.private_post_get_deposit_history(extend_2(request.clone(), params.clone())).await;
+        let mut response: Value = self.dispatch("privatePostGetDepositHistory".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         //
         // {
         //     "result": {
@@ -2128,7 +2083,7 @@ pub trait Derive : Exchange {
         if since.clone().is_nonnullish() {
             request.set("start_timestamp".into(), since.clone());
         };
-        let mut response: Value = self.private_post_get_withdrawal_history(extend_2(request.clone(), params.clone())).await;
+        let mut response: Value = self.dispatch("privatePostGetWithdrawalHistory".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         //
         // {
         //     "result": {
@@ -2165,9 +2120,9 @@ pub trait Derive : Exchange {
         //     "error_log": {}
         // }
         //
-        let mut code: Value = self.safe_string(transaction.clone(), Value::from("asset"));
-        let mut timestamp: Value = self.safe_integer(transaction.clone(), Value::from("timestamp"));
-        let mut tx_id: Value = self.safe_string(transaction.clone(), Value::from("tx_hash"));
+        let mut code: Value = self.safe_string(transaction.clone(), Value::from("asset"), Value::Undefined);
+        let mut timestamp: Value = self.safe_integer(transaction.clone(), Value::from("timestamp"), Value::Undefined);
+        let mut tx_id: Value = self.safe_string(transaction.clone(), Value::from("tx_hash"), Value::Undefined);
         if tx_id.clone() == Value::from("0x0") {
             tx_id = Value::Undefined;
         };
@@ -2186,7 +2141,7 @@ pub trait Derive : Exchange {
             "type": Value::Undefined,
             "amount": self.safe_number(transaction.clone(), Value::from("amount"), Value::Undefined),
             "currency": code,
-            "status": <Self as Derive>::parse_transaction_status(self, self.safe_string(transaction.clone(), Value::from("tx_status"))),
+            "status": <Self as Derive>::parse_transaction_status(self, self.safe_string(transaction.clone(), Value::from("tx_status"), Value::Undefined)),
             "updated": Value::Undefined,
             "comment": Value::Undefined,
             "internal": Value::Undefined,
@@ -2211,7 +2166,7 @@ pub trait Derive : Exchange {
             // saving in options
             return Value::Json(serde_json::Value::Array(vec![derivesub_account_id.clone().into(), params.clone().into()]));
         };
-        let mut options_wallet: Value = self.safe_string(self.get("options".into()), Value::from("subaccount_id"));
+        let mut options_wallet: Value = self.safe_string(self.get("options".into()), Value::from("subaccount_id"), Value::Undefined);
         if options_wallet.clone().is_nonnullish() {
             return Value::Json(serde_json::Value::Array(vec![options_wallet.clone().into(), params.clone().into()]));
         };
@@ -2227,7 +2182,7 @@ pub trait Derive : Exchange {
             // saving in options
             return Value::Json(serde_json::Value::Array(vec![derive_wallet_address.clone().into(), params.clone().into()]));
         };
-        let mut options_wallet: Value = self.safe_string(self.get("options".into()), Value::from("deriveWalletAddress"));
+        let mut options_wallet: Value = self.safe_string(self.get("options".into()), Value::from("deriveWalletAddress"), Value::Undefined);
         if options_wallet.clone().is_nonnullish() {
             return Value::Json(serde_json::Value::Array(vec![options_wallet.clone().into(), params.clone().into()]));
         };
@@ -2235,47 +2190,9 @@ pub trait Derive : Exchange {
         Value::Undefined
     }
 
-    fn handle_errors(&mut self, mut http_code: Value, mut reason: Value, mut url: Value, mut method: Value, mut headers: Value, mut body: Value, mut response: Value, mut request_headers: Value, mut request_body: Value) -> Value {
-        if !response.is_truthy() {
-            return Value::Undefined;
-        };
-        // fallback to default error handler
-        let mut error: Value = self.safe_dict(response.clone(), Value::from("error"), Value::Undefined);
-        if error.clone().is_nonnullish() {
-            let mut error_code: Value = self.safe_string(error.clone(), Value::from("code"));
-            let mut feedback: Value = self.get("id".into()) + Value::from(" ") + self.json(response.clone());
-            self.throw_broadly_matched_exception(self.get("exceptions".into()).get(Value::from("broad")), body.clone(), feedback.clone());
-            self.throw_exactly_matched_exception(self.get("exceptions".into()).get(Value::from("exact")), error_code.clone(), feedback.clone());
-            panic!(r###"ExchangeError::new(feedback)"###);
-        };
-        return Value::Undefined;
-    }
+    
 
-    fn sign(&mut self, mut path: Value, mut api: Value, mut method: Value, mut params: Value, mut headers: Value, mut body: Value) -> Value {
-        api = api.or_default(Value::from("public"));
-        method = method.or_default(Value::from("GET"));
-        params = params.or_default(Value::new_object());
-        let mut url: Value = self.get("urls".into()).get(Value::from("api")).get(api.clone()) + Value::from("/") + path.clone();
-        if method.clone() == Value::from("POST") {
-            headers = Value::Json(normalize(&Value::Json(json!({
-                "Content-Type": "application/json"
-            }))).unwrap());
-            if api.clone() == Value::from("private") {
-                let mut now: Value = self.milliseconds().to_string();
-                let mut signature: Value = <Self as Derive>::sign_message(self, now.clone(), self.get("privateKey".into()));
-                headers.set("X-LyraWallet".into(), self.safe_string(self.get("options".into()), Value::from("deriveWalletAddress")));
-                headers.set("X-LyraTimestamp".into(), now.clone());
-                headers.set("X-LyraSignature".into(), signature.clone());
-            };
-            body = self.json(params.clone());
-        };
-        return Value::Json(normalize(&Value::Json(json!({
-            "url": url,
-            "method": method,
-            "body": body,
-            "headers": headers
-        }))).unwrap());
-    }
+    
 
     
     async fn dispatch(&mut self, method: Value, params: Value, context: Value) -> Value {
@@ -2431,8 +2348,8 @@ impl ValueTrait for DeriveImpl {
     fn push(&mut self, value: Value) { self.0.push(value) }
     fn split(&self, separator: Value) -> Value { self.0.split(separator) }
     fn contains_key(&self, key: Value) -> bool { self.0.contains_key(key) }
-    fn keys(&self) -> Vec<Value> { self.0.keys() }
-    fn values(&self) -> Vec<Value> { self.0.values() }
+    fn keys(&self) -> Value { self.0.keys() }
+    fn values(&self) -> Value { self.0.values() }
     fn to_array(&self, x: Value) -> Value { self.0.to_array(x) }
     fn index_of(&self, x: Value) -> Value { self.0.index_of(x) }
     fn join(&self, glue: Value) -> Value { self.0.join(glue) }

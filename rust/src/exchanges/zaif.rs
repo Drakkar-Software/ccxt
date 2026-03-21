@@ -11,7 +11,16 @@ use async_trait::async_trait;
 use std::str::FromStr;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, JSON, Array, Object, Math, parse_int, shift_2, extend_2, normalize};
+use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, BoolExt, JSON, Array, Object, Math, Promise, parse_int, shift_2, extend_2, normalize};
+// Crypto hash identifiers
+fn sha256() -> Value { Value::from("sha256") }
+fn sha384() -> Value { Value::from("sha384") }
+fn sha512() -> Value { Value::from("sha512") }
+fn md5() -> Value { Value::from("md5") }
+fn ed25519() -> Value { Value::from("ed25519") }
+fn rsa(msg: Value, secret: Value, _hash: Value) -> Value { msg }
+fn eddsa(msg: Value, secret: Value, _curve: Value) -> Value { msg }
+fn secp256k1() -> Value { Value::from("secp256k1") }
 
 use crate::exchange::{PRECISE_BASE, TRUNCATE, ROUND, ROUND_UP, ROUND_DOWN};
 use crate::exchange::{DECIMAL_PLACES, SIGNIFICANT_DIGITS, TICK_SIZE, NO_PADDING, PAD_WITH_ZERO};
@@ -263,36 +272,11 @@ pub trait Zaif : Exchange {
         }"###).unwrap())
     }
 
-    async fn fetch_markets(&mut self, mut params: Value) -> Value {
-        params = params.or_default(Value::new_object());
-        let mut markets: Value = self.public_get_currency_pairs_all(params.clone()).await;
-        //
-        //     [
-        //         {
-        //             "aux_unit_point": 0,
-        //             "item_japanese": "\u30d3\u30c3\u30c8\u30b3\u30a4\u30f3",
-        //             "aux_unit_step": 5.0,
-        //             "description": "\u30d3\u30c3\u30c8\u30b3\u30a4\u30f3\u30fb\u65e5\u672c\u5186\u306e\u53d6\u5f15\u3092\u884c\u3046\u3053\u3068\u304c\u3067\u304d\u307e\u3059",
-        //             "item_unit_min": 0.001,
-        //             "event_number": 0,
-        //             "currency_pair": "btc_jpy",
-        //             "is_token": false,
-        //             "aux_unit_min": 5.0,
-        //             "aux_japanese": "\u65e5\u672c\u5186",
-        //             "id": 1,
-        //             "item_unit_step": 0.0001,
-        //             "name": "BTC/JPY",
-        //             "seq": 0,
-        //             "title": "BTC/JPY"
-        //         }
-        //     ]
-        //
-        return self.parse_markets(markets.clone());
-    }
+    
 
     fn parse_market(&self, mut market: Value) -> Value {
-        let mut id: Value = self.safe_string(market.clone(), Value::from("currency_pair"));
-        let mut name: Value = self.safe_string(market.clone(), Value::from("name"));
+        let mut id: Value = self.safe_string(market.clone(), Value::from("currency_pair"), Value::Undefined);
+        let mut name: Value = self.safe_string(market.clone(), Value::from("name"), Value::Undefined);
         let (mut base_id, mut quote_id) = shift_2(name.split(Value::from("/")));
         let mut base: Value = self.safe_currency_code(base_id.clone(), Value::Undefined);
         let mut quote: Value = self.safe_currency_code(quote_id.clone(), Value::Undefined);
@@ -323,7 +307,7 @@ pub trait Zaif : Exchange {
             "optionType": Value::Undefined,
             "precision": Value::Json(normalize(&Value::Json(json!({
                 "amount": self.safe_number(market.clone(), Value::from("item_unit_step"), Value::Undefined),
-                "price": self.parse_number(self.parse_precision(self.safe_string(market.clone(), Value::from("aux_unit_point"))), Value::Undefined)
+                "price": self.parse_number(self.parse_precision(self.safe_string(market.clone(), Value::from("aux_unit_point"), Value::Undefined)), Value::Undefined)
             }))).unwrap()),
             "limits": Value::Json(normalize(&Value::Json(json!({
                 "leverage": Value::Json(normalize(&Value::Json(json!({
@@ -350,25 +334,25 @@ pub trait Zaif : Exchange {
 
     fn parse_balance(&self, mut response: Value) -> Value {
         let mut balances: Value = self.safe_value(response.clone(), Value::from("return"), Value::new_object());
-        let mut deposit: Value = self.safe_value(balances.clone(), Value::from("deposit"));
+        let mut deposit: Value = self.safe_value(balances.clone(), Value::from("deposit"), Value::Undefined);
         let mut result: Value = Value::Json(normalize(&Value::Json(json!({
             "info": response,
             "timestamp": Value::Undefined,
             "datetime": Value::Undefined
         }))).unwrap());
         let mut funds: Value = self.safe_value(balances.clone(), Value::from("funds"), Value::new_object());
-        let mut currency_ids: Value = Object::keys(funds.clone());
+        let mut currency_ids: Value = funds.clone().keys();
         let mut i: usize = 0;
         while i < currency_ids.len() {
             let mut currency_id: Value = currency_ids.get(i.into());
             let mut code: Value = self.safe_currency_code(currency_id.clone(), Value::Undefined);
-            let mut balance: Value = self.safe_string(funds.clone(), currency_id.clone());
+            let mut balance: Value = self.safe_string(funds.clone(), currency_id.clone(), Value::Undefined);
             let mut account: Value = self.account();
             account.set("free".into(), balance.clone());
             account.set("total".into(), balance.clone());
             if deposit.clone().is_nonnullish() {
                 if deposit.contains_key(currency_id.clone()) {
-                    account.set("total".into(), self.safe_string(deposit.clone(), currency_id.clone()));
+                    account.set("total".into(), self.safe_string(deposit.clone(), currency_id.clone(), Value::Undefined));
                 };
             };
             result.set(code.clone(), account.clone());
@@ -380,7 +364,7 @@ pub trait Zaif : Exchange {
     async fn fetch_balance(&mut self, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        let mut response: Value = self.private_post_get_info(params.clone()).await;
+        let mut response: Value = self.dispatch("privatePostGetInfo".into(), params.clone(), Value::Undefined).await;
         return <Self as Zaif>::parse_balance(self, response.clone());
     }
 
@@ -429,19 +413,19 @@ pub trait Zaif : Exchange {
         // }
         //
         let mut symbol: Value = self.safe_symbol(Value::Undefined, market.clone(), Value::Undefined, Value::Undefined);
-        let mut vwap: Value = self.safe_string(ticker.clone(), Value::from("vwap"));
-        let mut base_volume: Value = self.safe_string(ticker.clone(), Value::from("volume"));
+        let mut vwap: Value = self.safe_string(ticker.clone(), Value::from("vwap"), Value::Undefined);
+        let mut base_volume: Value = self.safe_string(ticker.clone(), Value::from("volume"), Value::Undefined);
         let mut quote_volume: Value = Precise::string_mul(base_volume.clone(), vwap.clone());
-        let mut last: Value = self.safe_string(ticker.clone(), Value::from("last"));
+        let mut last: Value = self.safe_string(ticker.clone(), Value::from("last"), Value::Undefined);
         return self.safe_ticker(Value::Json(normalize(&Value::Json(json!({
             "symbol": symbol,
             "timestamp": Value::Undefined,
             "datetime": Value::Undefined,
-            "high": self.safe_string(ticker.clone(), Value::from("high")),
-            "low": self.safe_string(ticker.clone(), Value::from("low")),
-            "bid": self.safe_string(ticker.clone(), Value::from("bid")),
+            "high": self.safe_string(ticker.clone(), Value::from("high"), Value::Undefined),
+            "low": self.safe_string(ticker.clone(), Value::from("low"), Value::Undefined),
+            "bid": self.safe_string(ticker.clone(), Value::from("bid"), Value::Undefined),
             "bidVolume": Value::Undefined,
-            "ask": self.safe_string(ticker.clone(), Value::from("ask")),
+            "ask": self.safe_string(ticker.clone(), Value::from("ask"), Value::Undefined),
             "askVolume": Value::Undefined,
             "vwap": vwap,
             "open": Value::Undefined,
@@ -501,13 +485,13 @@ pub trait Zaif : Exchange {
         //          "trade_type": "ask"
         //      }
         //
-        let mut side: Value = self.safe_string(trade.clone(), Value::from("trade_type"));
+        let mut side: Value = self.safe_string(trade.clone(), Value::from("trade_type"), Value::Undefined);
         side = if side.clone() == Value::from("bid") { Value::from("buy") } else { Value::from("sell") };
-        let mut timestamp: Value = self.safe_timestamp(trade.clone(), Value::from("date"));
-        let mut id: Value = self.safe_string_2(trade.clone(), Value::from("id"), Value::from("tid"));
-        let mut price_string: Value = self.safe_string(trade.clone(), Value::from("price"));
-        let mut amount_string: Value = self.safe_string(trade.clone(), Value::from("amount"));
-        let mut market_id: Value = self.safe_string(trade.clone(), Value::from("currency_pair"));
+        let mut timestamp: Value = self.safe_timestamp(trade.clone(), Value::from("date"), Value::Undefined);
+        let mut id: Value = self.safe_string_2(trade.clone(), Value::from("id"), Value::from("tid"), Value::Undefined);
+        let mut price_string: Value = self.safe_string(trade.clone(), Value::from("price"), Value::Undefined);
+        let mut amount_string: Value = self.safe_string(trade.clone(), Value::from("amount"), Value::Undefined);
+        let mut market_id: Value = self.safe_string(trade.clone(), Value::from("currency_pair"), Value::Undefined);
         let mut symbol: Value = self.safe_symbol(market_id.clone(), market.clone(), Value::from("_"), Value::Undefined);
         return self.safe_trade(Value::Json(normalize(&Value::Json(json!({
             "id": id,
@@ -565,7 +549,7 @@ pub trait Zaif : Exchange {
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
             "order_id": id
         }))).unwrap());
-        let mut response: Value = self.private_post_cancel_order(extend_2(request.clone(), params.clone())).await;
+        let mut response: Value = self.dispatch("privatePostCancelOrder".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         //
         //    {
         //        "success": 1,
@@ -607,14 +591,14 @@ pub trait Zaif : Exchange {
         //        }
         //    }
         //
-        let mut side: Value = self.safe_string(order.clone(), Value::from("action"));
+        let mut side: Value = self.safe_string(order.clone(), Value::from("action"), Value::Undefined);
         side = if side.clone() == Value::from("bid") { Value::from("buy") } else { Value::from("sell") };
-        let mut timestamp: Value = self.safe_timestamp(order.clone(), Value::from("timestamp"));
-        let mut market_id: Value = self.safe_string(order.clone(), Value::from("currency_pair"));
+        let mut timestamp: Value = self.safe_timestamp(order.clone(), Value::from("timestamp"), Value::Undefined);
+        let mut market_id: Value = self.safe_string(order.clone(), Value::from("currency_pair"), Value::Undefined);
         let mut symbol: Value = self.safe_symbol(market_id.clone(), market.clone(), Value::from("_"), Value::Undefined);
-        let mut price: Value = self.safe_string(order.clone(), Value::from("price"));
-        let mut amount: Value = self.safe_string(order.clone(), Value::from("amount"));
-        let mut id: Value = self.safe_string_2(order.clone(), Value::from("id"), Value::from("order_id"));
+        let mut price: Value = self.safe_string(order.clone(), Value::from("price"), Value::Undefined);
+        let mut amount: Value = self.safe_string(order.clone(), Value::from("amount"), Value::Undefined);
+        let mut id: Value = self.safe_string_2(order.clone(), Value::from("id"), Value::from("order_id"), Value::Undefined);
         return self.safe_order(Value::Json(normalize(&Value::Json(json!({
             "id": id,
             "clientOrderId": Value::Undefined,
@@ -651,7 +635,7 @@ pub trait Zaif : Exchange {
             market = self.market(symbol.clone());
             request.set("currency_pair".into(), market.get(Value::from("id")));
         };
-        let mut response: Value = self.private_post_active_orders(extend_2(request.clone(), params.clone())).await;
+        let mut response: Value = self.dispatch("privatePostActiveOrders".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         return self.parse_orders(response.get(Value::from("return")), market.clone(), since.clone(), limit.clone(), Value::Undefined);
     }
 
@@ -672,7 +656,7 @@ pub trait Zaif : Exchange {
             market = self.market(symbol.clone());
             request.set("currency_pair".into(), market.get(Value::from("id")));
         };
-        let mut response: Value = self.private_post_trade_history(extend_2(request.clone(), params.clone())).await;
+        let mut response: Value = self.dispatch("privatePostTradeHistory".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         return self.parse_orders(response.get(Value::from("return")), market.clone(), since.clone(), limit.clone(), Value::Undefined);
     }
 
@@ -732,7 +716,7 @@ pub trait Zaif : Exchange {
         //
         currency = self.safe_currency(Value::Undefined, currency.clone());
         let mut fee: Value = Value::Undefined;
-        let mut fee_cost: Value = self.safe_value(transaction.clone(), Value::from("fee"));
+        let mut fee_cost: Value = self.safe_value(transaction.clone(), Value::from("fee"), Value::Undefined);
         if fee_cost.clone().is_nonnullish() {
             fee = Value::Json(normalize(&Value::Json(json!({
                 "cost": fee_cost,
@@ -740,8 +724,8 @@ pub trait Zaif : Exchange {
             }))).unwrap());
         };
         return Value::Json(normalize(&Value::Json(json!({
-            "id": self.safe_string(transaction.clone(), Value::from("id")),
-            "txid": self.safe_string(transaction.clone(), Value::from("txid")),
+            "id": self.safe_string(transaction.clone(), Value::from("id"), Value::Undefined),
+            "txid": self.safe_string(transaction.clone(), Value::from("txid"), Value::Undefined),
             "timestamp": Value::Undefined,
             "datetime": Value::Undefined,
             "network": Value::Undefined,
@@ -769,64 +753,9 @@ pub trait Zaif : Exchange {
         return nonce.to_fixed(Value::from(8));
     }
 
-    fn sign(&mut self, mut path: Value, mut api: Value, mut method: Value, mut params: Value, mut headers: Value, mut body: Value) -> Value {
-        api = api.or_default(Value::from("public"));
-        method = method.or_default(Value::from("GET"));
-        params = params.or_default(Value::new_object());
-        let mut url: Value = self.get("urls".into()).get(Value::from("api")).get(Value::from("rest")) + Value::from("/");
-        if api.clone() == Value::from("public") {
-            url = url +  Value::from("api/") + self.get("version".into()) + Value::from("/") + self.implode_params(path.clone(), params.clone());
-        } else if api.clone() == Value::from("fapi") {
-            url = url +  Value::from("fapi/") + self.get("version".into()) + Value::from("/") + self.implode_params(path.clone(), params.clone());
-        } else {
-            self.check_required_credentials(Value::Undefined);
-            if api.clone() == Value::from("ecapi") {
-                url = url +  Value::from("ecapi");
-            } else if api.clone() == Value::from("tlapi") {
-                url = url +  Value::from("tlapi");
-            } else {
-                url = url +  Value::from("tapi");
-            };
-            let mut nonce: Value = <Self as Zaif>::custom_nonce(self);
-            body = self.urlencode(extend_2(Value::Json(normalize(&Value::Json(json!({
-                "method": path,
-                "nonce": nonce
-            }))).unwrap()), params.clone()));
-            headers = Value::Json(normalize(&Value::Json(json!({
-                "Content-Type": "application/x-www-form-urlencoded",
-                "Key": self.get("apiKey".into()),
-                "Sign": self.hmac(self.encode(body.clone()), self.encode(self.get("secret".into())), sha512.clone())
-            }))).unwrap());
-        };
-        return Value::Json(normalize(&Value::Json(json!({
-            "url": url,
-            "method": method,
-            "body": body,
-            "headers": headers
-        }))).unwrap());
-    }
+    
 
-    fn handle_errors(&mut self, mut http_code: Value, mut reason: Value, mut url: Value, mut method: Value, mut headers: Value, mut body: Value, mut response: Value, mut request_headers: Value, mut request_body: Value) -> Value {
-        if response.clone().is_nullish() {
-            return Value::Undefined;
-        };
-        //
-        //     {"error": "unsupported currency_pair"}
-        //
-        let mut feedback: Value = self.get("id".into()) + Value::from(" ") + body.clone();
-        let mut error: Value = self.safe_string(response.clone(), Value::from("error"));
-        if error.clone().is_nonnullish() {
-            self.throw_exactly_matched_exception(self.get("exceptions".into()).get(Value::from("exact")), error.clone(), feedback.clone());
-            self.throw_broadly_matched_exception(self.get("exceptions".into()).get(Value::from("broad")), error.clone(), feedback.clone());
-            panic!(r###"ExchangeError::new(feedback)"###);
-        };
-        // unknown message
-        let mut success: Value = self.safe_bool(response.clone(), Value::from("success"), true.into());
-        if !success.is_truthy() {
-            panic!(r###"ExchangeError::new(feedback)"###);
-        };
-        return Value::Undefined;
-    }
+    
 
     
     async fn dispatch(&mut self, method: Value, params: Value, context: Value) -> Value {
@@ -903,8 +832,8 @@ impl ValueTrait for ZaifImpl {
     fn push(&mut self, value: Value) { self.0.push(value) }
     fn split(&self, separator: Value) -> Value { self.0.split(separator) }
     fn contains_key(&self, key: Value) -> bool { self.0.contains_key(key) }
-    fn keys(&self) -> Vec<Value> { self.0.keys() }
-    fn values(&self) -> Vec<Value> { self.0.values() }
+    fn keys(&self) -> Value { self.0.keys() }
+    fn values(&self) -> Value { self.0.values() }
     fn to_array(&self, x: Value) -> Value { self.0.to_array(x) }
     fn index_of(&self, x: Value) -> Value { self.0.index_of(x) }
     fn join(&self, glue: Value) -> Value { self.0.join(glue) }

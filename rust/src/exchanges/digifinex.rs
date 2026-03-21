@@ -11,7 +11,16 @@ use async_trait::async_trait;
 use std::str::FromStr;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, JSON, Array, Object, Math, parse_int, shift_2, extend_2, normalize};
+use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, BoolExt, JSON, Array, Object, Math, Promise, parse_int, shift_2, extend_2, normalize};
+// Crypto hash identifiers
+fn sha256() -> Value { Value::from("sha256") }
+fn sha384() -> Value { Value::from("sha384") }
+fn sha512() -> Value { Value::from("sha512") }
+fn md5() -> Value { Value::from("md5") }
+fn ed25519() -> Value { Value::from("ed25519") }
+fn rsa(msg: Value, secret: Value, _hash: Value) -> Value { msg }
+fn eddsa(msg: Value, secret: Value, _curve: Value) -> Value { msg }
+fn secp256k1() -> Value { Value::from("secp256k1") }
 
 use crate::exchange::{PRECISE_BASE, TRUNCATE, ROUND, ROUND_UP, ROUND_DOWN};
 use crate::exchange::{DECIMAL_PLACES, SIGNIFICANT_DIGITS, TICK_SIZE, NO_PADDING, PAD_WITH_ZERO};
@@ -707,7 +716,7 @@ pub trait Digifinex : Exchange {
         //
         let mut data: Value = self.safe_list(response.clone(), Value::from("data"), Value::new_array());
         let mut grouped_by_id: Value = self.group_by(data.clone(), Value::from("currency"));
-        let mut keys: Value = Object::keys(grouped_by_id.clone());
+        let mut keys: Value = grouped_by_id.clone().keys();
         let mut result: Value = Value::new_object();
         let mut i: usize = 0;
         while i < keys.len() {
@@ -718,14 +727,14 @@ pub trait Digifinex : Exchange {
             let mut j: usize = 0;
             while j < network_entries.len() {
                 let mut network_entry: Value = network_entries.get(j.into());
-                let mut network_id: Value = self.safe_string_2(network_entry.clone(), Value::from("chain"), Value::from("currency"));
+                let mut network_id: Value = self.safe_string_2(network_entry.clone(), Value::from("chain"), Value::from("currency"), Value::Undefined);
                 let mut network_code: Value = self.network_id_to_code(network_id.clone(), Value::Undefined);
                 networks.set(network_code.clone(), Value::Json(normalize(&Value::Json(json!({
                     "id": network_id,
                     "network": network_code,
                     "active": Value::Undefined,
-                    "deposit": self.safe_integer(network_entry.clone(), Value::from("deposit_status")) == Value::from(1),
-                    "withdraw": self.safe_integer(network_entry.clone(), Value::from("withdraw_status")) == Value::from(1),
+                    "deposit": self.safe_integer(network_entry.clone(), Value::from("deposit_status"), Value::Undefined) == Value::from(1),
+                    "withdraw": self.safe_integer(network_entry.clone(), Value::from("withdraw_status"), Value::Undefined) == Value::from(1),
                     "fee": self.safe_number(network_entry.clone(), Value::from("min_withdraw_fee"), Value::Undefined),
                     "precision": Value::Undefined,
                     "limits": Value::Json(normalize(&Value::Json(json!({
@@ -753,27 +762,19 @@ pub trait Digifinex : Exchange {
         return result.clone();
     }
 
-    async fn fetch_markets(&mut self, mut params: Value) -> Value {
-        params = params.or_default(Value::new_object());
-        let mut options: Value = self.safe_value(self.get("options".into()), Value::from("fetchMarkets"), Value::new_object());
-        let mut method: Value = self.safe_string(options.clone(), Value::from("method"), Value::from("fetch_markets_v2"));
-        if method.clone() == Value::from("fetch_markets_v2") {
-            return <Self as Digifinex>::fetch_markets_v2(self, params.clone()).await;
-        };
-        return <Self as Digifinex>::fetch_markets_v1(self, params.clone()).await;
-    }
+    
 
     async fn fetch_markets_v2(&mut self, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
-        let mut default_type: Value = self.safe_string(self.get("options".into()), Value::from("defaultType"));
+        let mut default_type: Value = self.safe_string(self.get("options".into()), Value::from("defaultType"), Value::Undefined);
         let (mut margin_mode, mut query) = shift_2(<Self as Digifinex>::handle_margin_mode_and_params(self, Value::from("fetchMarketsV2"), params.clone(), Value::Undefined));
         let mut promises_raw: Value = Value::new_array();
         if margin_mode.clone().is_nonnullish() {
-            promises_raw.push(self.public_spot_get_margin_symbols(query.clone()));
+            promises_raw.push(self.dispatch("publicSpotGetMarginSymbols".into(), query.clone(), Value::Undefined).await);
         } else {
-            promises_raw.push(self.public_spot_get_trades_symbols(query.clone()));
+            promises_raw.push(self.dispatch("publicSpotGetTradesSymbols".into(), query.clone(), Value::Undefined).await);
         };
-        promises_raw.push(self.public_swap_get_public_instruments(params.clone()));
+        promises_raw.push(self.dispatch("publicSwapGetPublicInstruments".into(), params.clone(), Value::Undefined).await);
         let mut promises: Value = Promise::all(promises_raw.clone()).await;
         let mut spot_markets: Value = promises.get(Value::from(0));
         let mut swap_markets: Value = promises.get(Value::from(1));
@@ -836,10 +837,10 @@ pub trait Digifinex : Exchange {
         let mut i: usize = 0;
         while i < response.len() {
             let mut market: Value = response.get(i.into());
-            let mut id: Value = self.safe_string_2(market.clone(), Value::from("symbol"), Value::from("instrument_id"));
-            let mut base_id: Value = self.safe_string_2(market.clone(), Value::from("base_asset"), Value::from("base_currency"));
-            let mut quote_id: Value = self.safe_string_2(market.clone(), Value::from("quote_asset"), Value::from("quote_currency"));
-            let mut settle_id: Value = self.safe_string(market.clone(), Value::from("clear_currency"));
+            let mut id: Value = self.safe_string_2(market.clone(), Value::from("symbol"), Value::from("instrument_id"), Value::Undefined);
+            let mut base_id: Value = self.safe_string_2(market.clone(), Value::from("base_asset"), Value::from("base_currency"), Value::Undefined);
+            let mut quote_id: Value = self.safe_string_2(market.clone(), Value::from("quote_asset"), Value::from("quote_currency"), Value::Undefined);
+            let mut settle_id: Value = self.safe_string(market.clone(), Value::from("clear_currency"), Value::Undefined);
             let mut base: Value = self.safe_currency_code(base_id.clone(), Value::Undefined);
             let mut quote: Value = self.safe_currency_code(quote_id.clone(), Value::Undefined);
             let mut settle: Value = self.safe_currency_code(settle_id.clone(), Value::Undefined);
@@ -864,9 +865,9 @@ pub trait Digifinex : Exchange {
             if swap.is_truthy() {
                 r#type = Value::from("swap");
                 symbol = base.clone() + Value::from("/") + quote.clone() + Value::from(":") + settle.clone();
-                is_inverse = self.safe_value(market.clone(), Value::from("is_inverse"));
+                is_inverse = self.safe_value(market.clone(), Value::from("is_inverse"), Value::Undefined);
                 is_linear = if !is_inverse.is_truthy() { true.into() } else { false.into() };
-                let mut is_trading: Value = self.safe_value(market.clone(), Value::from("isTrading"));
+                let mut is_trading: Value = self.safe_value(market.clone(), Value::from("isTrading"), Value::Undefined);
                 if is_trading.is_truthy() {
                     is_allowed = Value::from(1);
                 };
@@ -896,8 +897,8 @@ pub trait Digifinex : Exchange {
                 "strike": Value::Undefined,
                 "optionType": Value::Undefined,
                 "precision": Value::Json(normalize(&Value::Json(json!({
-                    "amount": self.parse_number(self.parse_precision(self.safe_string(market.clone(), Value::from("amount_precision"))), Value::Undefined),
-                    "price": self.parse_number(self.parse_precision(self.safe_string(market.clone(), Value::from("price_precision"))), Value::Undefined)
+                    "amount": self.parse_number(self.parse_precision(self.safe_string(market.clone(), Value::from("amount_precision"), Value::Undefined)), Value::Undefined),
+                    "price": self.parse_number(self.parse_precision(self.safe_string(market.clone(), Value::from("price_precision"), Value::Undefined)), Value::Undefined)
                 }))).unwrap()),
                 "limits": Value::Json(normalize(&Value::Json(json!({
                     "leverage": Value::Json(normalize(&Value::Json(json!({
@@ -948,7 +949,7 @@ pub trait Digifinex : Exchange {
         let mut i: usize = 0;
         while i < markets.len() {
             let mut market: Value = markets.get(i.into());
-            let mut id: Value = self.safe_string(market.clone(), Value::from("market"));
+            let mut id: Value = self.safe_string(market.clone(), Value::from("market"), Value::Undefined);
             let (mut base_id, mut quote_id) = shift_2(id.split(Value::from("_")));
             let mut base: Value = self.safe_currency_code(base_id.clone(), Value::Undefined);
             let mut quote: Value = self.safe_currency_code(quote_id.clone(), Value::Undefined);
@@ -977,8 +978,8 @@ pub trait Digifinex : Exchange {
                 "strike": Value::Undefined,
                 "optionType": Value::Undefined,
                 "precision": Value::Json(normalize(&Value::Json(json!({
-                    "price": self.parse_number(self.parse_precision(self.safe_string(market.clone(), Value::from("price_precision"))), Value::Undefined),
-                    "amount": self.parse_number(self.parse_precision(self.safe_string(market.clone(), Value::from("volume_precision"))), Value::Undefined)
+                    "price": self.parse_number(self.parse_precision(self.safe_string(market.clone(), Value::from("price_precision"), Value::Undefined)), Value::Undefined),
+                    "amount": self.parse_number(self.parse_precision(self.safe_string(market.clone(), Value::from("volume_precision"), Value::Undefined)), Value::Undefined)
                 }))).unwrap()),
                 "limits": Value::Json(normalize(&Value::Json(json!({
                     "leverage": Value::Json(normalize(&Value::Json(json!({
@@ -1036,11 +1037,11 @@ pub trait Digifinex : Exchange {
         let mut i: usize = 0;
         while i < response.len() {
             let mut balance: Value = response.get(i.into());
-            let mut currency_id: Value = self.safe_string(balance.clone(), Value::from("currency"));
+            let mut currency_id: Value = self.safe_string(balance.clone(), Value::from("currency"), Value::Undefined);
             let mut code: Value = self.safe_currency_code(currency_id.clone(), Value::Undefined);
             let mut account: Value = self.account();
-            let mut free: Value = self.safe_string_2(balance.clone(), Value::from("free"), Value::from("avail_balance"));
-            let mut total: Value = self.safe_string_2(balance.clone(), Value::from("total"), Value::from("equity"));
+            let mut free: Value = self.safe_string_2(balance.clone(), Value::from("free"), Value::from("avail_balance"), Value::Undefined);
+            let mut total: Value = self.safe_string_2(balance.clone(), Value::from("total"), Value::from("equity"), Value::Undefined);
             account.set("free".into(), free.clone());
             account.set("used".into(), Precise::string_sub(total.clone(), free.clone()));
             account.set("total".into(), total.clone());
@@ -1059,11 +1060,11 @@ pub trait Digifinex : Exchange {
         let mut response: Value = Value::Undefined;
         if margin_mode.clone().is_nonnullish() || market_type.clone() == Value::from("margin") {
             market_type = Value::from("margin");
-            response = self.private_spot_get_margin_assets(query.clone()).await;
+            response = self.dispatch("privateSpotGetMarginAssets".into(), query.clone(), Value::Undefined).await;
         } else if market_type.clone() == Value::from("spot") {
-            response = self.private_spot_get_spot_assets(query.clone()).await;
+            response = self.dispatch("privateSpotGetSpotAssets".into(), query.clone(), Value::Undefined).await;
         } else if market_type.clone() == Value::from("swap") {
-            response = self.private_swap_get_account_balance(query.clone()).await;
+            response = self.dispatch("privateSwapGetAccountBalance".into(), query.clone(), Value::Undefined).await;
         } else {
             panic!(r###"NotSupported::new(self.get("id".into()) + Value::from(" fetchBalance() not support this market type"))"###);
         };
@@ -1242,35 +1243,35 @@ pub trait Digifinex : Exchange {
         //
         let mut index_price: Value = self.safe_number(ticker.clone(), Value::from("index_price"), Value::Undefined);
         let mut market_type: Value = if index_price.clone().is_nonnullish() { Value::from("contract") } else { Value::from("spot") };
-        let mut market_id: Value = self.safe_string_upper_2(ticker.clone(), Value::from("symbol"), Value::from("instrument_id"));
+        let mut market_id: Value = self.safe_string_upper_2(ticker.clone(), Value::from("symbol"), Value::from("instrument_id"), Value::Undefined);
         let mut symbol: Value = self.safe_symbol(market_id.clone(), market.clone(), Value::Undefined, market_type.clone());
         market = self.safe_market(market_id.clone(), market.clone(), Value::Undefined, market_type.clone());
-        let mut timestamp: Value = self.safe_timestamp(ticker.clone(), Value::from("date"));
+        let mut timestamp: Value = self.safe_timestamp(ticker.clone(), Value::from("date"), Value::Undefined);
         if market.get(Value::from("swap")).is_truthy() {
-            timestamp = self.safe_integer(ticker.clone(), Value::from("timestamp"));
+            timestamp = self.safe_integer(ticker.clone(), Value::from("timestamp"), Value::Undefined);
         };
-        let mut last: Value = self.safe_string(ticker.clone(), Value::from("last"));
+        let mut last: Value = self.safe_string(ticker.clone(), Value::from("last"), Value::Undefined);
         return self.safe_ticker(Value::Json(normalize(&Value::Json(json!({
             "symbol": symbol,
             "timestamp": timestamp,
             "datetime": self.iso8601(timestamp.clone()),
-            "high": self.safe_string_2(ticker.clone(), Value::from("high"), Value::from("high_24h")),
-            "low": self.safe_string_2(ticker.clone(), Value::from("low"), Value::from("low_24h")),
-            "bid": self.safe_string_2(ticker.clone(), Value::from("buy"), Value::from("best_bid")),
-            "bidVolume": self.safe_string(ticker.clone(), Value::from("best_bid_size")),
-            "ask": self.safe_string_2(ticker.clone(), Value::from("sell"), Value::from("best_ask")),
-            "askVolume": self.safe_string(ticker.clone(), Value::from("best_ask_size")),
+            "high": self.safe_string_2(ticker.clone(), Value::from("high"), Value::from("high_24h"), Value::Undefined),
+            "low": self.safe_string_2(ticker.clone(), Value::from("low"), Value::from("low_24h"), Value::Undefined),
+            "bid": self.safe_string_2(ticker.clone(), Value::from("buy"), Value::from("best_bid"), Value::Undefined),
+            "bidVolume": self.safe_string(ticker.clone(), Value::from("best_bid_size"), Value::Undefined),
+            "ask": self.safe_string_2(ticker.clone(), Value::from("sell"), Value::from("best_ask"), Value::Undefined),
+            "askVolume": self.safe_string(ticker.clone(), Value::from("best_ask_size"), Value::Undefined),
             "vwap": Value::Undefined,
-            "open": self.safe_string(ticker.clone(), Value::from("open_24h")),
+            "open": self.safe_string(ticker.clone(), Value::from("open_24h"), Value::Undefined),
             "close": last,
             "last": last,
             "previousClose": Value::Undefined,
             "change": Value::Undefined,
-            "percentage": self.safe_string_2(ticker.clone(), Value::from("change"), Value::from("price_change_percent")),
+            "percentage": self.safe_string_2(ticker.clone(), Value::from("change"), Value::from("price_change_percent"), Value::Undefined),
             "average": Value::Undefined,
-            "baseVolume": self.safe_string_2(ticker.clone(), Value::from("vol"), Value::from("volume_24h")),
-            "quoteVolume": self.safe_string(ticker.clone(), Value::from("base_vol")),
-            "markPrice": self.safe_string(ticker.clone(), Value::from("mark_price")),
+            "baseVolume": self.safe_string_2(ticker.clone(), Value::from("vol"), Value::from("volume_24h"), Value::Undefined),
+            "quoteVolume": self.safe_string(ticker.clone(), Value::from("base_vol"), Value::Undefined),
+            "markPrice": self.safe_string(ticker.clone(), Value::from("mark_price"), Value::Undefined),
             "indexPrice": index_price,
             "info": ticker
         }))).unwrap()), market.clone());
@@ -1332,24 +1333,24 @@ pub trait Digifinex : Exchange {
         //         "trade_time": 1667953123562
         //     }
         //
-        let mut id: Value = self.safe_string_2(trade.clone(), Value::from("id"), Value::from("trade_id"));
-        let mut order_id: Value = self.safe_string(trade.clone(), Value::from("order_id"));
-        let mut price_string: Value = self.safe_string(trade.clone(), Value::from("price"));
-        let mut amount_string: Value = self.safe_string_n(trade.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("amount").into(), Value::from("volume").into(), Value::from("size").into()])));
-        let mut market_id: Value = self.safe_string_upper_2(trade.clone(), Value::from("symbol"), Value::from("instrument_id"));
+        let mut id: Value = self.safe_string_2(trade.clone(), Value::from("id"), Value::from("trade_id"), Value::Undefined);
+        let mut order_id: Value = self.safe_string(trade.clone(), Value::from("order_id"), Value::Undefined);
+        let mut price_string: Value = self.safe_string(trade.clone(), Value::from("price"), Value::Undefined);
+        let mut amount_string: Value = self.safe_string_n(trade.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("amount").into(), Value::from("volume").into(), Value::from("size").into()])), Value::Undefined);
+        let mut market_id: Value = self.safe_string_upper_2(trade.clone(), Value::from("symbol"), Value::from("instrument_id"), Value::Undefined);
         let mut symbol: Value = self.safe_symbol(market_id.clone(), market.clone(), Value::Undefined, Value::Undefined);
         if market.clone().is_nullish() {
             market = self.safe_market(market_id.clone(), Value::Undefined, Value::Undefined, Value::Undefined);
         };
-        let mut timestamp: Value = self.safe_timestamp_2(trade.clone(), Value::from("date"), Value::from("timestamp"));
-        let mut side: Value = self.safe_string_2(trade.clone(), Value::from("type"), Value::from("side"));
+        let mut timestamp: Value = self.safe_timestamp_2(trade.clone(), Value::from("date"), Value::from("timestamp"), Value::Undefined);
+        let mut side: Value = self.safe_string_2(trade.clone(), Value::from("type"), Value::from("side"), Value::Undefined);
         let mut r#type: Value = Value::Undefined;
         let mut taker_or_maker: Value = Value::Undefined;
         if market.get(Value::from("type")) == Value::from("swap") {
-            timestamp = self.safe_integer(trade.clone(), Value::from("trade_time"));
-            let mut order_type: Value = self.safe_string(trade.clone(), Value::from("order_type"));
-            let mut trade_role: Value = self.safe_string(trade.clone(), Value::from("match_role"));
-            let mut direction: Value = self.safe_string(trade.clone(), Value::from("direction"));
+            timestamp = self.safe_integer(trade.clone(), Value::from("trade_time"), Value::Undefined);
+            let mut order_type: Value = self.safe_string(trade.clone(), Value::from("order_type"), Value::Undefined);
+            let mut trade_role: Value = self.safe_string(trade.clone(), Value::from("match_role"), Value::Undefined);
+            let mut direction: Value = self.safe_string(trade.clone(), Value::from("direction"), Value::Undefined);
             if order_type.clone().is_nonnullish() {
                 r#type = if order_type.clone() == Value::from("0") { Value::from("limit") } else { Value::Undefined };
             };
@@ -1375,18 +1376,18 @@ pub trait Digifinex : Exchange {
             };
         } else {
             let mut parts: Value = side.split(Value::from("_"));
-            side = self.safe_string(parts.clone(), Value::from(0));
-            r#type = self.safe_string(parts.clone(), Value::from(1));
+            side = self.safe_string(parts.clone(), Value::from(0), Value::Undefined);
+            r#type = self.safe_string(parts.clone(), Value::from(1), Value::Undefined);
             if r#type.clone().is_nullish() {
                 r#type = Value::from("limit");
             };
-            let mut is_maker: Value = self.safe_value(trade.clone(), Value::from("is_maker"));
+            let mut is_maker: Value = self.safe_value(trade.clone(), Value::from("is_maker"), Value::Undefined);
             taker_or_maker = if is_maker.is_truthy() { Value::from("maker") } else { Value::from("taker") };
         };
         let mut fee: Value = Value::Undefined;
-        let mut fee_cost_string: Value = self.safe_string(trade.clone(), Value::from("fee"));
+        let mut fee_cost_string: Value = self.safe_string(trade.clone(), Value::from("fee"), Value::Undefined);
         if fee_cost_string.clone().is_nonnullish() {
-            let mut fee_currency_id: Value = self.safe_string(trade.clone(), Value::from("fee_currency"));
+            let mut fee_currency_id: Value = self.safe_string(trade.clone(), Value::from("fee_currency"), Value::Undefined);
             let mut fee_currency_code: Value = Value::Undefined;
             if fee_currency_id.clone().is_nonnullish() {
                 fee_currency_code = self.safe_currency_code(fee_currency_id.clone(), Value::Undefined);
@@ -1478,10 +1479,10 @@ pub trait Digifinex : Exchange {
         //     ]
         //
         if market.get(Value::from("swap")).is_truthy() {
-            return Value::Json(serde_json::Value::Array(vec![self.safe_integer(ohlcv.clone(), Value::from(0)).into(), self.safe_number(ohlcv.clone(), Value::from(1), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from(2), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from(3), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from(4), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from(5), Value::Undefined).into()]));
+            return Value::Json(serde_json::Value::Array(vec![self.safe_integer(ohlcv.clone(), Value::from(0), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from(1), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from(2), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from(3), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from(4), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from(5), Value::Undefined).into()]));
         } else {
             // volume
-            return Value::Json(serde_json::Value::Array(vec![self.safe_timestamp(ohlcv.clone(), Value::from(0)).into(), self.safe_number(ohlcv.clone(), Value::from(5), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from(3), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from(4), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from(2), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from(1), Value::Undefined).into()]));
+            return Value::Json(serde_json::Value::Array(vec![self.safe_timestamp(ohlcv.clone(), Value::from(0), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from(5), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from(3), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from(4), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from(2), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from(1), Value::Undefined).into()]));
         };
         Value::Undefined
     }
@@ -1530,12 +1531,12 @@ pub trait Digifinex : Exchange {
         let mut request: Value = <Self as Digifinex>::create_order_request(self, symbol.clone(), r#type.clone(), side.clone(), amount.clone(), price.clone(), params.clone());
         let mut response: Value = Value::Undefined;
         if market.get(Value::from("swap")).is_truthy() {
-            response = self.private_swap_post_trade_order_place(request.clone()).await;
+            response = self.dispatch("privateSwapPostTradeOrderPlace".into(), request.clone(), Value::Undefined).await;
         } else {
             if margin_mode.clone().is_nonnullish() {
-                response = self.private_spot_post_margin_order_new(request.clone()).await;
+                response = self.dispatch("privateSpotPostMarginOrderNew".into(), request.clone(), Value::Undefined).await;
             } else {
-                response = self.private_spot_post_spot_order_new(request.clone()).await;
+                response = self.dispatch("privateSpotPostSpotOrderNew".into(), request.clone(), Value::Undefined).await;
             };
         };
         //
@@ -1571,7 +1572,7 @@ pub trait Digifinex : Exchange {
         let mut i: usize = 0;
         while i < orders.len() {
             let mut raw_order: Value = orders.get(i.into());
-            let mut market_id: Value = self.safe_string(raw_order.clone(), Value::from("symbol"));
+            let mut market_id: Value = self.safe_string(raw_order.clone(), Value::from("symbol"), Value::Undefined);
             if symbol.clone().is_nullish() {
                 symbol = market_id.clone();
             } else {
@@ -1579,10 +1580,10 @@ pub trait Digifinex : Exchange {
                     panic!(r###"BadRequest::new(self.get("id".into()) + Value::from(" createOrders() requires all orders to have the same symbol"))"###);
                 };
             };
-            let mut r#type: Value = self.safe_string(raw_order.clone(), Value::from("type"));
-            let mut side: Value = self.safe_string(raw_order.clone(), Value::from("side"));
-            let mut amount: Value = self.safe_value(raw_order.clone(), Value::from("amount"));
-            let mut price: Value = self.safe_value(raw_order.clone(), Value::from("price"));
+            let mut r#type: Value = self.safe_string(raw_order.clone(), Value::from("type"), Value::Undefined);
+            let mut side: Value = self.safe_string(raw_order.clone(), Value::from("side"), Value::Undefined);
+            let mut amount: Value = self.safe_value(raw_order.clone(), Value::from("amount"), Value::Undefined);
+            let mut price: Value = self.safe_value(raw_order.clone(), Value::from("price"), Value::Undefined);
             let mut order_params: Value = self.safe_value(raw_order.clone(), Value::from("params"), Value::new_object());
             let mut margin_result: Value = <Self as Digifinex>::handle_margin_mode_and_params(self, Value::from("createOrders"), order_params.clone(), Value::Undefined);
             let mut current_margin_mode: Value = margin_result.get(Value::from(0));
@@ -1603,12 +1604,12 @@ pub trait Digifinex : Exchange {
         let mut request: Value = Value::new_object();
         let mut response: Value = Value::Undefined;
         if market.get(Value::from("swap")).is_truthy() {
-            response = self.private_swap_post_trade_batch_order(orders_requests.clone()).await;
+            response = self.dispatch("privateSwapPostTradeBatchOrder".into(), orders_requests.clone(), Value::Undefined).await;
         } else {
             request.set("market".into(), if margin_mode.clone().is_nonnullish() { Value::from("margin") } else { Value::from("spot") });
             request.set("symbol".into(), market.get(Value::from("id")));
             request.set("list".into(), self.json(orders_requests.clone()));
-            response = self.private_spot_post_market_order_batch_new(request.clone()).await;
+            response = self.dispatch("privateSpotPostMarketOrderBatchNew".into(), request.clone(), Value::Undefined).await;
         };
         //
         // spot
@@ -1685,7 +1686,7 @@ pub trait Digifinex : Exchange {
         let mut post_only_parsed: Value = Value::Undefined;
         if swap.is_truthy() {
             let mut reduce_only: Value = self.safe_bool(params.clone(), Value::from("reduceOnly"), false.into());
-            let mut time_in_force: Value = self.safe_string(params.clone(), Value::from("timeInForce"));
+            let mut time_in_force: Value = self.safe_string(params.clone(), Value::from("timeInForce"), Value::Undefined);
             let mut order_type: Value = Value::Undefined;
             if side.clone() == Value::from("buy") {
                 let mut request_type: Value = if reduce_only.is_truthy() { Value::from(4) } else { Value::from(1) };
@@ -1796,11 +1797,11 @@ pub trait Digifinex : Exchange {
         let mut response: Value = Value::Undefined;
         if margin_mode.clone().is_nonnullish() || market_type.clone() == Value::from("margin") {
             market_type = Value::from("margin");
-            response = self.private_spot_post_margin_order_cancel(extend_2(request.clone(), query.clone())).await;
+            response = self.dispatch("privateSpotPostMarginOrderCancel".into(), extend_2(request.clone(), query.clone()), Value::Undefined).await;
         } else if market_type.clone() == Value::from("spot") {
-            response = self.private_spot_post_spot_order_cancel(extend_2(request.clone(), query.clone())).await;
+            response = self.dispatch("privateSpotPostSpotOrderCancel".into(), extend_2(request.clone(), query.clone()), Value::Undefined).await;
         } else if market_type.clone() == Value::from("swap") {
-            response = self.private_swap_post_trade_cancel_order(extend_2(request.clone(), query.clone())).await;
+            response = self.dispatch("privateSwapPostTradeCancelOrder".into(), extend_2(request.clone(), query.clone()), Value::Undefined).await;
         } else {
             panic!(r###"NotSupported::new(self.get("id".into()) + Value::from(" cancelOrder() not support this market type"))"###);
         };
@@ -1836,7 +1837,7 @@ pub trait Digifinex : Exchange {
         } else {
             return self.safe_order(Value::Json(normalize(&Value::Json(json!({
                 "info": response,
-                "orderId": self.safe_string(response.clone(), Value::from("data"))
+                "orderId": self.safe_string(response.clone(), Value::from("data"), Value::Undefined)
             }))).unwrap()), Value::Undefined);
         };
         Value::Undefined
@@ -1861,9 +1862,9 @@ pub trait Digifinex : Exchange {
             let mut order: Value = error.get(i.into());
             result.push(self.safe_order(Value::Json(normalize(&Value::Json(json!({
                 "info": order,
-                "id": self.safe_string_2(order.clone(), Value::from("order-id"), Value::from("order_id")),
+                "id": self.safe_string_2(order.clone(), Value::from("order-id"), Value::from("order_id"), Value::Undefined),
                 "status": "failed",
-                "clientOrderId": self.safe_string(order.clone(), Value::from("client-order-id"))
+                "clientOrderId": self.safe_string(order.clone(), Value::from("client-order-id"), Value::Undefined)
             }))).unwrap()), Value::Undefined));
             i += 1;
         };
@@ -1880,7 +1881,7 @@ pub trait Digifinex : Exchange {
             "market": order_type,
             "order_id": ids.join(Value::from(","))
         }))).unwrap());
-        let mut response: Value = self.private_spot_post_spot_order_cancel(extend_2(request.clone(), params.clone())).await;
+        let mut response: Value = self.dispatch("privateSpotPostSpotOrderCancel".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         //
         //     {
         //         "code": 0,
@@ -1976,12 +1977,12 @@ pub trait Digifinex : Exchange {
         let mut last_trade_timestamp: Value = Value::Undefined;
         let mut time_in_force: Value = Value::Undefined;
         let mut r#type: Value = Value::Undefined;
-        let mut side: Value = self.safe_string(order.clone(), Value::from("type"));
-        let mut market_id: Value = self.safe_string_2(order.clone(), Value::from("symbol"), Value::from("instrument_id"));
+        let mut side: Value = self.safe_string(order.clone(), Value::from("type"), Value::Undefined);
+        let mut market_id: Value = self.safe_string_2(order.clone(), Value::from("symbol"), Value::from("instrument_id"), Value::Undefined);
         let mut symbol: Value = self.safe_symbol(market_id.clone(), market.clone(), Value::Undefined, Value::Undefined);
         market = self.market(symbol.clone());
         if market.get(Value::from("type")) == Value::from("swap") {
-            let mut order_type: Value = self.safe_integer(order.clone(), Value::from("order_type"));
+            let mut order_type: Value = self.safe_integer(order.clone(), Value::from("order_type"), Value::Undefined);
             if order_type.clone().is_nonnullish() {
                 if order_type.clone() == Value::from(9) || order_type.clone() == Value::from(10) || order_type.clone() == Value::from(11) || order_type.clone() == Value::from(12) || order_type.clone() == Value::from(15) {
                     time_in_force = Value::from("FOK");
@@ -2005,11 +2006,11 @@ pub trait Digifinex : Exchange {
             } else if side.clone() == Value::from("4") {
                 side = Value::from("close short");
             };
-            timestamp = self.safe_integer(order.clone(), Value::from("insert_time"));
-            last_trade_timestamp = self.safe_integer(order.clone(), Value::from("time_stamp"));
+            timestamp = self.safe_integer(order.clone(), Value::from("insert_time"), Value::Undefined);
+            last_trade_timestamp = self.safe_integer(order.clone(), Value::from("time_stamp"), Value::Undefined);
         } else {
-            timestamp = self.safe_timestamp(order.clone(), Value::from("created_date"));
-            last_trade_timestamp = self.safe_timestamp(order.clone(), Value::from("finished_date"));
+            timestamp = self.safe_timestamp(order.clone(), Value::from("created_date"), Value::Undefined);
+            last_trade_timestamp = self.safe_timestamp(order.clone(), Value::from("finished_date"), Value::Undefined);
             if side.clone().is_nonnullish() {
                 let mut parts: Value = side.split(Value::from("_"));
                 let mut num_parts: usize = parts.len();
@@ -2023,7 +2024,7 @@ pub trait Digifinex : Exchange {
         };
         return self.safe_order(Value::Json(normalize(&Value::Json(json!({
             "info": order,
-            "id": self.safe_string_2(order.clone(), Value::from("order_id"), Value::from("data")),
+            "id": self.safe_string_2(order.clone(), Value::from("order_id"), Value::from("data"), Value::Undefined),
             "clientOrderId": Value::Undefined,
             "timestamp": timestamp,
             "datetime": self.iso8601(timestamp.clone()),
@@ -2040,7 +2041,7 @@ pub trait Digifinex : Exchange {
             "remaining": Value::Undefined,
             "cost": Value::Undefined,
             "average": self.safe_number_2(order.clone(), Value::from("avg_price"), Value::from("price_avg"), Value::Undefined),
-            "status": <Self as Digifinex>::parse_order_status(self, self.safe_string_2(order.clone(), Value::from("status"), Value::from("state"))),
+            "status": <Self as Digifinex>::parse_order_status(self, self.safe_string_2(order.clone(), Value::from("status"), Value::from("state"), Value::Undefined)),
             "fee": Value::Json(normalize(&Value::Json(json!({
                 "cost": self.safe_number(order.clone(), Value::from("fee"), Value::Undefined)
             }))).unwrap()),
@@ -2077,11 +2078,11 @@ pub trait Digifinex : Exchange {
         let mut response: Value = Value::Undefined;
         if margin_mode.clone().is_nonnullish() || market_type.clone() == Value::from("margin") {
             market_type = Value::from("margin");
-            response = self.private_spot_get_margin_order_current(extend_2(request.clone(), query.clone())).await;
+            response = self.dispatch("privateSpotGetMarginOrderCurrent".into(), extend_2(request.clone(), query.clone()), Value::Undefined).await;
         } else if market_type.clone() == Value::from("spot") {
-            response = self.private_spot_get_spot_order_current(extend_2(request.clone(), query.clone())).await;
+            response = self.dispatch("privateSpotGetSpotOrderCurrent".into(), extend_2(request.clone(), query.clone()), Value::Undefined).await;
         } else if market_type.clone() == Value::from("swap") {
-            response = self.private_swap_get_trade_open_orders(extend_2(request.clone(), query.clone())).await;
+            response = self.dispatch("privateSwapGetTradeOpenOrders".into(), extend_2(request.clone(), query.clone()), Value::Undefined).await;
         } else {
             panic!(r###"NotSupported::new(self.get("id".into()) + Value::from(" fetchOpenOrders() not support this market type"))"###);
         };
@@ -2158,7 +2159,7 @@ pub trait Digifinex : Exchange {
         } else {
             request.set("market".into(), market_type.clone());
             if since.clone().is_nonnullish() {
-                request.set("start_time".into(), self.parse_to_int(since.clone() / Value::from(1000)));
+                request.set("start_time".into(), self.parse_to_int(since.clone() / Value::from(1000), Value::Undefined));
             };
         };
         // default 3 days from now, max 30 days
@@ -2172,11 +2173,11 @@ pub trait Digifinex : Exchange {
         let mut response: Value = Value::Undefined;
         if margin_mode.clone().is_nonnullish() || market_type.clone() == Value::from("margin") {
             market_type = Value::from("margin");
-            response = self.private_spot_get_margin_order_history(extend_2(request.clone(), query.clone())).await;
+            response = self.dispatch("privateSpotGetMarginOrderHistory".into(), extend_2(request.clone(), query.clone()), Value::Undefined).await;
         } else if market_type.clone() == Value::from("spot") {
-            response = self.private_spot_get_spot_order_history(extend_2(request.clone(), query.clone())).await;
+            response = self.dispatch("privateSpotGetSpotOrderHistory".into(), extend_2(request.clone(), query.clone()), Value::Undefined).await;
         } else if market_type.clone() == Value::from("swap") {
-            response = self.private_swap_get_trade_history_orders(extend_2(request.clone(), query.clone())).await;
+            response = self.dispatch("privateSwapGetTradeHistoryOrders".into(), extend_2(request.clone(), query.clone()), Value::Undefined).await;
         } else {
             panic!(r###"NotSupported::new(self.get("id".into()) + Value::from(" fetchOrders() not support this market type"))"###);
         };
@@ -2258,11 +2259,11 @@ pub trait Digifinex : Exchange {
         let mut response: Value = Value::Undefined;
         if margin_mode.clone().is_nonnullish() || market_type.clone() == Value::from("margin") {
             market_type = Value::from("margin");
-            response = self.private_spot_get_margin_order(extend_2(request.clone(), query.clone())).await;
+            response = self.dispatch("privateSpotGetMarginOrder".into(), extend_2(request.clone(), query.clone()), Value::Undefined).await;
         } else if market_type.clone() == Value::from("spot") {
-            response = self.private_spot_get_spot_order(extend_2(request.clone(), query.clone())).await;
+            response = self.dispatch("privateSpotGetSpotOrder".into(), extend_2(request.clone(), query.clone()), Value::Undefined).await;
         } else if market_type.clone() == Value::from("swap") {
-            response = self.private_swap_get_trade_order_info(extend_2(request.clone(), query.clone())).await;
+            response = self.dispatch("privateSwapGetTradeOrderInfo".into(), extend_2(request.clone(), query.clone()), Value::Undefined).await;
         } else {
             panic!(r###"NotSupported::new(self.get("id".into()) + Value::from(" fetchOrder() not support this market type"))"###);
         };
@@ -2314,8 +2315,8 @@ pub trait Digifinex : Exchange {
         //         }
         //     }
         //
-        let mut data: Value = self.safe_value(response.clone(), Value::from("data"));
-        let mut order: Value = if market_type.clone() == Value::from("swap") { data.clone() } else { self.safe_value(data.clone(), Value::from(0)) };
+        let mut data: Value = self.safe_value(response.clone(), Value::from("data"), Value::Undefined);
+        let mut order: Value = if market_type.clone() == Value::from("swap") { data.clone() } else { self.safe_value(data.clone(), Value::from(0), Value::Undefined) };
         if order.clone().is_nullish() {
             panic!(r###"OrderNotFound::new(self.get("id".into()) + Value::from(" fetchOrder() order ") + id.to_string() + Value::from(" not found"))"###);
         };
@@ -2340,7 +2341,7 @@ pub trait Digifinex : Exchange {
         } else {
             request.set("market".into(), market_type.clone());
             if since.clone().is_nonnullish() {
-                request.set("start_time".into(), self.parse_to_int(since.clone() / Value::from(1000)));
+                request.set("start_time".into(), self.parse_to_int(since.clone() / Value::from(1000), Value::Undefined));
             };
         };
         // default 3 days from now, max 30 days
@@ -2354,11 +2355,11 @@ pub trait Digifinex : Exchange {
         let mut response: Value = Value::Undefined;
         if margin_mode.clone().is_nonnullish() || market_type.clone() == Value::from("margin") {
             market_type = Value::from("margin");
-            response = self.private_spot_get_margin_mytrades(extend_2(request.clone(), query.clone())).await;
+            response = self.dispatch("privateSpotGetMarginMytrades".into(), extend_2(request.clone(), query.clone()), Value::Undefined).await;
         } else if market_type.clone() == Value::from("spot") {
-            response = self.private_spot_get_spot_mytrades(extend_2(request.clone(), query.clone())).await;
+            response = self.dispatch("privateSpotGetSpotMytrades".into(), extend_2(request.clone(), query.clone()), Value::Undefined).await;
         } else if market_type.clone() == Value::from("swap") {
-            response = self.private_swap_get_trade_history_trades(extend_2(request.clone(), query.clone())).await;
+            response = self.dispatch("privateSwapGetTradeHistoryTrades".into(), extend_2(request.clone(), query.clone()), Value::Undefined).await;
         } else {
             panic!(r###"NotSupported::new(self.get("id".into()) + Value::from(" fetchMyTrades() not support this market type"))"###);
         };
@@ -2438,15 +2439,15 @@ pub trait Digifinex : Exchange {
         //         "timestamp": 1650809432000
         //     }
         //
-        let mut r#type: Value = <Self as Digifinex>::parse_ledger_entry_type(self, self.safe_string_2(item.clone(), Value::from("type"), Value::from("finance_type")));
-        let mut currency_id: Value = self.safe_string_2(item.clone(), Value::from("currency_mark"), Value::from("currency"));
+        let mut r#type: Value = <Self as Digifinex>::parse_ledger_entry_type(self, self.safe_string_2(item.clone(), Value::from("type"), Value::from("finance_type"), Value::Undefined));
+        let mut currency_id: Value = self.safe_string_2(item.clone(), Value::from("currency_mark"), Value::from("currency"), Value::Undefined);
         let mut code: Value = self.safe_currency_code(currency_id.clone(), currency.clone());
         currency = self.safe_currency(currency_id.clone(), currency.clone());
         let mut amount: Value = self.safe_number_2(item.clone(), Value::from("num"), Value::from("change"), Value::Undefined);
         let mut after: Value = self.safe_number(item.clone(), Value::from("balance"), Value::Undefined);
-        let mut timestamp: Value = self.safe_timestamp(item.clone(), Value::from("time"));
+        let mut timestamp: Value = self.safe_timestamp(item.clone(), Value::from("time"), Value::Undefined);
         if timestamp.clone().is_nullish() {
-            timestamp = self.safe_integer(item.clone(), Value::from("timestamp"));
+            timestamp = self.safe_integer(item.clone(), Value::from("timestamp"), Value::Undefined);
         };
         return self.safe_ledger_entry(Value::Json(normalize(&Value::Json(json!({
             "info": item,
@@ -2481,7 +2482,7 @@ pub trait Digifinex : Exchange {
         } else {
             request.set("market".into(), market_type.clone());
             if since.clone().is_nonnullish() {
-                request.set("start_time".into(), self.parse_to_int(since.clone() / Value::from(1000)));
+                request.set("start_time".into(), self.parse_to_int(since.clone() / Value::from(1000), Value::Undefined));
             };
         };
         // default 3 days from now, max 30 days
@@ -2497,11 +2498,11 @@ pub trait Digifinex : Exchange {
         let mut response: Value = Value::Undefined;
         if margin_mode.clone().is_nonnullish() || market_type.clone() == Value::from("margin") {
             market_type = Value::from("margin");
-            response = self.private_spot_get_margin_financelog(extend_2(request.clone(), query.clone())).await;
+            response = self.dispatch("privateSpotGetMarginFinancelog".into(), extend_2(request.clone(), query.clone()), Value::Undefined).await;
         } else if market_type.clone() == Value::from("spot") {
-            response = self.private_spot_get_spot_financelog(extend_2(request.clone(), query.clone())).await;
+            response = self.dispatch("privateSpotGetSpotFinancelog".into(), extend_2(request.clone(), query.clone()), Value::Undefined).await;
         } else if market_type.clone() == Value::from("swap") {
-            response = self.private_swap_get_account_finance_record(extend_2(request.clone(), query.clone())).await;
+            response = self.dispatch("privateSwapGetAccountFinanceRecord".into(), extend_2(request.clone(), query.clone()), Value::Undefined).await;
         } else {
             panic!(r###"NotSupported::new(self.get("id".into()) + Value::from(" fetchLedger() not support this market type"))"###);
         };
@@ -2548,7 +2549,7 @@ pub trait Digifinex : Exchange {
         return self.parse_ledger(ledger.clone(), currency.clone(), since.clone(), limit.clone(), Value::Undefined);
     }
 
-    fn parse_deposit_address(&self, mut deposit_address: Value, mut currency: Value) -> Value {
+    fn parse_deposit_address(&mut self, mut deposit_address: Value, mut currency: Value) -> Value {
         //
         //     {
         //         "addressTag":"",
@@ -2557,9 +2558,9 @@ pub trait Digifinex : Exchange {
         //         "chain":"ERC20"
         //     }
         //
-        let mut address: Value = self.safe_string(deposit_address.clone(), Value::from("address"));
-        let mut tag: Value = self.safe_string(deposit_address.clone(), Value::from("addressTag"));
-        let mut currency_id: Value = self.safe_string_upper(deposit_address.clone(), Value::from("currency"));
+        let mut address: Value = self.safe_string(deposit_address.clone(), Value::from("address"), Value::Undefined);
+        let mut tag: Value = self.safe_string(deposit_address.clone(), Value::from("addressTag"), Value::Undefined);
+        let mut currency_id: Value = self.safe_string_upper(deposit_address.clone(), Value::from("currency"), Value::Undefined);
         let mut code: Value = self.safe_currency_code(currency_id.clone(), Value::Undefined);
         return Value::Json(normalize(&Value::Json(json!({
             "info": deposit_address,
@@ -2577,7 +2578,7 @@ pub trait Digifinex : Exchange {
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
             "currency": currency.get(Value::from("id"))
         }))).unwrap());
-        let mut response: Value = self.private_spot_get_deposit_address(extend_2(request.clone(), params.clone())).await;
+        let mut response: Value = self.dispatch("privateSpotGetDepositAddress".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         //
         //     {
         //         "data":[
@@ -2593,7 +2594,7 @@ pub trait Digifinex : Exchange {
         //
         let mut data: Value = self.safe_value(response.clone(), Value::from("data"), Value::new_array());
         let mut addresses: Value = self.parse_deposit_addresses(data.clone(), Value::Json(serde_json::Value::Array(vec![currency.get(Value::from("code")).into()])), Value::Undefined, Value::Undefined);
-        let mut address: Value = self.safe_value(addresses.clone(), code.clone());
+        let mut address: Value = self.safe_value(addresses.clone(), code.clone(), Value::Undefined);
         if address.clone().is_nullish() {
             panic!(r###"InvalidAddress::new(self.get("id".into()) + Value::from(" fetchDepositAddress() did not return an address for ") + code.clone() + Value::from(" - create the deposit address in the user settings on the exchange website first."))"###);
         };
@@ -2618,9 +2619,9 @@ pub trait Digifinex : Exchange {
         };
         let mut response: Value = Value::Undefined;
         if r#type.clone() == Value::from("deposit") {
-            response = self.private_spot_get_deposit_history(extend_2(request.clone(), params.clone())).await;
+            response = self.dispatch("privateSpotGetDepositHistory".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         } else {
-            response = self.private_spot_get_withdraw_history(extend_2(request.clone(), params.clone())).await;
+            response = self.dispatch("privateSpotGetWithdrawHistory".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         };
         //
         //     {
@@ -2696,15 +2697,15 @@ pub trait Digifinex : Exchange {
         //         "finished_date": "2020-04-20 13:23:00"
         //     }
         //
-        let mut id: Value = self.safe_string_2(transaction.clone(), Value::from("id"), Value::from("withdraw_id"));
-        let mut address: Value = self.safe_string(transaction.clone(), Value::from("address"));
-        let mut tag: Value = self.safe_string(transaction.clone(), Value::from("memo"));
-        let mut txid: Value = self.safe_string(transaction.clone(), Value::from("hash"));
-        let mut currency_id: Value = self.safe_string_upper(transaction.clone(), Value::from("currency"));
+        let mut id: Value = self.safe_string_2(transaction.clone(), Value::from("id"), Value::from("withdraw_id"), Value::Undefined);
+        let mut address: Value = self.safe_string(transaction.clone(), Value::from("address"), Value::Undefined);
+        let mut tag: Value = self.safe_string(transaction.clone(), Value::from("memo"), Value::Undefined);
+        let mut txid: Value = self.safe_string(transaction.clone(), Value::from("hash"), Value::Undefined);
+        let mut currency_id: Value = self.safe_string_upper(transaction.clone(), Value::from("currency"), Value::Undefined);
         let mut code: Value = self.safe_currency_code(currency_id.clone(), currency.clone());
-        let mut timestamp: Value = self.parse8601(self.safe_string(transaction.clone(), Value::from("created_date")));
-        let mut updated: Value = self.parse8601(self.safe_string(transaction.clone(), Value::from("finished_date")));
-        let mut status: Value = <Self as Digifinex>::parse_transaction_status(self, self.safe_string(transaction.clone(), Value::from("state")));
+        let mut timestamp: Value = self.parse8601(self.safe_string(transaction.clone(), Value::from("created_date"), Value::Undefined));
+        let mut updated: Value = self.parse8601(self.safe_string(transaction.clone(), Value::from("finished_date"), Value::Undefined));
+        let mut status: Value = <Self as Digifinex>::parse_transaction_status(self, self.safe_string(transaction.clone(), Value::from("state"), Value::Undefined));
         let mut amount: Value = self.safe_number(transaction.clone(), Value::from("amount"), Value::Undefined);
         let mut fee_cost: Value = self.safe_number(transaction.clone(), Value::from("fee"), Value::Undefined);
         let mut fee: Value = Value::Undefined;
@@ -2714,7 +2715,7 @@ pub trait Digifinex : Exchange {
                 "cost": fee_cost
             }))).unwrap());
         };
-        let mut network: Value = self.safe_string(transaction.clone(), Value::from("chain"));
+        let mut network: Value = self.safe_string(transaction.clone(), Value::from("chain"), Value::Undefined);
         return Value::Json(normalize(&Value::Json(json!({
             "info": transaction,
             "id": id,
@@ -2778,7 +2779,7 @@ pub trait Digifinex : Exchange {
         let mut from_account: Value = Value::Undefined;
         let mut to_account: Value = Value::Undefined;
         let mut data: Value = self.safe_dict(transfer.clone(), Value::from("data"), transfer.clone());
-        let mut r#type: Value = self.safe_integer(data.clone(), Value::from("type"));
+        let mut r#type: Value = self.safe_integer(data.clone(), Value::from("type"), Value::Undefined);
         if r#type.clone() == Value::from(1) {
             from_account = Value::from("spot");
             to_account = Value::from("swap");
@@ -2786,17 +2787,17 @@ pub trait Digifinex : Exchange {
             from_account = Value::from("swap");
             to_account = Value::from("spot");
         };
-        let mut timestamp: Value = self.safe_integer(transfer.clone(), Value::from("timestamp"));
+        let mut timestamp: Value = self.safe_integer(transfer.clone(), Value::from("timestamp"), Value::Undefined);
         return Value::Json(normalize(&Value::Json(json!({
             "info": transfer,
-            "id": self.safe_string(transfer.clone(), Value::from("transfer_id")),
+            "id": self.safe_string(transfer.clone(), Value::from("transfer_id"), Value::Undefined),
             "timestamp": timestamp,
             "datetime": self.iso8601(timestamp.clone()),
-            "currency": self.safe_currency_code(self.safe_string(data.clone(), Value::from("currency")), currency.clone()),
+            "currency": self.safe_currency_code(self.safe_string(data.clone(), Value::from("currency"), Value::Undefined), currency.clone()),
             "amount": self.safe_number_2(data.clone(), Value::from("amount"), Value::from("transfer_amount"), Value::Undefined),
             "fromAccount": from_account,
             "toAccount": to_account,
-            "status": <Self as Digifinex>::parse_transfer_status(self, self.safe_string(transfer.clone(), Value::from("code")))
+            "status": <Self as Digifinex>::parse_transfer_status(self, self.safe_string(transfer.clone(), Value::from("code"), Value::Undefined))
         }))).unwrap());
     }
 
@@ -2831,7 +2832,7 @@ pub trait Digifinex : Exchange {
             //         }
             //     }
             //
-            response = self.private_swap_post_account_transfer(extend_2(request.clone(), params.clone())).await;
+            response = self.dispatch("privateSwapPostAccountTransfer".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         } else {
             request.set("currency_mark".into(), currency_id.clone());
             request.set("num".into(), amount_string.clone());
@@ -2864,7 +2865,7 @@ pub trait Digifinex : Exchange {
         if tag.clone().is_nonnullish() {
             request.set("memo".into(), tag.clone());
         };
-        let mut response: Value = self.private_spot_post_withdraw_new(extend_2(request.clone(), params.clone())).await;
+        let mut response: Value = self.dispatch("privateSpotPostWithdrawNew".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         //
         //     {
         //         "code": 200,
@@ -2883,7 +2884,7 @@ pub trait Digifinex : Exchange {
             market = self.market(symbol.clone());
             request.set("symbol".into(), market.get(Value::from("id")));
         };
-        let mut response: Value = self.private_spot_get_margin_positions(extend_2(request.clone(), params.clone())).await;
+        let mut response: Value = self.dispatch("privateSpotGetMarginPositions".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         //
         //     {
         //         "margin": "45.71246418952618",
@@ -2905,7 +2906,7 @@ pub trait Digifinex : Exchange {
         //         "unrealized_pnl": "-0.049158102631998504"
         //     }
         //
-        let mut rows: Value = self.safe_value(response.clone(), Value::from("positions"));
+        let mut rows: Value = self.safe_value(response.clone(), Value::from("positions"), Value::Undefined);
         let mut interest: Value = self.parse_borrow_interests(rows.clone(), market.clone());
         return self.filter_by_currency_since_limit(interest.clone(), code.clone(), since.clone(), limit.clone(), Value::Undefined);
     }
@@ -2924,9 +2925,9 @@ pub trait Digifinex : Exchange {
         //         "leverage_ratio": 3
         //     }
         //
-        let mut market_id: Value = self.safe_string(info.clone(), Value::from("symbol"));
-        let mut amount_string: Value = self.safe_string(info.clone(), Value::from("amount"));
-        let mut leverage_string: Value = self.safe_string(info.clone(), Value::from("leverage_ratio"));
+        let mut market_id: Value = self.safe_string(info.clone(), Value::from("symbol"), Value::Undefined);
+        let mut amount_string: Value = self.safe_string(info.clone(), Value::from("amount"), Value::Undefined);
+        let mut leverage_string: Value = self.safe_string(info.clone(), Value::from("leverage_ratio"), Value::Undefined);
         let mut amount_invested: Value = Precise::string_div(amount_string.clone(), leverage_string.clone(), Value::Undefined);
         let mut amount_borrowed: Value = Precise::string_sub(amount_string.clone(), amount_invested.clone());
         let mut currency: Value = if market.clone().is_nullish() { Value::Undefined } else { market.get(Value::from("base")) };
@@ -2948,7 +2949,7 @@ pub trait Digifinex : Exchange {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
         let mut request: Value = Value::new_object();
-        let mut response: Value = self.private_spot_get_margin_assets(extend_2(request.clone(), params.clone())).await;
+        let mut response: Value = self.dispatch("privateSpotGetMarginAssets".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         //
         //     {
         //         "list": [
@@ -2971,7 +2972,7 @@ pub trait Digifinex : Exchange {
         let mut i: usize = 0;
         while i < data.len() {
             let mut entry: Value = data.get(i.into());
-            if self.safe_string(entry.clone(), Value::from("currency")) == code.clone() {
+            if self.safe_string(entry.clone(), Value::from("currency"), Value::Undefined) == code.clone() {
                 result = entry.clone();
             };
             i += 1;
@@ -2983,7 +2984,7 @@ pub trait Digifinex : Exchange {
     async fn fetch_cross_borrow_rates(&mut self, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        let mut response: Value = self.private_spot_get_margin_assets(params.clone()).await;
+        let mut response: Value = self.dispatch("privateSpotGetMarginAssets".into(), params.clone(), Value::Undefined).await;
         //
         //     {
         //         "list": [
@@ -3015,7 +3016,7 @@ pub trait Digifinex : Exchange {
         //     }
         //
         let mut timestamp: Value = self.milliseconds();
-        let mut currency_id: Value = self.safe_string(info.clone(), Value::from("currency"));
+        let mut currency_id: Value = self.safe_string(info.clone(), Value::from("currency"), Value::Undefined);
         return Value::Json(normalize(&Value::Json(json!({
             "currency": self.safe_currency_code(currency_id.clone(), currency.clone()),
             "rate": 0.001,
@@ -3039,7 +3040,7 @@ pub trait Digifinex : Exchange {
         let mut i: usize = 0;
         while i < info.len() {
             let mut item: Value = info.get(i.into());
-            let mut currency: Value = self.safe_string(item.clone(), code_key.clone());
+            let mut currency: Value = self.safe_string(item.clone(), code_key.clone(), Value::Undefined);
             let mut code: Value = self.safe_currency_code(currency.clone(), Value::Undefined);
             let mut borrow_rate: Value = <Self as Digifinex>::parse_borrow_rate(self, item.clone(), Value::Undefined);
             result.set(code.clone(), borrow_rate.clone());
@@ -3058,7 +3059,7 @@ pub trait Digifinex : Exchange {
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
             "instrument_id": market.get(Value::from("id"))
         }))).unwrap());
-        let mut response: Value = self.public_swap_get_public_funding_rate(extend_2(request.clone(), params.clone())).await;
+        let mut response: Value = self.dispatch("publicSwapGetPublicFundingRate".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         //
         //     {
         //         "code": 0,
@@ -3090,11 +3091,11 @@ pub trait Digifinex : Exchange {
         //         "next_funding_time": 1662739200000
         //     }
         //
-        let mut market_id: Value = self.safe_string(contract.clone(), Value::from("instrument_id"));
-        let mut timestamp: Value = self.safe_integer(contract.clone(), Value::from("funding_time"));
-        let mut next_timestamp: Value = self.safe_integer(contract.clone(), Value::from("next_funding_time"));
-        let mut funding_time_string: Value = self.safe_string(contract.clone(), Value::from("funding_time"));
-        let mut next_funding_time_string: Value = self.safe_string(contract.clone(), Value::from("next_funding_time"));
+        let mut market_id: Value = self.safe_string(contract.clone(), Value::from("instrument_id"), Value::Undefined);
+        let mut timestamp: Value = self.safe_integer(contract.clone(), Value::from("funding_time"), Value::Undefined);
+        let mut next_timestamp: Value = self.safe_integer(contract.clone(), Value::from("next_funding_time"), Value::Undefined);
+        let mut funding_time_string: Value = self.safe_string(contract.clone(), Value::from("funding_time"), Value::Undefined);
+        let mut next_funding_time_string: Value = self.safe_string(contract.clone(), Value::from("next_funding_time"), Value::Undefined);
         let mut milliseconds_interval: Value = Precise::string_sub(next_funding_time_string.clone(), funding_time_string.clone());
         return Value::Json(normalize(&Value::Json(json!({
             "info": contract,
@@ -3148,7 +3149,7 @@ pub trait Digifinex : Exchange {
         if limit.clone().is_nonnullish() {
             request.set("limit".into(), limit.clone());
         };
-        let mut response: Value = self.public_swap_get_public_funding_rate_history(extend_2(request.clone(), params.clone())).await;
+        let mut response: Value = self.dispatch("publicSwapGetPublicFundingRateHistory".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         //
         //     {
         //         "code": 0,
@@ -3170,9 +3171,9 @@ pub trait Digifinex : Exchange {
         let mut i: usize = 0;
         while i < result.len() {
             let mut entry: Value = result.get(i.into());
-            let mut market_id: Value = self.safe_string(data.clone(), Value::from("instrument_id"));
+            let mut market_id: Value = self.safe_string(data.clone(), Value::from("instrument_id"), Value::Undefined);
             let mut symbol_inner: Value = self.safe_symbol(market_id.clone(), Value::Undefined, Value::Undefined, Value::Undefined);
-            let mut timestamp: Value = self.safe_integer(entry.clone(), Value::from("time"));
+            let mut timestamp: Value = self.safe_integer(entry.clone(), Value::from("time"), Value::Undefined);
             rates.push(Value::Json(normalize(&Value::Json(json!({
                 "info": entry,
                 "symbol": symbol_inner,
@@ -3182,7 +3183,7 @@ pub trait Digifinex : Exchange {
             }))).unwrap()));
             i += 1;
         };
-        let mut sorted: Value = self.sort_by(rates.clone(), Value::from("timestamp"));
+        let mut sorted: Value = self.sort_by(rates.clone(), Value::from("timestamp"), Value::Undefined, Value::Undefined);
         return self.filter_by_symbol_since_limit(sorted.clone(), symbol.clone(), since.clone(), limit.clone(), Value::Undefined);
     }
 
@@ -3196,7 +3197,7 @@ pub trait Digifinex : Exchange {
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
             "instrument_id": market.get(Value::from("id"))
         }))).unwrap());
-        let mut response: Value = self.private_swap_get_account_trading_fee_rate(extend_2(request.clone(), params.clone())).await;
+        let mut response: Value = self.dispatch("privateSwapGetAccountTradingFeeRate".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         //
         //     {
         //         "code": 0,
@@ -3219,7 +3220,7 @@ pub trait Digifinex : Exchange {
         //         "maker_fee_rate": "0.0003"
         //     }
         //
-        let mut market_id: Value = self.safe_string(fee.clone(), Value::from("instrument_id"));
+        let mut market_id: Value = self.safe_string(fee.clone(), Value::from("instrument_id"), Value::Undefined);
         let mut symbol: Value = self.safe_symbol(market_id.clone(), market.clone(), Value::Undefined, Value::Undefined);
         return Value::Json(normalize(&Value::Json(json!({
             "info": fee,
@@ -3262,9 +3263,9 @@ pub trait Digifinex : Exchange {
         };
         let mut response: Value = Value::Undefined;
         if market_type.clone() == Value::from("spot") || market_type.clone() == Value::from("margin") {
-            response = self.private_spot_get_margin_positions(extend_2(request.clone(), query.clone())).await;
+            response = self.dispatch("privateSpotGetMarginPositions".into(), extend_2(request.clone(), query.clone()), Value::Undefined).await;
         } else if market_type.clone() == Value::from("swap") {
-            response = self.private_swap_get_account_positions(extend_2(request.clone(), query.clone())).await;
+            response = self.dispatch("privateSwapGetAccountPositions".into(), extend_2(request.clone(), query.clone()), Value::Undefined).await;
         } else {
             panic!(r###"NotSupported::new(self.get("id".into()) + Value::from(" fetchPositions() not support this market type"))"###);
         };
@@ -3347,9 +3348,9 @@ pub trait Digifinex : Exchange {
         request.set(market_id_request.clone(), market.get(Value::from("id")));
         let mut response: Value = Value::Undefined;
         if market_type.clone() == Value::from("spot") || market_type.clone() == Value::from("margin") {
-            response = self.private_spot_get_margin_positions(extend_2(request.clone(), query.clone())).await;
+            response = self.dispatch("privateSpotGetMarginPositions".into(), extend_2(request.clone(), query.clone()), Value::Undefined).await;
         } else if market_type.clone() == Value::from("swap") {
-            response = self.private_swap_get_account_positions(extend_2(request.clone(), query.clone())).await;
+            response = self.dispatch("privateSwapGetAccountPositions".into(), extend_2(request.clone(), query.clone()), Value::Undefined).await;
         } else {
             panic!(r###"NotSupported::new(self.get("id".into()) + Value::from(" fetchPosition() not support this market type"))"###);
         };
@@ -3456,17 +3457,17 @@ pub trait Digifinex : Exchange {
         //         "leverage_ratio": 5
         //     }
         //
-        let mut market_id: Value = self.safe_string_2(position.clone(), Value::from("instrument_id"), Value::from("symbol"));
+        let mut market_id: Value = self.safe_string_2(position.clone(), Value::from("instrument_id"), Value::from("symbol"), Value::Undefined);
         market = self.safe_market(market_id.clone(), market.clone(), Value::Undefined, Value::Undefined);
         let mut symbol: Value = market.get(Value::from("symbol"));
-        let mut margin_mode: Value = self.safe_string(position.clone(), Value::from("margin_mode"));
+        let mut margin_mode: Value = self.safe_string(position.clone(), Value::from("margin_mode"), Value::Undefined);
         if margin_mode.clone().is_nonnullish() {
             margin_mode = if margin_mode.clone() == Value::from("crossed") { Value::from("cross") } else { Value::from("isolated") };
         } else {
             margin_mode = Value::from("crossed");
         };
-        let mut timestamp: Value = self.safe_integer(position.clone(), Value::from("timestamp"));
-        let mut side: Value = self.safe_string(position.clone(), Value::from("side"));
+        let mut timestamp: Value = self.safe_integer(position.clone(), Value::from("timestamp"), Value::Undefined);
+        let mut side: Value = self.safe_string(position.clone(), Value::from("side"), Value::Undefined);
         if side.clone() == Value::from("go_long") {
             side = Value::from("long");
         } else if side.clone() == Value::from("go_short") {
@@ -3518,7 +3519,7 @@ pub trait Digifinex : Exchange {
             "instrument_id": market.get(Value::from("id")),
             "leverage": leverage
         }))).unwrap());
-        let mut default_margin_mode: Value = self.safe_string_2(self.get("options".into()), Value::from("marginMode"), Value::from("defaultMarginMode"));
+        let mut default_margin_mode: Value = self.safe_string_2(self.get("options".into()), Value::from("marginMode"), Value::from("defaultMarginMode"), Value::Undefined);
         let mut margin_mode: Value = self.safe_string_lower_2(params.clone(), Value::from("marginMode"), Value::from("defaultMarginMode"), default_margin_mode.clone());
         if margin_mode.clone().is_nonnullish() {
             margin_mode = if margin_mode.clone() == Value::from("cross") { Value::from("crossed") } else { Value::from("isolated") };
@@ -3526,7 +3527,7 @@ pub trait Digifinex : Exchange {
             params = self.omit(params.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("marginMode").into(), Value::from("defaultMarginMode").into()])));
         };
         if margin_mode.clone() == Value::from("isolated") {
-            let mut side: Value = self.safe_string(params.clone(), Value::from("side"));
+            let mut side: Value = self.safe_string(params.clone(), Value::from("side"), Value::Undefined);
             if side.clone().is_nonnullish() {
                 request.set("side".into(), side.clone());
                 params = self.omit(params.clone(), Value::from("side"));
@@ -3534,7 +3535,7 @@ pub trait Digifinex : Exchange {
                 self.check_required_argument(Value::from("setLeverage"), side.clone(), Value::from("side"), Value::Json(serde_json::Value::Array(vec![Value::from("long").into(), Value::from("short").into()])));
             };
         };
-        return self.private_swap_post_account_leverage(extend_2(request.clone(), params.clone())).await;
+        return self.dispatch("privateSwapPostAccountLeverage".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
     }
 
     async fn fetch_transfers(&mut self, mut code: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
@@ -3553,7 +3554,7 @@ pub trait Digifinex : Exchange {
             request.set("limit".into(), limit.clone());
         };
         // default 20 max 100
-        let mut response: Value = self.private_swap_get_account_transfer_record(extend_2(request.clone(), params.clone())).await;
+        let mut response: Value = self.dispatch("privateSwapGetAccountTransferRecord".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         //
         //     {
         //         "code": 0,
@@ -3576,7 +3577,7 @@ pub trait Digifinex : Exchange {
     async fn fetch_leverage_tiers(&mut self, mut symbols: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        let mut response: Value = self.public_swap_get_public_instruments(params.clone()).await;
+        let mut response: Value = self.dispatch("publicSwapGetPublicInstruments".into(), params.clone(), Value::Undefined).await;
         //
         //     {
         //         "code": 0,
@@ -3621,7 +3622,7 @@ pub trait Digifinex : Exchange {
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
             "instrument_id": market.get(Value::from("id"))
         }))).unwrap());
-        let mut response: Value = self.public_swap_get_public_instrument(extend_2(request.clone(), params.clone())).await;
+        let mut response: Value = self.dispatch("publicSwapGetPublicInstrument".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         //
         //     {
         //         "code": 0,
@@ -3683,7 +3684,7 @@ pub trait Digifinex : Exchange {
         let mut i: usize = 0;
         while i < brackets.len() {
             let mut tier: Value = brackets.get(i.into());
-            let mut market_id: Value = self.safe_string(info.clone(), Value::from("instrument_id"));
+            let mut market_id: Value = self.safe_string(info.clone(), Value::from("instrument_id"), Value::Undefined);
             market = self.safe_market(market_id.clone(), market.clone(), Value::Undefined, Value::Undefined);
             tiers.push(Value::Json(normalize(&Value::Json(json!({
                 "tier": self.sum(Value::from(i), Value::from(1)),
@@ -3710,7 +3711,7 @@ pub trait Digifinex : Exchange {
     /// * `[params]` {object} - extra parameters specific to the exchange API endpoint
     fn handle_margin_mode_and_params(&mut self, mut method_name: Value, mut params: Value, mut default_value: Value) -> Value {
         params = params.or_default(Value::new_object());
-        let mut default_type: Value = self.safe_string(self.get("options".into()), Value::from("defaultType"));
+        let mut default_type: Value = self.safe_string(self.get("options".into()), Value::from("defaultType"), Value::Undefined);
         let mut is_margin: Value = self.safe_bool(params.clone(), Value::from("margin"), false.into());
         let mut margin_mode: Value = Value::Undefined;
         (margin_mode, params) = shift_2(Exchange::handle_margin_mode_and_params(self, method_name.clone(), params.clone(), default_value.clone()));
@@ -3763,7 +3764,7 @@ pub trait Digifinex : Exchange {
         return <Self as Digifinex>::parse_deposit_withdraw_fees(self, data.clone(), codes.clone(), Value::Undefined);
     }
 
-    fn parse_deposit_withdraw_fees(&self, mut response: Value, mut codes: Value, mut currency_id_key: Value) -> Value {
+    fn parse_deposit_withdraw_fees(&mut self, mut response: Value, mut codes: Value, mut currency_id_key: Value) -> Value {
         //
         //     [
         //         {
@@ -3795,18 +3796,18 @@ pub trait Digifinex : Exchange {
         let mut i: usize = 0;
         while i < response.len() {
             let mut entry: Value = response.get(i.into());
-            let mut currency_id: Value = self.safe_string(entry.clone(), Value::from("currency"));
+            let mut currency_id: Value = self.safe_string(entry.clone(), Value::from("currency"), Value::Undefined);
             let mut code: Value = self.safe_currency_code(currency_id.clone(), Value::Undefined);
             if codes.clone().is_nullish() || self.in_array(code.clone(), codes.clone()).is_truthy() {
-                let mut deposit_withdraw_fee: Value = self.safe_value(deposit_withdraw_fees.clone(), code.clone());
+                let mut deposit_withdraw_fee: Value = self.safe_value(deposit_withdraw_fees.clone(), code.clone(), Value::Undefined);
                 if deposit_withdraw_fee.clone().is_nullish() {
                     deposit_withdraw_fees.set(code.clone(), self.deposit_withdraw_fee(Value::new_object()));
                     deposit_withdraw_fees.get(code.clone()).set("info".into(), Value::new_array());
                 };
                 let mut deposit_withdraw_info: Value = deposit_withdraw_fees.get(code.clone()).get(Value::from("info"));
                 deposit_withdraw_info.push(entry.clone());
-                let mut network_id: Value = self.safe_string(entry.clone(), Value::from("chain"));
-                let mut withdraw_fee: Value = self.safe_value(entry.clone(), Value::from("min_withdraw_fee"));
+                let mut network_id: Value = self.safe_string(entry.clone(), Value::from("chain"), Value::Undefined);
+                let mut withdraw_fee: Value = self.safe_value(entry.clone(), Value::from("min_withdraw_fee"), Value::Undefined);
                 let mut withdraw_result: Value = Value::Json(normalize(&Value::Json(json!({
                     "fee": withdraw_fee,
                     "percentage": if withdraw_fee.clone().is_nonnullish() { false.into() } else { Value::Undefined }
@@ -3828,7 +3829,7 @@ pub trait Digifinex : Exchange {
             };
             i += 1;
         };
-        let mut deposit_withdraw_codes: Value = Object::keys(deposit_withdraw_fees.clone());
+        let mut deposit_withdraw_codes: Value = deposit_withdraw_fees.clone().keys();
         let mut i: usize = 0;
         while i < deposit_withdraw_codes.len() {
             let mut code: Value = deposit_withdraw_codes.get(i.into());
@@ -3841,14 +3842,14 @@ pub trait Digifinex : Exchange {
 
     async fn add_margin(&mut self, mut symbol: Value, mut amount: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
-        let mut side: Value = self.safe_string(params.clone(), Value::from("side"));
+        let mut side: Value = self.safe_string(params.clone(), Value::from("side"), Value::Undefined);
         self.check_required_argument(Value::from("addMargin"), side.clone(), Value::from("side"), Value::Json(serde_json::Value::Array(vec![Value::from("long").into(), Value::from("short").into()])));
         return <Self as Digifinex>::modify_margin_helper(self, symbol.clone(), amount.clone(), Value::from(1), params.clone()).await;
     }
 
     async fn reduce_margin(&mut self, mut symbol: Value, mut amount: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
-        let mut side: Value = self.safe_string(params.clone(), Value::from("side"));
+        let mut side: Value = self.safe_string(params.clone(), Value::from("side"), Value::Undefined);
         self.check_required_argument(Value::from("reduceMargin"), side.clone(), Value::from("side"), Value::Json(serde_json::Value::Array(vec![Value::from("long").into(), Value::from("short").into()])));
         return <Self as Digifinex>::modify_margin_helper(self, symbol.clone(), amount.clone(), Value::from(2), params.clone()).await;
     }
@@ -3856,7 +3857,7 @@ pub trait Digifinex : Exchange {
     async fn modify_margin_helper(&mut self, mut symbol: Value, mut amount: Value, mut r#type: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        let mut side: Value = self.safe_string(params.clone(), Value::from("side"));
+        let mut side: Value = self.safe_string(params.clone(), Value::from("side"), Value::Undefined);
         let mut market: Value = self.market(symbol.clone());
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
             "instrument_id": market.get(Value::from("id")),
@@ -3864,7 +3865,7 @@ pub trait Digifinex : Exchange {
             "type": r#type,
             "side": side
         }))).unwrap());
-        let mut response: Value = self.private_swap_post_account_position_margin(extend_2(request.clone(), params.clone())).await;
+        let mut response: Value = self.dispatch("privateSwapPostAccountPositionMargin".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         //
         //     {
         //         "code": 0,
@@ -3876,7 +3877,7 @@ pub trait Digifinex : Exchange {
         //         }
         //     }
         //
-        let mut code: Value = self.safe_integer(response.clone(), Value::from("code"));
+        let mut code: Value = self.safe_integer(response.clone(), Value::from("code"), Value::Undefined);
         let mut status: Value = if code.clone() == Value::from(0) { Value::from("ok") } else { Value::from("failed") };
         let mut data: Value = self.safe_value(response.clone(), Value::from("data"), Value::new_object());
         return extend_2(<Self as Digifinex>::parse_margin_modification(self, data.clone(), market.clone()), Value::Json(normalize(&Value::Json(json!({
@@ -3893,8 +3894,8 @@ pub trait Digifinex : Exchange {
         //         "amount": "3.6834"
         //     }
         //
-        let mut market_id: Value = self.safe_string(data.clone(), Value::from("instrument_id"));
-        let mut raw_type: Value = self.safe_integer(data.clone(), Value::from("type"));
+        let mut market_id: Value = self.safe_string(data.clone(), Value::from("instrument_id"), Value::Undefined);
+        let mut raw_type: Value = self.safe_integer(data.clone(), Value::from("type"), Value::Undefined);
         return Value::Json(normalize(&Value::Json(json!({
             "info": data,
             "symbol": self.safe_symbol(market_id.clone(), market.clone(), Value::Undefined, Value::from("swap")),
@@ -3925,7 +3926,7 @@ pub trait Digifinex : Exchange {
         if since.clone().is_nonnullish() {
             request.set("start_timestamp".into(), since.clone());
         };
-        let mut response: Value = self.private_swap_get_account_funding_fee(extend_2(request.clone(), params.clone())).await;
+        let mut response: Value = self.dispatch("privateSwapGetAccountFundingFee".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         //
         //     {
         //         "code": 0,
@@ -3952,9 +3953,9 @@ pub trait Digifinex : Exchange {
         //         "timestamp": 1698768009440
         //     }
         //
-        let mut market_id: Value = self.safe_string(income.clone(), Value::from("instrument_id"));
-        let mut currency_id: Value = self.safe_string(income.clone(), Value::from("currency"));
-        let mut timestamp: Value = self.safe_integer(income.clone(), Value::from("timestamp"));
+        let mut market_id: Value = self.safe_string(income.clone(), Value::from("instrument_id"), Value::Undefined);
+        let mut currency_id: Value = self.safe_string(income.clone(), Value::from("currency"), Value::Undefined);
+        let mut timestamp: Value = self.safe_integer(income.clone(), Value::from("timestamp"), Value::Undefined);
         return Value::Json(normalize(&Value::Json(json!({
             "info": income,
             "symbol": self.safe_symbol(market_id.clone(), market.clone(), Value::Undefined, Value::from("swap")),
@@ -3966,108 +3967,11 @@ pub trait Digifinex : Exchange {
         }))).unwrap());
     }
 
-    async fn set_margin_mode(&mut self, mut margin_mode: Value, mut symbol: Value, mut params: Value) -> Value {
-        params = params.or_default(Value::new_object());
-        if symbol.clone().is_nullish() {
-            panic!(r###"ArgumentsRequired::new(self.get("id".into()) + Value::from(" setMarginMode() requires a symbol argument"))"###);
-        };
-        self.load_markets(Value::Undefined, Value::Undefined).await;
-        let mut market: Value = self.market(symbol.clone());
-        margin_mode = margin_mode.to_lower_case();
-        if margin_mode.clone() == Value::from("cross") {
-            margin_mode = Value::from("crossed");
-        };
-        let mut request: Value = Value::Json(normalize(&Value::Json(json!({
-            "instrument_id": market.get(Value::from("id")),
-            "margin_mode": margin_mode
-        }))).unwrap());
-        return self.private_swap_post_account_position_mode(extend_2(request.clone(), params.clone())).await;
-    }
+    
 
-    fn sign(&mut self, mut path: Value, mut api: Value, mut method: Value, mut params: Value, mut headers: Value, mut body: Value) -> Value {
-        api = api.or_default(Value::new_array());
-        method = method.or_default(Value::from("GET"));
-        params = params.or_default(Value::new_object());
-        let mut signed: Value = (api.get(Value::from(0)) == Value::from("private")).into();
-        let mut endpoint: Value = api.get(Value::from(1));
-        let mut path_part: Value = if endpoint.clone() == Value::from("spot") { Value::from("/v3") } else { Value::from("/swap/v2") };
-        let mut request: Value = Value::from("/") + self.implode_params(path.clone(), params.clone());
-        let mut payload: Value = path_part.clone() + request.clone();
-        let mut url: Value = self.get("urls".into()).get(Value::from("api")).get(Value::from("rest")) + payload.clone();
-        let mut query: Value = self.omit(params.clone(), self.extract_params(path.clone()));
-        let mut urlencoded: Value = Value::Undefined;
-        if signed.is_truthy() && path_part.clone() == Value::from("/swap/v2") && method.clone() == Value::from("POST") {
-            urlencoded = JSON.into()::stringify(params.clone());
-        } else {
-            urlencoded = self.urlencode(self.keysort(query.clone()));
-        };
-        if signed.is_truthy() {
-            let mut auth: Value = Value::Undefined;
-            let mut nonce: Value = Value::Undefined;
-            if path_part.clone() == Value::from("/swap/v2") {
-                nonce = self.milliseconds().to_string();
-                auth = nonce.clone() + method.clone() + payload.clone();
-                if method.clone() == Value::from("GET") {
-                    if urlencoded.is_truthy() {
-                        auth = auth +  Value::from("?") + urlencoded.clone();
-                    };
-                } else if method.clone() == Value::from("POST") {
-                    auth = auth +  urlencoded.clone();
-                };
-            } else {
-                nonce = self.nonce().to_string();
-                auth = urlencoded.clone();
-            };
-            let mut signature: Value = self.hmac(self.encode(auth.clone()), self.encode(self.get("secret".into())), sha256.clone());
-            if method.clone() == Value::from("GET") {
-                if urlencoded.is_truthy() {
-                    url = url +  Value::from("?") + urlencoded.clone();
-                };
-            } else if method.clone() == Value::from("POST") {
-                headers = Value::Json(normalize(&Value::Json(json!({
-                    "Content-Type": "application/x-www-form-urlencoded"
-                }))).unwrap());
-                if urlencoded.is_truthy() {
-                    body = urlencoded.clone();
-                };
-            };
-            headers = Value::Json(normalize(&Value::Json(json!({
-                "ACCESS-KEY": self.get("apiKey".into()),
-                "ACCESS-SIGN": signature,
-                "ACCESS-TIMESTAMP": nonce
-            }))).unwrap());
-        } else {
-            if urlencoded.is_truthy() {
-                url = url +  Value::from("?") + urlencoded.clone();
-            };
-        };
-        return Value::Json(normalize(&Value::Json(json!({
-            "url": url,
-            "method": method,
-            "body": body,
-            "headers": headers
-        }))).unwrap());
-    }
+    
 
-    fn handle_errors(&mut self, mut status_code: Value, mut status_text: Value, mut url: Value, mut method: Value, mut response_headers: Value, mut response_body: Value, mut response: Value, mut request_headers: Value, mut request_body: Value) -> Value {
-        if !response.is_truthy() {
-            return Value::Undefined;
-        };
-        // fall back to default error handler
-        let mut code: Value = self.safe_string(response.clone(), Value::from("code"));
-        if code.clone() == Value::from("0") || code.clone() == Value::from("200") {
-            return Value::Undefined;
-        };
-        // no error
-        let mut feedback: Value = self.get("id".into()) + Value::from(" ") + response_body.clone();
-        if code.clone().is_nullish() {
-            panic!(r###"BadResponse::new(feedback)"###);
-        };
-        let mut unknown_error: Value = Value::Json(serde_json::Value::Array(vec![ExchangeError.clone().into(), feedback.clone().into()]));
-        let (mut ExceptionClass, mut message) = shift_2(self.safe_value(self.get("exceptions".into()).get(Value::from("exact")), code.clone(), unknown_error.clone()));
-        panic!(r###"ExceptionClass::new(message)"###);
-        Value::Undefined
-    }
+    
 
     
     async fn dispatch(&mut self, method: Value, params: Value, context: Value) -> Value {
@@ -4198,8 +4102,8 @@ impl ValueTrait for DigifinexImpl {
     fn push(&mut self, value: Value) { self.0.push(value) }
     fn split(&self, separator: Value) -> Value { self.0.split(separator) }
     fn contains_key(&self, key: Value) -> bool { self.0.contains_key(key) }
-    fn keys(&self) -> Vec<Value> { self.0.keys() }
-    fn values(&self) -> Vec<Value> { self.0.values() }
+    fn keys(&self) -> Value { self.0.keys() }
+    fn values(&self) -> Value { self.0.values() }
     fn to_array(&self, x: Value) -> Value { self.0.to_array(x) }
     fn index_of(&self, x: Value) -> Value { self.0.index_of(x) }
     fn join(&self, glue: Value) -> Value { self.0.join(glue) }

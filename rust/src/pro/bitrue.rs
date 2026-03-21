@@ -11,7 +11,16 @@ use async_trait::async_trait;
 use std::str::FromStr;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, JSON, Array, Object, Math, parse_int, shift_2, extend_2, normalize};
+use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, BoolExt, JSON, Array, Object, Math, Promise, parse_int, shift_2, extend_2, normalize};
+// Crypto hash identifiers
+fn sha256() -> Value { Value::from("sha256") }
+fn sha384() -> Value { Value::from("sha384") }
+fn sha512() -> Value { Value::from("sha512") }
+fn md5() -> Value { Value::from("md5") }
+fn ed25519() -> Value { Value::from("ed25519") }
+fn rsa(msg: Value, secret: Value, _hash: Value) -> Value { msg }
+fn eddsa(msg: Value, secret: Value, _curve: Value) -> Value { msg }
+fn secp256k1() -> Value { Value::from("secp256k1") }
 
 use crate::exchange::{PRECISE_BASE, TRUNCATE, ROUND, ROUND_UP, ROUND_DOWN};
 use crate::exchange::{DECIMAL_PLACES, SIGNIFICANT_DIGITS, TICK_SIZE, NO_PADDING, PAD_WITH_ZERO};
@@ -800,7 +809,7 @@ pub trait Bitrue : Exchange {
 
     async fn watch_balance(&mut self, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
-        let mut url: Value = <Self as Bitrue>::authenticate(self, Value::Undefined).await;
+        let mut url: Value = <Self as Bitrue>::authenticate(self).await;
         let mut message_hash: Value = Value::from("balance");
         let mut message: Value = Value::Json(normalize(&Value::Json(json!({
             "event": "sub",
@@ -886,11 +895,11 @@ pub trait Bitrue : Exchange {
         let mut i: usize = 0;
         while i < balances.len() {
             let mut balance: Value = balances.get(i.into());
-            let mut currency_id: Value = self.safe_string(balance.clone(), Value::from("a"));
+            let mut currency_id: Value = self.safe_string(balance.clone(), Value::from("a"), Value::Undefined);
             let mut code: Value = self.safe_currency_code(currency_id.clone(), Value::Undefined);
             let mut account: Value = self.account();
-            let mut free: Value = self.safe_string(balance.clone(), Value::from("F"));
-            let mut used: Value = self.safe_string(balance.clone(), Value::from("L"));
+            let mut free: Value = self.safe_string(balance.clone(), Value::from("F"), Value::Undefined);
+            let mut used: Value = self.safe_string(balance.clone(), Value::from("L"), Value::Undefined);
             let mut balance_update_time: Value = self.safe_integer(balance.clone(), Value::from("T"), Value::from(0));
             let mut lock_balance_update_time: Value = self.safe_integer(balance.clone(), Value::from("t"), Value::from(0));
             let mut update_free: Value = (balance_update_time.clone() != Value::from(0)).into();
@@ -917,7 +926,7 @@ pub trait Bitrue : Exchange {
             let mut market: Value = self.market(symbol.clone());
             symbol = market.get(Value::from("symbol"));
         };
-        let mut url: Value = <Self as Bitrue>::authenticate(self, Value::Undefined).await;
+        let mut url: Value = <Self as Bitrue>::authenticate(self).await;
         let mut message_hash: Value = Value::from("orders");
         let mut message: Value = Value::Json(normalize(&Value::Json(json!({
             "event": "sub",
@@ -993,33 +1002,33 @@ pub trait Bitrue : Exchange {
         //        "Y": "0"
         //    }
         //
-        let mut timestamp: Value = self.safe_integer(order.clone(), Value::from("E"));
-        let mut market_id: Value = self.safe_string_upper(order.clone(), Value::from("s"));
-        let mut type_id: Value = self.safe_string(order.clone(), Value::from("o"));
-        let mut side_id: Value = self.safe_integer(order.clone(), Value::from("S"));
+        let mut timestamp: Value = self.safe_integer(order.clone(), Value::from("E"), Value::Undefined);
+        let mut market_id: Value = self.safe_string_upper(order.clone(), Value::from("s"), Value::Undefined);
+        let mut type_id: Value = self.safe_string(order.clone(), Value::from("o"), Value::Undefined);
+        let mut side_id: Value = self.safe_integer(order.clone(), Value::from("S"), Value::Undefined);
         // 1: buy
         // 2: sell
         let mut side: Value = if side_id.clone() == Value::from(1) { Value::from("buy") } else { Value::from("sell") };
-        let mut status_id: Value = self.safe_string(order.clone(), Value::from("X"));
-        let mut fee_currency_id: Value = self.safe_string(order.clone(), Value::from("N"));
+        let mut status_id: Value = self.safe_string(order.clone(), Value::from("X"), Value::Undefined);
+        let mut fee_currency_id: Value = self.safe_string(order.clone(), Value::from("N"), Value::Undefined);
         return self.safe_order(Value::Json(normalize(&Value::Json(json!({
             "info": order,
-            "id": self.safe_string(order.clone(), Value::from("i")),
-            "clientOrderId": self.safe_string(order.clone(), Value::from("c")),
+            "id": self.safe_string(order.clone(), Value::from("i"), Value::Undefined),
+            "clientOrderId": self.safe_string(order.clone(), Value::from("c"), Value::Undefined),
             "timestamp": timestamp,
             "datetime": self.iso8601(timestamp.clone()),
-            "lastTradeTimestamp": self.safe_integer(order.clone(), Value::from("T")),
+            "lastTradeTimestamp": self.safe_integer(order.clone(), Value::from("T"), Value::Undefined),
             "symbol": self.safe_symbol(market_id.clone(), market.clone(), Value::Undefined, Value::Undefined),
             "type": <Self as Bitrue>::parse_ws_order_type(self, type_id.clone()),
             "timeInForce": Value::Undefined,
             "postOnly": Value::Undefined,
             "side": side,
-            "price": self.safe_string(order.clone(), Value::from("p")),
+            "price": self.safe_string(order.clone(), Value::from("p"), Value::Undefined),
             "triggerPrice": Value::Undefined,
-            "amount": self.safe_string(order.clone(), Value::from("q")),
-            "cost": self.safe_string(order.clone(), Value::from("Y")),
+            "amount": self.safe_string(order.clone(), Value::from("q"), Value::Undefined),
+            "cost": self.safe_string(order.clone(), Value::from("Y"), Value::Undefined),
             "average": Value::Undefined,
-            "filled": self.safe_string(order.clone(), Value::from("z")),
+            "filled": self.safe_string(order.clone(), Value::from("z"), Value::Undefined),
             "remaining": Value::Undefined,
             "status": <Self as Bitrue>::parse_ws_order_status(self, status_id.clone()),
             "fee": Value::Json(normalize(&Value::Json(json!({
@@ -1082,18 +1091,18 @@ pub trait Bitrue : Exchange {
         //         }
         //     }
         //
-        let mut channel: Value = self.safe_string(message.clone(), Value::from("channel"));
+        let mut channel: Value = self.safe_string(message.clone(), Value::from("channel"), Value::Undefined);
         let mut parts: Value = channel.split(Value::from("_"));
-        let mut market_id: Value = self.safe_string_upper(parts.clone(), Value::from(1));
+        let mut market_id: Value = self.safe_string_upper(parts.clone(), Value::from(1), Value::Undefined);
         let mut market: Value = self.safe_market(market_id.clone(), Value::Undefined, Value::Undefined, Value::Undefined);
         let mut symbol: Value = market.get(Value::from("symbol"));
-        let mut timestamp: Value = self.safe_integer(message.clone(), Value::from("ts"));
+        let mut timestamp: Value = self.safe_integer(message.clone(), Value::from("ts"), Value::Undefined);
         let mut tick: Value = self.safe_value(message.clone(), Value::from("tick"), Value::new_object());
         if !self.get("orderbooks".into()).contains_key(symbol.clone()) {
             self.get("orderbooks".into()).set(symbol.clone(), self.order_book(Value::Undefined, Value::Undefined));
         };
         let mut orderbook: Value = self.get("orderbooks".into()).get(symbol.clone());
-        let mut snapshot: Value = self.parse_order_book(tick.clone(), symbol.clone(), timestamp.clone(), Value::from("buys"), Value::from("asks"), Value::Undefined, Value::Undefined, Value::Undefined);
+        let mut snapshot: Value = self.parse_order_book(tick.clone(), symbol.clone(), timestamp.clone(), Value::from("buys"), Value::from("asks"));
         orderbook.reset(snapshot.clone());
         let mut message_hash: Value = Value::from("orderbook:") + symbol.clone();
         client.resolve(orderbook.clone(), message_hash.clone());
@@ -1133,7 +1142,7 @@ pub trait Bitrue : Exchange {
         //         "ping": 1670057540627
         //     }
         //
-        let mut time: Value = self.safe_integer(message.clone(), Value::from("ping"));
+        let mut time: Value = self.safe_integer(message.clone(), Value::from("ping"), Value::Undefined);
         let mut pong: Value = Value::Json(normalize(&Value::Json(json!({
             "pong": time
         }))).unwrap());
@@ -1147,12 +1156,12 @@ pub trait Bitrue : Exchange {
         } else if message.contains_key(Value::from("ping")) {
             <Self as Bitrue>::handle_ping(self, client.clone(), message.clone());
         } else {
-            let mut event: Value = self.safe_string(message.clone(), Value::from("e"));
+            let mut event: Value = self.safe_string(message.clone(), Value::from("e"), Value::Undefined);
             let mut handlers: Value = Value::Json(normalize(&Value::Json(json!({
                 "BALANCE": self.get("handleBalance".into()),
                 "ORDER": self.get("handleOrder".into())
             }))).unwrap());
-            let mut handler: Value = self.safe_value(handlers.clone(), event.clone());
+            let mut handler: Value = self.safe_value(handlers.clone(), event.clone(), Value::Undefined);
             if handler.clone().is_nonnullish() {
                 handler.call(self, client.clone(), message.clone());
             };
@@ -1162,9 +1171,9 @@ pub trait Bitrue : Exchange {
 
     async fn authenticate(&mut self, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
-        let mut listen_key: Value = self.safe_value(self.get("options".into()), Value::from("listenKey"));
+        let mut listen_key: Value = self.safe_value(self.get("options".into()), Value::from("listenKey"), Value::Undefined);
         if listen_key.clone().is_nullish() {
-            let mut response: Value = self.open_v1_private_post_poseidon_api_v1_listen_key(params.clone()).await;
+            let mut response: Value = self.dispatch("openV1PrivatePostPoseidonApiV1ListenKey".into(), params.clone(), Value::Undefined).await;
             //
             //     {
             //         "msg": "succ",
@@ -1175,7 +1184,7 @@ pub trait Bitrue : Exchange {
             //     }
             //
             let mut data: Value = self.safe_value(response.clone(), Value::from("data"), Value::new_object());
-            let mut key: Value = self.safe_string(data.clone(), Value::from("listenKey"));
+            let mut key: Value = self.safe_string(data.clone(), Value::from("listenKey"), Value::Undefined);
             self.get("options".into()).set("listenKey".into(), key.clone());
             self.get("options".into()).set("listenKeyUrl".into(), self.get("urls".into()).get(Value::from("api")).get(Value::from("ws")).get(Value::from("private")) + Value::from("/stream?listenKey=") + key.clone());
             let mut refresh_timeout: Value = self.safe_integer(self.get("options".into()), Value::from("listenKeyRefreshRate"), Value::from(1800000));
@@ -1186,11 +1195,11 @@ pub trait Bitrue : Exchange {
 
     async fn keep_alive_listen_key(&mut self, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
-        let mut listen_key: Value = self.safe_string(self.get("options".into()), Value::from("listenKey"));
+        let mut listen_key: Value = self.safe_string(self.get("options".into()), Value::from("listenKey"), Value::Undefined);
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
             "listenKey": listen_key
         }))).unwrap());
-                self.open_v1_private_put_poseidon_api_v1_listen_key_listen_key(extend_2(request.clone(), params.clone())).await;
+                self.dispatch("openV1PrivatePutPoseidonApiV1ListenKeyListenKey".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         // catch block omitted (no exception support in Value runtime)
 ;
         //
@@ -1314,8 +1323,8 @@ impl ValueTrait for BitrueImpl {
     fn push(&mut self, value: Value) { self.0.push(value) }
     fn split(&self, separator: Value) -> Value { self.0.split(separator) }
     fn contains_key(&self, key: Value) -> bool { self.0.contains_key(key) }
-    fn keys(&self) -> Vec<Value> { self.0.keys() }
-    fn values(&self) -> Vec<Value> { self.0.values() }
+    fn keys(&self) -> Value { self.0.keys() }
+    fn values(&self) -> Value { self.0.values() }
     fn to_array(&self, x: Value) -> Value { self.0.to_array(x) }
     fn index_of(&self, x: Value) -> Value { self.0.index_of(x) }
     fn join(&self, glue: Value) -> Value { self.0.join(glue) }

@@ -11,7 +11,16 @@ use async_trait::async_trait;
 use std::str::FromStr;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, JSON, Array, Object, Math, parse_int, shift_2, extend_2, normalize};
+use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, BoolExt, JSON, Array, Object, Math, Promise, parse_int, shift_2, extend_2, normalize};
+// Crypto hash identifiers
+fn sha256() -> Value { Value::from("sha256") }
+fn sha384() -> Value { Value::from("sha384") }
+fn sha512() -> Value { Value::from("sha512") }
+fn md5() -> Value { Value::from("md5") }
+fn ed25519() -> Value { Value::from("ed25519") }
+fn rsa(msg: Value, secret: Value, _hash: Value) -> Value { msg }
+fn eddsa(msg: Value, secret: Value, _curve: Value) -> Value { msg }
+fn secp256k1() -> Value { Value::from("secp256k1") }
 
 use crate::exchange::{PRECISE_BASE, TRUNCATE, ROUND, ROUND_UP, ROUND_DOWN};
 use crate::exchange::{DECIMAL_PLACES, SIGNIFICANT_DIGITS, TICK_SIZE, NO_PADDING, PAD_WITH_ZERO};
@@ -226,7 +235,7 @@ pub trait Paymium : Exchange {
         let mut result: Value = Value::Json(normalize(&Value::Json(json!({
             "info": response
         }))).unwrap());
-        let mut currencies: Value = Object::keys(self.get("currencies".into()));
+        let mut currencies: Value = self.get("currencies".into()).keys();
         let mut i: usize = 0;
         while i < currencies.len() {
             let mut code: Value = currencies.get(i.into());
@@ -236,8 +245,8 @@ pub trait Paymium : Exchange {
             if response.contains_key(free.clone()) {
                 let mut account: Value = self.account();
                 let mut used: Value = Value::from("locked_") + currency_id.clone();
-                account.set("free".into(), self.safe_string(response.clone(), free.clone()));
-                account.set("used".into(), self.safe_string(response.clone(), used.clone()));
+                account.set("free".into(), self.safe_string(response.clone(), free.clone(), Value::Undefined));
+                account.set("used".into(), self.safe_string(response.clone(), used.clone(), Value::Undefined));
                 result.set(code.clone(), account.clone());
             };
             i += 1;
@@ -304,28 +313,28 @@ pub trait Paymium : Exchange {
         // }
         //
         let mut symbol: Value = self.safe_symbol(Value::Undefined, market.clone(), Value::Undefined, Value::Undefined);
-        let mut timestamp: Value = self.safe_timestamp(ticker.clone(), Value::from("at"));
-        let mut vwap: Value = self.safe_string(ticker.clone(), Value::from("vwap"));
-        let mut base_volume: Value = self.safe_string(ticker.clone(), Value::from("volume"));
+        let mut timestamp: Value = self.safe_timestamp(ticker.clone(), Value::from("at"), Value::Undefined);
+        let mut vwap: Value = self.safe_string(ticker.clone(), Value::from("vwap"), Value::Undefined);
+        let mut base_volume: Value = self.safe_string(ticker.clone(), Value::from("volume"), Value::Undefined);
         let mut quote_volume: Value = Precise::string_mul(base_volume.clone(), vwap.clone());
-        let mut last: Value = self.safe_string(ticker.clone(), Value::from("price"));
+        let mut last: Value = self.safe_string(ticker.clone(), Value::from("price"), Value::Undefined);
         return self.safe_ticker(Value::Json(normalize(&Value::Json(json!({
             "symbol": symbol,
             "timestamp": timestamp,
             "datetime": self.iso8601(timestamp.clone()),
-            "high": self.safe_string(ticker.clone(), Value::from("high")),
-            "low": self.safe_string(ticker.clone(), Value::from("low")),
-            "bid": self.safe_string(ticker.clone(), Value::from("bid")),
+            "high": self.safe_string(ticker.clone(), Value::from("high"), Value::Undefined),
+            "low": self.safe_string(ticker.clone(), Value::from("low"), Value::Undefined),
+            "bid": self.safe_string(ticker.clone(), Value::from("bid"), Value::Undefined),
             "bidVolume": Value::Undefined,
-            "ask": self.safe_string(ticker.clone(), Value::from("ask")),
+            "ask": self.safe_string(ticker.clone(), Value::from("ask"), Value::Undefined),
             "askVolume": Value::Undefined,
             "vwap": vwap,
-            "open": self.safe_string(ticker.clone(), Value::from("open")),
+            "open": self.safe_string(ticker.clone(), Value::from("open"), Value::Undefined),
             "close": last,
             "last": last,
             "previousClose": Value::Undefined,
             "change": Value::Undefined,
-            "percentage": self.safe_string(ticker.clone(), Value::from("variation")),
+            "percentage": self.safe_string(ticker.clone(), Value::from("variation"), Value::Undefined),
             "average": Value::Undefined,
             "baseVolume": base_volume,
             "quoteVolume": quote_volume,
@@ -365,13 +374,13 @@ pub trait Paymium : Exchange {
 
 
     fn parse_trade(&mut self, mut trade: Value, mut market: Value) -> Value {
-        let mut timestamp: Value = self.safe_timestamp(trade.clone(), Value::from("created_at_int"));
-        let mut id: Value = self.safe_string(trade.clone(), Value::from("uuid"));
+        let mut timestamp: Value = self.safe_timestamp(trade.clone(), Value::from("created_at_int"), Value::Undefined);
+        let mut id: Value = self.safe_string(trade.clone(), Value::from("uuid"), Value::Undefined);
         market = self.safe_market(Value::Undefined, market.clone(), Value::Undefined, Value::Undefined);
-        let mut side: Value = self.safe_string(trade.clone(), Value::from("side"));
-        let mut price: Value = self.safe_string(trade.clone(), Value::from("price"));
+        let mut side: Value = self.safe_string(trade.clone(), Value::from("side"), Value::Undefined);
+        let mut price: Value = self.safe_string(trade.clone(), Value::from("price"), Value::Undefined);
         let mut amount_field: Value = Value::from("traded_") + market.get(Value::from("base")).to_lower_case();
-        let mut amount: Value = self.safe_string(trade.clone(), amount_field.clone());
+        let mut amount: Value = self.safe_string(trade.clone(), amount_field.clone(), Value::Undefined);
         return self.safe_trade(Value::Json(normalize(&Value::Json(json!({
             "info": trade,
             "id": id,
@@ -406,7 +415,7 @@ pub trait Paymium : Exchange {
     async fn create_deposit_address(&mut self, mut code: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        let mut response: Value = self.private_post_user_addresses(params.clone()).await;
+        let mut response: Value = self.dispatch("privatePostUserAddresses".into(), params.clone(), Value::Undefined).await;
         //
         //     {
         //         "address": "1HdjGr6WCTcnmW1tNNsHX7fh4Jr5C2PeKe",
@@ -424,7 +433,7 @@ pub trait Paymium : Exchange {
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
             "address": code
         }))).unwrap());
-        let mut response: Value = self.private_get_user_addresses_address(extend_2(request.clone(), params.clone())).await;
+        let mut response: Value = self.dispatch("privateGetUserAddressesAddress".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         //
         //     {
         //         "address": "1HdjGr6WCTcnmW1tNNsHX7fh4Jr5C2PeKe",
@@ -439,7 +448,7 @@ pub trait Paymium : Exchange {
     async fn fetch_deposit_addresses(&mut self, mut codes: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        let mut response: Value = self.private_get_user_addresses(params.clone()).await;
+        let mut response: Value = self.dispatch("privateGetUserAddresses".into(), params.clone(), Value::Undefined).await;
         //
         //     [
         //         {
@@ -453,7 +462,7 @@ pub trait Paymium : Exchange {
         return self.parse_deposit_addresses(response.clone(), codes.clone(), Value::Undefined, Value::Undefined);
     }
 
-    fn parse_deposit_address(&self, mut deposit_address: Value, mut currency: Value) -> Value {
+    fn parse_deposit_address(&mut self, mut deposit_address: Value, mut currency: Value) -> Value {
         //
         //     {
         //         "address": "1HdjGr6WCTcnmW1tNNsHX7fh4Jr5C2PeKe",
@@ -462,8 +471,8 @@ pub trait Paymium : Exchange {
         //         "label": "Savings"
         //     }
         //
-        let mut address: Value = self.safe_string(deposit_address.clone(), Value::from("address"));
-        let mut currency_id: Value = self.safe_string(deposit_address.clone(), Value::from("currency"));
+        let mut address: Value = self.safe_string(deposit_address.clone(), Value::from("address"), Value::Undefined);
+        let mut currency_id: Value = self.safe_string(deposit_address.clone(), Value::from("currency"), Value::Undefined);
         return Value::Json(normalize(&Value::Json(json!({
             "info": deposit_address,
             "currency": self.safe_currency_code(currency_id.clone(), currency.clone()),
@@ -486,7 +495,7 @@ pub trait Paymium : Exchange {
         if r#type.clone() != Value::from("market") {
             request.set("price".into(), price.clone());
         };
-        let mut response: Value = self.private_post_user_orders(extend_2(request.clone(), params.clone())).await;
+        let mut response: Value = self.dispatch("privatePostUserOrders".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         return self.safe_order(Value::Json(normalize(&Value::Json(json!({
             "info": response,
             "id": response.get(Value::from("uuid"))
@@ -498,7 +507,7 @@ pub trait Paymium : Exchange {
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
             "uuid": id
         }))).unwrap());
-        let mut response: Value = self.private_delete_user_orders_uuid_cancel(extend_2(request.clone(), params.clone())).await;
+        let mut response: Value = self.dispatch("privateDeleteUserOrdersUuidCancel".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         return self.safe_order(Value::Json(normalize(&Value::Json(json!({
             "info": response
         }))).unwrap()), Value::Undefined);
@@ -520,7 +529,7 @@ pub trait Paymium : Exchange {
             "email": to_account
         }))).unwrap());
         // 'comment': 'a small note explaining the transfer'
-        let mut response: Value = self.private_post_user_email_transfers(extend_2(request.clone(), params.clone())).await;
+        let mut response: Value = self.dispatch("privatePostUserEmailTransfers".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         //
         //     {
         //         "uuid": "968f4580-e26c-4ad8-8bcd-874d23d55296",
@@ -589,21 +598,21 @@ pub trait Paymium : Exchange {
         //         ]
         //     }
         //
-        let mut currency_id: Value = self.safe_string(transfer.clone(), Value::from("currency"));
-        let mut updated_at: Value = self.safe_string(transfer.clone(), Value::from("updated_at"));
+        let mut currency_id: Value = self.safe_string(transfer.clone(), Value::from("currency"), Value::Undefined);
+        let mut updated_at: Value = self.safe_string(transfer.clone(), Value::from("updated_at"), Value::Undefined);
         let mut timetstamp: Value = self.parse_date(updated_at.clone());
-        let mut account_operations: Value = self.safe_value(transfer.clone(), Value::from("account_operations"));
+        let mut account_operations: Value = self.safe_value(transfer.clone(), Value::from("account_operations"), Value::Undefined);
         let mut first_operation: Value = self.safe_value(account_operations.clone(), Value::from(0), Value::new_object());
-        let mut status: Value = self.safe_string(transfer.clone(), Value::from("state"));
+        let mut status: Value = self.safe_string(transfer.clone(), Value::from("state"), Value::Undefined);
         return Value::Json(normalize(&Value::Json(json!({
             "info": transfer,
-            "id": self.safe_string(transfer.clone(), Value::from("uuid")),
+            "id": self.safe_string(transfer.clone(), Value::from("uuid"), Value::Undefined),
             "timestamp": timetstamp,
             "datetime": self.iso8601(timetstamp.clone()),
             "currency": self.safe_currency_code(currency_id.clone(), currency.clone()),
             "amount": self.safe_number(transfer.clone(), Value::from("amount"), Value::Undefined),
             "fromAccount": Value::Undefined,
-            "toAccount": self.safe_string(first_operation.clone(), Value::from("address")),
+            "toAccount": self.safe_string(first_operation.clone(), Value::from("address"), Value::Undefined),
             "status": <Self as Paymium>::parse_transfer_status(self, status.clone())
         }))).unwrap());
     }
@@ -616,57 +625,9 @@ pub trait Paymium : Exchange {
         return self.safe_string(statuses.clone(), status.clone(), status.clone());
     }
 
-    fn sign(&mut self, mut path: Value, mut api: Value, mut method: Value, mut params: Value, mut headers: Value, mut body: Value) -> Value {
-        api = api.or_default(Value::from("public"));
-        method = method.or_default(Value::from("GET"));
-        params = params.or_default(Value::new_object());
-        let mut url: Value = self.get("urls".into()).get(Value::from("api")).get(Value::from("rest")) + Value::from("/") + self.get("version".into()) + Value::from("/") + self.implode_params(path.clone(), params.clone());
-        let mut query: Value = self.omit(params.clone(), self.extract_params(path.clone()));
-        if api.clone() == Value::from("public") {
-            if Object::keys(query.clone()).len() > 0 {
-                url = url +  Value::from("?") + self.urlencode(query.clone());
-            };
-        } else {
-            self.check_required_credentials(Value::Undefined);
-            let mut nonce: Value = self.nonce().to_string();
-            let mut auth: Value = nonce.clone() + url.clone();
-            headers = Value::Json(normalize(&Value::Json(json!({
-                "Api-Key": self.get("apiKey".into()),
-                "Api-Nonce": nonce
-            }))).unwrap());
-            if method.clone() == Value::from("POST") {
-                if Object::keys(query.clone()).len() > 0 {
-                    body = self.json(query.clone());
-                    auth = auth +  body.clone();
-                    headers.set("Content-Type".into(), Value::from("application/json"));
-                };
-            } else {
-                if Object::keys(query.clone()).len() > 0 {
-                    let mut query_string: Value = self.urlencode(query.clone());
-                    auth = auth +  query_string.clone();
-                    url = url +  Value::from("?") + query_string.clone();
-                };
-            };
-            headers.set("Api-Signature".into(), self.hmac(self.encode(auth.clone()), self.encode(self.get("secret".into())), sha256.clone()));
-        };
-        return Value::Json(normalize(&Value::Json(json!({
-            "url": url,
-            "method": method,
-            "body": body,
-            "headers": headers
-        }))).unwrap());
-    }
+    
 
-    fn handle_errors(&mut self, mut http_code: Value, mut reason: Value, mut url: Value, mut method: Value, mut headers: Value, mut body: Value, mut response: Value, mut request_headers: Value, mut request_body: Value) -> Value {
-        if response.clone().is_nullish() {
-            return Value::Undefined;
-        };
-        let mut errors: Value = self.safe_value(response.clone(), Value::from("errors"));
-        if errors.clone().is_nonnullish() {
-            panic!(r###"ExchangeError::new(self.get("id".into()) + Value::from(" ") + self.json(response.clone()))"###);
-        };
-        return Value::Undefined;
-    }
+    
 
     
     async fn dispatch(&mut self, method: Value, params: Value, context: Value) -> Value {
@@ -733,8 +694,8 @@ impl ValueTrait for PaymiumImpl {
     fn push(&mut self, value: Value) { self.0.push(value) }
     fn split(&self, separator: Value) -> Value { self.0.split(separator) }
     fn contains_key(&self, key: Value) -> bool { self.0.contains_key(key) }
-    fn keys(&self) -> Vec<Value> { self.0.keys() }
-    fn values(&self) -> Vec<Value> { self.0.values() }
+    fn keys(&self) -> Value { self.0.keys() }
+    fn values(&self) -> Value { self.0.values() }
     fn to_array(&self, x: Value) -> Value { self.0.to_array(x) }
     fn index_of(&self, x: Value) -> Value { self.0.index_of(x) }
     fn join(&self, glue: Value) -> Value { self.0.join(glue) }

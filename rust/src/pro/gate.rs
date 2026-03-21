@@ -11,7 +11,16 @@ use async_trait::async_trait;
 use std::str::FromStr;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, JSON, Array, Object, Math, parse_int, shift_2, extend_2, normalize};
+use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, BoolExt, JSON, Array, Object, Math, Promise, parse_int, shift_2, extend_2, normalize};
+// Crypto hash identifiers
+fn sha256() -> Value { Value::from("sha256") }
+fn sha384() -> Value { Value::from("sha384") }
+fn sha512() -> Value { Value::from("sha512") }
+fn md5() -> Value { Value::from("md5") }
+fn ed25519() -> Value { Value::from("ed25519") }
+fn rsa(msg: Value, secret: Value, _hash: Value) -> Value { msg }
+fn eddsa(msg: Value, secret: Value, _curve: Value) -> Value { msg }
+fn secp256k1() -> Value { Value::from("secp256k1") }
 
 use crate::exchange::{PRECISE_BASE, TRUNCATE, ROUND, ROUND_UP, ROUND_DOWN};
 use crate::exchange::{DECIMAL_PLACES, SIGNIFICANT_DIGITS, TICK_SIZE, NO_PADDING, PAD_WITH_ZERO};
@@ -1398,9 +1407,9 @@ pub trait Gate : Exchange {
         let mut channel: Value = message_type.clone() + Value::from(".order_place");
         let mut url: Value = <Self as Gate>::get_url_by_market(self, market.clone());
         params.set("textIsRequired".into(), true.into());
-        let mut request: Value = self.create_order_request(symbol.clone(), r#type.clone(), side.clone(), amount.clone(), price.clone(), params.clone());
+        let mut request: Value = <Self as Gate>::create_order_request(self, symbol.clone(), r#type.clone(), side.clone(), amount.clone(), price.clone(), params.clone());
         <Self as Gate>::authenticate(self, url.clone(), message_type.clone()).await;
-        let mut raw_order: Value = <Self as Gate>::request_private(self, url.clone(), request.clone(), channel.clone(), Value::Undefined).await;
+        let mut raw_order: Value = <Self as Gate>::request_private(self, url.clone(), request.clone(), channel.clone()).await;
         let mut order: Value = self.parse_order(raw_order.clone(), market.clone());
         return order.clone();
     }
@@ -1408,7 +1417,7 @@ pub trait Gate : Exchange {
     async fn create_orders_ws(&mut self, mut orders: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        let mut request: Value = self.create_orders_request(orders.clone(), params.clone());
+        let mut request: Value = <Self as Gate>::create_orders_request(self, orders.clone(), params.clone());
         let mut first_order: Value = orders.get(Value::from(0));
         let mut market: Value = self.market(first_order.get(Value::from("symbol")));
         if market.get(Value::from("swap")) != true.into() {
@@ -1418,7 +1427,7 @@ pub trait Gate : Exchange {
         let mut channel: Value = message_type.clone() + Value::from(".order_batch_place");
         let mut url: Value = <Self as Gate>::get_url_by_market(self, market.clone());
         <Self as Gate>::authenticate(self, url.clone(), message_type.clone()).await;
-        let mut raw_orders: Value = <Self as Gate>::request_private(self, url.clone(), request.clone(), channel.clone(), Value::Undefined).await;
+        let mut raw_orders: Value = <Self as Gate>::request_private(self, url.clone(), request.clone(), channel.clone()).await;
         return self.parse_orders(raw_orders.clone(), market.clone(), Value::Undefined, Value::Undefined, Value::Undefined);
     }
 
@@ -1433,9 +1442,9 @@ pub trait Gate : Exchange {
         let mut url: Value = <Self as Gate>::get_url_by_market(self, market.clone());
         params = self.omit(params.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("stop").into(), Value::from("trigger").into()])));
         let (mut r#type, mut query) = shift_2(self.handle_market_type_and_params(Value::from("cancelAllOrders"), market.clone(), params.clone(), Value::Undefined));
-        let (mut request, mut request_params) = shift_2(if r#type.clone() == Value::from("spot") { self.multi_order_spot_prepare_request(market.clone(), trigger.clone(), query.clone()) } else { self.prepare_request(market.clone(), r#type.clone(), query.clone()) });
+        let (mut request, mut request_params) = shift_2(if r#type.clone() == Value::from("spot") { <Self as Gate>::multi_order_spot_prepare_request(self, market.clone(), trigger.clone(), query.clone()) } else { <Self as Gate>::prepare_request(self, market.clone(), r#type.clone(), query.clone()) });
         <Self as Gate>::authenticate(self, url.clone(), message_type.clone()).await;
-        let mut raw_orders: Value = <Self as Gate>::request_private(self, url.clone(), extend_2(request.clone(), request_params.clone()), channel.clone(), Value::Undefined).await;
+        let mut raw_orders: Value = <Self as Gate>::request_private(self, url.clone(), extend_2(request.clone(), request_params.clone()), channel.clone()).await;
         return self.parse_orders(raw_orders.clone(), market.clone(), Value::Undefined, Value::Undefined, Value::Undefined);
     }
 
@@ -1446,13 +1455,13 @@ pub trait Gate : Exchange {
         let mut trigger: Value = self.safe_value_n(params.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("is_stop_order").into(), Value::from("stop").into(), Value::from("trigger").into()])), false.into());
         params = self.omit(params.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("is_stop_order").into(), Value::from("stop").into(), Value::from("trigger").into()])));
         let (mut r#type, mut query) = shift_2(self.handle_market_type_and_params(Value::from("cancelOrder"), market.clone(), params.clone(), Value::Undefined));
-        let (mut request, mut request_params) = shift_2(if r#type.clone() == Value::from("spot") || r#type.clone() == Value::from("margin") { self.spot_order_prepare_request(market.clone(), trigger.clone(), query.clone()) } else { self.prepare_request(market.clone(), r#type.clone(), query.clone()) });
+        let (mut request, mut request_params) = shift_2(if r#type.clone() == Value::from("spot") || r#type.clone() == Value::from("margin") { <Self as Gate>::spot_order_prepare_request(self, market.clone(), trigger.clone(), query.clone()) } else { <Self as Gate>::prepare_request(self, market.clone(), r#type.clone(), query.clone()) });
         let mut message_type: Value = <Self as Gate>::get_type_by_market(self, market.clone());
         let mut channel: Value = message_type.clone() + Value::from(".order_cancel");
         let mut url: Value = <Self as Gate>::get_url_by_market(self, market.clone());
         <Self as Gate>::authenticate(self, url.clone(), message_type.clone()).await;
         request.set("order_id".into(), id.to_string());
-        let mut res: Value = <Self as Gate>::request_private(self, url.clone(), extend_2(request.clone(), request_params.clone()), channel.clone(), Value::Undefined).await;
+        let mut res: Value = <Self as Gate>::request_private(self, url.clone(), extend_2(request.clone(), request_params.clone()), channel.clone()).await;
         return self.parse_order(res.clone(), market.clone());
     }
 
@@ -1460,12 +1469,12 @@ pub trait Gate : Exchange {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
         let mut market: Value = self.market(symbol.clone());
-        let mut extended_request: Value = self.edit_order_request(id.clone(), symbol.clone(), r#type.clone(), side.clone(), amount.clone(), price.clone(), params.clone());
+        let mut extended_request: Value = <Self as Gate>::edit_order_request(self, id.clone(), symbol.clone(), r#type.clone(), side.clone(), amount.clone(), price.clone(), params.clone());
         let mut message_type: Value = <Self as Gate>::get_type_by_market(self, market.clone());
         let mut channel: Value = message_type.clone() + Value::from(".order_amend");
         let mut url: Value = <Self as Gate>::get_url_by_market(self, market.clone());
         <Self as Gate>::authenticate(self, url.clone(), message_type.clone()).await;
-        let mut raw_order: Value = <Self as Gate>::request_private(self, url.clone(), extended_request.clone(), channel.clone(), Value::Undefined).await;
+        let mut raw_order: Value = <Self as Gate>::request_private(self, url.clone(), extended_request.clone(), channel.clone()).await;
         return self.parse_order(raw_order.clone(), market.clone());
     }
 
@@ -1473,12 +1482,12 @@ pub trait Gate : Exchange {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
         let mut market: Value = if symbol.clone().is_nullish() { Value::Undefined } else { self.market(symbol.clone()) };
-        let (mut request, mut request_params) = shift_2(self.fetch_order_request(id.clone(), symbol.clone(), params.clone()));
+        let (mut request, mut request_params) = shift_2(<Self as Gate>::fetch_order_request(self, id.clone(), symbol.clone(), params.clone()));
         let mut message_type: Value = <Self as Gate>::get_type_by_market(self, market.clone());
         let mut channel: Value = message_type.clone() + Value::from(".order_status");
         let mut url: Value = <Self as Gate>::get_url_by_market(self, market.clone());
         <Self as Gate>::authenticate(self, url.clone(), message_type.clone()).await;
-        let mut raw_order: Value = <Self as Gate>::request_private(self, url.clone(), extend_2(request.clone(), request_params.clone()), channel.clone(), Value::Undefined).await;
+        let mut raw_order: Value = <Self as Gate>::request_private(self, url.clone(), extend_2(request.clone(), request_params.clone()), channel.clone()).await;
         return self.parse_order(raw_order.clone(), market.clone());
     }
 
@@ -1503,13 +1512,13 @@ pub trait Gate : Exchange {
                 panic!(r###"NotSupported::new(self.get("id".into()) + Value::from(" fetchOrdersByStatusWs is only supported by swap markets. Use rest API for other markets"))"###);
             };
         };
-        let (mut request, mut request_params) = shift_2(self.prepare_orders_by_status_request(status.clone(), symbol.clone(), since.clone(), limit.clone(), params.clone()));
+        let (mut request, mut request_params) = shift_2(<Self as Gate>::prepare_orders_by_status_request(self, status.clone(), symbol.clone(), since.clone(), limit.clone(), params.clone()));
         let mut new_request: Value = self.omit(request.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("settle").into()])));
         let mut message_type: Value = <Self as Gate>::get_type_by_market(self, market.clone());
         let mut channel: Value = message_type.clone() + Value::from(".order_list");
         let mut url: Value = <Self as Gate>::get_url_by_market(self, market.clone());
         <Self as Gate>::authenticate(self, url.clone(), message_type.clone()).await;
-        let mut raw_orders: Value = <Self as Gate>::request_private(self, url.clone(), extend_2(new_request.clone(), request_params.clone()), channel.clone(), Value::Undefined).await;
+        let mut raw_orders: Value = <Self as Gate>::request_private(self, url.clone(), extend_2(new_request.clone(), request_params.clone()), channel.clone()).await;
         let mut orders: Value = self.parse_orders(raw_orders.clone(), market.clone(), Value::Undefined, Value::Undefined, Value::Undefined);
         return self.filter_by_symbol_since_limit(orders.clone(), symbol.clone(), since.clone(), limit.clone(), Value::Undefined);
     }
@@ -1565,8 +1574,8 @@ pub trait Gate : Exchange {
     }
 
     fn handle_order_book_subscription(&mut self, mut client: Value, mut message: Value, mut subscription: Value) -> Value {
-        let mut symbol: Value = self.safe_string(subscription.clone(), Value::from("symbol"));
-        let mut limit: Value = self.safe_integer(subscription.clone(), Value::from("limit"));
+        let mut symbol: Value = self.safe_string(subscription.clone(), Value::from("symbol"), Value::Undefined);
+        let mut limit: Value = self.safe_integer(subscription.clone(), Value::from("limit"), Value::Undefined);
         self.get("orderbooks".into()).set(symbol.clone(), self.order_book(Value::new_object(), limit.clone()));
         Value::Undefined
     }
@@ -1625,19 +1634,19 @@ pub trait Gate : Exchange {
         //         }
         //     }
         //
-        let mut channel: Value = self.safe_string(message.clone(), Value::from("channel"));
+        let mut channel: Value = self.safe_string(message.clone(), Value::from("channel"), Value::Undefined);
         let mut channel_parts: Value = channel.split(Value::from("."));
-        let mut raw_market_type: Value = self.safe_string(channel_parts.clone(), Value::from(0));
+        let mut raw_market_type: Value = self.safe_string(channel_parts.clone(), Value::from(0), Value::Undefined);
         let mut is_spot: Value = (raw_market_type.clone() == Value::from("spot")).into();
         let mut market_type: Value = if is_spot.is_truthy() { Value::from("spot") } else { Value::from("contract") };
-        let mut delta: Value = self.safe_value(message.clone(), Value::from("result"));
-        let mut delta_start: Value = self.safe_integer(delta.clone(), Value::from("U"));
-        let mut delta_end: Value = self.safe_integer(delta.clone(), Value::from("u"));
-        let mut market_id: Value = self.safe_string(delta.clone(), Value::from("s"));
+        let mut delta: Value = self.safe_value(message.clone(), Value::from("result"), Value::Undefined);
+        let mut delta_start: Value = self.safe_integer(delta.clone(), Value::from("U"), Value::Undefined);
+        let mut delta_end: Value = self.safe_integer(delta.clone(), Value::from("u"), Value::Undefined);
+        let mut market_id: Value = self.safe_string(delta.clone(), Value::from("s"), Value::Undefined);
         let mut symbol: Value = self.safe_symbol(market_id.clone(), Value::Undefined, Value::from("_"), market_type.clone());
         let mut message_hash: Value = Value::from("orderbook:") + symbol.clone();
         let mut stored_order_book: Value = self.safe_value(self.get("orderbooks".into()), symbol.clone(), self.order_book(Value::new_object(), Value::Undefined));
-        let mut nonce: Value = self.safe_integer(stored_order_book.clone(), Value::from("nonce"));
+        let mut nonce: Value = self.safe_integer(stored_order_book.clone(), Value::from("nonce"), Value::Undefined);
         if nonce.clone().is_nullish() {
             let mut cache_length: usize = 0;
             if stored_order_book.clone().is_nonnullish() {
@@ -1648,7 +1657,7 @@ pub trait Gate : Exchange {
             if cache_length.clone() == wait_amount.clone() {
                 // max limit is 100
                 let mut subscription: Value = client.get(subscriptions.clone()).get(message_hash.clone());
-                let mut limit: Value = self.safe_integer(subscription.clone(), Value::from("limit"));
+                let mut limit: Value = self.safe_integer(subscription.clone(), Value::from("limit"), Value::Undefined);
                 self.spawn(self.get("loadOrderBook".into()), client.clone(), message_hash.clone(), symbol.clone(), limit.clone(), Value::new_object());
             };
             // needed for c#, number of args needs to match
@@ -1672,17 +1681,17 @@ pub trait Gate : Exchange {
     }
 
     fn get_cache_index(&mut self, mut order_book: Value, mut cache: Value) -> Value {
-        let mut nonce: Value = self.safe_integer(order_book.clone(), Value::from("nonce"));
+        let mut nonce: Value = self.safe_integer(order_book.clone(), Value::from("nonce"), Value::Undefined);
         let mut first_delta: Value = cache.get(Value::from(0));
-        let mut first_delta_start: Value = self.safe_integer(first_delta.clone(), Value::from("U"));
+        let mut first_delta_start: Value = self.safe_integer(first_delta.clone(), Value::from("U"), Value::Undefined);
         if nonce.clone() < first_delta_start.clone() {
             return Value::from(1).neg();
         };
         let mut i: usize = 0;
         while i < cache.len() {
             let mut delta: Value = cache.get(i.into());
-            let mut delta_start: Value = self.safe_integer(delta.clone(), Value::from("U"));
-            let mut delta_end: Value = self.safe_integer(delta.clone(), Value::from("u"));
+            let mut delta_start: Value = self.safe_integer(delta.clone(), Value::from("U"), Value::Undefined);
+            let mut delta_end: Value = self.safe_integer(delta.clone(), Value::from("u"), Value::Undefined);
             if nonce.clone() >= delta_start.clone() - Value::from(1) && nonce.clone() < delta_end.clone() {
                 return Value::from(i);
             };
@@ -1696,10 +1705,10 @@ pub trait Gate : Exchange {
         while i < bid_asks.len() {
             let mut bid_ask: Value = bid_asks.get(i.into());
             if Array::is_array(bid_ask.clone()).is_truthy() {
-                book_side.store_array(self.parse_bid_ask(bid_ask.clone(), Value::Undefined, Value::Undefined, Value::Undefined));
+                book_side.store_array(self.parse_bid_ask(bid_ask.clone(), Value::Undefined, Value::Undefined));
             } else {
-                let mut price: Value = self.safe_float(bid_ask.clone(), Value::from("p"));
-                let mut amount: Value = self.safe_float(bid_ask.clone(), Value::from("s"));
+                let mut price: Value = self.safe_float(bid_ask.clone(), Value::from("p"), Value::Undefined);
+                let mut amount: Value = self.safe_float(bid_ask.clone(), Value::from("s"), Value::Undefined);
                 book_side.store(price.clone(), amount.clone());
             };
             i += 1;
@@ -1708,10 +1717,10 @@ pub trait Gate : Exchange {
     }
 
     fn handle_delta(&mut self, mut orderbook: Value, mut delta: Value) -> Value {
-        let mut timestamp: Value = self.safe_integer(delta.clone(), Value::from("t"));
+        let mut timestamp: Value = self.safe_integer(delta.clone(), Value::from("t"), Value::Undefined);
         orderbook.set("timestamp".into(), timestamp.clone());
         orderbook.set("datetime".into(), self.iso8601(timestamp.clone()));
-        orderbook.set("nonce".into(), self.safe_integer(delta.clone(), Value::from("u")));
+        orderbook.set("nonce".into(), self.safe_integer(delta.clone(), Value::from("u"), Value::Undefined));
         let mut bids: Value = self.safe_value(delta.clone(), Value::from("b"), Value::new_array());
         let mut asks: Value = self.safe_value(delta.clone(), Value::from("a"), Value::new_array());
         let mut stored_bids: Value = orderbook.get(Value::from("bids"));
@@ -1728,7 +1737,7 @@ pub trait Gate : Exchange {
         symbol = market.get(Value::from("symbol"));
         params.set("callerMethodName".into(), Value::from("watchTicker"));
         let mut result: Value = <Self as Gate>::watch_tickers(self, Value::Json(serde_json::Value::Array(vec![symbol.clone().into()])), params.clone()).await;
-        return self.safe_value(result.clone(), symbol.clone());
+        return self.safe_value(result.clone(), symbol.clone(), Value::Undefined);
     }
 
     async fn watch_tickers(&mut self, mut symbols: Value, mut params: Value) -> Value {
@@ -1822,11 +1831,11 @@ pub trait Gate : Exchange {
     }
 
     fn handle_ticker_and_bid_ask(&mut self, mut object_name: Value, mut client: Value, mut message: Value) -> Value {
-        let mut channel: Value = self.safe_string(message.clone(), Value::from("channel"));
+        let mut channel: Value = self.safe_string(message.clone(), Value::from("channel"), Value::Undefined);
         let mut parts: Value = channel.split(Value::from("."));
-        let mut raw_market_type: Value = self.safe_string(parts.clone(), Value::from(0));
+        let mut raw_market_type: Value = self.safe_string(parts.clone(), Value::from(0), Value::Undefined);
         let mut market_type: Value = if raw_market_type.clone() == Value::from("futures") { Value::from("contract") } else { Value::from("spot") };
-        let mut result: Value = self.safe_value(message.clone(), Value::from("result"));
+        let mut result: Value = self.safe_value(message.clone(), Value::from("result"), Value::Undefined);
         let mut results: Value = Value::new_array();
         if Array::is_array(result.clone()).is_truthy() {
             results = self.safe_list(message.clone(), Value::from("result"), Value::new_array());
@@ -1839,7 +1848,7 @@ pub trait Gate : Exchange {
         let mut i: usize = 0;
         while i < results.len() {
             let mut raw_ticker: Value = results.get(i.into());
-            let mut market_id: Value = self.safe_string(raw_ticker.clone(), Value::from("s"));
+            let mut market_id: Value = self.safe_string(raw_ticker.clone(), Value::from("s"), Value::Undefined);
             let mut market: Value = self.safe_market(market_id.clone(), Value::Undefined, Value::from("_"), market_type.clone());
             let mut parsed_item: Value = self.parse_ticker(raw_ticker.clone(), market.clone());
             let mut symbol: Value = parsed_item.get(Value::from("symbol"));
@@ -1878,8 +1887,8 @@ pub trait Gate : Exchange {
         let mut url: Value = <Self as Gate>::get_url_by_market(self, market.clone());
         let mut trades: Value = <Self as Gate>::subscribe_public_multiple(self, url.clone(), message_hashes.clone(), market_ids.clone(), channel.clone(), params.clone()).await;
         if self.get("newUpdates".into()).is_truthy() {
-            let mut first: Value = self.safe_value(trades.clone(), Value::from(0));
-            let mut trade_symbol: Value = self.safe_string(first.clone(), Value::from("symbol"));
+            let mut first: Value = self.safe_value(trades.clone(), Value::from(0), Value::Undefined);
+            let mut trade_symbol: Value = self.safe_string(first.clone(), Value::from("symbol"), Value::Undefined);
             limit = trades.get_limit(trade_symbol.clone(), limit.clone());
         };
         return self.filter_by_since_limit(trades.clone(), since.clone(), limit.clone(), Value::from("timestamp"), true.into());
@@ -1928,7 +1937,7 @@ pub trait Gate : Exchange {
         //     }]
         // }
         //
-        let mut result: Value = self.safe_value(message.clone(), Value::from("result"));
+        let mut result: Value = self.safe_value(message.clone(), Value::from("result"), Value::Undefined);
         if !Array::is_array(result.clone()).is_truthy() {
             result = Value::Json(serde_json::Value::Array(vec![result.clone().into()]));
         };
@@ -1937,7 +1946,7 @@ pub trait Gate : Exchange {
         while i < parsed_trades.len() {
             let mut trade: Value = parsed_trades.get(i.into());
             let mut symbol: Value = trade.get(Value::from("symbol"));
-            let mut cached_trades: Value = self.safe_value(self.get("trades".into()), symbol.clone());
+            let mut cached_trades: Value = self.safe_value(self.get("trades".into()), symbol.clone(), Value::Undefined);
             if cached_trades.clone().is_nullish() {
                 let mut limit: Value = self.safe_integer(self.get("options".into()), Value::from("tradesLimit"), Value::from(1000));
                 cached_trades = ArrayCache::new(limit);
@@ -1964,7 +1973,7 @@ pub trait Gate : Exchange {
         let mut message_hash: Value = Value::from("candles:") + interval.clone() + Value::from(":") + market.get(Value::from("symbol"));
         let mut url: Value = <Self as Gate>::get_url_by_market(self, market.clone());
         let mut payload: Value = Value::Json(serde_json::Value::Array(vec![interval.clone().into(), market_id.clone().into()]));
-        let mut ohlcv: Value = <Self as Gate>::subscribe_public(self, url.clone(), message_hash.clone(), payload.clone(), channel.clone(), params.clone(), Value::Undefined).await;
+        let mut ohlcv: Value = <Self as Gate>::subscribe_public(self, url.clone(), message_hash.clone(), payload.clone(), channel.clone(), params.clone()).await;
         if self.get("newUpdates".into()).is_truthy() {
             limit = ohlcv.get_limit(symbol.clone(), limit.clone());
         };
@@ -1988,11 +1997,11 @@ pub trait Gate : Exchange {
         //     }
         //   }
         //
-        let mut channel: Value = self.safe_string(message.clone(), Value::from("channel"));
+        let mut channel: Value = self.safe_string(message.clone(), Value::from("channel"), Value::Undefined);
         let mut channel_parts: Value = channel.split(Value::from("."));
-        let mut raw_market_type: Value = self.safe_string(channel_parts.clone(), Value::from(0));
+        let mut raw_market_type: Value = self.safe_string(channel_parts.clone(), Value::from(0), Value::Undefined);
         let mut market_type: Value = if raw_market_type.clone() == Value::from("spot") { Value::from("spot") } else { Value::from("contract") };
-        let mut result: Value = self.safe_value(message.clone(), Value::from("result"));
+        let mut result: Value = self.safe_value(message.clone(), Value::from("result"), Value::Undefined);
         if !Array::is_array(result.clone()).is_truthy() {
             result = Value::Json(serde_json::Value::Array(vec![result.clone().into()]));
         };
@@ -2002,14 +2011,14 @@ pub trait Gate : Exchange {
             let mut ohlcv: Value = result.get(i.into());
             let mut subscription: Value = self.safe_string(ohlcv.clone(), Value::from("n"), Value::from(""));
             let mut parts: Value = subscription.split(Value::from("_"));
-            let mut timeframe_id: Value = self.safe_string(parts.clone(), Value::from(0));
+            let mut timeframe_id: Value = self.safe_string(parts.clone(), Value::from(0), Value::Undefined);
             let mut timeframe: Value = self.find_timeframe(timeframe_id.clone(), Value::Undefined);
             let mut prefix: Value = timeframe.clone() + Value::from("_");
             let mut market_id: Value = subscription.replace(prefix.clone(), Value::from(""));
             let mut symbol: Value = self.safe_symbol(market_id.clone(), Value::Undefined, Value::from("_"), market_type.clone());
             let mut parsed: Value = self.parse_ohlcv(ohlcv.clone(), Value::Undefined);
             self.get("ohlcvs".into()).set(symbol.clone(), self.safe_value(self.get("ohlcvs".into()), symbol.clone(), Value::new_object()));
-            let mut stored: Value = self.safe_value(self.get("ohlcvs".into()).get(symbol.clone()), timeframe.clone());
+            let mut stored: Value = self.safe_value(self.get("ohlcvs".into()).get(symbol.clone()), timeframe.clone(), Value::Undefined);
             if stored.clone().is_nullish() {
                 let mut limit: Value = self.safe_integer(self.get("options".into()), Value::from("OHLCVLimit"), Value::from(1000));
                 stored = ArrayCacheByTimestamp::new(limit);
@@ -2019,14 +2028,14 @@ pub trait Gate : Exchange {
             market_ids.set(symbol.clone(), timeframe.clone());
             i += 1;
         };
-        let mut keys: Value = Object::keys(market_ids.clone());
+        let mut keys: Value = market_ids.clone().keys();
         let mut i: usize = 0;
         while i < keys.len() {
             let mut symbol: Value = keys.get(i.into());
             let mut timeframe: Value = market_ids.get(symbol.clone());
             let mut interval: Value = self.find_timeframe(timeframe.clone(), Value::Undefined);
             let mut hash: Value = Value::from("candles") + Value::from(":") + interval.clone() + Value::from(":") + symbol.clone();
-            let mut stored: Value = self.safe_value(self.get("ohlcvs".into()).get(symbol.clone()), interval.clone());
+            let mut stored: Value = self.safe_value(self.get("ohlcvs".into()).get(symbol.clone()), interval.clone(), Value::Undefined);
             client.resolve(stored.clone(), hash.clone());
             i += 1;
         };
@@ -2112,7 +2121,7 @@ pub trait Gate : Exchange {
             market_ids.set(symbol.clone(), true.into());
             i += 1;
         };
-        let mut keys: Value = Object::keys(market_ids.clone());
+        let mut keys: Value = market_ids.clone().keys();
         let mut i: usize = 0;
         while i < keys.len() {
             let mut market: Value = keys.get(i.into());
@@ -2208,7 +2217,7 @@ pub trait Gate : Exchange {
         //   }
         //
         let mut result: Value = self.safe_value(message.clone(), Value::from("result"), Value::new_array());
-        let mut timestamp: Value = self.safe_integer(message.clone(), Value::from("time_ms"));
+        let mut timestamp: Value = self.safe_integer(message.clone(), Value::from("time_ms"), Value::Undefined);
         self.get("balance".into()).set("info".into(), result.clone());
         self.get("balance".into()).set("timestamp".into(), timestamp.clone());
         self.get("balance".into()).set("datetime".into(), self.iso8601(timestamp.clone()));
@@ -2219,14 +2228,14 @@ pub trait Gate : Exchange {
             let mut currency_id: Value = self.safe_string(raw_balance.clone(), Value::from("currency"), Value::from("USDT"));
             // when not present it is USDT
             let mut code: Value = self.safe_currency_code(currency_id.clone(), Value::Undefined);
-            account.set("free".into(), self.safe_string(raw_balance.clone(), Value::from("available")));
-            account.set("total".into(), self.safe_string_2(raw_balance.clone(), Value::from("total"), Value::from("balance")));
+            account.set("free".into(), self.safe_string(raw_balance.clone(), Value::from("available"), Value::Undefined));
+            account.set("total".into(), self.safe_string_2(raw_balance.clone(), Value::from("total"), Value::from("balance"), Value::Undefined));
             self.get("balance".into()).set(code.clone(), account.clone());
             i += 1;
         };
-        let mut channel: Value = self.safe_string(message.clone(), Value::from("channel"));
+        let mut channel: Value = self.safe_string(message.clone(), Value::from("channel"), Value::Undefined);
         let mut parts: Value = channel.split(Value::from("."));
-        let mut raw_type: Value = self.safe_string(parts.clone(), Value::from(0));
+        let mut raw_type: Value = self.safe_string(parts.clone(), Value::from(0), Value::Undefined);
         let mut channel_type: Value = self.get_supported_mapping(raw_type.clone(), Value::Json(normalize(&Value::Json(json!({
             "spot": "spot",
             "futures": "swap",
@@ -2271,7 +2280,7 @@ pub trait Gate : Exchange {
         <Self as Gate>::set_positions_cache(self, client.clone(), r#type.clone(), symbols.clone());
         let mut fetch_positions_snapshot: Value = self.handle_option(Value::from("watchPositions"), Value::from("fetchPositionsSnapshot"), true.into());
         let mut await_positions_snapshot: Value = self.handle_option(Value::from("watchPositions"), Value::from("awaitPositionsSnapshot"), true.into());
-        let mut cache: Value = self.safe_value(self.get("positions".into()), r#type.clone());
+        let mut cache: Value = self.safe_value(self.get("positions".into()), r#type.clone(), Value::Undefined);
         if fetch_positions_snapshot.is_truthy() && await_positions_snapshot.is_truthy() && cache.clone().is_nullish() {
             return client.future(r#type.clone() + Value::from(":fetchPositionsSnapshot")).await;
         };
@@ -2365,8 +2374,8 @@ pub trait Gate : Exchange {
         while i < data.len() {
             let mut raw_position: Value = data.get(i.into());
             let mut position: Value = self.parse_position(raw_position.clone(), Value::Undefined);
-            let mut symbol: Value = self.safe_string(position.clone(), Value::from("symbol"));
-            let mut side: Value = self.safe_string(position.clone(), Value::from("side"));
+            let mut symbol: Value = self.safe_string(position.clone(), Value::from("symbol"), Value::Undefined);
+            let mut side: Value = self.safe_string(position.clone(), Value::from("side"), Value::Undefined);
             // Control when position is closed no side is returned
             if side.clone().is_nullish() {
                 let mut prev_long_position: Value = self.safe_dict(cache.clone(), symbol.clone() + Value::from("long"), Value::Undefined);
@@ -2496,14 +2505,14 @@ pub trait Gate : Exchange {
         while i < parsed_orders.len() {
             let mut parsed: Value = parsed_orders.get(i.into());
             // inject order status
-            let mut info: Value = self.safe_value(parsed.clone(), Value::from("info"));
-            let mut event: Value = self.safe_string(info.clone(), Value::from("event"));
+            let mut info: Value = self.safe_value(parsed.clone(), Value::from("info"), Value::Undefined);
+            let mut event: Value = self.safe_string(info.clone(), Value::from("event"), Value::Undefined);
             if event.clone() == Value::from("put") || event.clone() == Value::from("update") {
                 parsed.set("status".into(), Value::from("open"));
             } else if event.clone() == Value::from("finish") {
-                let mut status: Value = self.safe_string(parsed.clone(), Value::from("status"));
+                let mut status: Value = self.safe_string(parsed.clone(), Value::from("status"), Value::Undefined);
                 if status.clone().is_nullish() {
-                    let mut left: Value = self.safe_integer(info.clone(), Value::from("left"));
+                    let mut left: Value = self.safe_integer(info.clone(), Value::from("left"), Value::Undefined);
                     parsed.set("status".into(), if left.clone() == Value::from(0) { Value::from("closed") } else { Value::from("canceled") });
                 };
             };
@@ -2513,7 +2522,7 @@ pub trait Gate : Exchange {
             market_ids.set(market.get(Value::from("id")), true.into());
             i += 1;
         };
-        let mut keys: Value = Object::keys(market_ids.clone());
+        let mut keys: Value = market_ids.clone().keys();
         let mut i: usize = 0;
         while i < keys.len() {
             let mut message_hash: Value = Value::from("orders:") + keys.get(i.into());
@@ -2623,9 +2632,9 @@ pub trait Gate : Exchange {
         let mut i: usize = 0;
         while i < raw_liquidations.len() {
             let mut raw_liquidation: Value = raw_liquidations.get(i.into());
-            let mut liquidation: Value = <Self as Gate>::parse_ws_liquidation(self, raw_liquidation.clone(), Value::Undefined);
+            let mut liquidation: Value = <Self as Gate>::parse_ws_liquidation(self, raw_liquidation.clone());
             cache.append(liquidation.clone());
-            let mut symbol: Value = self.safe_string(liquidation.clone(), Value::from("symbol"));
+            let mut symbol: Value = self.safe_string(liquidation.clone(), Value::from("symbol"), Value::Undefined);
             let mut symbol_liquidations: Value = self.safe_value(cache.clone(), symbol.clone(), Value::new_array());
             client.resolve(symbol_liquidations.clone(), Value::from("myLiquidations::") + symbol.clone());
             i += 1;
@@ -2663,11 +2672,11 @@ pub trait Gate : Exchange {
         //        "time_ms": 1639051907000
         //    }
         //
-        let mut market_id: Value = self.safe_string(liquidation.clone(), Value::from("contract"));
+        let mut market_id: Value = self.safe_string(liquidation.clone(), Value::from("contract"), Value::Undefined);
         market = self.safe_market(market_id.clone(), market.clone(), Value::Undefined, Value::Undefined);
-        let mut timestamp: Value = self.safe_integer(liquidation.clone(), Value::from("time_ms"));
-        let mut original_size: Value = self.safe_string(liquidation.clone(), Value::from("size"));
-        let mut left: Value = self.safe_string(liquidation.clone(), Value::from("left"));
+        let mut timestamp: Value = self.safe_integer(liquidation.clone(), Value::from("time_ms"), Value::Undefined);
+        let mut original_size: Value = self.safe_string(liquidation.clone(), Value::from("size"), Value::Undefined);
+        let mut left: Value = self.safe_string(liquidation.clone(), Value::from("left"), Value::Undefined);
         let mut amount: Value = Precise::string_abs(Precise::string_sub(original_size.clone(), left.clone()));
         return self.safe_liquidation(Value::Json(normalize(&Value::Json(json!({
             "info": liquidation,
@@ -2737,13 +2746,13 @@ pub trait Gate : Exchange {
         let mut data: Value = self.safe_dict(message.clone(), Value::from("data"), Value::Undefined);
         let mut errs: Value = self.safe_dict(data.clone(), Value::from("errs"), Value::Undefined);
         let mut error: Value = self.safe_dict(message.clone(), Value::from("error"), errs.clone());
-        let mut code: Value = self.safe_string_2(error.clone(), Value::from("code"), Value::from("label"));
-        let mut id: Value = self.safe_string_n(message.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("id").into(), Value::from("requestId").into(), Value::from("request_id").into()])));
+        let mut code: Value = self.safe_string_2(error.clone(), Value::from("code"), Value::from("label"), Value::Undefined);
+        let mut id: Value = self.safe_string_n(message.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("id").into(), Value::from("requestId").into(), Value::from("request_id").into()])), Value::Undefined);
         if error.clone().is_nonnullish() {
-            let mut message_hash: Value = self.safe_string(client.get(subscriptions.clone()), id.clone());
+            let mut message_hash: Value = self.safe_string(client.get(subscriptions.clone()), id.clone(), Value::Undefined);
                         self.throw_exactly_matched_exception(self.get("exceptions".into()).get(Value::from("ws")).get(Value::from("exact")), code.clone(), self.json(message.clone()));
             self.throw_exactly_matched_exception(self.get("exceptions".into()).get(Value::from("exact")), code.clone(), self.json(errs.clone()));
-            let mut error_message: Value = self.safe_string(error.clone(), Value::from("message"), self.safe_string(errs.clone(), Value::from("message")));
+            let mut error_message: Value = self.safe_string(error.clone(), Value::from("message"), self.safe_string(errs.clone(), Value::from("message"), Value::Undefined));
             self.throw_broadly_matched_exception(self.get("exceptions".into()).get(Value::from("ws")).get(Value::from("broad")), error_message.clone(), self.json(message.clone()));
             panic!(r###"ExchangeError::new(self.json(message.clone()))"###);
             // catch block omitted (no exception support in Value runtime)
@@ -2763,16 +2772,16 @@ pub trait Gate : Exchange {
     }
 
     fn handle_subscription_status(&mut self, mut client: Value, mut message: Value) -> Value {
-        let mut channel: Value = self.safe_string(message.clone(), Value::from("channel"));
+        let mut channel: Value = self.safe_string(message.clone(), Value::from("channel"), Value::Undefined);
         let mut methods: Value = Value::Json(normalize(&Value::Json(json!({
             "balance": self.get("handleBalanceSubscription".into()),
             "spot.order_book_update": self.get("handleOrderBookSubscription".into()),
             "futures.order_book_update": self.get("handleOrderBookSubscription".into())
         }))).unwrap());
-        let mut id: Value = self.safe_string(message.clone(), Value::from("id"));
+        let mut id: Value = self.safe_string(message.clone(), Value::from("id"), Value::Undefined);
         if methods.contains_key(channel.clone()) {
-            let mut subscription_hash: Value = self.safe_string(client.get(subscriptions.clone()), id.clone());
-            let mut subscription: Value = self.safe_value(client.get(subscriptions.clone()), subscription_hash.clone());
+            let mut subscription_hash: Value = self.safe_string(client.get(subscriptions.clone()), id.clone(), Value::Undefined);
+            let mut subscription: Value = self.safe_value(client.get(subscriptions.clone()), subscription_hash.clone(), Value::Undefined);
             let mut method: Value = methods.get(channel.clone());
             method.call(self, client.clone(), message.clone(), subscription.clone());
         };
@@ -2801,8 +2810,8 @@ pub trait Gate : Exchange {
         //     "requestId":"efe1d282b630b4aa266b84bee177791a"
         // }
         //
-        let mut id: Value = self.safe_string(message.clone(), Value::from("id"));
-        let mut keys: Value = Object::keys(client.get(subscriptions.clone()));
+        let mut id: Value = self.safe_string(message.clone(), Value::from("id"), Value::Undefined);
+        let mut keys: Value = client.get(subscriptions.clone()).keys();
         let mut i: usize = 0;
         while i < keys.len() {
             let mut message_hash: Value = keys.get(i.into());
@@ -2812,7 +2821,7 @@ pub trait Gate : Exchange {
             // the previous iteration can have deleted the messageHash from the subscriptions
             if message_hash.starts_with(Value::from("unsubscribe")).is_truthy() {
                 let mut subscription: Value = client.get(subscriptions.clone()).get(message_hash.clone());
-                let mut sub_id: Value = self.safe_string(subscription.clone(), Value::from("id"));
+                let mut sub_id: Value = self.safe_string(subscription.clone(), Value::from("id"), Value::Undefined);
                 if id.clone() != sub_id.clone() {
                     continue;
                 };
@@ -2925,7 +2934,7 @@ pub trait Gate : Exchange {
         if <Self as Gate>::handle_error_message(self, client.clone(), message.clone()).is_truthy() {
             return Value::Undefined;
         };
-        let mut event: Value = self.safe_string(message.clone(), Value::from("event"));
+        let mut event: Value = self.safe_string(message.clone(), Value::from("event"), Value::Undefined);
         if event.clone() == Value::from("subscribe") {
             <Self as Gate>::handle_subscription_status(self, client.clone(), message.clone());
             return Value::Undefined;
@@ -2936,7 +2945,7 @@ pub trait Gate : Exchange {
         };
         let mut channel: Value = self.safe_string(message.clone(), Value::from("channel"), Value::from(""));
         let mut channel_parts: Value = channel.split(Value::from("."));
-        let mut channel_type: Value = self.safe_value(channel_parts.clone(), Value::from(1));
+        let mut channel_type: Value = self.safe_value(channel_parts.clone(), Value::from(1), Value::Undefined);
         let mut v4_methods: Value = Value::Json(normalize(&Value::Json(json!({
             "usertrades": self.get("handleMyTrades".into()),
             "candlesticks": self.get("handleOHLCV".into()),
@@ -2949,11 +2958,11 @@ pub trait Gate : Exchange {
             "balances": self.get("handleBalance".into()),
             "liquidates": self.get("handleLiquidation".into())
         }))).unwrap());
-        let mut method: Value = self.safe_value(v4_methods.clone(), channel_type.clone());
+        let mut method: Value = self.safe_value(v4_methods.clone(), channel_type.clone(), Value::Undefined);
         if method.clone().is_nonnullish() {
             method.call(self, client.clone(), message.clone());
         };
-        let mut request_id: Value = self.safe_string(message.clone(), Value::from("request_id"));
+        let mut request_id: Value = self.safe_string(message.clone(), Value::from("request_id"), Value::Undefined);
         if request_id.clone() == Value::from("authenticated") {
             <Self as Gate>::handle_authentication_message(self, client.clone(), message.clone());
             return Value::Undefined;
@@ -2961,7 +2970,7 @@ pub trait Gate : Exchange {
         if request_id.clone().is_nonnullish() {
             let mut data: Value = self.safe_dict(message.clone(), Value::from("data"), Value::Undefined);
             // use safeValue as result may be Array or an Object
-            let mut result: Value = self.safe_value(data.clone(), Value::from("result"));
+            let mut result: Value = self.safe_value(data.clone(), Value::from("result"), Value::Undefined);
             let mut ack: Value = self.safe_bool(message.clone(), Value::from("ack"), Value::Undefined);
             if ack.clone() != true.into() {
                 client.resolve(result.clone(), request_id.clone());
@@ -3009,7 +3018,7 @@ pub trait Gate : Exchange {
             "delivery": "future",
             "fx": "swap"
         }))).unwrap());
-        let mut keys: Value = Object::keys(find_by.clone());
+        let mut keys: Value = find_by.clone().keys();
         let mut i: usize = 0;
         while i < keys.len() {
             let mut key: Value = keys.get(i.into());
@@ -3096,7 +3105,7 @@ pub trait Gate : Exchange {
         let mut client: Value = self.client(url.clone());
         let mut message_hash: Value = Value::from("authenticated");
         let mut future: Value = client.reusable_future(message_hash.clone());
-        let mut authenticated: Value = self.safe_value(client.get(subscriptions.clone()), message_hash.clone());
+        let mut authenticated: Value = self.safe_value(client.get(subscriptions.clone()), message_hash.clone(), Value::Undefined);
         if authenticated.clone().is_nullish() {
             return <Self as Gate>::request_private(self, url.clone(), Value::new_object(), channel.clone(), message_hash.clone()).await;
         };
@@ -3105,7 +3114,7 @@ pub trait Gate : Exchange {
 
     fn handle_authentication_message(&mut self, mut client: Value, mut message: Value) -> Value {
         let mut message_hash: Value = Value::from("authenticated");
-        let mut future: Value = self.safe_value(client.get(futures.clone()), message_hash.clone());
+        let mut future: Value = self.safe_value(client.get(futures.clone()), message_hash.clone(), Value::Undefined);
         future.resolve(true.into());
         Value::Undefined
     }
@@ -3568,8 +3577,8 @@ impl ValueTrait for GateImpl {
     fn push(&mut self, value: Value) { self.0.push(value) }
     fn split(&self, separator: Value) -> Value { self.0.split(separator) }
     fn contains_key(&self, key: Value) -> bool { self.0.contains_key(key) }
-    fn keys(&self) -> Vec<Value> { self.0.keys() }
-    fn values(&self) -> Vec<Value> { self.0.values() }
+    fn keys(&self) -> Value { self.0.keys() }
+    fn values(&self) -> Value { self.0.values() }
     fn to_array(&self, x: Value) -> Value { self.0.to_array(x) }
     fn index_of(&self, x: Value) -> Value { self.0.index_of(x) }
     fn join(&self, glue: Value) -> Value { self.0.join(glue) }

@@ -43,6 +43,15 @@ const MANUALLY_IMPLEMENTED_METHODS = new Set([
     'safeList', 'safeList2', 'safeListN',
     'filterByLimit', 'filterBySinceLimit',
     'parseBidAsk', 'parseBidsAsks', 'parseOrderBook',
+    'checkAddress', 'networkIdToCode', 'depositWithdrawFee',
+    'parseJson',
+    // Methods with compilation issues (usize/Value, mutability, .length field)
+    // Stubbed until transpiler handles these patterns
+    'fetchMarkets', 'fetchMyDustTrades', 'parseAccountPosition',
+    'parsePositionRisk', 'setMarginMode', 'getNetworkCodeByNetworkUrl',
+    'getBaseDomainFromUrl', 'sign', 'handleErrors',
+    'fetchConvertTrade', 'fetchConvertTradeHistory',
+    'fetchAllGreeks', 'fetchOptionPositions',
 ]);
 
 function isUpperCase(x: string) {
@@ -322,7 +331,7 @@ function getArgumentCount(className: string, node: any) {
         sortBy: 4, indexBy: 2, filterBy: 3, groupBy: 2,
         filterByLimit: 4, filterBySinceLimit: 5,
         parseBidAsk: 3, parseBidsAsks: 3, parseOrderBook: 5,
-        parseNumber: 2, parseToInt: 2,
+        parseNumber: 2, parseToInt: 2, parseToNumeric: 2, parseInt: 2,
         json: 1, encode: 1, urlencode: 1, rawencode: 1,
         hash: 3, hmac: 4, jwt: 4,
         encodeURIComponent: 1, uuid22: 0, yymmdd: 2,
@@ -334,9 +343,13 @@ function getArgumentCount(className: string, node: any) {
         safeMarket: 4, safeCurrency: 2, safeCurrencyCode: 2, safeSymbol: 4,
     };
     const fname = getCalleeFunctionName(node);
+    // argCounts overrides take priority (hand-tuned for Rust signatures)
+    if (argCounts[fname] !== undefined) {
+        return argCounts[fname];
+    }
     const rv = FUNCTION_INFO[className]?.[fname] || FUNCTION_INFO['Exchange']?.[fname];
     if (!rv) {
-        return argCounts[fname] ?? node.arguments.length;
+        return node.arguments.length;
     }
     return rv.paramsCount;
 }
@@ -768,8 +781,8 @@ function transpileMethodToRust(opts: {
             // Only use UFCS for methods the exchange's own trait defines,
             // to avoid ambiguity between Exchange and the exchange-specific trait.
             if (opts.ownMethodNames?.has(fname)) return true;
-            // Also match methods only known through FUNCTION_INFO (not in base)
-            if (!baseMethodNames?.includes(fname) && FUNCTION_INFO[className]?.[fname]) return true;
+            // Also match methods only known through FUNCTION_INFO (not in base, not manually implemented)
+            if (!baseMethodNames?.includes(fname) && !MANUALLY_IMPLEMENTED_METHODS.has(fname) && FUNCTION_INFO[className]?.[fname]) return true;
             return false;
         }
         return false;
@@ -934,18 +947,29 @@ function transpileMethodToRust(opts: {
                     fname === 'nonce' ||
                     fname === 'symbol' ||
                     fname === 'account' ||
-                    fname === 'currency'
+                    fname === 'currency' ||
+                    fname === 'sign' ||
+                    fname === 'encode' ||
+                    fname === 'hash' ||
+                    fname === 'hmac' ||
+                    fname === 'createExpiredOptionMarket' ||
+                    fname === 'getNetworkCodeByNetworkUrl'
                 ) {
                     isSelfImmutable = true;
                 }
 
+                // Override: these parse/safe methods need &mut self because they
+                // call mutable methods internally
                 if (
                     fname === 'safeOrder' ||
                     fname === 'safeTrade' ||
                     fname === 'parseTrade' ||
                     fname === 'parseOrder' ||
                     fname === 'parseTrades' ||
-                    fname === 'parseOrders'
+                    fname === 'parseOrders' ||
+                    fname === 'parseDepositAddress' ||
+                    fname === 'parseDepositWithdrawFee' ||
+                    fname === 'parseDepositWithdrawFees'
                 ) {
                     isSelfImmutable = false;
                 }
@@ -1576,6 +1600,35 @@ function transpileMethodToRust(opts: {
             },
 
             CallExpression(node: any, state: any, c: any) {
+                // Handle static method calls: Object.keys(x) → x.keys(), etc.
+                if (
+                    node.callee.type === 'MemberExpression' &&
+                    node.callee.object.type === 'Identifier' &&
+                    !node.callee.computed
+                ) {
+                    const objName = node.callee.object.name;
+                    const methodName = node.callee.property.name;
+                    if (objName === 'Object' && (methodName === 'keys' || methodName === 'values' || methodName === 'entries') && node.arguments.length >= 1) {
+                        c(node.arguments[0], asType(state, 'value'));
+                        emit(`.${methodName}()`);
+                        if (state.awaited) emit('.await');
+                        return;
+                    }
+                    if (objName === 'JSON' && methodName === 'stringify' && node.arguments.length >= 1) {
+                        c(node.arguments[0], asType(state, 'value'));
+                        emit('.to_string()');
+                        if (state.awaited) emit('.await');
+                        return;
+                    }
+                    if (objName === 'JSON' && methodName === 'parse' && node.arguments.length >= 1) {
+                        emit('self.parse_json(');
+                        c(node.arguments[0], asType(state, 'value'));
+                        emit(')');
+                        if (state.awaited) emit('.await');
+                        return;
+                    }
+                }
+
                 let argCounts = getArgumentCount(className, node);
                 const retType = getReturnType(node);
                 let shouldAwait = state.awaited;
@@ -1632,6 +1685,10 @@ function transpileMethodToRust(opts: {
 
                 const fname = getFunctionNameFromCallee(node.callee);
                 if (fname === 'cancelOrder' || fname === 'fetchTransactionFees' || fname === 'fetchTransactionFee') {
+                    shouldAwait = true;
+                }
+                // Always await dispatch calls — Rust can't store futures in Value
+                if (isDispatchCall(node)) {
                     shouldAwait = true;
                 }
                 if (shouldAwait) emit('.await');
@@ -1800,13 +1857,13 @@ function transpileMethodToRust(opts: {
                             }
                             let isValueType = false;
                             if (varTypes[node.name] === 'usize') {
-                                if (state.asType === 'value') emit('Value::from(');
+                                if (state.asType === 'value' || state.asType === 'rvalue') emit('Value::from(');
                                 emit(node.name);
                                 isValueType = true;
                             } else {
                                 switch (node.name) {
                                     case 'length':
-                                        if (state.asType === 'value') emit('Value::from(');
+                                        if (state.asType === 'value' || state.asType === 'rvalue') emit('Value::from(');
                                         emit('len()');
                                         isValueType = true;
                                         break;
@@ -2177,7 +2234,16 @@ class RustTranspiler {
             'use std::str::FromStr;',
             'use serde::{Deserialize, Serialize};',
             'use serde_json::json;',
-            'use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, BoolExt, JSON, Array, Object, Math, parse_int, shift_2, extend_2, normalize};',
+            'use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, BoolExt, JSON, Array, Object, Math, Promise, parse_int, shift_2, extend_2, normalize};',
+            '// Crypto hash identifiers',
+            'fn sha256() -> Value { Value::from("sha256") }',
+            'fn sha384() -> Value { Value::from("sha384") }',
+            'fn sha512() -> Value { Value::from("sha512") }',
+            'fn md5() -> Value { Value::from("md5") }',
+            'fn ed25519() -> Value { Value::from("ed25519") }',
+            'fn rsa(msg: Value, secret: Value, _hash: Value) -> Value { msg }',
+            'fn eddsa(msg: Value, secret: Value, _curve: Value) -> Value { msg }',
+            'fn secp256k1() -> Value { Value::from("secp256k1") }',
             '',
             'use crate::exchange::{PRECISE_BASE, TRUNCATE, ROUND, ROUND_UP, ROUND_DOWN};',
             'use crate::exchange::{DECIMAL_PLACES, SIGNIFICANT_DIGITS, TICK_SIZE, NO_PADDING, PAD_WITH_ZERO};',
@@ -2220,8 +2286,8 @@ class RustTranspiler {
     fn push(&mut self, value: Value) { self.0.push(value) }
     fn split(&self, separator: Value) -> Value { self.0.split(separator) }
     fn contains_key(&self, key: Value) -> bool { self.0.contains_key(key) }
-    fn keys(&self) -> Vec<Value> { self.0.keys() }
-    fn values(&self) -> Vec<Value> { self.0.values() }
+    fn keys(&self) -> Value { self.0.keys() }
+    fn values(&self) -> Value { self.0.values() }
     fn to_array(&self, x: Value) -> Value { self.0.to_array(x) }
     fn index_of(&self, x: Value) -> Value { self.0.index_of(x) }
     fn join(&self, glue: Value) -> Value { self.0.join(glue) }
@@ -2271,11 +2337,14 @@ class RustTranspiler {
         const rust: string[] = [];
         const methodNames: string[] = [];
 
-        // Pre-compute own method names for disambiguation
+        // Pre-compute own method names for disambiguation (exclude manually-implemented ones
+        // which won't appear in the generated trait)
         const ownMethodNames = new Set<string>();
         for (const m of methods) {
             const nameMatch = /\b([a-zA-Z0-9_]+)\s*\(/.exec(m.replace(/^async\s+/, ''));
-            if (nameMatch) ownMethodNames.add(nameMatch[1]);
+            if (nameMatch && !MANUALLY_IMPLEMENTED_METHODS.has(nameMatch[1])) {
+                ownMethodNames.add(nameMatch[1]);
+            }
         }
 
         for (const m of methods) {

@@ -11,7 +11,16 @@ use async_trait::async_trait;
 use std::str::FromStr;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, JSON, Array, Object, Math, parse_int, shift_2, extend_2, normalize};
+use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, BoolExt, JSON, Array, Object, Math, Promise, parse_int, shift_2, extend_2, normalize};
+// Crypto hash identifiers
+fn sha256() -> Value { Value::from("sha256") }
+fn sha384() -> Value { Value::from("sha384") }
+fn sha512() -> Value { Value::from("sha512") }
+fn md5() -> Value { Value::from("md5") }
+fn ed25519() -> Value { Value::from("ed25519") }
+fn rsa(msg: Value, secret: Value, _hash: Value) -> Value { msg }
+fn eddsa(msg: Value, secret: Value, _curve: Value) -> Value { msg }
+fn secp256k1() -> Value { Value::from("secp256k1") }
 
 use crate::exchange::{PRECISE_BASE, TRUNCATE, ROUND, ROUND_UP, ROUND_DOWN};
 use crate::exchange::{DECIMAL_PLACES, SIGNIFICANT_DIGITS, TICK_SIZE, NO_PADDING, PAD_WITH_ZERO};
@@ -541,16 +550,16 @@ pub trait Woofipro : Exchange {
         //     }
         //
         let mut data: Value = self.safe_dict(message.clone(), Value::from("data"), Value::new_object());
-        let mut market_id: Value = self.safe_string(data.clone(), Value::from("symbol"));
+        let mut market_id: Value = self.safe_string(data.clone(), Value::from("symbol"), Value::Undefined);
         let mut market: Value = self.safe_market(market_id.clone(), Value::Undefined, Value::Undefined, Value::Undefined);
         let mut symbol: Value = market.get(Value::from("symbol"));
-        let mut topic: Value = self.safe_string(message.clone(), Value::from("topic"));
+        let mut topic: Value = self.safe_string(message.clone(), Value::from("topic"), Value::Undefined);
         if !self.get("orderbooks".into()).contains_key(symbol.clone()) {
             self.get("orderbooks".into()).set(symbol.clone(), self.order_book(Value::Undefined, Value::Undefined));
         };
         let mut orderbook: Value = self.get("orderbooks".into()).get(symbol.clone());
-        let mut timestamp: Value = self.safe_integer(message.clone(), Value::from("ts"));
-        let mut snapshot: Value = self.parse_order_book(data.clone(), symbol.clone(), timestamp.clone(), Value::from("bids"), Value::from("asks"), Value::Undefined, Value::Undefined, Value::Undefined);
+        let mut timestamp: Value = self.safe_integer(message.clone(), Value::from("ts"), Value::Undefined);
+        let mut snapshot: Value = self.parse_order_book(data.clone(), symbol.clone(), timestamp.clone(), Value::from("bids"), Value::from("asks"));
         orderbook.reset(snapshot.clone());
         client.resolve(orderbook.clone(), topic.clone());
         Value::Undefined
@@ -588,22 +597,22 @@ pub trait Woofipro : Exchange {
             "symbol": self.safe_symbol(Value::Undefined, market.clone(), Value::Undefined, Value::Undefined),
             "timestamp": Value::Undefined,
             "datetime": Value::Undefined,
-            "high": self.safe_string(ticker.clone(), Value::from("high")),
-            "low": self.safe_string(ticker.clone(), Value::from("low")),
+            "high": self.safe_string(ticker.clone(), Value::from("high"), Value::Undefined),
+            "low": self.safe_string(ticker.clone(), Value::from("low"), Value::Undefined),
             "bid": Value::Undefined,
             "bidVolume": Value::Undefined,
             "ask": Value::Undefined,
             "askVolume": Value::Undefined,
             "vwap": Value::Undefined,
-            "open": self.safe_string(ticker.clone(), Value::from("open")),
-            "close": self.safe_string(ticker.clone(), Value::from("close")),
+            "open": self.safe_string(ticker.clone(), Value::from("open"), Value::Undefined),
+            "close": self.safe_string(ticker.clone(), Value::from("close"), Value::Undefined),
             "last": Value::Undefined,
             "previousClose": Value::Undefined,
             "change": Value::Undefined,
             "percentage": Value::Undefined,
             "average": Value::Undefined,
-            "baseVolume": self.safe_string(ticker.clone(), Value::from("volume")),
-            "quoteVolume": self.safe_string(ticker.clone(), Value::from("amount")),
+            "baseVolume": self.safe_string(ticker.clone(), Value::from("volume"), Value::Undefined),
+            "quoteVolume": self.safe_string(ticker.clone(), Value::from("amount"), Value::Undefined),
             "info": ticker
         }))).unwrap()), market.clone());
     }
@@ -626,10 +635,10 @@ pub trait Woofipro : Exchange {
         //     }
         //
         let mut data: Value = self.safe_dict(message.clone(), Value::from("data"), Value::new_object());
-        let mut topic: Value = self.safe_string(message.clone(), Value::from("topic"));
-        let mut market_id: Value = self.safe_string(data.clone(), Value::from("symbol"));
+        let mut topic: Value = self.safe_string(message.clone(), Value::from("topic"), Value::Undefined);
+        let mut market_id: Value = self.safe_string(data.clone(), Value::from("symbol"), Value::Undefined);
         let mut market: Value = self.safe_market(market_id.clone(), Value::Undefined, Value::Undefined, Value::Undefined);
-        let mut timestamp: Value = self.safe_integer(message.clone(), Value::from("ts"));
+        let mut timestamp: Value = self.safe_integer(message.clone(), Value::from("ts"), Value::Undefined);
         data.set("date".into(), timestamp.clone());
         let mut ticker: Value = <Self as Woofipro>::parse_ws_ticker(self, data.clone(), market.clone());
         ticker.set("symbol".into(), market.get(Value::from("symbol")));
@@ -673,13 +682,13 @@ pub trait Woofipro : Exchange {
         //         ]
         //     }
         //
-        let mut topic: Value = self.safe_string(message.clone(), Value::from("topic"));
+        let mut topic: Value = self.safe_string(message.clone(), Value::from("topic"), Value::Undefined);
         let mut data: Value = self.safe_list(message.clone(), Value::from("data"), Value::new_array());
-        let mut timestamp: Value = self.safe_integer(message.clone(), Value::from("ts"));
+        let mut timestamp: Value = self.safe_integer(message.clone(), Value::from("ts"), Value::Undefined);
         let mut result: Value = Value::new_array();
         let mut i: usize = 0;
         while i < data.len() {
-            let mut market_id: Value = self.safe_string(data.get(i.into()), Value::from("symbol"));
+            let mut market_id: Value = self.safe_string(data.get(i.into()), Value::from("symbol"), Value::Undefined);
             let mut market: Value = self.safe_market(market_id.clone(), Value::Undefined, Value::Undefined, Value::Undefined);
             let mut ticker: Value = <Self as Woofipro>::parse_ws_ticker(self, extend_2(data.get(i.into()), Value::Json(normalize(&Value::Json(json!({
                 "date": timestamp
@@ -723,15 +732,15 @@ pub trait Woofipro : Exchange {
         //       ]
         //     }
         //
-        let mut topic: Value = self.safe_string(message.clone(), Value::from("topic"));
+        let mut topic: Value = self.safe_string(message.clone(), Value::from("topic"), Value::Undefined);
         let mut data: Value = self.safe_list(message.clone(), Value::from("data"), Value::new_array());
-        let mut timestamp: Value = self.safe_integer(message.clone(), Value::from("ts"));
+        let mut timestamp: Value = self.safe_integer(message.clone(), Value::from("ts"), Value::Undefined);
         let mut result: Value = Value::new_array();
         let mut i: usize = 0;
         while i < data.len() {
             let mut ticker: Value = <Self as Woofipro>::parse_ws_bid_ask(self, extend_2(data.get(i.into()), Value::Json(normalize(&Value::Json(json!({
                 "ts": timestamp
-            }))).unwrap())), Value::Undefined);
+            }))).unwrap())));
             self.get("tickers".into()).set(ticker.get(Value::from("symbol")), ticker.clone());
             result.push(ticker.clone());
             i += 1;
@@ -741,18 +750,18 @@ pub trait Woofipro : Exchange {
     }
 
     fn parse_ws_bid_ask(&self, mut ticker: Value, mut market: Value) -> Value {
-        let mut market_id: Value = self.safe_string(ticker.clone(), Value::from("symbol"));
+        let mut market_id: Value = self.safe_string(ticker.clone(), Value::from("symbol"), Value::Undefined);
         market = self.safe_market(market_id.clone(), market.clone(), Value::Undefined, Value::Undefined);
-        let mut symbol: Value = self.safe_string(market.clone(), Value::from("symbol"));
-        let mut timestamp: Value = self.safe_integer(ticker.clone(), Value::from("ts"));
+        let mut symbol: Value = self.safe_string(market.clone(), Value::from("symbol"), Value::Undefined);
+        let mut timestamp: Value = self.safe_integer(ticker.clone(), Value::from("ts"), Value::Undefined);
         return self.safe_ticker(Value::Json(normalize(&Value::Json(json!({
             "symbol": symbol,
             "timestamp": timestamp,
             "datetime": self.iso8601(timestamp.clone()),
-            "ask": self.safe_string(ticker.clone(), Value::from("ask")),
-            "askVolume": self.safe_string(ticker.clone(), Value::from("askSize")),
-            "bid": self.safe_string(ticker.clone(), Value::from("bid")),
-            "bidVolume": self.safe_string(ticker.clone(), Value::from("bidSize")),
+            "ask": self.safe_string(ticker.clone(), Value::from("ask"), Value::Undefined),
+            "askVolume": self.safe_string(ticker.clone(), Value::from("askSize"), Value::Undefined),
+            "bid": self.safe_string(ticker.clone(), Value::from("bid"), Value::Undefined),
+            "bidVolume": self.safe_string(ticker.clone(), Value::from("bidSize"), Value::Undefined),
             "info": ticker
         }))).unwrap()), market.clone());
     }
@@ -800,15 +809,15 @@ pub trait Woofipro : Exchange {
         //     }
         //
         let mut data: Value = self.safe_dict(message.clone(), Value::from("data"), Value::new_object());
-        let mut topic: Value = self.safe_string(message.clone(), Value::from("topic"));
-        let mut market_id: Value = self.safe_string(data.clone(), Value::from("symbol"));
+        let mut topic: Value = self.safe_string(message.clone(), Value::from("topic"), Value::Undefined);
+        let mut market_id: Value = self.safe_string(data.clone(), Value::from("symbol"), Value::Undefined);
         let mut market: Value = self.safe_market(market_id.clone(), Value::Undefined, Value::Undefined, Value::Undefined);
         let mut symbol: Value = market.get(Value::from("symbol"));
-        let mut interval: Value = self.safe_string(data.clone(), Value::from("type"));
+        let mut interval: Value = self.safe_string(data.clone(), Value::from("type"), Value::Undefined);
         let mut timeframe: Value = self.find_timeframe(interval.clone(), Value::Undefined);
-        let mut parsed: Value = Value::Json(serde_json::Value::Array(vec![self.safe_integer(data.clone(), Value::from("startTime")).into(), self.safe_number(data.clone(), Value::from("open"), Value::Undefined).into(), self.safe_number(data.clone(), Value::from("high"), Value::Undefined).into(), self.safe_number(data.clone(), Value::from("low"), Value::Undefined).into(), self.safe_number(data.clone(), Value::from("close"), Value::Undefined).into(), self.safe_number(data.clone(), Value::from("volume"), Value::Undefined).into()]));
+        let mut parsed: Value = Value::Json(serde_json::Value::Array(vec![self.safe_integer(data.clone(), Value::from("startTime"), Value::Undefined).into(), self.safe_number(data.clone(), Value::from("open"), Value::Undefined).into(), self.safe_number(data.clone(), Value::from("high"), Value::Undefined).into(), self.safe_number(data.clone(), Value::from("low"), Value::Undefined).into(), self.safe_number(data.clone(), Value::from("close"), Value::Undefined).into(), self.safe_number(data.clone(), Value::from("volume"), Value::Undefined).into()]));
         self.get("ohlcvs".into()).set(symbol.clone(), self.safe_value(self.get("ohlcvs".into()), symbol.clone(), Value::new_object()));
-        let mut stored: Value = self.safe_value(self.get("ohlcvs".into()).get(symbol.clone()), timeframe.clone());
+        let mut stored: Value = self.safe_value(self.get("ohlcvs".into()).get(symbol.clone()), timeframe.clone(), Value::Undefined);
         if stored.clone().is_nullish() {
             let mut limit: Value = self.safe_integer(self.get("options".into()), Value::from("OHLCVLimit"), Value::from(1000));
             stored = ArrayCacheByTimestamp::new(limit);
@@ -851,10 +860,10 @@ pub trait Woofipro : Exchange {
         //     }
         // }
         //
-        let mut topic: Value = self.safe_string(message.clone(), Value::from("topic"));
-        let mut timestamp: Value = self.safe_integer(message.clone(), Value::from("ts"));
+        let mut topic: Value = self.safe_string(message.clone(), Value::from("topic"), Value::Undefined);
+        let mut timestamp: Value = self.safe_integer(message.clone(), Value::from("ts"), Value::Undefined);
         let mut data: Value = self.safe_dict(message.clone(), Value::from("data"), Value::new_object());
-        let mut market_id: Value = self.safe_string(data.clone(), Value::from("symbol"));
+        let mut market_id: Value = self.safe_string(data.clone(), Value::from("symbol"), Value::Undefined);
         let mut market: Value = self.safe_market(market_id.clone(), Value::Undefined, Value::Undefined, Value::Undefined);
         let mut symbol: Value = market.get(Value::from("symbol"));
         let mut trade: Value = <Self as Woofipro>::parse_ws_trade(self, extend_2(data.clone(), Value::Json(normalize(&Value::Json(json!({
@@ -909,29 +918,29 @@ pub trait Woofipro : Exchange {
         //         maker: false
         //     }
         //
-        let mut market_id: Value = self.safe_string(trade.clone(), Value::from("symbol"));
+        let mut market_id: Value = self.safe_string(trade.clone(), Value::from("symbol"), Value::Undefined);
         market = self.safe_market(market_id.clone(), market.clone(), Value::Undefined, Value::Undefined);
         let mut symbol: Value = market.get(Value::from("symbol"));
-        let mut price: Value = self.safe_string_2(trade.clone(), Value::from("executedPrice"), Value::from("price"));
-        let mut amount: Value = self.safe_string_2(trade.clone(), Value::from("executedQuantity"), Value::from("size"));
+        let mut price: Value = self.safe_string_2(trade.clone(), Value::from("executedPrice"), Value::from("price"), Value::Undefined);
+        let mut amount: Value = self.safe_string_2(trade.clone(), Value::from("executedQuantity"), Value::from("size"), Value::Undefined);
         let mut cost: Value = Precise::string_mul(price.clone(), amount.clone());
-        let mut side: Value = self.safe_string_lower(trade.clone(), Value::from("side"));
-        let mut timestamp: Value = self.safe_integer(trade.clone(), Value::from("timestamp"));
+        let mut side: Value = self.safe_string_lower(trade.clone(), Value::from("side"), Value::Undefined);
+        let mut timestamp: Value = self.safe_integer(trade.clone(), Value::from("timestamp"), Value::Undefined);
         let mut taker_or_maker: Value = Value::Undefined;
         let mut maker: Value = self.safe_bool(trade.clone(), Value::from("maker"), Value::Undefined);
         if maker.clone().is_nonnullish() {
             taker_or_maker = if maker.is_truthy() { Value::from("maker") } else { Value::from("taker") };
         };
         let mut fee: Value = Value::Undefined;
-        let mut fee_value: Value = self.safe_string(trade.clone(), Value::from("fee"));
+        let mut fee_value: Value = self.safe_string(trade.clone(), Value::from("fee"), Value::Undefined);
         if fee_value.clone().is_nonnullish() {
             fee = Value::Json(normalize(&Value::Json(json!({
                 "cost": fee_value,
-                "currency": self.safe_currency_code(self.safe_string(trade.clone(), Value::from("feeAsset")), Value::Undefined)
+                "currency": self.safe_currency_code(self.safe_string(trade.clone(), Value::from("feeAsset"), Value::Undefined), Value::Undefined)
             }))).unwrap());
         };
         return self.safe_trade(Value::Json(normalize(&Value::Json(json!({
-            "id": self.safe_string(trade.clone(), Value::from("tradeId")),
+            "id": self.safe_string(trade.clone(), Value::from("tradeId"), Value::Undefined),
             "timestamp": timestamp,
             "datetime": self.iso8601(timestamp.clone()),
             "symbol": symbol,
@@ -939,9 +948,9 @@ pub trait Woofipro : Exchange {
             "price": price,
             "amount": amount,
             "cost": cost,
-            "order": self.safe_string(trade.clone(), Value::from("orderId")),
+            "order": self.safe_string(trade.clone(), Value::from("orderId"), Value::Undefined),
             "takerOrMaker": taker_or_maker,
-            "type": self.safe_string_lower(trade.clone(), Value::from("type")),
+            "type": self.safe_string_lower(trade.clone(), Value::from("type"), Value::Undefined),
             "fee": fee,
             "info": trade
         }))).unwrap()), market.clone());
@@ -956,10 +965,10 @@ pub trait Woofipro : Exchange {
         //     }
         //
         let mut message_hash: Value = Value::from("authenticated");
-        let mut success: Value = self.safe_value(message.clone(), Value::from("success"));
+        let mut success: Value = self.safe_value(message.clone(), Value::from("success"), Value::Undefined);
         if success.is_truthy() {
             // client.resolve (message, messageHash);
-            let mut future: Value = self.safe_value(client.get(futures.clone()), Value::from("authenticated"));
+            let mut future: Value = self.safe_value(client.get(futures.clone()), Value::from("authenticated"), Value::Undefined);
             future.resolve(true.into());
         } else {
             let mut error: Value = AuthenticationError::new(self.json(message.clone()));
@@ -980,7 +989,7 @@ pub trait Woofipro : Exchange {
         let mut message_hash: Value = Value::from("authenticated");
         let mut event: Value = Value::from("auth");
         let mut future: Value = client.reusable_future(message_hash.clone());
-        let mut authenticated: Value = self.safe_value(client.get(subscriptions.clone()), message_hash.clone());
+        let mut authenticated: Value = self.safe_value(client.get(subscriptions.clone()), message_hash.clone(), Value::Undefined);
         if authenticated.clone().is_nullish() {
             let mut ts: Value = self.nonce().to_string();
             let mut auth: Value = ts.clone();
@@ -1045,7 +1054,7 @@ pub trait Woofipro : Exchange {
             "topic": topic
         }))).unwrap());
         let mut message: Value = extend_2(request.clone(), params.clone());
-        let mut orders: Value = <Self as Woofipro>::watch_private(self, message_hash.clone(), message.clone(), Value::Undefined).await;
+        let mut orders: Value = <Self as Woofipro>::watch_private(self, message_hash.clone(), message.clone()).await;
         if self.get("newUpdates".into()).is_truthy() {
             limit = orders.get_limit(symbol.clone(), limit.clone());
         };
@@ -1069,7 +1078,7 @@ pub trait Woofipro : Exchange {
             "topic": topic
         }))).unwrap());
         let mut message: Value = extend_2(request.clone(), params.clone());
-        let mut orders: Value = <Self as Woofipro>::watch_private(self, message_hash.clone(), message.clone(), Value::Undefined).await;
+        let mut orders: Value = <Self as Woofipro>::watch_private(self, message_hash.clone(), message.clone()).await;
         if self.get("newUpdates".into()).is_truthy() {
             limit = orders.get_limit(symbol.clone(), limit.clone());
         };
@@ -1142,34 +1151,34 @@ pub trait Woofipro : Exchange {
         //         "createdTime":1704679472448
         //     }
         //
-        let mut order_id: Value = self.safe_string(order.clone(), Value::from("orderId"));
-        let mut market_id: Value = self.safe_string(order.clone(), Value::from("symbol"));
+        let mut order_id: Value = self.safe_string(order.clone(), Value::from("orderId"), Value::Undefined);
+        let mut market_id: Value = self.safe_string(order.clone(), Value::from("symbol"), Value::Undefined);
         market = self.market(market_id.clone());
         let mut symbol: Value = market.get(Value::from("symbol"));
-        let mut timestamp: Value = self.safe_integer(order.clone(), Value::from("timestamp"));
+        let mut timestamp: Value = self.safe_integer(order.clone(), Value::from("timestamp"), Value::Undefined);
         let mut fee: Value = Value::Json(normalize(&Value::Json(json!({
-            "cost": self.safe_string(order.clone(), Value::from("totalFee")),
-            "currency": self.safe_string(order.clone(), Value::from("feeAsset"))
+            "cost": self.safe_string(order.clone(), Value::from("totalFee"), Value::Undefined),
+            "currency": self.safe_string(order.clone(), Value::from("feeAsset"), Value::Undefined)
         }))).unwrap());
-        let mut price_string: Value = self.safe_string(order.clone(), Value::from("price"));
+        let mut price_string: Value = self.safe_string(order.clone(), Value::from("price"), Value::Undefined);
         let mut price: Value = self.safe_number(order.clone(), Value::from("price"), Value::Undefined);
         let mut avg_price: Value = self.safe_number(order.clone(), Value::from("avgPrice"), Value::Undefined);
         if Precise::string_eq(price_string.clone(), Value::from("0")) && avg_price.clone().is_nonnullish() {
             price = avg_price.clone();
         };
-        let mut amount: Value = self.safe_string(order.clone(), Value::from("quantity"));
-        let mut side: Value = self.safe_string_lower(order.clone(), Value::from("side"));
-        let mut r#type: Value = self.safe_string_lower(order.clone(), Value::from("type"));
+        let mut amount: Value = self.safe_string(order.clone(), Value::from("quantity"), Value::Undefined);
+        let mut side: Value = self.safe_string_lower(order.clone(), Value::from("side"), Value::Undefined);
+        let mut r#type: Value = self.safe_string_lower(order.clone(), Value::from("type"), Value::Undefined);
         let mut filled: Value = self.safe_number(order.clone(), Value::from("totalExecutedQuantity"), Value::Undefined);
-        let mut total_exec_quantity: Value = self.safe_string(order.clone(), Value::from("totalExecutedQuantity"));
+        let mut total_exec_quantity: Value = self.safe_string(order.clone(), Value::from("totalExecutedQuantity"), Value::Undefined);
         let mut remaining: Value = amount.clone();
         if Precise::string_ge(amount.clone(), total_exec_quantity.clone()) {
             remaining = Precise::string_sub(remaining.clone(), total_exec_quantity.clone());
         };
-        let mut raw_status: Value = self.safe_string(order.clone(), Value::from("status"));
-        let mut status: Value = self.parse_order_status(raw_status.clone());
+        let mut raw_status: Value = self.safe_string(order.clone(), Value::from("status"), Value::Undefined);
+        let mut status: Value = <Self as Woofipro>::parse_order_status(self, raw_status.clone());
         let mut trades: Value = Value::Undefined;
-        let mut client_order_id: Value = self.safe_string(order.clone(), Value::from("clientOrderId"));
+        let mut client_order_id: Value = self.safe_string(order.clone(), Value::from("clientOrderId"), Value::Undefined);
         let mut trigger_price: Value = self.safe_number(order.clone(), Value::from("triggerPrice"), Value::Undefined);
         return self.safe_order(Value::Json(normalize(&Value::Json(json!({
             "info": order,
@@ -1226,14 +1235,14 @@ pub trait Woofipro : Exchange {
         //         }
         //     }
         //
-        let mut topic: Value = self.safe_string(message.clone(), Value::from("topic"));
-        let mut data: Value = self.safe_value(message.clone(), Value::from("data"));
+        let mut topic: Value = self.safe_string(message.clone(), Value::from("topic"), Value::Undefined);
+        let mut data: Value = self.safe_value(message.clone(), Value::from("data"), Value::Undefined);
         if Array::is_array(data.clone()).is_truthy() {
             // algoexecutionreport
             let mut i: usize = 0;
             while i < data.len() {
                 let mut order: Value = data.get(i.into());
-                let mut trade_id: Value = self.omit_zero(self.safe_string(data.clone(), Value::from("tradeId")));
+                let mut trade_id: Value = self.omit_zero(self.safe_string(data.clone(), Value::from("tradeId"), Value::Undefined));
                 if trade_id.clone().is_nonnullish() {
                     <Self as Woofipro>::handle_my_trade(self, client.clone(), order.clone());
                 };
@@ -1242,7 +1251,7 @@ pub trait Woofipro : Exchange {
             };
         } else {
             // executionreport
-            let mut trade_id: Value = self.omit_zero(self.safe_string(data.clone(), Value::from("tradeId")));
+            let mut trade_id: Value = self.omit_zero(self.safe_string(data.clone(), Value::from("tradeId"), Value::Undefined));
             if trade_id.clone().is_nonnullish() {
                 <Self as Woofipro>::handle_my_trade(self, client.clone(), data.clone());
             };
@@ -1253,8 +1262,8 @@ pub trait Woofipro : Exchange {
 
     fn handle_order(&mut self, mut client: Value, mut message: Value, mut topic: Value) -> Value {
         let mut parsed: Value = <Self as Woofipro>::parse_ws_order(self, message.clone(), Value::Undefined);
-        let mut symbol: Value = self.safe_string(parsed.clone(), Value::from("symbol"));
-        let mut order_id: Value = self.safe_string(parsed.clone(), Value::from("id"));
+        let mut symbol: Value = self.safe_string(parsed.clone(), Value::from("symbol"), Value::Undefined);
+        let mut order_id: Value = self.safe_string(parsed.clone(), Value::from("id"), Value::Undefined);
         if symbol.clone().is_nonnullish() {
             if self.get("orders".into()).is_nullish() {
                 let mut limit: Value = self.safe_integer(self.get("options".into()), Value::from("ordersLimit"), Value::from(1000));
@@ -1264,7 +1273,7 @@ pub trait Woofipro : Exchange {
             let mut orders: Value = self.safe_dict(cached_orders.get(hashmap.clone()), symbol.clone(), Value::new_object());
             let mut order: Value = self.safe_dict(orders.clone(), order_id.clone(), Value::Undefined);
             if order.clone().is_nonnullish() {
-                let mut fee: Value = self.safe_value(order.clone(), Value::from("fee"));
+                let mut fee: Value = self.safe_value(order.clone(), Value::from("fee"), Value::Undefined);
                 if fee.clone().is_nonnullish() {
                     parsed.set("fee".into(), fee.clone());
                 };
@@ -1273,8 +1282,8 @@ pub trait Woofipro : Exchange {
                     parsed.set("fees".into(), fees.clone());
                 };
                 parsed.set("trades".into(), self.safe_list(order.clone(), Value::from("trades"), Value::Undefined));
-                parsed.set("timestamp".into(), self.safe_integer(order.clone(), Value::from("timestamp")));
-                parsed.set("datetime".into(), self.safe_string(order.clone(), Value::from("datetime")));
+                parsed.set("timestamp".into(), self.safe_integer(order.clone(), Value::from("timestamp"), Value::Undefined));
+                parsed.set("datetime".into(), self.safe_string(order.clone(), Value::from("datetime"), Value::Undefined));
             };
             cached_orders.append(parsed.clone());
             client.resolve(self.get("orders".into()), topic.clone());
@@ -1314,7 +1323,7 @@ pub trait Woofipro : Exchange {
         // }
         //
         let mut message_hash: Value = Value::from("myTrades");
-        let mut market_id: Value = self.safe_string(message.clone(), Value::from("symbol"));
+        let mut market_id: Value = self.safe_string(message.clone(), Value::from("symbol"), Value::Undefined);
         let mut market: Value = self.safe_market(market_id.clone(), Value::Undefined, Value::Undefined, Value::Undefined);
         let mut symbol: Value = market.get(Value::from("symbol"));
         let mut trade: Value = <Self as Woofipro>::parse_ws_trade(self, message.clone(), market.clone());
@@ -1348,7 +1357,7 @@ pub trait Woofipro : Exchange {
         };
         let mut url: Value = self.get("urls".into()).get(Value::from("api")).get(Value::from("ws")).get(Value::from("private")) + Value::from("/") + self.get("accountId".into());
         let mut client: Value = self.client(url.clone());
-        <Self as Woofipro>::set_positions_cache(self, client.clone(), symbols.clone(), Value::Undefined);
+        <Self as Woofipro>::set_positions_cache(self, client.clone(), symbols.clone());
         let mut fetch_positions_snapshot: Value = self.handle_option(Value::from("watchPositions"), Value::from("fetchPositionsSnapshot"), true.into());
         let mut await_positions_snapshot: Value = self.handle_option(Value::from("watchPositions"), Value::from("awaitPositionsSnapshot"), true.into());
         if fetch_positions_snapshot.is_truthy() && await_positions_snapshot.is_truthy() && self.get("positions".into()).is_nullish() {
@@ -1445,7 +1454,7 @@ pub trait Woofipro : Exchange {
         let mut i: usize = 0;
         while i < raw_positions.len() {
             let mut raw_position: Value = raw_positions.get(i.into());
-            let mut market_id: Value = self.safe_string(raw_position.clone(), Value::from("symbol"));
+            let mut market_id: Value = self.safe_string(raw_position.clone(), Value::from("symbol"), Value::Undefined);
             let mut market: Value = self.safe_market(market_id.clone(), Value::Undefined, Value::Undefined, Value::Undefined);
             let mut position: Value = <Self as Woofipro>::parse_ws_position(self, raw_position.clone(), market.clone());
             new_positions.push(position.clone());
@@ -1483,26 +1492,26 @@ pub trait Woofipro : Exchange {
         //         "timestamp":1685154032762
         //     }
         //
-        let mut contract: Value = self.safe_string(position.clone(), Value::from("symbol"));
+        let mut contract: Value = self.safe_string(position.clone(), Value::from("symbol"), Value::Undefined);
         market = self.safe_market(contract.clone(), market.clone(), Value::Undefined, Value::Undefined);
-        let mut size: Value = self.safe_string(position.clone(), Value::from("positionQty"));
+        let mut size: Value = self.safe_string(position.clone(), Value::from("positionQty"), Value::Undefined);
         let mut side: Value = Value::Undefined;
         if Precise::string_gt(size.clone(), Value::from("0")) {
             side = Value::from("long");
         } else {
             side = Value::from("short");
         };
-        let mut contract_size: Value = self.safe_string(market.clone(), Value::from("contractSize"));
-        let mut mark_price: Value = self.safe_string(position.clone(), Value::from("markPrice"));
-        let mut timestamp: Value = self.safe_integer(position.clone(), Value::from("timestamp"));
-        let mut entry_price: Value = self.safe_string(position.clone(), Value::from("averageOpenPrice"));
-        let mut unrealised_pnl: Value = self.safe_string(position.clone(), Value::from("unsettledPnl"));
+        let mut contract_size: Value = self.safe_string(market.clone(), Value::from("contractSize"), Value::Undefined);
+        let mut mark_price: Value = self.safe_string(position.clone(), Value::from("markPrice"), Value::Undefined);
+        let mut timestamp: Value = self.safe_integer(position.clone(), Value::from("timestamp"), Value::Undefined);
+        let mut entry_price: Value = self.safe_string(position.clone(), Value::from("averageOpenPrice"), Value::Undefined);
+        let mut unrealised_pnl: Value = self.safe_string(position.clone(), Value::from("unsettledPnl"), Value::Undefined);
         size = Precise::string_abs(size.clone());
         let mut notional: Value = Precise::string_mul(size.clone(), mark_price.clone());
         return self.safe_position(Value::Json(normalize(&Value::Json(json!({
             "info": position,
             "id": Value::Undefined,
-            "symbol": self.safe_string(market.clone(), Value::from("symbol")),
+            "symbol": self.safe_string(market.clone(), Value::from("symbol"), Value::Undefined),
             "timestamp": timestamp,
             "datetime": self.iso8601(timestamp.clone()),
             "lastUpdateTimestamp": Value::Undefined,
@@ -1541,7 +1550,7 @@ pub trait Woofipro : Exchange {
             "topic": topic
         }))).unwrap());
         let mut message: Value = extend_2(request.clone(), params.clone());
-        return <Self as Woofipro>::watch_private(self, message_hash.clone(), message.clone(), Value::Undefined).await;
+        return <Self as Woofipro>::watch_private(self, message_hash.clone(), message.clone()).await;
     }
 
     fn handle_balance(&mut self, mut client: Value, mut message: Value) -> Value {
@@ -1574,8 +1583,8 @@ pub trait Woofipro : Exchange {
         //
         let mut data: Value = self.safe_dict(message.clone(), Value::from("data"), Value::new_object());
         let mut balances: Value = self.safe_dict(data.clone(), Value::from("balances"), Value::new_object());
-        let mut keys: Value = Object::keys(balances.clone());
-        let mut ts: Value = self.safe_integer(message.clone(), Value::from("ts"));
+        let mut keys: Value = balances.clone().keys();
+        let mut ts: Value = self.safe_integer(message.clone(), Value::from("ts"), Value::Undefined);
         self.get("balance".into()).set("info".into(), data.clone());
         self.get("balance".into()).set("timestamp".into(), ts.clone());
         self.get("balance".into()).set("datetime".into(), self.iso8601(ts.clone()));
@@ -1585,8 +1594,8 @@ pub trait Woofipro : Exchange {
             let mut value: Value = balances.get(key.clone());
             let mut code: Value = self.safe_currency_code(key.clone(), Value::Undefined);
             let mut account: Value = if self.get("balance".into()).contains_key(code.clone()) { self.get("balance".into()).get(code.clone()) } else { self.account() };
-            let mut total: Value = self.safe_string(value.clone(), Value::from("holding"));
-            let mut used: Value = self.safe_string(value.clone(), Value::from("frozen"));
+            let mut total: Value = self.safe_string(value.clone(), Value::from("holding"), Value::Undefined);
+            let mut used: Value = self.safe_string(value.clone(), Value::from("frozen"), Value::Undefined);
             account.set("total".into(), total.clone());
             account.set("used".into(), used.clone());
             account.set("free".into(), Precise::string_sub(total.clone(), used.clone()));
@@ -1609,7 +1618,7 @@ pub trait Woofipro : Exchange {
         if success.is_truthy() {
             return false.into();
         };
-        let mut error_message: Value = self.safe_string(message.clone(), Value::from("errorMsg"));
+        let mut error_message: Value = self.safe_string(message.clone(), Value::from("errorMsg"), Value::Undefined);
                 if error_message.clone().is_nonnullish() {
             let mut feedback: Value = self.get("id".into()) + Value::from(" ") + self.json(message.clone());
             self.throw_exactly_matched_exception(self.get("exceptions".into()).get(Value::from("exact")), error_message.clone(), feedback.clone());
@@ -1640,15 +1649,15 @@ pub trait Woofipro : Exchange {
             "balance": self.get("handleBalance".into()),
             "bbos": self.get("handleBidAsk".into())
         }))).unwrap());
-        let mut event: Value = self.safe_string(message.clone(), Value::from("event"));
-        let mut method: Value = self.safe_value(methods.clone(), event.clone());
+        let mut event: Value = self.safe_string(message.clone(), Value::from("event"), Value::Undefined);
+        let mut method: Value = self.safe_value(methods.clone(), event.clone(), Value::Undefined);
         if method.clone().is_nonnullish() {
             method.call(self, client.clone(), message.clone());
             return Value::Undefined;
         };
-        let mut topic: Value = self.safe_string(message.clone(), Value::from("topic"));
+        let mut topic: Value = self.safe_string(message.clone(), Value::from("topic"), Value::Undefined);
         if topic.clone().is_nonnullish() {
-            method = self.safe_value(methods.clone(), topic.clone());
+            method = self.safe_value(methods.clone(), topic.clone(), Value::Undefined);
             if method.clone().is_nonnullish() {
                 method.call(self, client.clone(), message.clone());
                 return Value::Undefined;
@@ -1656,8 +1665,8 @@ pub trait Woofipro : Exchange {
             let mut split_topic: Value = topic.split(Value::from("@"));
             let mut split_length: usize = split_topic.len();
             if split_length.clone() == Value::from(2) {
-                let mut name: Value = self.safe_string(split_topic.clone(), Value::from(1));
-                method = self.safe_value(methods.clone(), name.clone());
+                let mut name: Value = self.safe_string(split_topic.clone(), Value::from(1), Value::Undefined);
+                method = self.safe_value(methods.clone(), name.clone(), Value::Undefined);
                 if method.clone().is_nonnullish() {
                     method.call(self, client.clone(), message.clone());
                     return Value::Undefined;
@@ -1665,7 +1674,7 @@ pub trait Woofipro : Exchange {
                 let mut split_name: Value = name.split(Value::from("_"));
                 let mut split_name_length: usize = split_topic.len();
                 if split_name_length.clone() == Value::from(2) {
-                    method = self.safe_value(methods.clone(), self.safe_string(split_name.clone(), Value::from(0)));
+                    method = self.safe_value(methods.clone(), self.safe_string(split_name.clone(), Value::from(0), Value::Undefined), Value::Undefined);
                     if method.clone().is_nonnullish() {
                         method.call(self, client.clone(), message.clone());
                     };
@@ -1863,8 +1872,8 @@ impl ValueTrait for WoofiproImpl {
     fn push(&mut self, value: Value) { self.0.push(value) }
     fn split(&self, separator: Value) -> Value { self.0.split(separator) }
     fn contains_key(&self, key: Value) -> bool { self.0.contains_key(key) }
-    fn keys(&self) -> Vec<Value> { self.0.keys() }
-    fn values(&self) -> Vec<Value> { self.0.values() }
+    fn keys(&self) -> Value { self.0.keys() }
+    fn values(&self) -> Value { self.0.values() }
     fn to_array(&self, x: Value) -> Value { self.0.to_array(x) }
     fn index_of(&self, x: Value) -> Value { self.0.index_of(x) }
     fn join(&self, glue: Value) -> Value { self.0.join(glue) }

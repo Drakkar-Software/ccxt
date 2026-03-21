@@ -11,7 +11,16 @@ use async_trait::async_trait;
 use std::str::FromStr;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, JSON, Array, Object, Math, parse_int, shift_2, extend_2, normalize};
+use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, BoolExt, JSON, Array, Object, Math, Promise, parse_int, shift_2, extend_2, normalize};
+// Crypto hash identifiers
+fn sha256() -> Value { Value::from("sha256") }
+fn sha384() -> Value { Value::from("sha384") }
+fn sha512() -> Value { Value::from("sha512") }
+fn md5() -> Value { Value::from("md5") }
+fn ed25519() -> Value { Value::from("ed25519") }
+fn rsa(msg: Value, secret: Value, _hash: Value) -> Value { msg }
+fn eddsa(msg: Value, secret: Value, _curve: Value) -> Value { msg }
+fn secp256k1() -> Value { Value::from("secp256k1") }
 
 use crate::exchange::{PRECISE_BASE, TRUNCATE, ROUND, ROUND_UP, ROUND_DOWN};
 use crate::exchange::{DECIMAL_PLACES, SIGNIFICANT_DIGITS, TICK_SIZE, NO_PADDING, PAD_WITH_ZERO};
@@ -537,13 +546,13 @@ pub trait Bitvavo : Exchange {
         //     }
         //
         <Self as Bitvavo>::handle_bid_ask(self, client.clone(), message.clone());
-        let mut event: Value = self.safe_string(message.clone(), Value::from("event"));
+        let mut event: Value = self.safe_string(message.clone(), Value::from("event"), Value::Undefined);
         let mut tickers: Value = self.safe_value(message.clone(), Value::from("data"), Value::new_array());
         let mut result: Value = Value::new_array();
         let mut i: usize = 0;
         while i < tickers.len() {
             let mut data: Value = tickers.get(i.into());
-            let mut market_id: Value = self.safe_string(data.clone(), Value::from("market"));
+            let mut market_id: Value = self.safe_string(data.clone(), Value::from("market"), Value::Undefined);
             let mut market: Value = self.safe_market(market_id.clone(), Value::Undefined, Value::from("-"), Value::Undefined);
             let mut message_hash: Value = event.clone() + Value::from("@") + market_id.clone();
             let mut ticker: Value = self.parse_ticker(data.clone(), market.clone());
@@ -573,7 +582,7 @@ pub trait Bitvavo : Exchange {
         let mut i: usize = 0;
         while i < tickers.len() {
             let mut data: Value = tickers.get(i.into());
-            let mut ticker: Value = <Self as Bitvavo>::parse_ws_bid_ask(self, data.clone(), Value::Undefined);
+            let mut ticker: Value = <Self as Bitvavo>::parse_ws_bid_ask(self, data.clone());
             let mut symbol: Value = ticker.get(Value::from("symbol"));
             self.get("bidsasks".into()).set(symbol.clone(), ticker.clone());
             result.push(ticker.clone());
@@ -586,10 +595,10 @@ pub trait Bitvavo : Exchange {
     }
 
     fn parse_ws_bid_ask(&self, mut ticker: Value, mut market: Value) -> Value {
-        let mut market_id: Value = self.safe_string(ticker.clone(), Value::from("market"));
+        let mut market_id: Value = self.safe_string(ticker.clone(), Value::from("market"), Value::Undefined);
         market = self.safe_market(market_id.clone(), Value::Undefined, Value::from("-"), Value::Undefined);
-        let mut symbol: Value = self.safe_string(market.clone(), Value::from("symbol"));
-        let mut timestamp: Value = self.safe_integer(ticker.clone(), Value::from("timestamp"));
+        let mut symbol: Value = self.safe_string(market.clone(), Value::from("symbol"), Value::Undefined);
+        let mut timestamp: Value = self.safe_integer(ticker.clone(), Value::from("timestamp"), Value::Undefined);
         return self.safe_ticker(Value::Json(normalize(&Value::Json(json!({
             "symbol": symbol,
             "timestamp": timestamp,
@@ -625,13 +634,13 @@ pub trait Bitvavo : Exchange {
         //         "side": "buy"
         //     }
         //
-        let mut market_id: Value = self.safe_string(message.clone(), Value::from("market"));
+        let mut market_id: Value = self.safe_string(message.clone(), Value::from("market"), Value::Undefined);
         let mut market: Value = self.safe_market(market_id.clone(), Value::Undefined, Value::from("-"), Value::Undefined);
         let mut symbol: Value = market.get(Value::from("symbol"));
         let mut name: Value = Value::from("trades");
         let mut message_hash: Value = name.clone() + Value::from("@") + market_id.clone();
         let mut trade: Value = self.parse_trade(message.clone(), market.clone());
-        let mut trades_array: Value = self.safe_value(self.get("trades".into()), symbol.clone());
+        let mut trades_array: Value = self.safe_value(self.get("trades".into()), symbol.clone(), Value::Undefined);
         if trades_array.clone().is_nullish() {
             let mut limit: Value = self.safe_integer(self.get("options".into()), Value::from("tradesLimit"), Value::from(1000));
             trades_array = ArrayCache::new(limit);
@@ -679,9 +688,9 @@ pub trait Bitvavo : Exchange {
         //        ]
         //    }
         //
-        let mut response: Value = self.safe_value(message.clone(), Value::from("response"));
+        let mut response: Value = self.safe_value(message.clone(), Value::from("response"), Value::Undefined);
         let mut ohlcv: Value = self.parse_ohlcvs(response.clone(), Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined);
-        let mut message_hash: Value = self.safe_string(message.clone(), Value::from("requestId"));
+        let mut message_hash: Value = self.safe_string(message.clone(), Value::from("requestId"), Value::Undefined);
         client.resolve(ohlcv.clone(), message_hash.clone());
         Value::Undefined
     }
@@ -705,16 +714,16 @@ pub trait Bitvavo : Exchange {
         //     }
         //
         let mut name: Value = Value::from("candles");
-        let mut market_id: Value = self.safe_string(message.clone(), Value::from("market"));
+        let mut market_id: Value = self.safe_string(message.clone(), Value::from("market"), Value::Undefined);
         let mut market: Value = self.safe_market(market_id.clone(), Value::Undefined, Value::from("-"), Value::Undefined);
         let mut symbol: Value = market.get(Value::from("symbol"));
-        let mut interval: Value = self.safe_string(message.clone(), Value::from("interval"));
+        let mut interval: Value = self.safe_string(message.clone(), Value::from("interval"), Value::Undefined);
         // use a reverse lookup in a static map instead
         let mut timeframe: Value = self.find_timeframe(interval.clone(), Value::Undefined);
         let mut message_hash: Value = name.clone() + Value::from("@") + market_id.clone() + Value::from("_") + interval.clone();
-        let mut candles: Value = self.safe_value(message.clone(), Value::from("candle"));
+        let mut candles: Value = self.safe_value(message.clone(), Value::from("candle"), Value::Undefined);
         self.get("ohlcvs".into()).set(symbol.clone(), self.safe_value(self.get("ohlcvs".into()), symbol.clone(), Value::new_object()));
-        let mut stored: Value = self.safe_value(self.get("ohlcvs".into()).get(symbol.clone()), timeframe.clone());
+        let mut stored: Value = self.safe_value(self.get("ohlcvs".into()).get(symbol.clone()), timeframe.clone(), Value::Undefined);
         if stored.clone().is_nullish() {
             let mut limit: Value = self.safe_integer(self.get("options".into()), Value::from("OHLCVLimit"), Value::from(1000));
             stored = ArrayCacheByTimestamp::new(limit);
@@ -761,8 +770,8 @@ pub trait Bitvavo : Exchange {
     }
 
     fn handle_delta(&mut self, mut bookside: Value, mut delta: Value) -> Value {
-        let mut price: Value = self.safe_float(delta.clone(), Value::from(0));
-        let mut amount: Value = self.safe_float(delta.clone(), Value::from(1));
+        let mut price: Value = self.safe_float(delta.clone(), Value::from(0), Value::Undefined);
+        let mut amount: Value = self.safe_float(delta.clone(), Value::from(1), Value::Undefined);
         bookside.store(price.clone(), amount.clone());
         Value::Undefined
     }
@@ -790,7 +799,7 @@ pub trait Bitvavo : Exchange {
         //         ]
         //     }
         //
-        let mut nonce: Value = self.safe_integer(message.clone(), Value::from("nonce"));
+        let mut nonce: Value = self.safe_integer(message.clone(), Value::from("nonce"), Value::Undefined);
         if nonce.clone() > orderbook.get(Value::from("nonce")) {
             <Self as Bitvavo>::handle_deltas(self, orderbook.get(Value::from("asks")), self.safe_value(message.clone(), Value::from("asks"), Value::new_array()));
             <Self as Bitvavo>::handle_deltas(self, orderbook.get(Value::from("bids")), self.safe_value(message.clone(), Value::from("bids"), Value::new_array()));
@@ -813,18 +822,18 @@ pub trait Bitvavo : Exchange {
         //         "asks": []
         //     }
         //
-        let mut event: Value = self.safe_string(message.clone(), Value::from("event"));
-        let mut market_id: Value = self.safe_string(message.clone(), Value::from("market"));
+        let mut event: Value = self.safe_string(message.clone(), Value::from("event"), Value::Undefined);
+        let mut market_id: Value = self.safe_string(message.clone(), Value::from("market"), Value::Undefined);
         let mut market: Value = self.safe_market(market_id.clone(), Value::Undefined, Value::from("-"), Value::Undefined);
         let mut symbol: Value = market.get(Value::from("symbol"));
         let mut message_hash: Value = event.clone() + Value::from("@") + market.get(Value::from("id"));
-        let mut orderbook: Value = self.safe_value(self.get("orderbooks".into()), symbol.clone());
+        let mut orderbook: Value = self.safe_value(self.get("orderbooks".into()), symbol.clone(), Value::Undefined);
         if orderbook.clone().is_nullish() {
             return Value::Undefined;
         };
         if orderbook.get(Value::from("nonce")).is_nullish() {
             let mut subscription: Value = self.safe_value(client.get(subscriptions.clone()), message_hash.clone(), Value::new_object());
-            let mut watching_order_book_snapshot: Value = self.safe_value(subscription.clone(), Value::from("watchingOrderBookSnapshot"));
+            let mut watching_order_book_snapshot: Value = self.safe_value(subscription.clone(), Value::from("watchingOrderBookSnapshot"), Value::Undefined);
             if watching_order_book_snapshot.clone().is_nullish() {
                 subscription.set("watchingOrderBookSnapshot".into(), true.into());
                 client.get(subscriptions.clone()).set(message_hash.clone(), subscription.clone());
@@ -842,8 +851,8 @@ pub trait Bitvavo : Exchange {
     }
 
     async fn watch_order_book_snapshot(&mut self, mut client: Value, mut message: Value, mut subscription: Value) -> Value {
-        let mut params: Value = self.safe_value(subscription.clone(), Value::from("params"));
-        let mut market_id: Value = self.safe_string(subscription.clone(), Value::from("marketId"));
+        let mut params: Value = self.safe_value(subscription.clone(), Value::from("params"), Value::Undefined);
+        let mut market_id: Value = self.safe_string(subscription.clone(), Value::from("marketId"), Value::Undefined);
         let mut name: Value = Value::from("getBook");
         let mut message_hash: Value = name.clone() + Value::from("@") + market_id.clone();
         let mut url: Value = self.get("urls".into()).get(Value::from("api")).get(Value::from("ws"));
@@ -875,17 +884,17 @@ pub trait Bitvavo : Exchange {
         //         }
         //     }
         //
-        let mut response: Value = self.safe_value(message.clone(), Value::from("response"));
+        let mut response: Value = self.safe_value(message.clone(), Value::from("response"), Value::Undefined);
         if response.clone().is_nullish() {
             return Value::Undefined;
         };
-        let mut market_id: Value = self.safe_string(response.clone(), Value::from("market"));
+        let mut market_id: Value = self.safe_string(response.clone(), Value::from("market"), Value::Undefined);
         let mut symbol: Value = self.safe_symbol(market_id.clone(), Value::Undefined, Value::from("-"), Value::Undefined);
         let mut name: Value = Value::from("book");
         let mut message_hash: Value = name.clone() + Value::from("@") + market_id.clone();
         let mut orderbook: Value = self.get("orderbooks".into()).get(symbol.clone());
-        let mut snapshot: Value = self.parse_order_book(response.clone(), symbol.clone(), Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined);
-        snapshot.set("nonce".into(), self.safe_integer(response.clone(), Value::from("nonce")));
+        let mut snapshot: Value = self.parse_order_book(response.clone(), symbol.clone(), Value::Undefined, Value::Undefined, Value::Undefined);
+        snapshot.set("nonce".into(), self.safe_integer(response.clone(), Value::from("nonce"), Value::Undefined));
         orderbook.reset(snapshot.clone());
         // unroll the accumulated deltas
         let mut messages: Value = orderbook.get(cache.clone());
@@ -901,8 +910,8 @@ pub trait Bitvavo : Exchange {
     }
 
     fn handle_order_book_subscription(&mut self, mut client: Value, mut message: Value, mut subscription: Value) -> Value {
-        let mut symbol: Value = self.safe_string(subscription.clone(), Value::from("symbol"));
-        let mut limit: Value = self.safe_integer(subscription.clone(), Value::from("limit"));
+        let mut symbol: Value = self.safe_string(subscription.clone(), Value::from("symbol"), Value::Undefined);
+        let mut limit: Value = self.safe_integer(subscription.clone(), Value::from("limit"), Value::Undefined);
         if self.get("orderbooks".into()).contains_key(symbol.clone()) {
             self.get("orderbooks".into()).get(symbol.clone());
         };
@@ -914,12 +923,12 @@ pub trait Bitvavo : Exchange {
         let mut name: Value = Value::from("book");
         let mut i: usize = 0;
         while i < market_ids.len() {
-            let mut market_id: Value = self.safe_string(market_ids.clone(), Value::from(i));
+            let mut market_id: Value = self.safe_string(market_ids.clone(), Value::from(i), Value::Undefined);
             let mut symbol: Value = self.safe_symbol(market_id.clone(), Value::Undefined, Value::from("-"), Value::Undefined);
             let mut message_hash: Value = name.clone() + Value::from("@") + market_id.clone();
             if !self.get("orderbooks".into()).contains_key(symbol.clone()) {
-                let mut subscription: Value = self.safe_value(client.get(subscriptions.clone()), message_hash.clone());
-                let mut method: Value = self.safe_value(subscription.clone(), Value::from("method"));
+                let mut subscription: Value = self.safe_value(client.get(subscriptions.clone()), message_hash.clone(), Value::Undefined);
+                let mut method: Value = self.safe_value(subscription.clone(), Value::from("method"), Value::Undefined);
                 if method.clone().is_nonnullish() {
                     method.call(self, client.clone(), message.clone(), subscription.clone());
                 };
@@ -935,7 +944,7 @@ pub trait Bitvavo : Exchange {
             panic!(r###"ArgumentsRequired::new(self.get("id".into()) + Value::from(" watchOrders() requires a symbol argument"))"###);
         };
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        <Self as Bitvavo>::authenticate(self, Value::Undefined).await;
+        <Self as Bitvavo>::authenticate(self).await;
         let mut market: Value = self.market(symbol.clone());
         symbol = market.get(Value::from("symbol"));
         let mut market_id: Value = market.get(Value::from("id"));
@@ -962,7 +971,7 @@ pub trait Bitvavo : Exchange {
             panic!(r###"ArgumentsRequired::new(self.get("id".into()) + Value::from(" watchMyTrades() requires a symbol argument"))"###);
         };
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        <Self as Bitvavo>::authenticate(self, Value::Undefined).await;
+        <Self as Bitvavo>::authenticate(self).await;
         let mut market: Value = self.market(symbol.clone());
         symbol = market.get(Value::from("symbol"));
         let mut market_id: Value = market.get(Value::from("id"));
@@ -986,31 +995,31 @@ pub trait Bitvavo : Exchange {
     async fn create_order_ws(&mut self, mut symbol: Value, mut r#type: Value, mut side: Value, mut amount: Value, mut price: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        <Self as Bitvavo>::authenticate(self, Value::Undefined).await;
-        let mut request: Value = self.create_order_request(symbol.clone(), r#type.clone(), side.clone(), amount.clone(), price.clone(), params.clone());
+        <Self as Bitvavo>::authenticate(self).await;
+        let mut request: Value = <Self as Bitvavo>::create_order_request(self, symbol.clone(), r#type.clone(), side.clone(), amount.clone(), price.clone(), params.clone());
         return <Self as Bitvavo>::watch_request(self, Value::from("privateCreateOrder"), request.clone()).await;
     }
 
     async fn edit_order_ws(&mut self, mut id: Value, mut symbol: Value, mut r#type: Value, mut side: Value, mut amount: Value, mut price: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        <Self as Bitvavo>::authenticate(self, Value::Undefined).await;
-        let mut request: Value = self.edit_order_request(id.clone(), symbol.clone(), r#type.clone(), side.clone(), amount.clone(), price.clone(), params.clone());
+        <Self as Bitvavo>::authenticate(self).await;
+        let mut request: Value = <Self as Bitvavo>::edit_order_request(self, id.clone(), symbol.clone(), r#type.clone(), side.clone(), amount.clone(), price.clone(), params.clone());
         return <Self as Bitvavo>::watch_request(self, Value::from("privateUpdateOrder"), request.clone()).await;
     }
 
     async fn cancel_order_ws(&mut self, mut id: Value, mut symbol: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        <Self as Bitvavo>::authenticate(self, Value::Undefined).await;
-        let mut request: Value = self.cancel_order_request(id.clone(), symbol.clone(), params.clone());
+        <Self as Bitvavo>::authenticate(self).await;
+        let mut request: Value = <Self as Bitvavo>::cancel_order_request(self, id.clone(), symbol.clone(), params.clone());
         return <Self as Bitvavo>::watch_request(self, Value::from("privateCancelOrder"), request.clone()).await;
     }
 
     async fn cancel_all_orders_ws(&mut self, mut symbol: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        <Self as Bitvavo>::authenticate(self, Value::Undefined).await;
+        <Self as Bitvavo>::authenticate(self).await;
         let mut request: Value = Value::new_object();
         let mut market: Value = Value::Undefined;
         if symbol.clone().is_nonnullish() {
@@ -1037,7 +1046,7 @@ pub trait Bitvavo : Exchange {
         // let messageHash = this.buildMessageHash (action, { 'market': marketId });
         // client.resolve (orders, messageHash);
         // messageHash = this.buildMessageHash (action, message);
-        let mut message_hash: Value = self.safe_string(message.clone(), Value::from("requestId"));
+        let mut message_hash: Value = self.safe_string(message.clone(), Value::from("requestId"), Value::Undefined);
         client.resolve(orders.clone(), message_hash.clone());
         Value::Undefined
     }
@@ -1048,7 +1057,7 @@ pub trait Bitvavo : Exchange {
             panic!(r###"ArgumentsRequired::new(self.get("id".into()) + Value::from(" fetchOrder() requires a symbol argument"))"###);
         };
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        <Self as Bitvavo>::authenticate(self, Value::Undefined).await;
+        <Self as Bitvavo>::authenticate(self).await;
         let mut market: Value = self.market(symbol.clone());
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
             "orderId": id,
@@ -1063,8 +1072,8 @@ pub trait Bitvavo : Exchange {
             panic!(r###"ArgumentsRequired::new(self.get("id".into()) + Value::from(" fetchOrdersWs() requires a symbol argument"))"###);
         };
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        <Self as Bitvavo>::authenticate(self, Value::Undefined).await;
-        let mut request: Value = self.fetch_orders_request(symbol.clone(), since.clone(), limit.clone(), params.clone());
+        <Self as Bitvavo>::authenticate(self).await;
+        let mut request: Value = <Self as Bitvavo>::fetch_orders_request(self, symbol.clone(), since.clone(), limit.clone(), params.clone());
         let mut orders: Value = <Self as Bitvavo>::watch_request(self, Value::from("privateGetOrders"), request.clone()).await;
         return self.filter_by_symbol_since_limit(orders.clone(), symbol.clone(), since.clone(), limit.clone(), Value::Undefined);
     }
@@ -1073,7 +1082,7 @@ pub trait Bitvavo : Exchange {
         let mut ts: Value = self.milliseconds().to_string();
         let mut random_number: Value = self.rand_number(Value::from(4));
         let mut random_part: Value = random_number.to_string();
-        return parse_int(ts.clone() + random_part.clone());
+        return parse_int(ts.clone() + random_part.clone(), Value::Undefined);
     }
 
     async fn watch_request(&mut self, mut action: Value, mut request: Value) -> Value {
@@ -1088,7 +1097,7 @@ pub trait Bitvavo : Exchange {
     async fn fetch_open_orders_ws(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        <Self as Bitvavo>::authenticate(self, Value::Undefined).await;
+        <Self as Bitvavo>::authenticate(self).await;
         let mut request: Value = Value::new_object();
         // 'market': market['id'], // rate limit 25 without a market, 1 with market specified
         let mut market: Value = Value::Undefined;
@@ -1106,8 +1115,8 @@ pub trait Bitvavo : Exchange {
             panic!(r###"ArgumentsRequired::new(self.get("id".into()) + Value::from(" fetchMyTradesWs() requires a symbol argument"))"###);
         };
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        <Self as Bitvavo>::authenticate(self, Value::Undefined).await;
-        let mut request: Value = self.fetch_my_trades_request(symbol.clone(), since.clone(), limit.clone(), params.clone());
+        <Self as Bitvavo>::authenticate(self).await;
+        let mut request: Value = <Self as Bitvavo>::fetch_my_trades_request(self, symbol.clone(), since.clone(), limit.clone(), params.clone());
         let mut my_trades: Value = <Self as Bitvavo>::watch_request(self, Value::from("privateGetTrades"), request.clone()).await;
         return self.filter_by_symbol_since_limit(my_trades.clone(), symbol.clone(), since.clone(), limit.clone(), Value::Undefined);
     }
@@ -1139,7 +1148,7 @@ pub trait Bitvavo : Exchange {
         // const marketId = this.safeString (firstRawTrade, 'market');
         let mut trades: Value = self.parse_trades(response.clone(), Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined);
         // const messageHash = this.buildMessageHash (action, { 'market': marketId });
-        let mut message_hash: Value = self.safe_string(message.clone(), Value::from("requestId"));
+        let mut message_hash: Value = self.safe_string(message.clone(), Value::from("requestId"), Value::Undefined);
         client.resolve(trades.clone(), message_hash.clone());
         Value::Undefined
     }
@@ -1149,8 +1158,8 @@ pub trait Bitvavo : Exchange {
         (tag, params) = shift_2(self.handle_withdraw_tag_and_params(tag.clone(), params.clone()));
         self.check_address(address.clone());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        <Self as Bitvavo>::authenticate(self, Value::Undefined).await;
-        let mut request: Value = self.withdraw_request(code.clone(), amount.clone(), address.clone(), tag.clone(), params.clone());
+        <Self as Bitvavo>::authenticate(self).await;
+        let mut request: Value = <Self as Bitvavo>::withdraw_request(self, code.clone(), amount.clone(), address.clone(), tag.clone(), params.clone());
         return <Self as Bitvavo>::watch_request(self, Value::from("privateWithdrawAssets"), request.clone()).await;
     }
 
@@ -1167,8 +1176,8 @@ pub trait Bitvavo : Exchange {
         //
         // const action = this.safeString (message, 'action');
         // const messageHash = this.buildMessageHash (action, message);
-        let mut message_hash: Value = self.safe_string(message.clone(), Value::from("requestId"));
-        let mut response: Value = self.safe_value(message.clone(), Value::from("response"));
+        let mut message_hash: Value = self.safe_string(message.clone(), Value::from("requestId"), Value::Undefined);
+        let mut response: Value = self.safe_value(message.clone(), Value::from("response"), Value::Undefined);
         let mut withdraw: Value = self.parse_transaction(response.clone(), Value::Undefined);
         client.resolve(withdraw.clone(), message_hash.clone());
         Value::Undefined
@@ -1177,8 +1186,8 @@ pub trait Bitvavo : Exchange {
     async fn fetch_withdrawals_ws(&mut self, mut code: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        <Self as Bitvavo>::authenticate(self, Value::Undefined).await;
-        let mut request: Value = self.fetch_withdrawals_request(code.clone(), since.clone(), limit.clone(), params.clone());
+        <Self as Bitvavo>::authenticate(self).await;
+        let mut request: Value = <Self as Bitvavo>::fetch_withdrawals_request(self, code.clone(), since.clone(), limit.clone(), params.clone());
         let mut withdraws: Value = <Self as Bitvavo>::watch_request(self, Value::from("privateGetWithdrawalHistory"), request.clone()).await;
         return self.filter_by_currency_since_limit(withdraws.clone(), code.clone(), since.clone(), limit.clone(), Value::Undefined);
     }
@@ -1202,7 +1211,7 @@ pub trait Bitvavo : Exchange {
         // const action = this.safeString (message, 'action');
         // const messageHash = this.buildMessageHash (action, message);
         let mut response: Value = self.safe_list(message.clone(), Value::from("response"), Value::Undefined);
-        let mut message_hash: Value = self.safe_string(message.clone(), Value::from("requestId"));
+        let mut message_hash: Value = self.safe_string(message.clone(), Value::from("requestId"), Value::Undefined);
         let mut withdrawals: Value = self.parse_transactions(response.clone(), Value::Undefined, Value::Undefined, Value::Undefined, Value::Json(normalize(&Value::Json(json!({
             "type": "withdrawal"
         }))).unwrap()));
@@ -1214,7 +1223,7 @@ pub trait Bitvavo : Exchange {
         timeframe = timeframe.or_default(Value::from("1m"));
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        let mut request: Value = self.fetch_ohlcv_request(symbol.clone(), timeframe.clone(), since.clone(), limit.clone(), params.clone());
+        let mut request: Value = <Self as Bitvavo>::fetch_ohlcv_request(self, symbol.clone(), timeframe.clone(), since.clone(), limit.clone(), params.clone());
         let mut action: Value = Value::from("getCandles");
         let mut ohlcv: Value = <Self as Bitvavo>::watch_request(self, action.clone(), request.clone()).await;
         return self.filter_by_since_limit(ohlcv.clone(), since.clone(), limit.clone(), Value::from(0), true.into());
@@ -1223,8 +1232,8 @@ pub trait Bitvavo : Exchange {
     async fn fetch_deposits_ws(&mut self, mut code: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        <Self as Bitvavo>::authenticate(self, Value::Undefined).await;
-        let mut request: Value = self.fetch_deposits_request(code.clone(), since.clone(), limit.clone(), params.clone());
+        <Self as Bitvavo>::authenticate(self).await;
+        let mut request: Value = <Self as Bitvavo>::fetch_deposits_request(self, code.clone(), since.clone(), limit.clone(), params.clone());
         let mut deposits: Value = <Self as Bitvavo>::watch_request(self, Value::from("privateGetDepositHistory"), request.clone()).await;
         return self.filter_by_currency_since_limit(deposits.clone(), code.clone(), since.clone(), limit.clone(), Value::Undefined);
     }
@@ -1245,11 +1254,11 @@ pub trait Bitvavo : Exchange {
         //        ]
         //    }
         //
-        let mut response: Value = self.safe_value(message.clone(), Value::from("response"));
+        let mut response: Value = self.safe_value(message.clone(), Value::from("response"), Value::Undefined);
         let mut deposits: Value = self.parse_transactions(response.clone(), Value::Undefined, Value::Undefined, Value::Undefined, Value::Json(normalize(&Value::Json(json!({
             "type": "deposit"
         }))).unwrap()));
-        let mut message_hash: Value = self.safe_string(message.clone(), Value::from("requestId"));
+        let mut message_hash: Value = self.safe_string(message.clone(), Value::from("requestId"), Value::Undefined);
         client.resolve(deposits.clone(), message_hash.clone());
         Value::Undefined
     }
@@ -1257,7 +1266,7 @@ pub trait Bitvavo : Exchange {
     async fn fetch_trading_fees_ws(&mut self, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        <Self as Bitvavo>::authenticate(self, Value::Undefined).await;
+        <Self as Bitvavo>::authenticate(self).await;
         return <Self as Bitvavo>::watch_request(self, Value::from("privateGetAccount"), params.clone()).await;
     }
 
@@ -1293,8 +1302,8 @@ pub trait Bitvavo : Exchange {
         //        ]
         //    }
         //
-        let mut message_hash: Value = self.safe_string(message.clone(), Value::from("requestId"));
-        let mut response: Value = self.safe_value(message.clone(), Value::from("response"));
+        let mut message_hash: Value = self.safe_string(message.clone(), Value::from("requestId"), Value::Undefined);
+        let mut response: Value = self.safe_value(message.clone(), Value::from("response"), Value::Undefined);
         let mut currencies: Value = self.parse_currencies(response.clone());
         client.resolve(currencies.clone(), message_hash.clone());
         Value::Undefined
@@ -1313,9 +1322,9 @@ pub trait Bitvavo : Exchange {
         //        }
         //    }
         //
-        let mut message_hash: Value = self.safe_string(message.clone(), Value::from("requestId"));
-        let mut response: Value = self.safe_value(message.clone(), Value::from("response"));
-        let mut fees: Value = self.parse_trading_fees(response.clone());
+        let mut message_hash: Value = self.safe_string(message.clone(), Value::from("requestId"), Value::Undefined);
+        let mut response: Value = self.safe_value(message.clone(), Value::from("response"), Value::Undefined);
+        let mut fees: Value = <Self as Bitvavo>::parse_trading_fees(self, response.clone(), Value::Undefined);
         client.resolve(fees.clone(), message_hash.clone());
         Value::Undefined
     }
@@ -1323,7 +1332,7 @@ pub trait Bitvavo : Exchange {
     async fn fetch_balance_ws(&mut self, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        <Self as Bitvavo>::authenticate(self, Value::Undefined).await;
+        <Self as Bitvavo>::authenticate(self).await;
         return <Self as Bitvavo>::watch_request(self, Value::from("privateGetBalance"), params.clone()).await;
     }
 
@@ -1340,7 +1349,7 @@ pub trait Bitvavo : Exchange {
         //        ]
         //    }
         //
-        let mut message_hash: Value = self.safe_string(message.clone(), Value::from("requestId"));
+        let mut message_hash: Value = self.safe_string(message.clone(), Value::from("requestId"), Value::Undefined);
         let mut response: Value = self.safe_value(message.clone(), Value::from("response"), Value::new_array());
         let mut balance: Value = self.parse_balance(response.clone());
         client.resolve(balance.clone(), message_hash.clone());
@@ -1378,7 +1387,7 @@ pub trait Bitvavo : Exchange {
         //
         let mut response: Value = self.safe_value(message.clone(), Value::from("response"), Value::new_object());
         let mut order: Value = self.parse_order(response.clone(), Value::Undefined);
-        let mut message_hash: Value = self.safe_string(message.clone(), Value::from("requestId"));
+        let mut message_hash: Value = self.safe_string(message.clone(), Value::from("requestId"), Value::Undefined);
         client.resolve(order.clone(), message_hash.clone());
         Value::Undefined
     }
@@ -1405,7 +1414,7 @@ pub trait Bitvavo : Exchange {
         //
         let mut response: Value = self.safe_value(message.clone(), Value::from("response"), Value::new_object());
         let mut markets: Value = self.parse_markets(response.clone());
-        let mut message_hash: Value = self.safe_string(message.clone(), Value::from("requestId"));
+        let mut message_hash: Value = self.safe_string(message.clone(), Value::from("requestId"), Value::Undefined);
         client.resolve(markets.clone(), message_hash.clone());
         Value::Undefined
     }
@@ -1419,7 +1428,7 @@ pub trait Bitvavo : Exchange {
             "privateGetOrder": self.get("actionAndOrderIdMessageHash".into()),
             "privateGetTrades": self.get("actionAndMarketMessageHash".into())
         }))).unwrap());
-        let mut method: Value = self.safe_value(methods.clone(), action.clone());
+        let mut method: Value = self.safe_value(methods.clone(), action.clone(), Value::Undefined);
         let mut message_hash: Value = action.clone();
         if method.clone().is_nonnullish() {
             message_hash = method.call(self, action.clone(), params.clone());
@@ -1435,7 +1444,7 @@ pub trait Bitvavo : Exchange {
 
     fn action_and_order_id_message_hash(&mut self, mut action: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
-        let mut order_id: Value = self.safe_string(params.clone(), Value::from("orderId"));
+        let mut order_id: Value = self.safe_string(params.clone(), Value::from("orderId"), Value::Undefined);
         if order_id.clone().is_nullish() {
             panic!(r###"ExchangeError::new(self.get("id".into()) + Value::from(" privateUpdateOrderMessageHash requires a orderId parameter"))"###);
         };
@@ -1464,7 +1473,7 @@ pub trait Bitvavo : Exchange {
         //         "postOnly": false
         //     }
         //
-        let mut market_id: Value = self.safe_string(message.clone(), Value::from("market"));
+        let mut market_id: Value = self.safe_string(message.clone(), Value::from("market"), Value::Undefined);
         let mut market: Value = self.safe_market(market_id.clone(), Value::Undefined, Value::from("-"), Value::Undefined);
         let mut symbol: Value = market.get(Value::from("symbol"));
         let mut message_hash: Value = Value::from("order:") + symbol.clone();
@@ -1495,7 +1504,7 @@ pub trait Bitvavo : Exchange {
         //         "feeCurrency": "EUR"
         //     }
         //
-        let mut market_id: Value = self.safe_string(message.clone(), Value::from("market"));
+        let mut market_id: Value = self.safe_string(message.clone(), Value::from("market"), Value::Undefined);
         let mut market: Value = self.safe_market(market_id.clone(), Value::Undefined, Value::from("-"), Value::Undefined);
         let mut symbol: Value = market.get(Value::from("symbol"));
         let mut message_hash: Value = Value::from("myTrades:") + symbol.clone();
@@ -1523,13 +1532,13 @@ pub trait Bitvavo : Exchange {
         let mut methods: Value = Value::Json(normalize(&Value::Json(json!({
             "book": self.get("handleOrderBookSubscriptions".into())
         }))).unwrap());
-        let mut names: Value = Object::keys(subscriptions.clone());
+        let mut names: Value = subscriptions.clone().keys();
         let mut i: usize = 0;
         while i < names.len() {
             let mut name: Value = names.get(i.into());
-            let mut method: Value = self.safe_value(methods.clone(), name.clone());
+            let mut method: Value = self.safe_value(methods.clone(), name.clone(), Value::Undefined);
             if method.clone().is_nonnullish() {
-                let mut subscription: Value = self.safe_value(subscriptions.clone(), name.clone());
+                let mut subscription: Value = self.safe_value(subscriptions.clone(), name.clone(), Value::Undefined);
                 method.call(self, client.clone(), message.clone(), subscription.clone());
             };
             i += 1;
@@ -1542,12 +1551,12 @@ pub trait Bitvavo : Exchange {
         let mut url: Value = self.get("urls".into()).get(Value::from("api")).get(Value::from("ws"));
         let mut client: Value = self.client(url.clone());
         let mut message_hash: Value = Value::from("authenticated");
-        let mut future: Value = self.safe_value(client.get(subscriptions.clone()), message_hash.clone());
+        let mut future: Value = self.safe_value(client.get(subscriptions.clone()), message_hash.clone(), Value::Undefined);
         if future.clone().is_nullish() {
             let mut timestamp: Value = self.milliseconds();
             let mut string_timestamp: Value = timestamp.to_string();
             let mut auth: Value = string_timestamp.clone() + Value::from("GET/") + self.get("version".into()) + Value::from("/websocket");
-            let mut signature: Value = self.hmac(self.encode(auth.clone()), self.encode(self.get("secret".into())), sha256.clone());
+            let mut signature: Value = self.hmac(self.encode(auth.clone()), self.encode(self.get("secret".into())), sha256.clone(), Value::Undefined);
             let mut action: Value = Value::from("authenticate");
             let mut request: Value = Value::Json(normalize(&Value::Json(json!({
                 "action": action,
@@ -1601,9 +1610,9 @@ pub trait Bitvavo : Exchange {
         //        error: 'You do not have sufficient balance to complete this operation.'
         //    }
         //
-        let mut error: Value = self.safe_string(message.clone(), Value::from("error"));
-        let mut code: Value = self.safe_integer(error.clone(), Value::from("errorCode"));
-        let mut action: Value = self.safe_string(message.clone(), Value::from("action"));
+        let mut error: Value = self.safe_string(message.clone(), Value::from("error"), Value::Undefined);
+        let mut code: Value = self.safe_integer(error.clone(), Value::from("errorCode"), Value::Undefined);
+        let mut action: Value = self.safe_string(message.clone(), Value::from("action"), Value::Undefined);
         let mut build_message: Value = <Self as Bitvavo>::build_message_hash(self, action.clone(), message.clone());
         let mut message_hash: Value = self.safe_string(message.clone(), Value::from("requestId"), build_message.clone());
         let mut rejected: Value = false.into();
@@ -1661,7 +1670,7 @@ pub trait Bitvavo : Exchange {
         //         "authenticated": true
         //     }
         //
-        let mut error: Value = self.safe_string(message.clone(), Value::from("error"));
+        let mut error: Value = self.safe_string(message.clone(), Value::from("error"), Value::Undefined);
         if error.clone().is_nonnullish() {
             <Self as Bitvavo>::handle_error_message(self, client.clone(), message.clone());
         };
@@ -1692,11 +1701,11 @@ pub trait Bitvavo : Exchange {
             "getCandles": self.get("handleFetchOHLCV".into()),
             "getMarkets": self.get("handleMarkets".into())
         }))).unwrap());
-        let mut event: Value = self.safe_string(message.clone(), Value::from("event"));
-        let mut method: Value = self.safe_value(methods.clone(), event.clone());
+        let mut event: Value = self.safe_string(message.clone(), Value::from("event"), Value::Undefined);
+        let mut method: Value = self.safe_value(methods.clone(), event.clone(), Value::Undefined);
         if method.clone().is_nullish() {
-            let mut action: Value = self.safe_string(message.clone(), Value::from("action"));
-            method = self.safe_value(methods.clone(), action.clone());
+            let mut action: Value = self.safe_string(message.clone(), Value::from("action"), Value::Undefined);
+            method = self.safe_value(methods.clone(), action.clone(), Value::Undefined);
             if method.clone().is_nonnullish() {
                 method.call(self, client.clone(), message.clone());
             };
@@ -1770,8 +1779,8 @@ impl ValueTrait for BitvavoImpl {
     fn push(&mut self, value: Value) { self.0.push(value) }
     fn split(&self, separator: Value) -> Value { self.0.split(separator) }
     fn contains_key(&self, key: Value) -> bool { self.0.contains_key(key) }
-    fn keys(&self) -> Vec<Value> { self.0.keys() }
-    fn values(&self) -> Vec<Value> { self.0.values() }
+    fn keys(&self) -> Value { self.0.keys() }
+    fn values(&self) -> Value { self.0.values() }
     fn to_array(&self, x: Value) -> Value { self.0.to_array(x) }
     fn index_of(&self, x: Value) -> Value { self.0.index_of(x) }
     fn join(&self, glue: Value) -> Value { self.0.join(glue) }

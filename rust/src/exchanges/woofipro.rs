@@ -11,7 +11,16 @@ use async_trait::async_trait;
 use std::str::FromStr;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, JSON, Array, Object, Math, parse_int, shift_2, extend_2, normalize};
+use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, BoolExt, JSON, Array, Object, Math, Promise, parse_int, shift_2, extend_2, normalize};
+// Crypto hash identifiers
+fn sha256() -> Value { Value::from("sha256") }
+fn sha384() -> Value { Value::from("sha384") }
+fn sha512() -> Value { Value::from("sha512") }
+fn md5() -> Value { Value::from("md5") }
+fn ed25519() -> Value { Value::from("ed25519") }
+fn rsa(msg: Value, secret: Value, _hash: Value) -> Value { msg }
+fn eddsa(msg: Value, secret: Value, _curve: Value) -> Value { msg }
+fn secp256k1() -> Value { Value::from("secp256k1") }
 
 use crate::exchange::{PRECISE_BASE, TRUNCATE, ROUND, ROUND_UP, ROUND_DOWN};
 use crate::exchange::{DECIMAL_PLACES, SIGNIFICANT_DIGITS, TICK_SIZE, NO_PADDING, PAD_WITH_ZERO};
@@ -520,14 +529,14 @@ pub trait Woofipro : Exchange {
         //     "liquidation_tier": "1"
         //   }
         //
-        let mut market_id: Value = self.safe_string(market.clone(), Value::from("symbol"));
+        let mut market_id: Value = self.safe_string(market.clone(), Value::from("symbol"), Value::Undefined);
         let mut parts: Value = market_id.split(Value::from("_"));
         let mut market_type: Value = Value::from("swap");
-        let mut base_id: Value = self.safe_string(parts.clone(), Value::from(1));
-        let mut quote_id: Value = self.safe_string(parts.clone(), Value::from(2));
+        let mut base_id: Value = self.safe_string(parts.clone(), Value::from(1), Value::Undefined);
+        let mut quote_id: Value = self.safe_string(parts.clone(), Value::from(2), Value::Undefined);
         let mut base: Value = self.safe_currency_code(base_id.clone(), Value::Undefined);
         let mut quote: Value = self.safe_currency_code(quote_id.clone(), Value::Undefined);
-        let mut settle_id: Value = self.safe_string(parts.clone(), Value::from(2));
+        let mut settle_id: Value = self.safe_string(parts.clone(), Value::from(2), Value::Undefined);
         let mut settle: Value = self.safe_currency_code(settle_id.clone(), Value::Undefined);
         let mut symbol: Value = base.clone() + Value::from("/") + quote.clone() + Value::from(":") + settle.clone();
         return Value::Json(normalize(&Value::Json(json!({
@@ -576,58 +585,17 @@ pub trait Woofipro : Exchange {
                     "max": Value::Undefined
                 }))).unwrap())
             }))).unwrap()),
-            "created": self.safe_integer(market.clone(), Value::from("created_time")),
+            "created": self.safe_integer(market.clone(), Value::from("created_time"), Value::Undefined),
             "info": market
         }))).unwrap());
     }
 
-    async fn fetch_markets(&mut self, mut params: Value) -> Value {
-        params = params.or_default(Value::new_object());
-        let mut response: Value = self.v1_public_get_public_info(params.clone()).await;
-        //
-        //   {
-        //     "success": true,
-        //     "timestamp": 1702989203989,
-        //     "data": {
-        //       "rows": [
-        //         {
-        //           "symbol": "PERP_BTC_USDC",
-        //           "quote_min": 123,
-        //           "quote_max": 100000,
-        //           "quote_tick": 0.1,
-        //           "base_min": 0.00001,
-        //           "base_max": 20,
-        //           "base_tick": 0.00001,
-        //           "min_notional": 1,
-        //           "price_range": 0.02,
-        //           "price_scope": 0.4,
-        //           "std_liquidation_fee": 0.03,
-        //           "liquidator_fee": 0.015,
-        //           "claim_insurance_fund_discount": 0.0075,
-        //           "funding_period": 8,
-        //           "cap_funding": 0.000375,
-        //           "floor_funding": -0.000375,
-        //           "interest_rate": 0.0001,
-        //           "created_time": 1684140107326,
-        //           "updated_time": 1685345968053,
-        //           "base_mmr": 0.05,
-        //           "base_imr": 0.1,
-        //           "imr_factor": 0.0002512,
-        //           "liquidation_tier": "1"
-        //         }
-        //       ]
-        //     }
-        //   }
-        //
-        let mut data: Value = self.safe_dict(response.clone(), Value::from("data"), Value::new_object());
-        let mut rows: Value = self.safe_list(data.clone(), Value::from("rows"), Value::new_array());
-        return self.parse_markets(rows.clone());
-    }
+    
 
     async fn fetch_currencies(&mut self, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         let mut result: Value = Value::new_object();
-        let mut token_promise: Value = self.v1_public_get_public_token(params.clone());
+        let mut token_promise: Value = self.dispatch("v1PublicGetPublicToken".into(), params.clone(), Value::Undefined).await;
         //
         // {
         //     "success": true,
@@ -650,7 +618,7 @@ pub trait Woofipro : Exchange {
         //     }
         // }
         //
-        let mut chain_promise: Value = self.v1_public_get_public_chain_info(params.clone());
+        let mut chain_promise: Value = self.dispatch("v1PublicGetPublicChainInfo".into(), params.clone(), Value::Undefined).await;
         let (mut token_response, mut chain_response) = shift_2(Promise::all(Value::Json(serde_json::Value::Array(vec![token_promise.clone().into(), chain_promise.clone().into()]))).await);
         let mut token_data: Value = self.safe_dict(token_response.clone(), Value::from("data"), Value::new_object());
         let mut token_rows: Value = self.safe_list(token_data.clone(), Value::from("rows"), Value::new_array());
@@ -660,16 +628,16 @@ pub trait Woofipro : Exchange {
         let mut i: usize = 0;
         while i < token_rows.len() {
             let mut token: Value = token_rows.get(i.into());
-            let mut currency_id: Value = self.safe_string(token.clone(), Value::from("token"));
+            let mut currency_id: Value = self.safe_string(token.clone(), Value::from("token"), Value::Undefined);
             let mut networks: Value = self.safe_list(token.clone(), Value::from("chain_details"), Value::Undefined);
             let mut code: Value = self.safe_currency_code(currency_id.clone(), Value::Undefined);
             let mut resulting_networks: Value = Value::new_object();
             let mut j: usize = 0;
             while j < networks.len() {
                 let mut network_entry: Value = networks.get(j.into());
-                let mut network_id: Value = self.safe_string(network_entry.clone(), Value::from("chain_id"));
+                let mut network_id: Value = self.safe_string(network_entry.clone(), Value::from("chain_id"), Value::Undefined);
                 let mut network_row: Value = self.safe_dict(indexed_chains.clone(), network_id.clone(), Value::Undefined);
-                let mut network_name: Value = self.safe_string(network_row.clone(), Value::from("name"));
+                let mut network_name: Value = self.safe_string(network_row.clone(), Value::from("name"), Value::Undefined);
                 let mut network_code: Value = self.network_id_to_code(network_name.clone(), code.clone());
                 resulting_networks.set(network_code.clone(), Value::Json(normalize(&Value::Json(json!({
                     "id": network_id,
@@ -688,7 +656,7 @@ pub trait Woofipro : Exchange {
                     "deposit": Value::Undefined,
                     "withdraw": Value::Undefined,
                     "fee": self.safe_number(network_entry.clone(), Value::from("withdrawal_fee"), Value::Undefined),
-                    "precision": self.parse_number(self.parse_precision(self.safe_string(network_entry.clone(), Value::from("decimals"))), Value::Undefined),
+                    "precision": self.parse_number(self.parse_precision(self.safe_string(network_entry.clone(), Value::from("decimals"), Value::Undefined)), Value::Undefined),
                     "info": Value::Json(serde_json::Value::Array(vec![network_entry.clone().into(), network_row.clone().into()]))
                 }))).unwrap()));
                 j += 1;
@@ -721,10 +689,10 @@ pub trait Woofipro : Exchange {
     }
 
     fn parse_token_and_fee_temp(&self, mut item: Value, mut fee_token_key: Value, mut fee_amount_key: Value) -> Value {
-        let mut fee_cost: Value = self.safe_string(item.clone(), fee_amount_key.clone());
+        let mut fee_cost: Value = self.safe_string(item.clone(), fee_amount_key.clone(), Value::Undefined);
         let mut fee: Value = Value::Undefined;
         if fee_cost.clone().is_nonnullish() {
-            let mut fee_currency_id: Value = self.safe_string(item.clone(), fee_token_key.clone());
+            let mut fee_currency_id: Value = self.safe_string(item.clone(), fee_token_key.clone(), Value::Undefined);
             let mut fee_currency_code: Value = self.safe_currency_code(fee_currency_id.clone(), Value::Undefined);
             fee = Value::Json(normalize(&Value::Json(json!({
                 "cost": fee_cost,
@@ -763,24 +731,24 @@ pub trait Woofipro : Exchange {
         //     }
         //
         let mut is_from_fetch_order: Value = trade.contains_key(Value::from("id")).into();
-        let mut timestamp: Value = self.safe_integer(trade.clone(), Value::from("executed_timestamp"));
-        let mut market_id: Value = self.safe_string(trade.clone(), Value::from("symbol"));
+        let mut timestamp: Value = self.safe_integer(trade.clone(), Value::from("executed_timestamp"), Value::Undefined);
+        let mut market_id: Value = self.safe_string(trade.clone(), Value::from("symbol"), Value::Undefined);
         market = self.safe_market(market_id.clone(), market.clone(), Value::Undefined, Value::Undefined);
         let mut symbol: Value = market.get(Value::from("symbol"));
-        let mut price: Value = self.safe_string(trade.clone(), Value::from("executed_price"));
-        let mut amount: Value = self.safe_string(trade.clone(), Value::from("executed_quantity"));
-        let mut order_id: Value = self.safe_string(trade.clone(), Value::from("order_id"));
+        let mut price: Value = self.safe_string(trade.clone(), Value::from("executed_price"), Value::Undefined);
+        let mut amount: Value = self.safe_string(trade.clone(), Value::from("executed_quantity"), Value::Undefined);
+        let mut order_id: Value = self.safe_string(trade.clone(), Value::from("order_id"), Value::Undefined);
         let mut fee: Value = <Self as Woofipro>::parse_token_and_fee_temp(self, trade.clone(), Value::from("fee_asset"), Value::from("fee"));
-        let mut fee_cost: Value = self.safe_string(fee.clone(), Value::from("cost"));
+        let mut fee_cost: Value = self.safe_string(fee.clone(), Value::from("cost"), Value::Undefined);
         if fee_cost.clone().is_nonnullish() {
             fee.set("cost".into(), fee_cost.clone());
         };
         let mut cost: Value = Precise::string_mul(price.clone(), amount.clone());
-        let mut side: Value = self.safe_string_lower(trade.clone(), Value::from("side"));
-        let mut id: Value = self.safe_string(trade.clone(), Value::from("id"));
+        let mut side: Value = self.safe_string_lower(trade.clone(), Value::from("side"), Value::Undefined);
+        let mut id: Value = self.safe_string(trade.clone(), Value::from("id"), Value::Undefined);
         let mut taker_or_maker: Value = Value::Undefined;
         if is_from_fetch_order.is_truthy() {
-            let mut is_maker: Value = (self.safe_string(trade.clone(), Value::from("is_maker")) == Value::from("1")).into();
+            let mut is_maker: Value = (self.safe_string(trade.clone(), Value::from("is_maker"), Value::Undefined) == Value::from("1")).into();
             taker_or_maker = if is_maker.is_truthy() { Value::from("maker") } else { Value::from("taker") };
         };
         return self.safe_trade(Value::Json(normalize(&Value::Json(json!({
@@ -826,13 +794,13 @@ pub trait Woofipro : Exchange {
         //            "sum_unitary_funding": 521.367
         //         }
         //
-        let mut symbol: Value = self.safe_string(funding_rate.clone(), Value::from("symbol"));
+        let mut symbol: Value = self.safe_string(funding_rate.clone(), Value::from("symbol"), Value::Undefined);
         market = self.market(symbol.clone());
-        let mut next_funding_timestamp: Value = self.safe_integer(funding_rate.clone(), Value::from("next_funding_time"));
-        let mut est_funding_rate_timestamp: Value = self.safe_integer(funding_rate.clone(), Value::from("est_funding_rate_timestamp"));
-        let mut last_funding_rate_timestamp: Value = self.safe_integer(funding_rate.clone(), Value::from("last_funding_rate_timestamp"));
-        let mut funding_time_string: Value = self.safe_string(funding_rate.clone(), Value::from("last_funding_rate_timestamp"));
-        let mut next_funding_time_string: Value = self.safe_string(funding_rate.clone(), Value::from("next_funding_time"));
+        let mut next_funding_timestamp: Value = self.safe_integer(funding_rate.clone(), Value::from("next_funding_time"), Value::Undefined);
+        let mut est_funding_rate_timestamp: Value = self.safe_integer(funding_rate.clone(), Value::from("est_funding_rate_timestamp"), Value::Undefined);
+        let mut last_funding_rate_timestamp: Value = self.safe_integer(funding_rate.clone(), Value::from("last_funding_rate_timestamp"), Value::Undefined);
+        let mut funding_time_string: Value = self.safe_string(funding_rate.clone(), Value::from("last_funding_rate_timestamp"), Value::Undefined);
+        let mut next_funding_time_string: Value = self.safe_string(funding_rate.clone(), Value::from("next_funding_time"), Value::Undefined);
         let mut milliseconds_interval: Value = Precise::string_sub(next_funding_time_string.clone(), funding_time_string.clone());
         return Value::Json(normalize(&Value::Json(json!({
             "info": funding_rate,
@@ -879,7 +847,7 @@ pub trait Woofipro : Exchange {
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
             "symbol": market.get(Value::from("id"))
         }))).unwrap());
-        let mut response: Value = self.v1_public_get_public_funding_rate_symbol(extend_2(request.clone(), params.clone())).await;
+        let mut response: Value = self.dispatch("v1PublicGetPublicFundingRateSymbol".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         //
         // {
         //     "success": true,
@@ -903,7 +871,7 @@ pub trait Woofipro : Exchange {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
         symbols = self.market_symbols(symbols.clone(), Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined);
-        let mut response: Value = self.v1_public_get_public_funding_rates(params.clone()).await;
+        let mut response: Value = self.dispatch("v1PublicGetPublicFundingRates".into(), params.clone(), Value::Undefined).await;
         //
         // {
         //     "success": true,
@@ -944,7 +912,7 @@ pub trait Woofipro : Exchange {
             request.set("start_t".into(), since.clone());
         };
         (request, params) = shift_2(self.handle_until_option(Value::from("end_t"), request.clone(), params.clone(), Value::from(0.001)));
-        let mut response: Value = self.v1_public_get_public_funding_rate_history(extend_2(request.clone(), params.clone())).await;
+        let mut response: Value = self.dispatch("v1PublicGetPublicFundingRateHistory".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         //
         // {
         //     "success": true,
@@ -970,8 +938,8 @@ pub trait Woofipro : Exchange {
         let mut i: usize = 0;
         while i < result.len() {
             let mut entry: Value = result.get(i.into());
-            let mut market_id: Value = self.safe_string(entry.clone(), Value::from("symbol"));
-            let mut timestamp: Value = self.safe_integer(entry.clone(), Value::from("funding_rate_timestamp"));
+            let mut market_id: Value = self.safe_string(entry.clone(), Value::from("symbol"), Value::Undefined);
+            let mut timestamp: Value = self.safe_integer(entry.clone(), Value::from("funding_rate_timestamp"), Value::Undefined);
             rates.push(Value::Json(normalize(&Value::Json(json!({
                 "info": entry,
                 "symbol": self.safe_symbol(market_id.clone(), Value::Undefined, Value::Undefined, Value::Undefined),
@@ -981,7 +949,7 @@ pub trait Woofipro : Exchange {
             }))).unwrap()));
             i += 1;
         };
-        let mut sorted: Value = self.sort_by(rates.clone(), Value::from("timestamp"));
+        let mut sorted: Value = self.sort_by(rates.clone(), Value::from("timestamp"), Value::Undefined, Value::Undefined);
         return self.filter_by_symbol_since_limit(sorted.clone(), symbol.clone(), since.clone(), limit.clone(), Value::Undefined);
     }
 
@@ -998,13 +966,13 @@ pub trait Woofipro : Exchange {
         //         "updated_time": 1682235722003
         // }
         //
-        let mut market_id: Value = self.safe_string(income.clone(), Value::from("symbol"));
+        let mut market_id: Value = self.safe_string(income.clone(), Value::from("symbol"), Value::Undefined);
         let mut symbol: Value = self.safe_symbol(market_id.clone(), market.clone(), Value::Undefined, Value::Undefined);
-        let mut amount: Value = self.safe_string(income.clone(), Value::from("funding_fee"));
+        let mut amount: Value = self.safe_string(income.clone(), Value::from("funding_fee"), Value::Undefined);
         let mut code: Value = self.safe_currency_code(Value::from("USDC"), Value::Undefined);
-        let mut timestamp: Value = self.safe_integer(income.clone(), Value::from("updated_time"));
+        let mut timestamp: Value = self.safe_integer(income.clone(), Value::from("updated_time"), Value::Undefined);
         let mut rate: Value = self.safe_number(income.clone(), Value::from("funding_rate"), Value::Undefined);
-        let mut payment_type: Value = self.safe_string(income.clone(), Value::from("payment_type"));
+        let mut payment_type: Value = self.safe_string(income.clone(), Value::from("payment_type"), Value::Undefined);
         amount = if payment_type.clone() == Value::from("Pay") { Precise::string_neg(amount.clone()) } else { amount.clone() };
         return Value::Json(normalize(&Value::Json(json!({
             "info": income,
@@ -1035,7 +1003,7 @@ pub trait Woofipro : Exchange {
         if since.clone().is_nonnullish() {
             request.set("start_t".into(), since.clone());
         };
-        let mut until: Value = self.safe_integer(params.clone(), Value::from("until"));
+        let mut until: Value = self.safe_integer(params.clone(), Value::from("until"), Value::Undefined);
         // unified in milliseconds
         params = self.omit(params.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("until").into()])));
         if until.clone().is_nonnullish() {
@@ -1044,7 +1012,7 @@ pub trait Woofipro : Exchange {
         if limit.clone().is_nonnullish() {
             request.set("size".into(), Math::min(limit.clone(), Value::from(500)));
         };
-        let mut response: Value = self.v1_private_get_funding_fee_history(extend_2(request.clone(), params.clone())).await;
+        let mut response: Value = self.dispatch("v1PrivateGetFundingFeeHistory".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         //
         // {
         //     "success": true,
@@ -1076,7 +1044,7 @@ pub trait Woofipro : Exchange {
     async fn fetch_trading_fees(&mut self, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        let mut response: Value = self.v1_private_get_client_info(params.clone()).await;
+        let mut response: Value = self.dispatch("v1PrivateGetClientInfo".into(), params.clone(), Value::Undefined).await;
         //
         // {
         //     "success": true,
@@ -1105,8 +1073,8 @@ pub trait Woofipro : Exchange {
         // }
         //
         let mut data: Value = self.safe_dict(response.clone(), Value::from("data"), Value::new_object());
-        let mut maker: Value = self.safe_string(data.clone(), Value::from("futures_maker_fee_rate"));
-        let mut taker: Value = self.safe_string(data.clone(), Value::from("futures_taker_fee_rate"));
+        let mut maker: Value = self.safe_string(data.clone(), Value::from("futures_maker_fee_rate"), Value::Undefined);
+        let mut taker: Value = self.safe_string(data.clone(), Value::from("futures_taker_fee_rate"), Value::Undefined);
         let mut result: Value = Value::new_object();
         let mut i: usize = 0;
         while i < self.get("symbols".into()).len() {
@@ -1157,7 +1125,7 @@ pub trait Woofipro : Exchange {
 
 
     fn parse_ohlcv(&self, mut ohlcv: Value, mut market: Value) -> Value {
-        return Value::Json(serde_json::Value::Array(vec![self.safe_integer(ohlcv.clone(), Value::from("start_timestamp")).into(), self.safe_number(ohlcv.clone(), Value::from("open"), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from("high"), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from("low"), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from("close"), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from("volume"), Value::Undefined).into()]));
+        return Value::Json(serde_json::Value::Array(vec![self.safe_integer(ohlcv.clone(), Value::from("start_timestamp"), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from("open"), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from("high"), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from("low"), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from("close"), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from("volume"), Value::Undefined).into()]));
     }
 
     async fn fetch_ohlcv(&mut self, mut symbol: Value, mut timeframe: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
@@ -1241,47 +1209,47 @@ pub trait Woofipro : Exchange {
         //       "updatedTime": "1686149903.362"
         //   }
         //
-        let mut timestamp: Value = self.safe_integer_n(order.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("timestamp").into(), Value::from("created_time").into(), Value::from("createdTime").into()])));
-        let mut order_id: Value = self.safe_string_n(order.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("order_id").into(), Value::from("orderId").into(), Value::from("algoOrderId").into()])));
-        let mut client_order_id: Value = self.omit_zero(self.safe_string_2(order.clone(), Value::from("client_order_id"), Value::from("clientOrderId")));
+        let mut timestamp: Value = self.safe_integer_n(order.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("timestamp").into(), Value::from("created_time").into(), Value::from("createdTime").into()])), Value::Undefined);
+        let mut order_id: Value = self.safe_string_n(order.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("order_id").into(), Value::from("orderId").into(), Value::from("algoOrderId").into()])), Value::Undefined);
+        let mut client_order_id: Value = self.omit_zero(self.safe_string_2(order.clone(), Value::from("client_order_id"), Value::from("clientOrderId"), Value::Undefined));
         // Somehow, this always returns 0 for limit order
-        let mut market_id: Value = self.safe_string(order.clone(), Value::from("symbol"));
+        let mut market_id: Value = self.safe_string(order.clone(), Value::from("symbol"), Value::Undefined);
         market = self.safe_market(market_id.clone(), market.clone(), Value::Undefined, Value::Undefined);
         let mut symbol: Value = market.get(Value::from("symbol"));
-        let mut price: Value = self.safe_string_2(order.clone(), Value::from("order_price"), Value::from("price"));
-        let mut amount: Value = self.safe_string_2(order.clone(), Value::from("order_quantity"), Value::from("quantity"));
+        let mut price: Value = self.safe_string_2(order.clone(), Value::from("order_price"), Value::from("price"), Value::Undefined);
+        let mut amount: Value = self.safe_string_2(order.clone(), Value::from("order_quantity"), Value::from("quantity"), Value::Undefined);
         // This is base amount
-        let mut cost: Value = self.safe_string_2(order.clone(), Value::from("order_amount"), Value::from("amount"));
+        let mut cost: Value = self.safe_string_2(order.clone(), Value::from("order_amount"), Value::from("amount"), Value::Undefined);
         // This is quote amount
-        let mut order_type: Value = self.safe_string_lower_2(order.clone(), Value::from("order_type"), Value::from("type"));
-        let mut status: Value = self.safe_value_2(order.clone(), Value::from("status"), Value::from("algoStatus"));
+        let mut order_type: Value = self.safe_string_lower_2(order.clone(), Value::from("order_type"), Value::from("type"), Value::Undefined);
+        let mut status: Value = self.safe_value_2(order.clone(), Value::from("status"), Value::from("algoStatus"), Value::Undefined);
         let mut success: Value = self.safe_bool(order.clone(), Value::from("success"), Value::Undefined);
         if success.clone().is_nonnullish() {
             status = if success.is_truthy() { Value::from("NEW") } else { Value::from("REJECTED") };
         };
-        let mut side: Value = self.safe_string_lower(order.clone(), Value::from("side"));
-        let mut filled: Value = self.omit_zero(self.safe_value_2(order.clone(), Value::from("executed"), Value::from("totalExecutedQuantity")));
-        let mut average: Value = self.omit_zero(self.safe_string_2(order.clone(), Value::from("average_executed_price"), Value::from("averageExecutedPrice")));
+        let mut side: Value = self.safe_string_lower(order.clone(), Value::from("side"), Value::Undefined);
+        let mut filled: Value = self.omit_zero(self.safe_value_2(order.clone(), Value::from("executed"), Value::from("totalExecutedQuantity"), Value::Undefined));
+        let mut average: Value = self.omit_zero(self.safe_string_2(order.clone(), Value::from("average_executed_price"), Value::from("averageExecutedPrice"), Value::Undefined));
         let mut remaining: Value = Precise::string_sub(cost.clone(), filled.clone());
-        let mut fee: Value = self.safe_value_2(order.clone(), Value::from("total_fee"), Value::from("totalFee"));
-        let mut fee_currency: Value = self.safe_string_2(order.clone(), Value::from("fee_asset"), Value::from("feeAsset"));
-        let mut transactions: Value = self.safe_value(order.clone(), Value::from("Transactions"));
+        let mut fee: Value = self.safe_value_2(order.clone(), Value::from("total_fee"), Value::from("totalFee"), Value::Undefined);
+        let mut fee_currency: Value = self.safe_string_2(order.clone(), Value::from("fee_asset"), Value::from("feeAsset"), Value::Undefined);
+        let mut transactions: Value = self.safe_value(order.clone(), Value::from("Transactions"), Value::Undefined);
         let mut trigger_price: Value = self.safe_number(order.clone(), Value::from("triggerPrice"), Value::Undefined);
         let mut take_profit_price: Value = Value::Undefined;
         let mut stop_loss_price: Value = Value::Undefined;
-        let mut child_orders: Value = self.safe_value(order.clone(), Value::from("childOrders"));
+        let mut child_orders: Value = self.safe_value(order.clone(), Value::from("childOrders"), Value::Undefined);
         if child_orders.clone().is_nonnullish() {
-            let mut first: Value = self.safe_value(child_orders.clone(), Value::from(0));
+            let mut first: Value = self.safe_value(child_orders.clone(), Value::from(0), Value::Undefined);
             let mut inner_child_orders: Value = self.safe_value(first.clone(), Value::from("childOrders"), Value::new_array());
             let mut inner_child_orders_length: usize = inner_child_orders.len();
             if inner_child_orders_length.clone() > Value::from(0) {
-                let mut take_profit_order: Value = self.safe_value(inner_child_orders.clone(), Value::from(0));
-                let mut stop_loss_order: Value = self.safe_value(inner_child_orders.clone(), Value::from(1));
+                let mut take_profit_order: Value = self.safe_value(inner_child_orders.clone(), Value::from(0), Value::Undefined);
+                let mut stop_loss_order: Value = self.safe_value(inner_child_orders.clone(), Value::from(1), Value::Undefined);
                 take_profit_price = self.safe_number(take_profit_order.clone(), Value::from("triggerPrice"), Value::Undefined);
                 stop_loss_price = self.safe_number(stop_loss_order.clone(), Value::from("triggerPrice"), Value::Undefined);
             };
         };
-        let mut last_update_timestamp: Value = self.safe_integer_2(order.clone(), Value::from("updatedTime"), Value::from("updated_time"));
+        let mut last_update_timestamp: Value = self.safe_integer_2(order.clone(), Value::from("updatedTime"), Value::from("updated_time"), Value::Undefined);
         return self.safe_order(Value::Json(normalize(&Value::Json(json!({
             "id": order_id,
             "clientOrderId": client_order_id,
@@ -1373,15 +1341,15 @@ pub trait Woofipro : Exchange {
             "symbol": market.get(Value::from("id")),
             "side": order_side
         }))).unwrap());
-        let mut trigger_price: Value = self.safe_string_2(params.clone(), Value::from("triggerPrice"), Value::from("stopPrice"));
-        let mut stop_loss: Value = self.safe_value(params.clone(), Value::from("stopLoss"));
-        let mut take_profit: Value = self.safe_value(params.clone(), Value::from("takeProfit"));
+        let mut trigger_price: Value = self.safe_string_2(params.clone(), Value::from("triggerPrice"), Value::from("stopPrice"), Value::Undefined);
+        let mut stop_loss: Value = self.safe_value(params.clone(), Value::from("stopLoss"), Value::Undefined);
+        let mut take_profit: Value = self.safe_value(params.clone(), Value::from("takeProfit"), Value::Undefined);
         let mut has_stop_loss: Value = (stop_loss.clone().is_nonnullish()).into();
         let mut has_take_profit: Value = (take_profit.clone().is_nonnullish()).into();
-        let mut algo_type: Value = self.safe_string(params.clone(), Value::from("algoType"));
-        let mut is_conditional: Value = (trigger_price.clone().is_nonnullish() || has_stop_loss.is_truthy() || has_take_profit.is_truthy() || self.safe_value(params.clone(), Value::from("childOrders")).is_nonnullish()).into();
+        let mut algo_type: Value = self.safe_string(params.clone(), Value::from("algoType"), Value::Undefined);
+        let mut is_conditional: Value = (trigger_price.clone().is_nonnullish() || has_stop_loss.is_truthy() || has_take_profit.is_truthy() || self.safe_value(params.clone(), Value::from("childOrders"), Value::Undefined).is_nonnullish()).into();
         let mut is_market: Value = (order_type.clone() == Value::from("MARKET")).into();
-        let mut time_in_force: Value = self.safe_string_lower(params.clone(), Value::from("timeInForce"));
+        let mut time_in_force: Value = self.safe_string_lower(params.clone(), Value::from("timeInForce"), Value::Undefined);
         let mut post_only: Value = self.is_post_only(is_market.clone(), Value::Undefined, params.clone());
         let mut order_qty_key: Value = if is_conditional.is_truthy() { Value::from("quantity") } else { Value::from("order_quantity") };
         let mut price_key: Value = if is_conditional.is_truthy() { Value::from("price") } else { Value::from("order_price") };
@@ -1408,7 +1376,7 @@ pub trait Woofipro : Exchange {
         } else if algo_type.clone() != Value::from("POSITIONAL_TP_SL") {
             request.set(order_qty_key.clone(), self.amount_to_precision(symbol.clone(), amount.clone()));
         };
-        let mut client_order_id: Value = self.safe_string_n(params.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("clOrdID").into(), Value::from("clientOrderId").into(), Value::from("client_order_id").into()])));
+        let mut client_order_id: Value = self.safe_string_n(params.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("clOrdID").into(), Value::from("clientOrderId").into(), Value::from("client_order_id").into()])), Value::Undefined);
         if client_order_id.clone().is_nonnullish() {
             request.set("client_order_id".into(), client_order_id.clone());
         };
@@ -1458,13 +1426,13 @@ pub trait Woofipro : Exchange {
         self.load_markets(Value::Undefined, Value::Undefined).await;
         let mut market: Value = self.market(symbol.clone());
         let mut request: Value = <Self as Woofipro>::create_order_request(self, symbol.clone(), r#type.clone(), side.clone(), amount.clone(), price.clone(), params.clone());
-        let mut trigger_price: Value = self.safe_string_2(params.clone(), Value::from("triggerPrice"), Value::from("stopPrice"));
-        let mut stop_loss: Value = self.safe_value(params.clone(), Value::from("stopLoss"));
-        let mut take_profit: Value = self.safe_value(params.clone(), Value::from("takeProfit"));
-        let mut is_conditional: Value = (trigger_price.clone().is_nonnullish() || stop_loss.clone().is_nonnullish() || take_profit.clone().is_nonnullish() || self.safe_value(params.clone(), Value::from("childOrders")).is_nonnullish()).into();
+        let mut trigger_price: Value = self.safe_string_2(params.clone(), Value::from("triggerPrice"), Value::from("stopPrice"), Value::Undefined);
+        let mut stop_loss: Value = self.safe_value(params.clone(), Value::from("stopLoss"), Value::Undefined);
+        let mut take_profit: Value = self.safe_value(params.clone(), Value::from("takeProfit"), Value::Undefined);
+        let mut is_conditional: Value = (trigger_price.clone().is_nonnullish() || stop_loss.clone().is_nonnullish() || take_profit.clone().is_nonnullish() || self.safe_value(params.clone(), Value::from("childOrders"), Value::Undefined).is_nonnullish()).into();
         let mut response: Value = Value::Undefined;
         if is_conditional.is_truthy() {
-            response = self.v1_private_post_algo_order(request.clone()).await;
+            response = self.dispatch("v1PrivatePostAlgoOrder".into(), request.clone(), Value::Undefined).await;
         } else {
             //
             // {
@@ -1496,7 +1464,7 @@ pub trait Woofipro : Exchange {
         // }
         //
         let mut data: Value = self.safe_dict(response.clone(), Value::from("data"), Value::Undefined);
-        data.set("timestamp".into(), self.safe_integer(response.clone(), Value::from("timestamp")));
+        data.set("timestamp".into(), self.safe_integer(response.clone(), Value::from("timestamp"), Value::Undefined));
         let mut order: Value = <Self as Woofipro>::parse_order(self, data.clone(), market.clone());
         order.set("type".into(), r#type.clone());
         return order.clone();
@@ -1509,16 +1477,16 @@ pub trait Woofipro : Exchange {
         let mut i: usize = 0;
         while i < orders.len() {
             let mut raw_order: Value = orders.get(i.into());
-            let mut market_id: Value = self.safe_string(raw_order.clone(), Value::from("symbol"));
-            let mut r#type: Value = self.safe_string(raw_order.clone(), Value::from("type"));
-            let mut side: Value = self.safe_string(raw_order.clone(), Value::from("side"));
-            let mut amount: Value = self.safe_value(raw_order.clone(), Value::from("amount"));
-            let mut price: Value = self.safe_value(raw_order.clone(), Value::from("price"));
+            let mut market_id: Value = self.safe_string(raw_order.clone(), Value::from("symbol"), Value::Undefined);
+            let mut r#type: Value = self.safe_string(raw_order.clone(), Value::from("type"), Value::Undefined);
+            let mut side: Value = self.safe_string(raw_order.clone(), Value::from("side"), Value::Undefined);
+            let mut amount: Value = self.safe_value(raw_order.clone(), Value::from("amount"), Value::Undefined);
+            let mut price: Value = self.safe_value(raw_order.clone(), Value::from("price"), Value::Undefined);
             let mut order_params: Value = self.safe_dict(raw_order.clone(), Value::from("params"), Value::new_object());
-            let mut trigger_price: Value = self.safe_string_2(order_params.clone(), Value::from("triggerPrice"), Value::from("stopPrice"));
-            let mut stop_loss: Value = self.safe_value(order_params.clone(), Value::from("stopLoss"));
-            let mut take_profit: Value = self.safe_value(order_params.clone(), Value::from("takeProfit"));
-            let mut is_conditional: Value = (trigger_price.clone().is_nonnullish() || stop_loss.clone().is_nonnullish() || take_profit.clone().is_nonnullish() || self.safe_value(order_params.clone(), Value::from("childOrders")).is_nonnullish()).into();
+            let mut trigger_price: Value = self.safe_string_2(order_params.clone(), Value::from("triggerPrice"), Value::from("stopPrice"), Value::Undefined);
+            let mut stop_loss: Value = self.safe_value(order_params.clone(), Value::from("stopLoss"), Value::Undefined);
+            let mut take_profit: Value = self.safe_value(order_params.clone(), Value::from("takeProfit"), Value::Undefined);
+            let mut is_conditional: Value = (trigger_price.clone().is_nonnullish() || stop_loss.clone().is_nonnullish() || take_profit.clone().is_nonnullish() || self.safe_value(order_params.clone(), Value::from("childOrders"), Value::Undefined).is_nonnullish()).into();
             if is_conditional.is_truthy() {
                 panic!(r###"NotSupported::new(self.get("id".into()) + Value::from(" createOrders() only support non-stop order"))"###);
             };
@@ -1529,7 +1497,7 @@ pub trait Woofipro : Exchange {
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
             "orders": orders_requests
         }))).unwrap());
-        let mut response: Value = self.v1_private_post_batch_order(extend_2(request.clone(), params.clone())).await;
+        let mut response: Value = self.dispatch("v1PrivatePostBatchOrder".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         //
         //     {
         //         "success": true,
@@ -1559,11 +1527,11 @@ pub trait Woofipro : Exchange {
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
             "order_id": id
         }))).unwrap());
-        let mut trigger_price: Value = self.safe_string_n(params.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("triggerPrice").into(), Value::from("stopPrice").into(), Value::from("takeProfitPrice").into(), Value::from("stopLossPrice").into()])));
+        let mut trigger_price: Value = self.safe_string_n(params.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("triggerPrice").into(), Value::from("stopPrice").into(), Value::from("takeProfitPrice").into(), Value::from("stopLossPrice").into()])), Value::Undefined);
         if trigger_price.clone().is_nonnullish() {
             request.set("triggerPrice".into(), self.price_to_precision(symbol.clone(), trigger_price.clone()));
         };
-        let mut is_conditional: Value = (trigger_price.clone().is_nonnullish() || self.safe_value(params.clone(), Value::from("childOrders")).is_nonnullish()).into();
+        let mut is_conditional: Value = (trigger_price.clone().is_nonnullish() || self.safe_value(params.clone(), Value::from("childOrders"), Value::Undefined).is_nonnullish()).into();
         let mut order_qty_key: Value = if is_conditional.is_truthy() { Value::from("quantity") } else { Value::from("order_quantity") };
         let mut price_key: Value = if is_conditional.is_truthy() { Value::from("price") } else { Value::from("order_price") };
         if price.clone().is_nonnullish() {
@@ -1575,12 +1543,12 @@ pub trait Woofipro : Exchange {
         params = self.omit(params.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("stopPrice").into(), Value::from("triggerPrice").into(), Value::from("takeProfitPrice").into(), Value::from("stopLossPrice").into(), Value::from("trailingTriggerPrice").into(), Value::from("trailingAmount").into(), Value::from("trailingPercent").into()])));
         let mut response: Value = Value::Undefined;
         if is_conditional.is_truthy() {
-            response = self.v1_private_put_algo_order(extend_2(request.clone(), params.clone())).await;
+            response = self.dispatch("v1PrivatePutAlgoOrder".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         } else {
             request.set("symbol".into(), market.get(Value::from("id")));
             request.set("side".into(), side.to_upper_case());
             let mut order_type: Value = r#type.to_upper_case();
-            let mut time_in_force: Value = self.safe_string_lower(params.clone(), Value::from("timeInForce"));
+            let mut time_in_force: Value = self.safe_string_lower(params.clone(), Value::from("timeInForce"), Value::Undefined);
             let mut is_market: Value = (order_type.clone() == Value::from("MARKET")).into();
             let mut post_only: Value = self.is_post_only(is_market.clone(), Value::Undefined, params.clone());
             if post_only.is_truthy() {
@@ -1592,7 +1560,7 @@ pub trait Woofipro : Exchange {
             } else {
                 request.set("order_type".into(), order_type.clone());
             };
-            let mut client_order_id: Value = self.safe_string_n(params.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("clOrdID").into(), Value::from("clientOrderId").into(), Value::from("client_order_id").into()])));
+            let mut client_order_id: Value = self.safe_string_n(params.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("clOrdID").into(), Value::from("clientOrderId").into(), Value::from("client_order_id").into()])), Value::Undefined);
             params = self.omit(params.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("clOrdID").into(), Value::from("clientOrderId").into(), Value::from("client_order_id").into(), Value::from("postOnly").into(), Value::from("timeInForce").into()])));
             if client_order_id.clone().is_nonnullish() {
                 request.set("client_order_id".into(), client_order_id.clone());
@@ -1611,7 +1579,7 @@ pub trait Woofipro : Exchange {
         // }
         //
         let mut data: Value = self.safe_dict(response.clone(), Value::from("data"), Value::new_object());
-        data.set("timestamp".into(), self.safe_integer(response.clone(), Value::from("timestamp")));
+        data.set("timestamp".into(), self.safe_integer(response.clone(), Value::from("timestamp"), Value::Undefined));
         return <Self as Woofipro>::parse_order(self, data.clone(), market.clone());
     }
 
@@ -1630,7 +1598,7 @@ pub trait Woofipro : Exchange {
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
             "symbol": market.get(Value::from("id"))
         }))).unwrap());
-        let mut client_order_id_unified: Value = self.safe_string_2(params.clone(), Value::from("clOrdID"), Value::from("clientOrderId"));
+        let mut client_order_id_unified: Value = self.safe_string_2(params.clone(), Value::from("clOrdID"), Value::from("clientOrderId"), Value::Undefined);
         let mut client_order_id_exchange_specific: Value = self.safe_string(params.clone(), Value::from("client_order_id"), client_order_id_unified.clone());
         let mut is_by_client_order: Value = (client_order_id_exchange_specific.clone().is_nonnullish()).into();
         let mut response: Value = Value::Undefined;
@@ -1638,16 +1606,16 @@ pub trait Woofipro : Exchange {
             if is_by_client_order.is_truthy() {
                 request.set("client_order_id".into(), client_order_id_exchange_specific.clone());
                 params = self.omit(params.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("clOrdID").into(), Value::from("clientOrderId").into(), Value::from("client_order_id").into()])));
-                response = self.v1_private_delete_algo_client_order(extend_2(request.clone(), params.clone())).await;
+                response = self.dispatch("v1PrivateDeleteAlgoClientOrder".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
             } else {
                 request.set("order_id".into(), id.clone());
-                response = self.v1_private_delete_algo_order(extend_2(request.clone(), params.clone())).await;
+                response = self.dispatch("v1PrivateDeleteAlgoOrder".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
             };
         } else {
             if is_by_client_order.is_truthy() {
                 request.set("client_order_id".into(), client_order_id_exchange_specific.clone());
                 params = self.omit(params.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("clOrdID").into(), Value::from("clientOrderId").into(), Value::from("client_order_id").into()])));
-                response = self.v1_private_delete_client_order(extend_2(request.clone(), params.clone())).await;
+                response = self.dispatch("v1PrivateDeleteClientOrder".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
             } else {
                 request.set("order_id".into(), id.clone());
                 response = self.dispatch("v1PrivateDeleteOrder".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
@@ -1692,10 +1660,10 @@ pub trait Woofipro : Exchange {
         let mut response: Value = Value::Undefined;
         if client_order_ids.is_truthy() {
             request.set("client_order_ids".into(), client_order_ids.join(Value::from(",")));
-            response = self.v1_private_delete_client_batch_order(extend_2(request.clone(), params.clone())).await;
+            response = self.dispatch("v1PrivateDeleteClientBatchOrder".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         } else {
             request.set("order_ids".into(), ids.join(Value::from(",")));
-            response = self.v1_private_delete_batch_order(extend_2(request.clone(), params.clone())).await;
+            response = self.dispatch("v1PrivateDeleteBatchOrder".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         };
         //
         // {
@@ -1723,7 +1691,7 @@ pub trait Woofipro : Exchange {
         };
         let mut response: Value = Value::Undefined;
         if trigger.is_truthy() {
-            response = self.v1_private_delete_algo_orders(extend_2(request.clone(), params.clone())).await;
+            response = self.dispatch("v1PrivateDeleteAlgoOrders".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         } else {
             response = self.dispatch("v1PrivateDeleteOrders".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         };
@@ -1756,24 +1724,24 @@ pub trait Woofipro : Exchange {
         };
         let mut trigger: Value = self.safe_bool_2(params.clone(), Value::from("stop"), Value::from("trigger"), false.into());
         let mut request: Value = Value::new_object();
-        let mut client_order_id: Value = self.safe_string_n(params.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("clOrdID").into(), Value::from("clientOrderId").into(), Value::from("client_order_id").into()])));
+        let mut client_order_id: Value = self.safe_string_n(params.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("clOrdID").into(), Value::from("clientOrderId").into(), Value::from("client_order_id").into()])), Value::Undefined);
         params = self.omit(params.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("stop").into(), Value::from("trigger").into(), Value::from("clOrdID").into(), Value::from("clientOrderId").into(), Value::from("client_order_id").into()])));
         let mut response: Value = Value::Undefined;
         if trigger.is_truthy() {
             if client_order_id.is_truthy() {
                 request.set("client_order_id".into(), client_order_id.clone());
-                response = self.v1_private_get_algo_client_order_client_order_id(extend_2(request.clone(), params.clone())).await;
+                response = self.dispatch("v1PrivateGetAlgoClientOrderClientOrderId".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
             } else {
                 request.set("oid".into(), id.clone());
-                response = self.v1_private_get_algo_order_oid(extend_2(request.clone(), params.clone())).await;
+                response = self.dispatch("v1PrivateGetAlgoOrderOid".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
             };
         } else {
             if client_order_id.is_truthy() {
                 request.set("client_order_id".into(), client_order_id.clone());
-                response = self.v1_private_get_client_order_client_order_id(extend_2(request.clone(), params.clone())).await;
+                response = self.dispatch("v1PrivateGetClientOrderClientOrderId".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
             } else {
                 request.set("oid".into(), id.clone());
-                response = self.v1_private_get_order_oid(extend_2(request.clone(), params.clone())).await;
+                response = self.dispatch("v1PrivateGetOrderOid".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
             };
         };
         //
@@ -1838,7 +1806,7 @@ pub trait Woofipro : Exchange {
         (request, params) = shift_2(self.handle_until_option(Value::from("end_t"), request.clone(), params.clone(), Value::Undefined));
         let mut response: Value = Value::Undefined;
         if is_trigger.is_truthy() {
-            response = self.v1_private_get_algo_orders(extend_2(request.clone(), params.clone())).await;
+            response = self.dispatch("v1PrivateGetAlgoOrders".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         } else {
             response = self.dispatch("v1PrivateGetOrders".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         };
@@ -1909,7 +1877,7 @@ pub trait Woofipro : Exchange {
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
             "oid": id
         }))).unwrap());
-        let mut response: Value = self.v1_private_get_order_oid_trades(extend_2(request.clone(), params.clone())).await;
+        let mut response: Value = self.dispatch("v1PrivateGetOrderOidTrades".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         //
         // {
         //     "success": true,
@@ -1999,10 +1967,10 @@ pub trait Woofipro : Exchange {
         let mut i: usize = 0;
         while i < balances.len() {
             let mut balance: Value = balances.get(i.into());
-            let mut code: Value = self.safe_currency_code(self.safe_string(balance.clone(), Value::from("token")), Value::Undefined);
+            let mut code: Value = self.safe_currency_code(self.safe_string(balance.clone(), Value::from("token"), Value::Undefined), Value::Undefined);
             let mut account: Value = self.account();
-            account.set("total".into(), self.safe_string(balance.clone(), Value::from("holding")));
-            account.set("frozen".into(), self.safe_string(balance.clone(), Value::from("frozen")));
+            account.set("total".into(), self.safe_string(balance.clone(), Value::from("holding"), Value::Undefined));
+            account.set("frozen".into(), self.safe_string(balance.clone(), Value::from("frozen"), Value::Undefined));
             result.set(code.clone(), account.clone());
             i += 1;
         };
@@ -2012,7 +1980,7 @@ pub trait Woofipro : Exchange {
     async fn fetch_balance(&mut self, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        let mut response: Value = self.v1_private_get_client_holding(params.clone()).await;
+        let mut response: Value = self.dispatch("v1PrivateGetClientHolding".into(), params.clone(), Value::Undefined).await;
         //
         // {
         //     "success": true,
@@ -2047,12 +2015,12 @@ pub trait Woofipro : Exchange {
         if limit.clone().is_nonnullish() {
             request.set("pageSize".into(), limit.clone());
         };
-        let mut transaction_type: Value = self.safe_string(params.clone(), Value::from("type"));
+        let mut transaction_type: Value = self.safe_string(params.clone(), Value::from("type"), Value::Undefined);
         params = self.omit(params.clone(), Value::from("type"));
         if transaction_type.clone().is_nonnullish() {
             request.set("type".into(), transaction_type.clone());
         };
-        let mut response: Value = self.v1_private_get_asset_history(extend_2(request.clone(), params.clone())).await;
+        let mut response: Value = self.dispatch("v1PrivateGetAssetHistory".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         //
         // {
         //     "success": true,
@@ -2083,21 +2051,21 @@ pub trait Woofipro : Exchange {
     }
 
     fn parse_ledger_entry(&self, mut item: Value, mut currency: Value) -> Value {
-        let mut currency_id: Value = self.safe_string(item.clone(), Value::from("token"));
+        let mut currency_id: Value = self.safe_string(item.clone(), Value::from("token"), Value::Undefined);
         let mut code: Value = self.safe_currency_code(currency_id.clone(), currency.clone());
         currency = self.safe_currency(currency_id.clone(), currency.clone());
         let mut amount: Value = self.safe_number(item.clone(), Value::from("amount"), Value::Undefined);
-        let mut side: Value = self.safe_string(item.clone(), Value::from("token_side"));
+        let mut side: Value = self.safe_string(item.clone(), Value::from("token_side"), Value::Undefined);
         let mut direction: Value = if side.clone() == Value::from("DEPOSIT") { Value::from("in") } else { Value::from("out") };
-        let mut timestamp: Value = self.safe_integer(item.clone(), Value::from("created_time"));
+        let mut timestamp: Value = self.safe_integer(item.clone(), Value::from("created_time"), Value::Undefined);
         let mut fee: Value = <Self as Woofipro>::parse_token_and_fee_temp(self, item.clone(), Value::from("fee_token"), Value::from("fee_amount"));
         return self.safe_ledger_entry(Value::Json(normalize(&Value::Json(json!({
-            "id": self.safe_string(item.clone(), Value::from("id")),
+            "id": self.safe_string(item.clone(), Value::from("id"), Value::Undefined),
             "currency": code,
-            "account": self.safe_string(item.clone(), Value::from("account")),
+            "account": self.safe_string(item.clone(), Value::from("account"), Value::Undefined),
             "referenceAccount": Value::Undefined,
-            "referenceId": self.safe_string(item.clone(), Value::from("tx_id")),
-            "status": <Self as Woofipro>::parse_transaction_status(self, self.safe_string(item.clone(), Value::from("status"))),
+            "referenceId": self.safe_string(item.clone(), Value::from("tx_id"), Value::Undefined),
+            "status": <Self as Woofipro>::parse_transaction_status(self, self.safe_string(item.clone(), Value::from("status"), Value::Undefined)),
             "amount": amount,
             "before": Value::Undefined,
             "after": Value::Undefined,
@@ -2105,7 +2073,7 @@ pub trait Woofipro : Exchange {
             "direction": direction,
             "timestamp": timestamp,
             "datetime": self.iso8601(timestamp.clone()),
-            "type": <Self as Woofipro>::parse_ledger_entry_type(self, self.safe_string(item.clone(), Value::from("type"))),
+            "type": <Self as Woofipro>::parse_ledger_entry_type(self, self.safe_string(item.clone(), Value::from("type"), Value::Undefined)),
             "info": item
         }))).unwrap()), currency.clone());
     }
@@ -2122,39 +2090,39 @@ pub trait Woofipro : Exchange {
     async fn fetch_ledger(&mut self, mut code: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         let mut currency_rows: Value = <Self as Woofipro>::get_asset_history_rows(self, code.clone(), since.clone(), limit.clone(), params.clone()).await;
-        let mut currency: Value = self.safe_value(currency_rows.clone(), Value::from(0));
+        let mut currency: Value = self.safe_value(currency_rows.clone(), Value::from(0), Value::Undefined);
         let mut rows: Value = self.safe_list(currency_rows.clone(), Value::from(1), Value::Undefined);
         return self.parse_ledger(rows.clone(), currency.clone(), since.clone(), limit.clone(), params.clone());
     }
 
     fn parse_transaction(&self, mut transaction: Value, mut currency: Value) -> Value {
         // example in fetchLedger
-        let mut code: Value = self.safe_string(transaction.clone(), Value::from("token"));
-        let mut movement_direction: Value = self.safe_string_lower(transaction.clone(), Value::from("token_side"));
+        let mut code: Value = self.safe_string(transaction.clone(), Value::from("token"), Value::Undefined);
+        let mut movement_direction: Value = self.safe_string_lower(transaction.clone(), Value::from("token_side"), Value::Undefined);
         if movement_direction.clone() == Value::from("withdraw") {
             movement_direction = Value::from("withdrawal");
         };
         let mut fee: Value = <Self as Woofipro>::parse_token_and_fee_temp(self, transaction.clone(), Value::from("fee_token"), Value::from("fee_amount"));
-        let mut address_to: Value = self.safe_string(transaction.clone(), Value::from("target_address"));
-        let mut address_from: Value = self.safe_string(transaction.clone(), Value::from("source_address"));
-        let mut timestamp: Value = self.safe_integer(transaction.clone(), Value::from("created_time"));
+        let mut address_to: Value = self.safe_string(transaction.clone(), Value::from("target_address"), Value::Undefined);
+        let mut address_from: Value = self.safe_string(transaction.clone(), Value::from("source_address"), Value::Undefined);
+        let mut timestamp: Value = self.safe_integer(transaction.clone(), Value::from("created_time"), Value::Undefined);
         return Value::Json(normalize(&Value::Json(json!({
             "info": transaction,
-            "id": self.safe_string_2(transaction.clone(), Value::from("id"), Value::from("withdraw_id")),
-            "txid": self.safe_string(transaction.clone(), Value::from("tx_id")),
+            "id": self.safe_string_2(transaction.clone(), Value::from("id"), Value::from("withdraw_id"), Value::Undefined),
+            "txid": self.safe_string(transaction.clone(), Value::from("tx_id"), Value::Undefined),
             "timestamp": timestamp,
             "datetime": self.iso8601(timestamp.clone()),
             "address": Value::Undefined,
             "addressFrom": address_from,
             "addressTo": address_to,
-            "tag": self.safe_string(transaction.clone(), Value::from("extra")),
+            "tag": self.safe_string(transaction.clone(), Value::from("extra"), Value::Undefined),
             "tagFrom": Value::Undefined,
             "tagTo": Value::Undefined,
             "type": movement_direction,
             "amount": self.safe_number(transaction.clone(), Value::from("amount"), Value::Undefined),
             "currency": code,
-            "status": <Self as Woofipro>::parse_transaction_status(self, self.safe_string(transaction.clone(), Value::from("status"))),
-            "updated": self.safe_integer(transaction.clone(), Value::from("updated_time")),
+            "status": <Self as Woofipro>::parse_transaction_status(self, self.safe_string(transaction.clone(), Value::from("status"), Value::Undefined)),
+            "updated": self.safe_integer(transaction.clone(), Value::from("updated_time"), Value::Undefined),
             "comment": Value::Undefined,
             "internal": Value::Undefined,
             "fee": fee,
@@ -2193,7 +2161,7 @@ pub trait Woofipro : Exchange {
         params = params.or_default(Value::new_object());
         let mut request: Value = Value::new_object();
         let mut currency_rows: Value = <Self as Woofipro>::get_asset_history_rows(self, code.clone(), since.clone(), limit.clone(), extend_2(request.clone(), params.clone())).await;
-        let mut currency: Value = self.safe_value(currency_rows.clone(), Value::from(0));
+        let mut currency: Value = self.safe_value(currency_rows.clone(), Value::from(0), Value::Undefined);
         let mut rows: Value = self.safe_list(currency_rows.clone(), Value::from(1), Value::Undefined);
         //
         //     {
@@ -2211,7 +2179,7 @@ pub trait Woofipro : Exchange {
 
     async fn get_withdraw_nonce(&mut self, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
-        let mut response: Value = self.v1_private_get_withdraw_nonce(params.clone()).await;
+        let mut response: Value = self.dispatch("v1PrivateGetWithdrawNonce".into(), params.clone(), Value::Undefined).await;
         //
         //     {
         //         "success": true,
@@ -2252,8 +2220,8 @@ pub trait Woofipro : Exchange {
             };
         };
         let mut currency: Value = self.currency(code.clone());
-        let mut verifying_contract_address: Value = self.safe_string(self.get("options".into()), Value::from("verifyingContractAddress"));
-        let mut chain_id: Value = self.safe_string(params.clone(), Value::from("chainId"));
+        let mut verifying_contract_address: Value = self.safe_string(self.get("options".into()), Value::from("verifyingContractAddress"), Value::Undefined);
+        let mut chain_id: Value = self.safe_string(params.clone(), Value::from("chainId"), Value::Undefined);
         let mut currency_networks: Value = self.safe_dict(currency.clone(), Value::from("networks"), Value::new_object());
         let mut coin_network: Value = self.safe_dict(currency_networks.clone(), chain_id.clone(), Value::new_object());
         let mut coin_network_id: Value = self.safe_number(coin_network.clone(), Value::from("id"), Value::Undefined);
@@ -2294,7 +2262,7 @@ pub trait Woofipro : Exchange {
         }))).unwrap());
         let mut withdraw_request: Value = Value::Json(normalize(&Value::Json(json!({
             "brokerId": self.safe_string(self.get("options".into()), Value::from("keyBrokerId"), Value::from("woofi_pro")),
-            "chainId": self.parse_to_int(chain_id.clone()),
+            "chainId": self.parse_to_int(chain_id.clone(), Value::Undefined),
             "receiver": address,
             "token": code,
             "amount": amount.to_string(),
@@ -2310,7 +2278,7 @@ pub trait Woofipro : Exchange {
             "message": withdraw_request
         }))).unwrap());
         params = self.omit(params.clone(), Value::from("chainId"));
-        let mut response: Value = self.v1_private_post_withdraw_request(extend_2(request.clone(), params.clone())).await;
+        let mut response: Value = self.dispatch("v1PrivatePostWithdrawRequest".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         //
         //     {
         //         "success": true,
@@ -2325,7 +2293,7 @@ pub trait Woofipro : Exchange {
     }
 
     fn parse_leverage(&self, mut leverage: Value, mut market: Value) -> Value {
-        let mut leverage_value: Value = self.safe_integer(leverage.clone(), Value::from("max_leverage"));
+        let mut leverage_value: Value = self.safe_integer(leverage.clone(), Value::from("max_leverage"), Value::Undefined);
         return Value::Json(normalize(&Value::Json(json!({
             "info": leverage,
             "symbol": market.get(Value::from("symbol")),
@@ -2339,7 +2307,7 @@ pub trait Woofipro : Exchange {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
         let mut market: Value = self.market(symbol.clone());
-        let mut response: Value = self.v1_private_get_client_info(params.clone()).await;
+        let mut response: Value = self.dispatch("v1PrivateGetClientInfo".into(), params.clone(), Value::Undefined).await;
         //
         // {
         //     "success": true,
@@ -2380,7 +2348,7 @@ pub trait Woofipro : Exchange {
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
             "leverage": leverage
         }))).unwrap());
-        return self.v1_private_post_client_leverage(extend_2(request.clone(), params.clone())).await;
+        return self.dispatch("v1PrivatePostClientLeverage".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
     }
 
     fn parse_position(&self, mut position: Value, mut market: Value) -> Value {
@@ -2406,26 +2374,26 @@ pub trait Woofipro : Exchange {
         //     "unsettled_pnl": 354.858492
         // }
         //
-        let mut contract: Value = self.safe_string(position.clone(), Value::from("symbol"));
+        let mut contract: Value = self.safe_string(position.clone(), Value::from("symbol"), Value::Undefined);
         market = self.safe_market(contract.clone(), market.clone(), Value::Undefined, Value::Undefined);
-        let mut size: Value = self.safe_string(position.clone(), Value::from("position_qty"));
+        let mut size: Value = self.safe_string(position.clone(), Value::from("position_qty"), Value::Undefined);
         let mut side: Value = Value::Undefined;
         if Precise::string_gt(size.clone(), Value::from("0")) {
             side = Value::from("long");
         } else {
             side = Value::from("short");
         };
-        let mut contract_size: Value = self.safe_string(market.clone(), Value::from("contractSize"));
-        let mut mark_price: Value = self.safe_string(position.clone(), Value::from("mark_price"));
-        let mut timestamp: Value = self.safe_integer(position.clone(), Value::from("timestamp"));
-        let mut entry_price: Value = self.safe_string(position.clone(), Value::from("average_open_price"));
-        let mut unrealised_pnl: Value = self.safe_string(position.clone(), Value::from("unsettled_pnl"));
+        let mut contract_size: Value = self.safe_string(market.clone(), Value::from("contractSize"), Value::Undefined);
+        let mut mark_price: Value = self.safe_string(position.clone(), Value::from("mark_price"), Value::Undefined);
+        let mut timestamp: Value = self.safe_integer(position.clone(), Value::from("timestamp"), Value::Undefined);
+        let mut entry_price: Value = self.safe_string(position.clone(), Value::from("average_open_price"), Value::Undefined);
+        let mut unrealised_pnl: Value = self.safe_string(position.clone(), Value::from("unsettled_pnl"), Value::Undefined);
         size = Precise::string_abs(size.clone());
         let mut notional: Value = Precise::string_mul(size.clone(), mark_price.clone());
         return self.safe_position(Value::Json(normalize(&Value::Json(json!({
             "info": position,
             "id": Value::Undefined,
-            "symbol": self.safe_string(market.clone(), Value::from("symbol")),
+            "symbol": self.safe_string(market.clone(), Value::from("symbol"), Value::Undefined),
             "timestamp": timestamp,
             "datetime": self.iso8601(timestamp.clone()),
             "lastUpdateTimestamp": Value::Undefined,
@@ -2461,7 +2429,7 @@ pub trait Woofipro : Exchange {
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
             "symbol": market.get(Value::from("id"))
         }))).unwrap());
-        let mut response: Value = self.v1_private_get_position_symbol(extend_2(request.clone(), params.clone())).await;
+        let mut response: Value = self.dispatch("v1PrivateGetPositionSymbol".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         //
         // {
         //     "success": true,
@@ -2543,103 +2511,9 @@ pub trait Woofipro : Exchange {
         return self.milliseconds();
     }
 
-    fn sign(&mut self, mut path: Value, mut section: Value, mut method: Value, mut params: Value, mut headers: Value, mut body: Value) -> Value {
-        section = section.or_default(Value::from("public"));
-        method = method.or_default(Value::from("GET"));
-        params = params.or_default(Value::new_object());
-        let mut version: Value = section.get(Value::from(0));
-        let mut access: Value = section.get(Value::from(1));
-        let mut path_with_params: Value = self.implode_params(path.clone(), params.clone());
-        let mut url: Value = self.implode_hostname(self.get("urls".into()).get(Value::from("api")).get(access.clone()));
-        url = url +  Value::from("/") + version.clone() + Value::from("/");
-        params = self.omit(params.clone(), self.extract_params(path.clone()));
-        params = self.keysort(params.clone());
-        if access.clone() == Value::from("public") {
-            url = url +  path_with_params.clone();
-            if Object::keys(params.clone()).len() > 0 {
-                url = url +  Value::from("?") + self.urlencode(params.clone());
-            };
-        } else {
-            self.check_required_credentials(Value::Undefined);
-            if method.clone() == Value::from("POST") || method.clone() == Value::from("PUT") && path.clone() == Value::from("algo/order") || path.clone() == Value::from("order") || path.clone() == Value::from("batch-order") {
-                let mut is_sandbox_mode: Value = self.safe_bool(self.get("options".into()), Value::from("sandboxMode"), false.into());
-                if !is_sandbox_mode.is_truthy() {
-                    let mut broker_id: Value = self.safe_string(self.get("options".into()), Value::from("brokerId"), Value::from("CCXT"));
-                    if path.clone() == Value::from("batch-order") {
-                        let mut orders_list: Value = self.safe_list(params.clone(), Value::from("orders"), Value::new_array());
-                        let mut i: usize = 0;
-                        while i < orders_list.len() {
-                            params.get(Value::from("orders")).get(i.into()).set("order_tag".into(), broker_id.clone());
-                            i += 1;
-                        };
-                    } else {
-                        params.set("order_tag".into(), broker_id.clone());
-                    };
-                };
-                params = self.keysort(params.clone());
-            };
-            let mut auth: Value = Value::from("");
-            let mut ts: Value = <Self as Woofipro>::nonce(self).to_string();
-            url = url +  path_with_params.clone();
-            let mut api_key: Value = self.get("apiKey".into());
-            if apiKey.index_of(Value::from("ed25519:")) < Value::from(0) {
-                apiKey = Value::from("ed25519:") + apiKey.clone();
-            };
-            headers = Value::Json(normalize(&Value::Json(json!({
-                "orderly-account-id": self.get("accountId".into()),
-                "orderly-key": apiKey,
-                "orderly-timestamp": ts
-            }))).unwrap());
-            auth = ts.clone() + method.clone() + Value::from("/") + version.clone() + Value::from("/") + path_with_params.clone();
-            if method.clone() == Value::from("POST") || method.clone() == Value::from("PUT") {
-                body = self.json(params.clone());
-                auth = auth +  body.clone();
-                headers.set("content-type".into(), Value::from("application/json"));
-            } else {
-                if Object::keys(params.clone()).len() > 0 {
-                    url = url +  Value::from("?") + self.urlencode(params.clone());
-                    auth = auth +  Value::from("?") + self.rawencode(params.clone());
-                };
-                headers.set("content-type".into(), Value::from("application/x-www-form-urlencoded"));
-                if method.clone() == Value::from("DELETE") {
-                    body = Value::from("");
-                };
-            };
-            let mut secret: Value = self.get("secret".into());
-            if secret.index_of(Value::from("ed25519:")) >= Value::from(0) {
-                let mut parts: Value = secret.split(Value::from("ed25519:"));
-                secret = parts.get(Value::from(1));
-            };
-            let mut signature: Value = eddsa(self.encode(auth.clone()), self.base58_to_binary(secret.clone()), ed25519.clone());
-            headers.set("orderly-signature".into(), self.urlencode_base64(self.base64_to_binary(signature.clone())));
-        };
-        return Value::Json(normalize(&Value::Json(json!({
-            "url": url,
-            "method": method,
-            "body": body,
-            "headers": headers
-        }))).unwrap());
-    }
+    
 
-    fn handle_errors(&mut self, mut http_code: Value, mut reason: Value, mut url: Value, mut method: Value, mut headers: Value, mut body: Value, mut response: Value, mut request_headers: Value, mut request_body: Value) -> Value {
-        if !response.is_truthy() {
-            return Value::Undefined;
-        };
-        // fallback to default error handler
-        //
-        //     400 Bad Request {"success":false,"code":-1012,"message":"Amount is required for buy market orders when margin disabled."}
-        //                     {"code":"-1011","message":"The system is under maintenance.","success":false}
-        //
-        let mut success: Value = self.safe_bool(response.clone(), Value::from("success"), Value::Undefined);
-        let mut error_code: Value = self.safe_string(response.clone(), Value::from("code"));
-        if !success.is_truthy() {
-            let mut feedback: Value = self.get("id".into()) + Value::from(" ") + self.json(response.clone());
-            self.throw_broadly_matched_exception(self.get("exceptions".into()).get(Value::from("broad")), body.clone(), feedback.clone());
-            self.throw_exactly_matched_exception(self.get("exceptions".into()).get(Value::from("exact")), error_code.clone(), feedback.clone());
-            panic!(r###"ExchangeError::new(feedback)"###);
-        };
-        return Value::Undefined;
-    }
+    
 
     
     async fn dispatch(&mut self, method: Value, params: Value, context: Value) -> Value {
@@ -2797,8 +2671,8 @@ impl ValueTrait for WoofiproImpl {
     fn push(&mut self, value: Value) { self.0.push(value) }
     fn split(&self, separator: Value) -> Value { self.0.split(separator) }
     fn contains_key(&self, key: Value) -> bool { self.0.contains_key(key) }
-    fn keys(&self) -> Vec<Value> { self.0.keys() }
-    fn values(&self) -> Vec<Value> { self.0.values() }
+    fn keys(&self) -> Value { self.0.keys() }
+    fn values(&self) -> Value { self.0.values() }
     fn to_array(&self, x: Value) -> Value { self.0.to_array(x) }
     fn index_of(&self, x: Value) -> Value { self.0.index_of(x) }
     fn join(&self, glue: Value) -> Value { self.0.join(glue) }
