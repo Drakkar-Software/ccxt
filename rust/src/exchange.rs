@@ -2803,11 +2803,12 @@ pub trait Exchange: ValueTrait {
         request.set("symbol".into(), symbol.clone());
         if limit.is_nonnullish() { request.set("limit".into(), limit.clone()); }
         let mut dynamic_calls: Vec<(String, String, String)> = vec![];
-        if let Value::Json(serde_json::Value::Object(api_map)) = <Self as Exchange>::describe(self).get("api".into()) {
+        if let Value::Json(serde_json::Value::Object(api_map)) = self.get("api".into()) {
             for (api_name, node) in api_map { collect_routes(&node, &api_name, &mut dynamic_calls); }
         }
         for token in ["depth", "orderbook", "order_book"] {
             for (api_name, method_name, path_name) in &dynamic_calls {
+                if api_name.as_str() != "public" { continue; }
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
@@ -3174,16 +3175,19 @@ pub trait Exchange: ValueTrait {
         }
         let mut request = if params.is_object() { params.clone() } else { Value::new_object() };
         request.set("symbol".into(), symbol.clone());
-        request.set("timeframe".into(), timeframe.clone());
         request.set("interval".into(), timeframe.clone());
         if since.is_nonnullish() { request.set("since".into(), since.clone()); request.set("startTime".into(), since.clone()); }
         if limit.is_nonnullish() { request.set("limit".into(), limit.clone()); }
         let mut dynamic_calls: Vec<(String, String, String)> = vec![];
-        if let Value::Json(serde_json::Value::Object(api_map)) = <Self as Exchange>::describe(self).get("api".into()) {
+        if let Value::Json(serde_json::Value::Object(api_map)) = self.get("api".into()) {
             for (api_name, node) in api_map { collect_routes(&node, &api_name, &mut dynamic_calls); }
         }
         for token in ["klines", "candles", "ohlcv"] {
             for (api_name, method_name, path_name) in &dynamic_calls {
+                // Skip non-public APIs (futures, options, etc.) — they require
+                // different params (e.g. 'pair' instead of 'symbol') and are not
+                // appropriate for generic spot OHLCV fetching.
+                if api_name.as_str() != "public" { continue; }
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
@@ -3405,7 +3409,7 @@ pub trait Exchange: ValueTrait {
             }
         }
 
-        let urls_api = <Self as Exchange>::describe(self).get("urls".into()).get("api".into());
+        let urls_api = self.get("urls".into()).get("api".into());
         let mut base = urls_api.get(api.clone());
         if !base.is_string() {
             base = urls_api.get("public".into());
@@ -3429,7 +3433,7 @@ pub trait Exchange: ValueTrait {
             return Value::Undefined;
         }
         let mut base_url = base.unwrap_str().to_string();
-        let hostname = <Self as Exchange>::describe(self).get("hostname".into());
+        let hostname = self.get("hostname".into());
         if hostname.is_string() {
             base_url = base_url.replace("{hostname}", hostname.unwrap_str());
         }
@@ -3763,11 +3767,12 @@ pub trait Exchange: ValueTrait {
         let mut request = if params.is_object() { params.clone() } else { Value::new_object() };
         request.set("symbol".into(), symbol.clone());
         let mut dynamic_calls: Vec<(String, String, String)> = vec![];
-        if let Value::Json(serde_json::Value::Object(api_map)) = <Self as Exchange>::describe(self).get("api".into()) {
+        if let Value::Json(serde_json::Value::Object(api_map)) = self.get("api".into()) {
             for (api_name, node) in api_map { collect_routes(&node, &api_name, &mut dynamic_calls); }
         }
         for token in ["ticker/24hr", "ticker", "ticker/price", "bookticker", "tickers"] {
             for (api_name, method_name, path_name) in &dynamic_calls {
+                if api_name.as_str() != "public" { continue; }
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
