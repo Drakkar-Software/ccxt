@@ -1092,10 +1092,10 @@ pub trait Coinone : Exchange {
                     "v21privatePostTransactionkrwhistory" => self.request("transaction/krw/history".into(), "v2_1Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "v21privatePostTransactioncoinhistory" => self.request("transaction/coin/history".into(), "v2_1Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "v21privatePostTransactioncoinwithdrawallimit" => self.request("transaction/coin/withdrawal/limit".into(), "v2_1Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    _ => unimplemented!(),
+                    _ => panic!("Unknown API method: {}", m),
                 }
             },
-            _ => unimplemented!()
+            _ => panic!("dispatch: method must be a string, got {:?}", method)
         }
     }
 }

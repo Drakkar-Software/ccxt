@@ -2436,10 +2436,10 @@ pub trait Toobit : Exchange {
                     "privateDeleteApiv1futurescancelorderbyids" => self.request("api/v1/futures/cancelOrderByIds".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privateDeleteApiv1listenkey" => self.request("api/v1/listenKey".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privatePutApiv1listenkey" => self.request("api/v1/listenKey".into(), "private".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    _ => unimplemented!(),
+                    _ => panic!("Unknown API method: {}", m),
                 }
             },
-            _ => unimplemented!()
+            _ => panic!("dispatch: method must be a string, got {:?}", method)
         }
     }
 }

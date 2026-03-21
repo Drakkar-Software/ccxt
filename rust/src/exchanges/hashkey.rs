@@ -3791,10 +3791,10 @@ pub trait Hashkey : Exchange {
                     "privateDeleteApiv1futuresbatchorders" => self.request("api/v1/futures/batchOrders".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privateDeleteApiv1futurescancelorderbyids" => self.request("api/v1/futures/cancelOrderByIds".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privateDeleteApiv1userdatastream" => self.request("api/v1/userDataStream".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    _ => unimplemented!(),
+                    _ => panic!("Unknown API method: {}", m),
                 }
             },
-            _ => unimplemented!()
+            _ => panic!("dispatch: method must be a string, got {:?}", method)
         }
     }
 }

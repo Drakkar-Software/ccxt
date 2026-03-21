@@ -182,7 +182,7 @@ pub trait Deepcoin : Exchange {
         suffix = suffix.or_default(Value::from(""));
         let mut url: Value = self.get("urls".into()).get(Value::from("api")).get(Value::from("ws")).get(Value::from("public")).get(market.get(Value::from("type")).clone());
         let mut request_id: Value = <Self as Deepcoin>::request_id(self);
-        let mut request: Value = <Self as Deepcoin>::create_public_request(self, market.clone(), request_id.clone(), topic_id.clone(), suffix.clone());
+        let mut request: Value = <Self as Deepcoin>::create_public_request(self, market.clone(), request_id.clone(), topic_id.clone(), suffix.clone(), Value::Undefined);
         let mut subscription: Value = Value::Json(normalize(&Value::Json(json!({
             "subHash": message_hash,
             "id": request_id
@@ -216,14 +216,14 @@ pub trait Deepcoin : Exchange {
 
     async fn watch_private(&mut self, mut message_hash: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
-        let mut listen_key: Value = <Self as Deepcoin>::authenticate(self).await;
+        let mut listen_key: Value = <Self as Deepcoin>::authenticate(self, Value::Undefined).await;
         let mut url: Value = self.get("urls".into()).get(Value::from("api")).get(Value::from("ws")).get(Value::from("private")) + Value::from("?listenKey=") + listen_key.clone();
         return self.watch(url.clone(), message_hash.clone(), Value::Undefined, Value::from("private"), params.clone()).await;
     }
 
     async fn authenticate(&mut self, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
-        self.check_required_credentials(Value::Undefined);
+        self.check_required_credentials();
         let mut time: Value = self.milliseconds();
         let mut listen_key_expiry_timestamp: Value = self.safe_integer(self.get("options".into()), Value::from("listenKeyExpiryTimestamp"), time.clone());
         let mut expired: Value = (time.clone() - listen_key_expiry_timestamp.clone() > Value::from(60000)).into();
@@ -259,7 +259,7 @@ pub trait Deepcoin : Exchange {
         self.load_markets(Value::Undefined, Value::Undefined).await;
         let mut market: Value = self.market(symbol.clone());
         let mut message_hash: Value = Value::from("ticker") + Value::from("::") + market.get(Value::from("symbol"));
-        return <Self as Deepcoin>::watch_public(self, market.clone(), message_hash.clone(), Value::from("7"), params.clone()).await;
+        return <Self as Deepcoin>::watch_public(self, market.clone(), message_hash.clone(), Value::from("7"), params.clone(), Value::Undefined).await;
     }
 
     async fn un_watch_ticker(&mut self, mut symbol: Value, mut params: Value) -> Value {
@@ -270,7 +270,7 @@ pub trait Deepcoin : Exchange {
         let mut subscription: Value = Value::Json(normalize(&Value::Json(json!({
             "topic": "ticker"
         }))).unwrap());
-        return <Self as Deepcoin>::un_watch_public(self, market.clone(), message_hash.clone(), Value::from("7"), params.clone(), subscription.clone()).await;
+        return <Self as Deepcoin>::un_watch_public(self, market.clone(), message_hash.clone(), Value::from("7"), params.clone(), subscription.clone(), Value::Undefined).await;
     }
 
     fn handle_ticker(&mut self, mut client: Value, mut message: Value) -> Value {
@@ -383,7 +383,7 @@ pub trait Deepcoin : Exchange {
         self.load_markets(Value::Undefined, Value::Undefined).await;
         let mut market: Value = self.market(symbol.clone());
         let mut message_hash: Value = Value::from("trades") + Value::from("::") + market.get(Value::from("symbol"));
-        let mut trades: Value = <Self as Deepcoin>::watch_public(self, market.clone(), message_hash.clone(), Value::from("2"), params.clone()).await;
+        let mut trades: Value = <Self as Deepcoin>::watch_public(self, market.clone(), message_hash.clone(), Value::from("2"), params.clone(), Value::Undefined).await;
         if self.get("newUpdates".into()).is_truthy() {
             limit = trades.get_limit(symbol.clone(), limit.clone());
         };
@@ -398,7 +398,7 @@ pub trait Deepcoin : Exchange {
         let mut subscription: Value = Value::Json(normalize(&Value::Json(json!({
             "topic": "trades"
         }))).unwrap());
-        return <Self as Deepcoin>::un_watch_public(self, market.clone(), message_hash.clone(), Value::from("2"), params.clone(), subscription.clone()).await;
+        return <Self as Deepcoin>::un_watch_public(self, market.clone(), message_hash.clone(), Value::from("2"), params.clone(), subscription.clone(), Value::Undefined).await;
     }
 
     fn handle_trades(&mut self, mut client: Value, mut message: Value) -> Value {
@@ -585,7 +585,7 @@ pub trait Deepcoin : Exchange {
         let mut market: Value = self.safe_market(market_id.clone(), Value::Undefined, Value::from("/"), Value::Undefined);
         let mut symbol: Value = self.safe_symbol(market_id.clone(), market.clone(), Value::Undefined, Value::Undefined);
         let mut interval: Value = self.safe_string(data.clone(), Value::from("P"), Value::Undefined);
-        let mut timeframe: Value = self.find_timeframe(interval.clone(), Value::Undefined);
+        let mut timeframe: Value = self.find_timeframe(interval.clone());
         if !self.get("ohlcvs".into()).contains_key(symbol.clone()) {
             self.get("ohlcvs".into()).set(symbol.clone(), Value::new_object());
         };
@@ -666,7 +666,7 @@ pub trait Deepcoin : Exchange {
         let mut market: Value = self.safe_market(market_id.clone(), Value::Undefined, Value::from("/"), Value::Undefined);
         let mut symbol: Value = self.safe_symbol(market_id.clone(), market.clone(), Value::Undefined, Value::Undefined);
         if !self.get("orderbooks".into()).contains_key(symbol.clone()) {
-            self.get("orderbooks".into()).set(symbol.clone(), self.order_book(Value::Undefined, Value::Undefined));
+            self.get("orderbooks".into()).set(symbol.clone(), self.order_book());
         };
         let mut orderbook: Value = self.get("orderbooks".into()).get(symbol.clone());
         let mut r#type: Value = self.safe_string(message.clone(), Value::from("t"), Value::Undefined);
@@ -975,8 +975,8 @@ pub trait Deepcoin : Exchange {
     async fn watch_positions(&mut self, mut symbols: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        let mut listen_key: Value = <Self as Deepcoin>::authenticate(self).await;
-        symbols = self.market_symbols(symbols.clone(), Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined);
+        let mut listen_key: Value = <Self as Deepcoin>::authenticate(self, Value::Undefined).await;
+        symbols = self.market_symbols(symbols.clone());
         let mut message_hash: Value = Value::from("positions");
         let mut message_hashes: Value = Value::new_array();
         if symbols.clone().is_nonnullish() {
@@ -991,7 +991,7 @@ pub trait Deepcoin : Exchange {
             message_hashes.push(message_hash.clone());
         };
         let mut url: Value = self.get("urls".into()).get(Value::from("api")).get(Value::from("ws")).get(Value::from("private")) + Value::from("?listenKey=") + listen_key.clone();
-        let mut positions: Value = self.watch_multiple(url.clone(), message_hashes.clone(), params.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("private").into()])), Value::Undefined).await;
+        let mut positions: Value = self.watch_multiple(url.clone(), message_hashes.clone(), params.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("private").into()]))).await;
         if self.get("newUpdates".into()).is_truthy() {
             return positions.clone();
         };
@@ -1185,7 +1185,7 @@ pub trait Deepcoin : Exchange {
     fn handle_un_subscription(&mut self, mut client: Value, mut subscription: Value) -> Value {
         let mut sub_hash: Value = self.safe_string(subscription.clone(), Value::from("subHash"), Value::Undefined);
         let mut unsub_hash: Value = self.safe_string(subscription.clone(), Value::from("unsubHash"), Value::Undefined);
-        self.clean_unsubscription(client.clone(), sub_hash.clone(), unsub_hash.clone(), Value::Undefined);
+        self.clean_unsubscription(client.clone(), sub_hash.clone(), unsub_hash.clone());
         self.clean_cache(subscription.clone());
         Value::Undefined
     }
@@ -1230,10 +1230,10 @@ pub trait Deepcoin : Exchange {
         match method {
             Value::Json(serde_json::Value::String(ref m)) => {
                 match m.as_ref() {
-                    _ => unimplemented!(),
+                    _ => panic!("Unknown API method: {}", m),
                 }
             },
-            _ => unimplemented!()
+            _ => panic!("dispatch: method must be a string, got {:?}", method)
         }
     }
 }

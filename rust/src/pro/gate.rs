@@ -1431,9 +1431,9 @@ pub trait Gate : Exchange {
         let mut channel: Value = message_type.clone() + Value::from(".order_place");
         let mut url: Value = <Self as Gate>::get_url_by_market(self, market.clone());
         params.set("textIsRequired".into(), true.into());
-        let mut request: Value = <Self as Gate>::create_order_request(self, symbol.clone(), r#type.clone(), side.clone(), amount.clone(), price.clone(), params.clone());
+        let mut request: Value = self.create_order_request(symbol.clone(), r#type.clone(), side.clone(), amount.clone(), price.clone(), params.clone());
         <Self as Gate>::authenticate(self, url.clone(), message_type.clone()).await;
-        let mut raw_order: Value = <Self as Gate>::request_private(self, url.clone(), request.clone(), channel.clone()).await;
+        let mut raw_order: Value = <Self as Gate>::request_private(self, url.clone(), request.clone(), channel.clone(), Value::Undefined).await;
         let mut order: Value = self.parse_order(raw_order.clone(), market.clone());
         return order.clone();
     }
@@ -1441,7 +1441,7 @@ pub trait Gate : Exchange {
     async fn create_orders_ws(&mut self, mut orders: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        let mut request: Value = <Self as Gate>::create_orders_request(self, orders.clone(), params.clone());
+        let mut request: Value = self.create_orders_request(orders.clone(), params.clone());
         let mut first_order: Value = orders.get(Value::from(0));
         let mut market: Value = self.market(first_order.get(Value::from("symbol")));
         if market.get(Value::from("swap")) != true.into() {
@@ -1451,8 +1451,8 @@ pub trait Gate : Exchange {
         let mut channel: Value = message_type.clone() + Value::from(".order_batch_place");
         let mut url: Value = <Self as Gate>::get_url_by_market(self, market.clone());
         <Self as Gate>::authenticate(self, url.clone(), message_type.clone()).await;
-        let mut raw_orders: Value = <Self as Gate>::request_private(self, url.clone(), request.clone(), channel.clone()).await;
-        return self.parse_orders(raw_orders.clone(), market.clone(), Value::Undefined, Value::Undefined, Value::Undefined);
+        let mut raw_orders: Value = <Self as Gate>::request_private(self, url.clone(), request.clone(), channel.clone(), Value::Undefined).await;
+        return self.parse_orders(raw_orders.clone(), market.clone());
     }
 
     async fn cancel_all_orders_ws(&mut self, mut symbol: Value, mut params: Value) -> Value {
@@ -1465,11 +1465,11 @@ pub trait Gate : Exchange {
         (channel, params) = shift_2(self.handle_option_and_params(params.clone(), Value::from("cancelAllOrdersWs"), Value::from("channel"), channel.clone()));
         let mut url: Value = <Self as Gate>::get_url_by_market(self, market.clone());
         params = self.omit(params.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("stop").into(), Value::from("trigger").into()])));
-        let (mut r#type, mut query) = shift_2(self.handle_market_type_and_params(Value::from("cancelAllOrders"), market.clone(), params.clone(), Value::Undefined));
-        let (mut request, mut request_params) = shift_2(if r#type.clone() == Value::from("spot") { <Self as Gate>::multi_order_spot_prepare_request(self, market.clone(), trigger.clone(), query.clone()) } else { <Self as Gate>::prepare_request(self, market.clone(), r#type.clone(), query.clone()) });
+        let (mut r#type, mut query) = shift_2(self.handle_market_type_and_params(Value::from("cancelAllOrders"), market.clone(), params.clone()));
+        let (mut request, mut request_params) = shift_2(if r#type.clone() == Value::from("spot") { self.multi_order_spot_prepare_request(market.clone(), trigger.clone(), query.clone()) } else { self.prepare_request(market.clone(), r#type.clone(), query.clone()) });
         <Self as Gate>::authenticate(self, url.clone(), message_type.clone()).await;
-        let mut raw_orders: Value = <Self as Gate>::request_private(self, url.clone(), extend_2(request.clone(), request_params.clone()), channel.clone()).await;
-        return self.parse_orders(raw_orders.clone(), market.clone(), Value::Undefined, Value::Undefined, Value::Undefined);
+        let mut raw_orders: Value = <Self as Gate>::request_private(self, url.clone(), extend_2(request.clone(), request_params.clone()), channel.clone(), Value::Undefined).await;
+        return self.parse_orders(raw_orders.clone(), market.clone());
     }
 
     async fn cancel_order_ws(&mut self, mut id: Value, mut symbol: Value, mut params: Value) -> Value {
@@ -1478,14 +1478,14 @@ pub trait Gate : Exchange {
         let mut market: Value = if symbol.clone().is_nullish() { Value::Undefined } else { self.market(symbol.clone()) };
         let mut trigger: Value = self.safe_value_n(params.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("is_stop_order").into(), Value::from("stop").into(), Value::from("trigger").into()])), false.into());
         params = self.omit(params.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("is_stop_order").into(), Value::from("stop").into(), Value::from("trigger").into()])));
-        let (mut r#type, mut query) = shift_2(self.handle_market_type_and_params(Value::from("cancelOrder"), market.clone(), params.clone(), Value::Undefined));
-        let (mut request, mut request_params) = shift_2(if r#type.clone() == Value::from("spot") || r#type.clone() == Value::from("margin") { <Self as Gate>::spot_order_prepare_request(self, market.clone(), trigger.clone(), query.clone()) } else { <Self as Gate>::prepare_request(self, market.clone(), r#type.clone(), query.clone()) });
+        let (mut r#type, mut query) = shift_2(self.handle_market_type_and_params(Value::from("cancelOrder"), market.clone(), params.clone()));
+        let (mut request, mut request_params) = shift_2(if r#type.clone() == Value::from("spot") || r#type.clone() == Value::from("margin") { self.spot_order_prepare_request(market.clone(), trigger.clone(), query.clone()) } else { self.prepare_request(market.clone(), r#type.clone(), query.clone()) });
         let mut message_type: Value = <Self as Gate>::get_type_by_market(self, market.clone());
         let mut channel: Value = message_type.clone() + Value::from(".order_cancel");
         let mut url: Value = <Self as Gate>::get_url_by_market(self, market.clone());
         <Self as Gate>::authenticate(self, url.clone(), message_type.clone()).await;
         request.set("order_id".into(), id.to_string());
-        let mut res: Value = <Self as Gate>::request_private(self, url.clone(), extend_2(request.clone(), request_params.clone()), channel.clone()).await;
+        let mut res: Value = <Self as Gate>::request_private(self, url.clone(), extend_2(request.clone(), request_params.clone()), channel.clone(), Value::Undefined).await;
         return self.parse_order(res.clone(), market.clone());
     }
 
@@ -1493,12 +1493,12 @@ pub trait Gate : Exchange {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
         let mut market: Value = self.market(symbol.clone());
-        let mut extended_request: Value = <Self as Gate>::edit_order_request(self, id.clone(), symbol.clone(), r#type.clone(), side.clone(), amount.clone(), price.clone(), params.clone());
+        let mut extended_request: Value = self.edit_order_request(id.clone(), symbol.clone(), r#type.clone(), side.clone(), amount.clone(), price.clone(), params.clone());
         let mut message_type: Value = <Self as Gate>::get_type_by_market(self, market.clone());
         let mut channel: Value = message_type.clone() + Value::from(".order_amend");
         let mut url: Value = <Self as Gate>::get_url_by_market(self, market.clone());
         <Self as Gate>::authenticate(self, url.clone(), message_type.clone()).await;
-        let mut raw_order: Value = <Self as Gate>::request_private(self, url.clone(), extended_request.clone(), channel.clone()).await;
+        let mut raw_order: Value = <Self as Gate>::request_private(self, url.clone(), extended_request.clone(), channel.clone(), Value::Undefined).await;
         return self.parse_order(raw_order.clone(), market.clone());
     }
 
@@ -1506,12 +1506,12 @@ pub trait Gate : Exchange {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
         let mut market: Value = if symbol.clone().is_nullish() { Value::Undefined } else { self.market(symbol.clone()) };
-        let (mut request, mut request_params) = shift_2(<Self as Gate>::fetch_order_request(self, id.clone(), symbol.clone(), params.clone()));
+        let (mut request, mut request_params) = shift_2(self.fetch_order_request(id.clone(), symbol.clone(), params.clone()));
         let mut message_type: Value = <Self as Gate>::get_type_by_market(self, market.clone());
         let mut channel: Value = message_type.clone() + Value::from(".order_status");
         let mut url: Value = <Self as Gate>::get_url_by_market(self, market.clone());
         <Self as Gate>::authenticate(self, url.clone(), message_type.clone()).await;
-        let mut raw_order: Value = <Self as Gate>::request_private(self, url.clone(), extend_2(request.clone(), request_params.clone()), channel.clone()).await;
+        let mut raw_order: Value = <Self as Gate>::request_private(self, url.clone(), extend_2(request.clone(), request_params.clone()), channel.clone(), Value::Undefined).await;
         return self.parse_order(raw_order.clone(), market.clone());
     }
 
@@ -1536,15 +1536,15 @@ pub trait Gate : Exchange {
                 panic!(r###"NotSupported::new(self.get("id".into()) + Value::from(" fetchOrdersByStatusWs is only supported by swap markets. Use rest API for other markets"))"###);
             };
         };
-        let (mut request, mut request_params) = shift_2(<Self as Gate>::prepare_orders_by_status_request(self, status.clone(), symbol.clone(), since.clone(), limit.clone(), params.clone()));
+        let (mut request, mut request_params) = shift_2(self.prepare_orders_by_status_request(status.clone(), symbol.clone(), since.clone(), limit.clone(), params.clone()));
         let mut new_request: Value = self.omit(request.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("settle").into()])));
         let mut message_type: Value = <Self as Gate>::get_type_by_market(self, market.clone());
         let mut channel: Value = message_type.clone() + Value::from(".order_list");
         let mut url: Value = <Self as Gate>::get_url_by_market(self, market.clone());
         <Self as Gate>::authenticate(self, url.clone(), message_type.clone()).await;
-        let mut raw_orders: Value = <Self as Gate>::request_private(self, url.clone(), extend_2(new_request.clone(), request_params.clone()), channel.clone()).await;
-        let mut orders: Value = self.parse_orders(raw_orders.clone(), market.clone(), Value::Undefined, Value::Undefined, Value::Undefined);
-        return self.filter_by_symbol_since_limit(orders.clone(), symbol.clone(), since.clone(), limit.clone(), Value::Undefined);
+        let mut raw_orders: Value = <Self as Gate>::request_private(self, url.clone(), extend_2(new_request.clone(), request_params.clone()), channel.clone(), Value::Undefined).await;
+        let mut orders: Value = self.parse_orders(raw_orders.clone(), market.clone());
+        return self.filter_by_symbol_since_limit(orders.clone(), symbol.clone(), since.clone(), limit.clone());
     }
 
     async fn watch_order_book(&mut self, mut symbol: Value, mut limit: Value, mut params: Value) -> Value {
@@ -1669,7 +1669,7 @@ pub trait Gate : Exchange {
         let mut market_id: Value = self.safe_string(delta.clone(), Value::from("s"), Value::Undefined);
         let mut symbol: Value = self.safe_symbol(market_id.clone(), Value::Undefined, Value::from("_"), market_type.clone());
         let mut message_hash: Value = Value::from("orderbook:") + symbol.clone();
-        let mut stored_order_book: Value = self.safe_value(self.get("orderbooks".into()), symbol.clone(), self.order_book(Value::new_object(), Value::Undefined));
+        let mut stored_order_book: Value = self.safe_value(self.get("orderbooks".into()), symbol.clone(), self.order_book(Value::new_object()));
         let mut nonce: Value = self.safe_integer(stored_order_book.clone(), Value::from("nonce"), Value::Undefined);
         if nonce.clone().is_nullish() {
             let mut cache_length: usize = 0;
@@ -1827,12 +1827,12 @@ pub trait Gate : Exchange {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
         (caller_method_name, params) = shift_2(self.handle_param_string(params.clone(), Value::from("callerMethodName"), caller_method_name.clone()));
-        symbols = self.market_symbols(symbols.clone(), Value::Undefined, false.into(), Value::Undefined, Value::Undefined);
+        symbols = self.market_symbols(symbols.clone(), Value::Undefined, false.into());
         let mut market: Value = self.market(symbols.get(Value::from(0)));
         let mut message_type: Value = <Self as Gate>::get_type_by_market(self, market.clone());
         let mut market_ids: Value = self.market_ids(symbols.clone());
         let mut channel_name: Value = Value::Undefined;
-        (channel_name, params) = shift_2(self.handle_option_and_params(params.clone(), caller_method_name.clone(), Value::from("method"), Value::Undefined));
+        (channel_name, params) = shift_2(self.handle_option_and_params(params.clone(), caller_method_name.clone(), Value::from("method")));
         let mut url: Value = <Self as Gate>::get_url_by_market(self, market.clone());
         let mut channel: Value = message_type.clone() + Value::from(".") + channel_name.clone();
         let mut is_watch_tickers: Value = (caller_method_name.index_of(Value::from("watchTicker")) >= Value::from(0)).into();
@@ -1896,7 +1896,7 @@ pub trait Gate : Exchange {
     async fn watch_trades_for_symbols(&mut self, mut symbols: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        symbols = self.market_symbols(symbols.clone(), Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined);
+        symbols = self.market_symbols(symbols.clone());
         let mut market_ids: Value = self.market_ids(symbols.clone());
         let mut market: Value = self.market(symbols.get(Value::from(0)));
         let mut message_type: Value = <Self as Gate>::get_type_by_market(self, market.clone());
@@ -1921,7 +1921,7 @@ pub trait Gate : Exchange {
     async fn un_watch_trades_for_symbols(&mut self, mut symbols: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        symbols = self.market_symbols(symbols.clone(), Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined);
+        symbols = self.market_symbols(symbols.clone());
         let mut market_ids: Value = self.market_ids(symbols.clone());
         let mut market: Value = self.market(symbols.get(Value::from(0)));
         let mut message_type: Value = <Self as Gate>::get_type_by_market(self, market.clone());
@@ -1965,7 +1965,7 @@ pub trait Gate : Exchange {
         if !Array::is_array(result.clone()).is_truthy() {
             result = Value::Json(serde_json::Value::Array(vec![result.clone().into()]));
         };
-        let mut parsed_trades: Value = self.parse_trades(result.clone(), Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined);
+        let mut parsed_trades: Value = self.parse_trades(result.clone());
         let mut i: usize = 0;
         while i < parsed_trades.len() {
             let mut trade: Value = parsed_trades.get(i.into());
@@ -1997,7 +1997,7 @@ pub trait Gate : Exchange {
         let mut message_hash: Value = Value::from("candles:") + interval.clone() + Value::from(":") + market.get(Value::from("symbol"));
         let mut url: Value = <Self as Gate>::get_url_by_market(self, market.clone());
         let mut payload: Value = Value::Json(serde_json::Value::Array(vec![interval.clone().into(), market_id.clone().into()]));
-        let mut ohlcv: Value = <Self as Gate>::subscribe_public(self, url.clone(), message_hash.clone(), payload.clone(), channel.clone(), params.clone()).await;
+        let mut ohlcv: Value = <Self as Gate>::subscribe_public(self, url.clone(), message_hash.clone(), payload.clone(), channel.clone(), params.clone(), Value::Undefined).await;
         if self.get("newUpdates".into()).is_truthy() {
             limit = ohlcv.get_limit(symbol.clone(), limit.clone());
         };
@@ -2036,11 +2036,11 @@ pub trait Gate : Exchange {
             let mut subscription: Value = self.safe_string(ohlcv.clone(), Value::from("n"), Value::from(""));
             let mut parts: Value = subscription.split(Value::from("_"));
             let mut timeframe_id: Value = self.safe_string(parts.clone(), Value::from(0), Value::Undefined);
-            let mut timeframe: Value = self.find_timeframe(timeframe_id.clone(), Value::Undefined);
+            let mut timeframe: Value = self.find_timeframe(timeframe_id.clone());
             let mut prefix: Value = timeframe.clone() + Value::from("_");
             let mut market_id: Value = subscription.replace(prefix.clone(), Value::from(""));
             let mut symbol: Value = self.safe_symbol(market_id.clone(), Value::Undefined, Value::from("_"), market_type.clone());
-            let mut parsed: Value = self.parse_ohlcv(ohlcv.clone(), Value::Undefined);
+            let mut parsed: Value = self.parse_ohlcv(ohlcv.clone());
             self.get("ohlcvs".into()).set(symbol.clone(), self.safe_value(self.get("ohlcvs".into()), symbol.clone(), Value::new_object()));
             let mut stored: Value = self.safe_value(self.get("ohlcvs".into()).get(symbol.clone()), timeframe.clone(), Value::Undefined);
             if stored.clone().is_nullish() {
@@ -2057,7 +2057,7 @@ pub trait Gate : Exchange {
         while i < keys.len() {
             let mut symbol: Value = keys.get(i.into());
             let mut timeframe: Value = market_ids.get(symbol.clone());
-            let mut interval: Value = self.find_timeframe(timeframe.clone(), Value::Undefined);
+            let mut interval: Value = self.find_timeframe(timeframe.clone());
             let mut hash: Value = Value::from("candles") + Value::from(":") + interval.clone() + Value::from(":") + symbol.clone();
             let mut stored: Value = self.safe_value(self.get("ohlcvs".into()).get(symbol.clone()), interval.clone(), Value::Undefined);
             client.resolve(stored.clone(), hash.clone());
@@ -2077,8 +2077,8 @@ pub trait Gate : Exchange {
             market = self.market(symbol.clone());
             market_id = market.get(Value::from("id"));
         };
-        (r#type, params) = shift_2(self.handle_market_type_and_params(Value::from("watchMyTrades"), market.clone(), params.clone(), Value::Undefined));
-        (sub_type, params) = shift_2(self.handle_sub_type_and_params(Value::from("watchMyTrades"), market.clone(), params.clone(), Value::Undefined));
+        (r#type, params) = shift_2(self.handle_market_type_and_params(Value::from("watchMyTrades"), market.clone(), params.clone()));
+        (sub_type, params) = shift_2(self.handle_sub_type_and_params(Value::from("watchMyTrades"), market.clone(), params.clone()));
         let mut message_type: Value = self.get_supported_mapping(r#type.clone(), Value::Json(normalize(&Value::Json(json!({
             "spot": "spot",
             "margin": "spot",
@@ -2135,7 +2135,7 @@ pub trait Gate : Exchange {
             cached_trades = ArrayCacheBySymbolById::new(limit);
             self.set("my_trades".into(), cached_trades.clone());
         };
-        let mut parsed: Value = self.parse_trades(result.clone(), Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined);
+        let mut parsed: Value = self.parse_trades(result.clone());
         let mut market_ids: Value = Value::new_object();
         let mut i: usize = 0;
         while i < parsed.len() {
@@ -2162,8 +2162,8 @@ pub trait Gate : Exchange {
         self.load_markets(Value::Undefined, Value::Undefined).await;
         let mut r#type: Value = Value::Undefined;
         let mut sub_type: Value = Value::Undefined;
-        (r#type, params) = shift_2(self.handle_market_type_and_params(Value::from("watchBalance"), Value::Undefined, params.clone(), Value::Undefined));
-        (sub_type, params) = shift_2(self.handle_sub_type_and_params(Value::from("watchBalance"), Value::Undefined, params.clone(), Value::Undefined));
+        (r#type, params) = shift_2(self.handle_market_type_and_params(Value::from("watchBalance"), Value::Undefined, params.clone()));
+        (sub_type, params) = shift_2(self.handle_sub_type_and_params(Value::from("watchBalance"), Value::Undefined, params.clone()));
         let mut is_inverse: Value = (sub_type.clone() == Value::from("inverse")).into();
         let mut url: Value = <Self as Gate>::get_url_by_market_type(self, r#type.clone(), is_inverse.clone());
         let mut requires_uid: Value = (r#type.clone() != Value::from("spot")).into();
@@ -2275,14 +2275,14 @@ pub trait Gate : Exchange {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
         let mut market: Value = Value::Undefined;
-        symbols = self.market_symbols(symbols.clone(), Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined);
+        symbols = self.market_symbols(symbols.clone());
         let mut payload: Value = Value::Json(serde_json::Value::Array(vec![Value::from("!") + Value::from("all").into()]));
         if !self.is_empty(symbols.clone()).is_truthy() {
             market = self.get_market_from_symbols(symbols.clone());
         };
         let mut r#type: Value = Value::Undefined;
         let mut query: Value = Value::Undefined;
-        (r#type, query) = shift_2(self.handle_market_type_and_params(Value::from("watchPositions"), market.clone(), params.clone(), Value::Undefined));
+        (r#type, query) = shift_2(self.handle_market_type_and_params(Value::from("watchPositions"), market.clone(), params.clone()));
         if r#type.clone() == Value::from("spot") {
             r#type = Value::from("swap");
         };
@@ -2297,7 +2297,7 @@ pub trait Gate : Exchange {
         };
         let mut channel: Value = type_id.clone() + Value::from(".positions");
         let mut sub_type: Value = Value::Undefined;
-        (sub_type, query) = shift_2(self.handle_sub_type_and_params(Value::from("watchPositions"), market.clone(), query.clone(), Value::Undefined));
+        (sub_type, query) = shift_2(self.handle_sub_type_and_params(Value::from("watchPositions"), market.clone(), query.clone()));
         let mut is_inverse: Value = (sub_type.clone() == Value::from("inverse")).into();
         let mut url: Value = <Self as Gate>::get_url_by_market_type(self, r#type.clone(), is_inverse.clone());
         let mut client: Value = self.client(url.clone());
@@ -2453,7 +2453,7 @@ pub trait Gate : Exchange {
         };
         let mut r#type: Value = Value::Undefined;
         let mut query: Value = Value::Undefined;
-        (r#type, query) = shift_2(self.handle_market_type_and_params(Value::from("watchOrders"), market.clone(), params.clone(), Value::Undefined));
+        (r#type, query) = shift_2(self.handle_market_type_and_params(Value::from("watchOrders"), market.clone(), params.clone()));
         let mut type_id: Value = self.get_supported_mapping(r#type.clone(), Value::Json(normalize(&Value::Json(json!({
             "spot": "spot",
             "margin": "spot",
@@ -2469,7 +2469,7 @@ pub trait Gate : Exchange {
             payload = Value::Json(serde_json::Value::Array(vec![market.get(Value::from("id")).into()]));
         };
         let mut sub_type: Value = Value::Undefined;
-        (sub_type, query) = shift_2(self.handle_sub_type_and_params(Value::from("watchOrders"), market.clone(), query.clone(), Value::Undefined));
+        (sub_type, query) = shift_2(self.handle_sub_type_and_params(Value::from("watchOrders"), market.clone(), query.clone()));
         let mut is_inverse: Value = (sub_type.clone() == Value::from("inverse")).into();
         let mut url: Value = <Self as Gate>::get_url_by_market_type(self, r#type.clone(), is_inverse.clone());
         // uid required for non spot markets
@@ -2524,7 +2524,7 @@ pub trait Gate : Exchange {
         };
         let mut stored: Value = self.get("orders".into());
         let mut market_ids: Value = Value::new_object();
-        let mut parsed_orders: Value = self.parse_orders(orders.clone(), Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined);
+        let mut parsed_orders: Value = self.parse_orders(orders.clone());
         let mut i: usize = 0;
         while i < parsed_orders.len() {
             let mut parsed: Value = parsed_orders.get(i.into());
@@ -2565,18 +2565,18 @@ pub trait Gate : Exchange {
     async fn watch_my_liquidations_for_symbols(&mut self, mut symbols: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        symbols = self.market_symbols(symbols.clone(), Value::Undefined, true.into(), true.into(), Value::Undefined);
+        symbols = self.market_symbols(symbols.clone(), Value::Undefined, true.into(), true.into());
         let mut market: Value = self.get_market_from_symbols(symbols.clone());
         let mut r#type: Value = Value::Undefined;
         let mut query: Value = Value::Undefined;
-        (r#type, query) = shift_2(self.handle_market_type_and_params(Value::from("watchMyLiquidationsForSymbols"), market.clone(), params.clone(), Value::Undefined));
+        (r#type, query) = shift_2(self.handle_market_type_and_params(Value::from("watchMyLiquidationsForSymbols"), market.clone(), params.clone()));
         let mut type_id: Value = self.get_supported_mapping(r#type.clone(), Value::Json(normalize(&Value::Json(json!({
             "future": "futures",
             "swap": "futures",
             "option": "options"
         }))).unwrap()));
         let mut sub_type: Value = Value::Undefined;
-        (sub_type, query) = shift_2(self.handle_sub_type_and_params(Value::from("watchMyLiquidationsForSymbols"), market.clone(), query.clone(), Value::Undefined));
+        (sub_type, query) = shift_2(self.handle_sub_type_and_params(Value::from("watchMyLiquidationsForSymbols"), market.clone(), query.clone()));
         let mut is_inverse: Value = (sub_type.clone() == Value::from("inverse")).into();
         let mut url: Value = <Self as Gate>::get_url_by_market_type(self, r#type.clone(), is_inverse.clone());
         let mut payload: Value = Value::new_array();
@@ -2656,7 +2656,7 @@ pub trait Gate : Exchange {
         let mut i: usize = 0;
         while i < raw_liquidations.len() {
             let mut raw_liquidation: Value = raw_liquidations.get(i.into());
-            let mut liquidation: Value = <Self as Gate>::parse_ws_liquidation(self, raw_liquidation.clone());
+            let mut liquidation: Value = <Self as Gate>::parse_ws_liquidation(self, raw_liquidation.clone(), Value::Undefined);
             cache.append(liquidation.clone());
             let mut symbol: Value = self.safe_string(liquidation.clone(), Value::from("symbol"), Value::Undefined);
             let mut symbol_liquidations: Value = self.safe_value(cache.clone(), symbol.clone(), Value::new_array());
@@ -2712,7 +2712,7 @@ pub trait Gate : Exchange {
             "quoteValue": Value::Undefined,
             "timestamp": timestamp,
             "datetime": self.iso8601(timestamp.clone())
-        }))).unwrap()), Value::Undefined);
+        }))).unwrap()));
     }
 
     fn handle_error_message(&mut self, mut client: Value, mut message: Value) -> Value {
@@ -2855,7 +2855,7 @@ pub trait Gate : Exchange {
                 while j < message_hashes.len() {
                     let mut unsub_hash: Value = message_hashes.get(j.into());
                     let mut sub_hash: Value = sub_message_hashes.get(j.into());
-                    self.clean_unsubscription(client.clone(), sub_hash.clone(), unsub_hash.clone(), Value::Undefined);
+                    self.clean_unsubscription(client.clone(), sub_hash.clone(), unsub_hash.clone());
                     j += 1;
                 };
                 self.clean_cache(subscription.clone());
@@ -3098,7 +3098,7 @@ pub trait Gate : Exchange {
             "payload": payload
         }))).unwrap());
         let mut message: Value = extend_2(request.clone(), params.clone());
-        return self.watch_multiple(url.clone(), message_hashes.clone(), message.clone(), message_hashes.clone(), Value::Undefined).await;
+        return self.watch_multiple(url.clone(), message_hashes.clone(), message.clone(), message_hashes.clone()).await;
     }
 
     async fn un_subscribe_public_multiple(&mut self, mut url: Value, mut topic: Value, mut symbols: Value, mut message_hashes: Value, mut sub_message_hashes: Value, mut payload: Value, mut channel: Value, mut params: Value) -> Value {
@@ -3144,7 +3144,7 @@ pub trait Gate : Exchange {
     }
 
     async fn request_private(&mut self, mut url: Value, mut req_params: Value, mut channel: Value, mut request_id: Value) -> Value {
-        self.check_required_credentials(Value::Undefined);
+        self.check_required_credentials();
         // uid is required for some subscriptions only so it's not a part of required credentials
         let mut event: Value = Value::from("api");
         if request_id.clone().is_nullish() {
@@ -3182,7 +3182,7 @@ pub trait Gate : Exchange {
 
     async fn subscribe_private(&mut self, mut url: Value, mut message_hash: Value, mut payload: Value, mut channel: Value, mut params: Value, mut requires_uid: Value) -> Value {
         requires_uid = requires_uid.or_default(false.into());
-        self.check_required_credentials(Value::Undefined);
+        self.check_required_credentials();
         // uid is required for some subscriptions only so it's not a part of required credentials
         if requires_uid.is_truthy() {
             if self.get("uid".into()).is_nullish() || self.get("uid".into()).len() == 0 {
@@ -3565,10 +3565,10 @@ pub trait Gate : Exchange {
                     "privateOtcPostStablecoinordercreate" => self.request("stable_coin/order/create".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privateOtcPostOrderpaid" => self.request("order/paid".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privateOtcPostOrdercancel" => self.request("order/cancel".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    _ => unimplemented!(),
+                    _ => panic!("Unknown API method: {}", m),
                 }
             },
-            _ => unimplemented!()
+            _ => panic!("dispatch: method must be a string, got {:?}", method)
         }
     }
 }

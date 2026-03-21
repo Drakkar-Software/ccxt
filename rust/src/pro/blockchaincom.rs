@@ -576,7 +576,7 @@ pub trait Blockchaincom : Exchange {
             let mut message_hash: Value = Value::from("ohlcv:") + symbol.clone();
             let mut request: Value = self.safe_value(client.get(subscriptions.clone()), message_hash.clone(), Value::Undefined);
             let mut timeframe_id: Value = self.safe_number(request.clone(), Value::from("granularity"), Value::Undefined);
-            let mut timeframe: Value = self.find_timeframe(timeframe_id.clone(), Value::Undefined);
+            let mut timeframe: Value = self.find_timeframe(timeframe_id.clone());
             let mut ohlcv: Value = self.safe_value(message.clone(), Value::from("price"), Value::new_array());
             self.get("ohlcvs".into()).set(symbol.clone(), self.safe_value(self.get("ohlcvs".into()), symbol.clone(), Value::new_object()));
             let mut stored: Value = self.safe_value(self.get("ohlcvs".into()).get(symbol.clone()), timeframe.clone(), Value::Undefined);
@@ -606,7 +606,7 @@ pub trait Blockchaincom : Exchange {
             "symbol": market.get(Value::from("id"))
         }))).unwrap());
         request = self.deep_extend_2(request.clone(), params.clone());
-        return self.watch(url.clone(), message_hash.clone(), request.clone(), message_hash.clone(), Value::Undefined).await;
+        return self.watch(url.clone(), message_hash.clone(), request.clone(), message_hash.clone()).await;
     }
 
     fn handle_ticker(&mut self, mut client: Value, mut message: Value) -> Value {
@@ -790,7 +790,7 @@ pub trait Blockchaincom : Exchange {
     async fn watch_orders(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        <Self as Blockchaincom>::authenticate(self).await;
+        <Self as Blockchaincom>::authenticate(self, Value::Undefined).await;
         if symbol.clone().is_nonnullish() {
             let mut market: Value = self.market(symbol.clone());
             symbol = market.get(Value::from("symbol"));
@@ -802,7 +802,7 @@ pub trait Blockchaincom : Exchange {
         }))).unwrap());
         let mut message_hash: Value = Value::from("orders");
         let mut request: Value = self.deep_extend_2(message.clone(), params.clone());
-        let mut orders: Value = self.watch(url.clone(), message_hash.clone(), request.clone(), message_hash.clone(), Value::Undefined).await;
+        let mut orders: Value = self.watch(url.clone(), message_hash.clone(), request.clone(), message_hash.clone()).await;
         if self.get("newUpdates".into()).is_truthy() {
             limit = orders.get_limit(symbol.clone(), limit.clone());
         };
@@ -1011,7 +1011,7 @@ pub trait Blockchaincom : Exchange {
             "symbol": market.get(Value::from("id"))
         }))).unwrap());
         let mut request: Value = self.deep_extend_2(subscribe.clone(), params.clone());
-        let mut orderbook: Value = self.watch(url.clone(), message_hash.clone(), request.clone(), message_hash.clone(), Value::Undefined).await;
+        let mut orderbook: Value = self.watch(url.clone(), message_hash.clone(), request.clone(), message_hash.clone()).await;
         return orderbook.limit();
     }
 
@@ -1061,7 +1061,7 @@ pub trait Blockchaincom : Exchange {
         let mut datetime: Value = self.safe_string(message.clone(), Value::from("timestamp"), Value::Undefined);
         let mut timestamp: Value = self.parse8601(datetime.clone());
         if self.safe_value(self.get("orderbooks".into()), symbol.clone(), Value::Undefined).is_nullish() {
-            self.get("orderbooks".into()).set(symbol.clone(), self.counted_order_book(Value::Undefined, Value::Undefined));
+            self.get("orderbooks".into()).set(symbol.clone(), self.counted_order_book());
         };
         let mut orderbook: Value = self.get("orderbooks".into()).get(symbol.clone());
         if event.clone() == Value::from("snapshot") {
@@ -1145,13 +1145,13 @@ pub trait Blockchaincom : Exchange {
         let mut future: Value = client.reusable_future(message_hash.clone());
         let mut is_authenticated: Value = self.safe_value(client.get(subscriptions.clone()), message_hash.clone(), Value::Undefined);
         if is_authenticated.clone().is_nullish() {
-            self.check_required_credentials(Value::Undefined);
+            self.check_required_credentials();
             let mut request: Value = Value::Json(normalize(&Value::Json(json!({
                 "action": "subscribe",
                 "channel": "auth",
                 "token": self.get("secret".into())
             }))).unwrap());
-            return self.watch(url.clone(), message_hash.clone(), extend_2(request.clone(), params.clone()), message_hash.clone(), Value::Undefined);
+            return self.watch(url.clone(), message_hash.clone(), extend_2(request.clone(), params.clone()), message_hash.clone());
         };
         return future.clone();
     }
@@ -1185,10 +1185,10 @@ pub trait Blockchaincom : Exchange {
                     "privatePostWithdrawals" => self.request("withdrawals".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privateDeleteOrders" => self.request("orders".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privateDeleteOrdersorderid" => self.request("orders/{orderId}".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    _ => unimplemented!(),
+                    _ => panic!("Unknown API method: {}", m),
                 }
             },
-            _ => unimplemented!()
+            _ => panic!("dispatch: method must be a string, got {:?}", method)
         }
     }
 }

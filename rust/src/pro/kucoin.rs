@@ -1233,11 +1233,11 @@ pub trait Kucoin : Exchange {
         self.load_markets(Value::Undefined, Value::Undefined).await;
         let mut market: Value = self.market(symbol.clone());
         symbol = market.get(Value::from("symbol"));
-        let mut url: Value = <Self as Kucoin>::negotiate(self, false.into()).await;
+        let mut url: Value = <Self as Kucoin>::negotiate(self, false.into(), Value::Undefined).await;
         let (mut method, mut query) = shift_2(self.handle_option_and_params(params.clone(), Value::from("watchTicker"), Value::from("method"), Value::from("/market/snapshot")));
         let mut topic: Value = method.clone() + Value::from(":") + market.get(Value::from("id"));
         let mut message_hash: Value = Value::from("ticker:") + symbol.clone();
-        return <Self as Kucoin>::subscribe(self, url.clone(), message_hash.clone(), topic.clone(), query.clone()).await;
+        return <Self as Kucoin>::subscribe(self, url.clone(), message_hash.clone(), topic.clone(), query.clone(), Value::Undefined).await;
     }
 
     async fn un_watch_ticker(&mut self, mut symbol: Value, mut params: Value) -> Value {
@@ -1245,7 +1245,7 @@ pub trait Kucoin : Exchange {
         self.load_markets(Value::Undefined, Value::Undefined).await;
         let mut market: Value = self.market(symbol.clone());
         symbol = market.get(Value::from("symbol"));
-        let mut url: Value = <Self as Kucoin>::negotiate(self, false.into()).await;
+        let mut url: Value = <Self as Kucoin>::negotiate(self, false.into(), Value::Undefined).await;
         let mut method: Value = Value::Undefined;
         (method, params) = shift_2(self.handle_option_and_params(params.clone(), Value::from("watchTicker"), Value::from("method"), Value::from("/market/snapshot")));
         let mut topic: Value = method.clone() + Value::from(":") + market.get(Value::from("id"));
@@ -1264,7 +1264,7 @@ pub trait Kucoin : Exchange {
     async fn watch_tickers(&mut self, mut symbols: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        symbols = self.market_symbols(symbols.clone(), Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined);
+        symbols = self.market_symbols(symbols.clone());
         let mut message_hash: Value = Value::from("tickers");
         let mut method: Value = Value::Undefined;
         (method, params) = shift_2(self.handle_option_and_params(params.clone(), Value::from("watchTickers"), Value::from("method"), Value::from("/market/ticker")));
@@ -1280,25 +1280,25 @@ pub trait Kucoin : Exchange {
                 i += 1;
             };
         };
-        let mut url: Value = <Self as Kucoin>::negotiate(self, false.into()).await;
+        let mut url: Value = <Self as Kucoin>::negotiate(self, false.into(), Value::Undefined).await;
         let mut tickers: Value = Value::Undefined;
         if symbols.clone().is_nullish() {
             let mut all_topic: Value = method.clone() + Value::from(":all");
-            tickers = <Self as Kucoin>::subscribe(self, url.clone(), message_hash.clone(), all_topic.clone(), params.clone()).await;
+            tickers = <Self as Kucoin>::subscribe(self, url.clone(), message_hash.clone(), all_topic.clone(), params.clone(), Value::Undefined).await;
             if self.get("newUpdates".into()).is_truthy() {
                 return tickers.clone();
             };
         } else {
             let mut market_ids: Value = self.market_ids(symbols.clone());
             let mut symbols_topic: Value = method.clone() + Value::from(":") + market_ids.join(Value::from(","));
-            tickers = <Self as Kucoin>::subscribe_multiple(self, url.clone(), message_hashes.clone(), symbols_topic.clone(), topics.clone(), params.clone()).await;
+            tickers = <Self as Kucoin>::subscribe_multiple(self, url.clone(), message_hashes.clone(), symbols_topic.clone(), topics.clone(), params.clone(), Value::Undefined).await;
             if self.get("newUpdates".into()).is_truthy() {
                 let mut new_dict: Value = Value::new_object();
                 new_dict.set(tickers.get(Value::from("symbol")), tickers.clone());
                 return new_dict.clone();
             };
         };
-        return self.filter_by_array(self.get("tickers".into()), Value::from("symbol"), symbols.clone(), Value::Undefined);
+        return self.filter_by_array(self.get("tickers".into()), Value::from("symbol"), symbols.clone());
     }
 
     fn handle_ticker(&mut self, mut client: Value, mut message: Value) -> Value {
@@ -1391,7 +1391,7 @@ pub trait Kucoin : Exchange {
             tickers.set(ticker.get(Value::from("symbol")), ticker.clone());
             return tickers.clone();
         };
-        return self.filter_by_array(self.get("bidsasks".into()), Value::from("symbol"), symbols.clone(), Value::Undefined);
+        return self.filter_by_array(self.get("bidsasks".into()), Value::from("symbol"), symbols.clone());
     }
 
     async fn watch_multi_helper(&mut self, mut method_name: Value, mut channel_name: Value, mut symbols: Value, mut params: Value) -> Value {
@@ -1410,7 +1410,7 @@ pub trait Kucoin : Exchange {
             message_hashes.push(Value::from("bidask@") + market.get(Value::from("symbol")));
             i += 1;
         };
-        let mut url: Value = <Self as Kucoin>::negotiate(self, false.into()).await;
+        let mut url: Value = <Self as Kucoin>::negotiate(self, false.into(), Value::Undefined).await;
         let mut market_ids: Value = self.market_ids(symbols.clone());
         let mut joined: Value = market_ids.join(Value::from(","));
         let mut request_id: Value = <Self as Kucoin>::request_id(self).to_string();
@@ -1421,7 +1421,7 @@ pub trait Kucoin : Exchange {
             "response": true
         }))).unwrap());
         let mut message: Value = extend_2(request.clone(), params.clone());
-        return self.watch_multiple(url.clone(), message_hashes.clone(), message.clone(), message_hashes.clone(), Value::Undefined).await;
+        return self.watch_multiple(url.clone(), message_hashes.clone(), message.clone(), message_hashes.clone()).await;
     }
 
     fn handle_bid_ask(&mut self, mut client: Value, mut message: Value) -> Value {
@@ -1439,7 +1439,7 @@ pub trait Kucoin : Exchange {
         //         subject: 'level1'
         //     }
         //
-        let mut parsed_ticker: Value = <Self as Kucoin>::parse_ws_bid_ask(self, message.clone());
+        let mut parsed_ticker: Value = <Self as Kucoin>::parse_ws_bid_ask(self, message.clone(), Value::Undefined);
         let mut symbol: Value = parsed_ticker.get(Value::from("symbol"));
         self.get("bidsasks".into()).set(symbol.clone(), parsed_ticker.clone());
         let mut message_hash: Value = Value::from("bidask@") + symbol.clone();
@@ -1473,13 +1473,13 @@ pub trait Kucoin : Exchange {
         timeframe = timeframe.or_default(Value::from("1m"));
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        let mut url: Value = <Self as Kucoin>::negotiate(self, false.into()).await;
+        let mut url: Value = <Self as Kucoin>::negotiate(self, false.into(), Value::Undefined).await;
         let mut market: Value = self.market(symbol.clone());
         symbol = market.get(Value::from("symbol"));
         let mut period: Value = self.safe_string(self.get("timeframes".into()), timeframe.clone(), timeframe.clone());
         let mut topic: Value = Value::from("/market/candles:") + market.get(Value::from("id")) + Value::from("_") + period.clone();
         let mut message_hash: Value = Value::from("candles:") + symbol.clone() + Value::from(":") + timeframe.clone();
-        let mut ohlcv: Value = <Self as Kucoin>::subscribe(self, url.clone(), message_hash.clone(), topic.clone(), params.clone()).await;
+        let mut ohlcv: Value = <Self as Kucoin>::subscribe(self, url.clone(), message_hash.clone(), topic.clone(), params.clone(), Value::Undefined).await;
         if self.get("newUpdates".into()).is_truthy() {
             limit = ohlcv.get_limit(symbol.clone(), limit.clone());
         };
@@ -1490,7 +1490,7 @@ pub trait Kucoin : Exchange {
         timeframe = timeframe.or_default(Value::from("1m"));
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        let mut url: Value = <Self as Kucoin>::negotiate(self, false.into()).await;
+        let mut url: Value = <Self as Kucoin>::negotiate(self, false.into(), Value::Undefined).await;
         let mut market: Value = self.market(symbol.clone());
         symbol = market.get(Value::from("symbol"));
         let mut period: Value = self.safe_string(self.get("timeframes".into()), timeframe.clone(), timeframe.clone());
@@ -1535,7 +1535,7 @@ pub trait Kucoin : Exchange {
         let mut parts: Value = topic.split(Value::from("_"));
         let mut interval: Value = self.safe_string(parts.clone(), Value::from(1), Value::Undefined);
         // use a reverse lookup in a static map instead
-        let mut timeframe: Value = self.find_timeframe(interval.clone(), Value::Undefined);
+        let mut timeframe: Value = self.find_timeframe(interval.clone());
         let mut market: Value = self.safe_market(market_id.clone(), Value::Undefined, Value::Undefined, Value::Undefined);
         let mut symbol: Value = market.get(Value::from("symbol"));
         let mut message_hash: Value = Value::from("candles:") + symbol.clone() + Value::from(":") + timeframe.clone();
@@ -1564,9 +1564,9 @@ pub trait Kucoin : Exchange {
             panic!(r###"ArgumentsRequired::new(self.get("id".into()) + Value::from(" watchTradesForSymbols() requires a non-empty array of symbols"))"###);
         };
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        symbols = self.market_symbols(symbols.clone(), Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined);
+        symbols = self.market_symbols(symbols.clone());
         let mut market_ids: Value = self.market_ids(symbols.clone());
-        let mut url: Value = <Self as Kucoin>::negotiate(self, false.into()).await;
+        let mut url: Value = <Self as Kucoin>::negotiate(self, false.into(), Value::Undefined).await;
         let mut message_hashes: Value = Value::new_array();
         let mut subscription_hashes: Value = Value::new_array();
         let mut topic: Value = Value::from("/market/match:") + market_ids.join(Value::from(","));
@@ -1578,7 +1578,7 @@ pub trait Kucoin : Exchange {
             subscription_hashes.push(Value::from("/market/match:") + market_id.clone());
             i += 1;
         };
-        let mut trades: Value = <Self as Kucoin>::subscribe_multiple(self, url.clone(), message_hashes.clone(), topic.clone(), subscription_hashes.clone(), params.clone()).await;
+        let mut trades: Value = <Self as Kucoin>::subscribe_multiple(self, url.clone(), message_hashes.clone(), topic.clone(), subscription_hashes.clone(), params.clone(), Value::Undefined).await;
         if self.get("newUpdates".into()).is_truthy() {
             let mut first: Value = self.safe_value(trades.clone(), Value::from(0), Value::Undefined);
             let mut trade_symbol: Value = self.safe_string(first.clone(), Value::from("symbol"), Value::Undefined);
@@ -1590,9 +1590,9 @@ pub trait Kucoin : Exchange {
     async fn un_watch_trades_for_symbols(&mut self, mut symbols: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        symbols = self.market_symbols(symbols.clone(), Value::Undefined, false.into(), Value::Undefined, Value::Undefined);
+        symbols = self.market_symbols(symbols.clone(), Value::Undefined, false.into());
         let mut market_ids: Value = self.market_ids(symbols.clone());
-        let mut url: Value = <Self as Kucoin>::negotiate(self, false.into()).await;
+        let mut url: Value = <Self as Kucoin>::negotiate(self, false.into(), Value::Undefined).await;
         let mut message_hashes: Value = Value::new_array();
         let mut subscription_hashes: Value = Value::new_array();
         let mut topic: Value = Value::from("/market/match:") + market_ids.join(Value::from(","));
@@ -1639,7 +1639,7 @@ pub trait Kucoin : Exchange {
         //     }
         //
         let mut data: Value = self.safe_value(message.clone(), Value::from("data"), Value::new_object());
-        let mut trade: Value = self.parse_trade(data.clone(), Value::Undefined);
+        let mut trade: Value = self.parse_trade(data.clone());
         let mut symbol: Value = trade.get(Value::from("symbol"));
         let mut message_hash: Value = Value::from("trades:") + symbol.clone();
         let mut trades: Value = self.safe_value(self.get("trades".into()), symbol.clone(), Value::Undefined);
@@ -1690,9 +1690,9 @@ pub trait Kucoin : Exchange {
             };
         };
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        symbols = self.market_symbols(symbols.clone(), Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined);
+        symbols = self.market_symbols(symbols.clone());
         let mut market_ids: Value = self.market_ids(symbols.clone());
-        let mut url: Value = <Self as Kucoin>::negotiate(self, false.into()).await;
+        let mut url: Value = <Self as Kucoin>::negotiate(self, false.into(), Value::Undefined).await;
         let mut method: Value = Value::Undefined;
         (method, params) = shift_2(self.handle_option_and_params(params.clone(), Value::from("watchOrderBook"), Value::from("method"), Value::from("/market/level2")));
         if limit.clone() == Value::from(5) || limit.clone() == Value::from(50) {
@@ -1727,9 +1727,9 @@ pub trait Kucoin : Exchange {
         let mut limit: Value = self.safe_integer(params.clone(), Value::from("limit"), Value::Undefined);
         params = self.omit(params.clone(), Value::from("limit"));
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        symbols = self.market_symbols(symbols.clone(), Value::Undefined, false.into(), Value::Undefined, Value::Undefined);
+        symbols = self.market_symbols(symbols.clone(), Value::Undefined, false.into());
         let mut market_ids: Value = self.market_ids(symbols.clone());
-        let mut url: Value = <Self as Kucoin>::negotiate(self, false.into()).await;
+        let mut url: Value = <Self as Kucoin>::negotiate(self, false.into(), Value::Undefined).await;
         let mut method: Value = Value::Undefined;
         (method, params) = shift_2(self.handle_option_and_params(params.clone(), Value::from("watchOrderBook"), Value::from("method"), Value::from("/market/level2")));
         if limit.clone() == Value::from(5) || limit.clone() == Value::from(50) {
@@ -1808,7 +1808,7 @@ pub trait Kucoin : Exchange {
         // let orderbook = this.safeDict (this.orderbooks, symbol);
         if subject.clone() == Value::from("level2") {
             if !self.get("orderbooks".into()).contains_key(symbol.clone()) {
-                self.get("orderbooks".into()).set(symbol.clone(), self.order_book(Value::Undefined, Value::Undefined));
+                self.get("orderbooks".into()).set(symbol.clone(), self.order_book());
             } else {
                 let mut orderbook: Value = self.get("orderbooks".into()).get(symbol.clone());
                 orderbook.reset();
@@ -1816,7 +1816,7 @@ pub trait Kucoin : Exchange {
             self.get("orderbooks".into()).get(symbol.clone()).set("symbol".into(), symbol.clone());
         } else {
             if !self.get("orderbooks".into()).contains_key(symbol.clone()) {
-                self.get("orderbooks".into()).set(symbol.clone(), self.order_book(Value::Undefined, Value::Undefined));
+                self.get("orderbooks".into()).set(symbol.clone(), self.order_book());
             };
             let mut orderbook: Value = self.get("orderbooks".into()).get(symbol.clone());
             let mut nonce: Value = self.safe_integer(orderbook.clone(), Value::from("nonce"), Value::Undefined);
@@ -1938,7 +1938,7 @@ pub trait Kucoin : Exchange {
             while i < message_hashes.len() {
                 let mut message_hash: Value = message_hashes.get(i.into());
                 let mut sub_hash: Value = sub_message_hashes.get(i.into());
-                self.clean_unsubscription(client.clone(), sub_hash.clone(), message_hash.clone(), Value::Undefined);
+                self.clean_unsubscription(client.clone(), sub_hash.clone(), message_hash.clone());
                 i += 1;
             };
             self.clean_cache(subscription.clone());
@@ -1965,7 +1965,7 @@ pub trait Kucoin : Exchange {
         self.load_markets(Value::Undefined, Value::Undefined).await;
         let mut trigger: Value = self.safe_value_2(params.clone(), Value::from("stop"), Value::from("trigger"), Value::Undefined);
         params = self.omit(params.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("stop").into(), Value::from("trigger").into()])));
-        let mut url: Value = <Self as Kucoin>::negotiate(self, true.into()).await;
+        let mut url: Value = <Self as Kucoin>::negotiate(self, true.into(), Value::Undefined).await;
         let mut topic: Value = if trigger.is_truthy() { Value::from("/spotMarket/advancedOrders") } else { Value::from("/spotMarket/tradeOrders") };
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
             "privateChannel": true
@@ -1976,7 +1976,7 @@ pub trait Kucoin : Exchange {
             symbol = market.get(Value::from("symbol"));
             message_hash = message_hash.clone() + Value::from(":") + symbol.clone();
         };
-        let mut orders: Value = <Self as Kucoin>::subscribe(self, url.clone(), message_hash.clone(), topic.clone(), extend_2(request.clone(), params.clone())).await;
+        let mut orders: Value = <Self as Kucoin>::subscribe(self, url.clone(), message_hash.clone(), topic.clone(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         if self.get("newUpdates".into()).is_truthy() {
             limit = orders.get_limit(symbol.clone(), limit.clone());
         };
@@ -2128,7 +2128,7 @@ pub trait Kucoin : Exchange {
     async fn watch_my_trades(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        let mut url: Value = <Self as Kucoin>::negotiate(self, true.into()).await;
+        let mut url: Value = <Self as Kucoin>::negotiate(self, true.into(), Value::Undefined).await;
         let mut topic: Value = Value::Undefined;
         (topic, params) = shift_2(self.handle_option_and_params(params.clone(), Value::from("watchMyTrades"), Value::from("method"), Value::from("/spotMarket/tradeOrders")));
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
@@ -2140,7 +2140,7 @@ pub trait Kucoin : Exchange {
             symbol = market.get(Value::from("symbol"));
             message_hash = message_hash.clone() + Value::from(":") + market.get(Value::from("symbol"));
         };
-        let mut trades: Value = <Self as Kucoin>::subscribe(self, url.clone(), message_hash.clone(), topic.clone(), extend_2(request.clone(), params.clone())).await;
+        let mut trades: Value = <Self as Kucoin>::subscribe(self, url.clone(), message_hash.clone(), topic.clone(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         if self.get("newUpdates".into()).is_truthy() {
             limit = trades.get_limit(symbol.clone(), limit.clone());
         };
@@ -2274,13 +2274,13 @@ pub trait Kucoin : Exchange {
     async fn watch_balance(&mut self, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        let mut url: Value = <Self as Kucoin>::negotiate(self, true.into()).await;
+        let mut url: Value = <Self as Kucoin>::negotiate(self, true.into(), Value::Undefined).await;
         let mut topic: Value = Value::from("/account/balance");
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
             "privateChannel": true
         }))).unwrap());
         let mut message_hash: Value = Value::from("balance");
-        return <Self as Kucoin>::subscribe(self, url.clone(), message_hash.clone(), topic.clone(), extend_2(request.clone(), params.clone())).await;
+        return <Self as Kucoin>::subscribe(self, url.clone(), message_hash.clone(), topic.clone(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
     }
 
     fn handle_balance(&mut self, mut client: Value, mut message: Value) -> Value {
@@ -2741,10 +2741,10 @@ pub trait Kucoin : Exchange {
                     "utaprivatePostAccountmodeordercancelbatch" => self.request("{accountMode}/order/cancel-batch".into(), "utaPrivate".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "utaprivatePostSubaccountcantransferout" => self.request("sub-account/canTransferOut".into(), "utaPrivate".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "utaprivatePostDcpset" => self.request("dcp/set".into(), "utaPrivate".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    _ => unimplemented!(),
+                    _ => panic!("Unknown API method: {}", m),
                 }
             },
-            _ => unimplemented!()
+            _ => panic!("dispatch: method must be a string, got {:?}", method)
         }
     }
 }

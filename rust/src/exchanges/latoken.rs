@@ -1590,10 +1590,10 @@ pub trait Latoken : Exchange {
                     "privatePostAuthtransferemail" => self.request("auth/transfer/email".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privatePostAuthtransferid" => self.request("auth/transfer/id".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privatePostAuthtransferphone" => self.request("auth/transfer/phone".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    _ => unimplemented!(),
+                    _ => panic!("Unknown API method: {}", m),
                 }
             },
-            _ => unimplemented!()
+            _ => panic!("dispatch: method must be a string, got {:?}", method)
         }
     }
 }

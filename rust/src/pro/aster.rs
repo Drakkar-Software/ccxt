@@ -546,13 +546,13 @@ pub trait Aster : Exchange {
             message_hashes.push(Value::from("ticker:") + market.get(Value::from("symbol")));
             i += 1;
         };
-        let mut new_ticker: Value = self.watch_multiple(url.clone(), message_hashes.clone(), extend_2(request.clone(), params.clone()), Value::Json(serde_json::Value::Array(vec![r#type.clone().into()])), Value::Undefined).await;
+        let mut new_ticker: Value = self.watch_multiple(url.clone(), message_hashes.clone(), extend_2(request.clone(), params.clone()), Value::Json(serde_json::Value::Array(vec![r#type.clone().into()]))).await;
         if self.get("newUpdates".into()).is_truthy() {
             let mut result: Value = Value::new_object();
             result.set(new_ticker.get(Value::from("symbol")), new_ticker.clone());
             return result.clone();
         };
-        return self.filter_by_array(self.get("tickers".into()), Value::from("symbol"), symbols.clone(), Value::Undefined);
+        return self.filter_by_array(self.get("tickers".into()), Value::from("symbol"), symbols.clone());
     }
 
     async fn un_watch_tickers(&mut self, mut symbols: Value, mut params: Value) -> Value {
@@ -583,7 +583,7 @@ pub trait Aster : Exchange {
             message_hashes.push(Value::from("unsubscribe:ticker:") + market.get(Value::from("symbol")));
             i += 1;
         };
-        return self.watch_multiple(url.clone(), message_hashes.clone(), extend_2(request.clone(), params.clone()), Value::Json(serde_json::Value::Array(vec![r#type.clone().into()])), Value::Undefined).await;
+        return self.watch_multiple(url.clone(), message_hashes.clone(), extend_2(request.clone(), params.clone()), Value::Json(serde_json::Value::Array(vec![r#type.clone().into()]))).await;
     }
 
     async fn watch_mark_price(&mut self, mut symbol: Value, mut params: Value) -> Value {
@@ -631,13 +631,13 @@ pub trait Aster : Exchange {
             message_hashes.push(Value::from("ticker:") + market.get(Value::from("symbol")));
             i += 1;
         };
-        let mut new_ticker: Value = self.watch_multiple(url.clone(), message_hashes.clone(), extend_2(request.clone(), params.clone()), Value::Json(serde_json::Value::Array(vec![r#type.clone().into()])), Value::Undefined).await;
+        let mut new_ticker: Value = self.watch_multiple(url.clone(), message_hashes.clone(), extend_2(request.clone(), params.clone()), Value::Json(serde_json::Value::Array(vec![r#type.clone().into()]))).await;
         if self.get("newUpdates".into()).is_truthy() {
             let mut result: Value = Value::new_object();
             result.set(new_ticker.get(Value::from("symbol")), new_ticker.clone());
             return result.clone();
         };
-        return self.filter_by_array(self.get("tickers".into()), Value::from("symbol"), symbols.clone(), Value::Undefined);
+        return self.filter_by_array(self.get("tickers".into()), Value::from("symbol"), symbols.clone());
     }
 
     async fn un_watch_mark_prices(&mut self, mut symbols: Value, mut params: Value) -> Value {
@@ -670,7 +670,7 @@ pub trait Aster : Exchange {
             message_hashes.push(Value::from("unsubscribe:ticker:") + market.get(Value::from("symbol")));
             i += 1;
         };
-        return self.watch_multiple(url.clone(), message_hashes.clone(), extend_2(request.clone(), params.clone()), Value::Json(serde_json::Value::Array(vec![r#type.clone().into()])), Value::Undefined).await;
+        return self.watch_multiple(url.clone(), message_hashes.clone(), extend_2(request.clone(), params.clone()), Value::Json(serde_json::Value::Array(vec![r#type.clone().into()]))).await;
     }
 
     fn handle_ticker(&mut self, mut client: Value, mut message: Value) -> Value {
@@ -740,7 +740,7 @@ pub trait Aster : Exchange {
                 "info": message,
                 "markPrice": self.safe_string(message.clone(), Value::from("p"), Value::Undefined),
                 "indexPrice": self.safe_string(message.clone(), Value::from("i"), Value::Undefined)
-            }))).unwrap()), Value::Undefined);
+            }))).unwrap()));
         };
         return self.safe_ticker(Value::Json(normalize(&Value::Json(json!({
             "symbol": market.get(Value::from("symbol")),
@@ -791,13 +791,13 @@ pub trait Aster : Exchange {
             message_hashes.push(Value::from("bidask:") + market.get(Value::from("symbol")));
             i += 1;
         };
-        let mut new_ticker: Value = self.watch_multiple(url.clone(), message_hashes.clone(), extend_2(request.clone(), params.clone()), Value::Json(serde_json::Value::Array(vec![r#type.clone().into()])), Value::Undefined).await;
+        let mut new_ticker: Value = self.watch_multiple(url.clone(), message_hashes.clone(), extend_2(request.clone(), params.clone()), Value::Json(serde_json::Value::Array(vec![r#type.clone().into()]))).await;
         if self.get("newUpdates".into()).is_truthy() {
             let mut result: Value = Value::new_object();
             result.set(new_ticker.get(Value::from("symbol")), new_ticker.clone());
             return result.clone();
         };
-        return self.filter_by_array(self.get("bidsasks".into()), Value::from("symbol"), symbols.clone(), Value::Undefined);
+        return self.filter_by_array(self.get("bidsasks".into()), Value::from("symbol"), symbols.clone());
     }
 
     async fn un_watch_bids_asks(&mut self, mut symbols: Value, mut params: Value) -> Value {
@@ -825,7 +825,7 @@ pub trait Aster : Exchange {
             message_hashes.push(Value::from("unsubscribe:bidask:") + market.get(Value::from("symbol")));
             i += 1;
         };
-        return self.watch_multiple(url.clone(), message_hashes.clone(), extend_2(request.clone(), params.clone()), Value::Json(serde_json::Value::Array(vec![r#type.clone().into()])), Value::Undefined).await;
+        return self.watch_multiple(url.clone(), message_hashes.clone(), extend_2(request.clone(), params.clone()), Value::Json(serde_json::Value::Array(vec![r#type.clone().into()]))).await;
     }
 
     fn handle_bid_ask(&mut self, mut client: Value, mut message: Value) -> Value {
@@ -913,7 +913,7 @@ pub trait Aster : Exchange {
             message_hashes.push(Value::from("trade:") + market.get(Value::from("symbol")));
             i += 1;
         };
-        let mut trades: Value = self.watch_multiple(url.clone(), message_hashes.clone(), extend_2(request.clone(), params.clone()), Value::Json(serde_json::Value::Array(vec![r#type.clone().into()])), Value::Undefined).await;
+        let mut trades: Value = self.watch_multiple(url.clone(), message_hashes.clone(), extend_2(request.clone(), params.clone()), Value::Json(serde_json::Value::Array(vec![r#type.clone().into()]))).await;
         if self.get("newUpdates".into()).is_truthy() {
             let mut first: Value = self.safe_value(trades.clone(), Value::from(0), Value::Undefined);
             let mut trade_symbol: Value = self.safe_string(first.clone(), Value::from("symbol"), Value::Undefined);
@@ -950,7 +950,7 @@ pub trait Aster : Exchange {
             message_hashes.push(Value::from("unsubscribe:trade:") + market.get(Value::from("symbol")));
             i += 1;
         };
-        return self.watch_multiple(url.clone(), message_hashes.clone(), extend_2(request.clone(), params.clone()), Value::Json(serde_json::Value::Array(vec![r#type.clone().into()])), Value::Undefined).await;
+        return self.watch_multiple(url.clone(), message_hashes.clone(), extend_2(request.clone(), params.clone()), Value::Json(serde_json::Value::Array(vec![r#type.clone().into()]))).await;
     }
 
     fn handle_trade(&mut self, mut client: Value, mut message: Value) -> Value {
@@ -1144,7 +1144,7 @@ pub trait Aster : Exchange {
             "amount": amount,
             "cost": cost,
             "fee": fee
-        }))).unwrap()), Value::Undefined);
+        }))).unwrap()));
     }
 
     async fn watch_order_book(&mut self, mut symbol: Value, mut limit: Value, mut params: Value) -> Value {
@@ -1190,7 +1190,7 @@ pub trait Aster : Exchange {
             message_hashes.push(Value::from("orderbook:") + market.get(Value::from("symbol")));
             i += 1;
         };
-        let mut orderbook: Value = self.watch_multiple(url.clone(), message_hashes.clone(), extend_2(request.clone(), params.clone()), Value::Json(serde_json::Value::Array(vec![r#type.clone().into()])), Value::Undefined).await;
+        let mut orderbook: Value = self.watch_multiple(url.clone(), message_hashes.clone(), extend_2(request.clone(), params.clone()), Value::Json(serde_json::Value::Array(vec![r#type.clone().into()]))).await;
         return orderbook.limit();
     }
 
@@ -1227,7 +1227,7 @@ pub trait Aster : Exchange {
             message_hashes.push(Value::from("unsubscribe:orderbook:") + market.get(Value::from("symbol")));
             i += 1;
         };
-        return self.watch_multiple(url.clone(), message_hashes.clone(), extend_2(request.clone(), params.clone()), Value::Json(serde_json::Value::Array(vec![r#type.clone().into()])), Value::Undefined).await;
+        return self.watch_multiple(url.clone(), message_hashes.clone(), extend_2(request.clone(), params.clone()), Value::Json(serde_json::Value::Array(vec![r#type.clone().into()]))).await;
     }
 
     fn handle_order_book(&mut self, mut client: Value, mut message: Value) -> Value {
@@ -1266,7 +1266,7 @@ pub trait Aster : Exchange {
         let mut market: Value = self.safe_market(market_id.clone(), Value::Undefined, Value::Undefined, market_type.clone());
         let mut symbol: Value = market.get(Value::from("symbol"));
         if !self.get("orderbooks".into()).contains_key(symbol.clone()) {
-            self.get("orderbooks".into()).set(symbol.clone(), self.order_book(Value::Undefined, Value::Undefined));
+            self.get("orderbooks".into()).set(symbol.clone(), self.order_book());
         };
         let mut orderbook: Value = self.get("orderbooks".into()).get(symbol.clone());
         let mut snapshot: Value = self.parse_order_book(data.clone(), symbol.clone(), timestamp.clone(), Value::from("b"), Value::from("a"), Value::Undefined, Value::Undefined, Value::Undefined);
@@ -1327,7 +1327,7 @@ pub trait Aster : Exchange {
             message_hashes.push(Value::from("ohlcv:") + market.get(Value::from("symbol")) + Value::from(":") + unfied_timeframe.clone());
             i += 1;
         };
-        let (mut symbol, mut timeframe, mut stored) = shift_3(self.watch_multiple(url.clone(), message_hashes.clone(), extend_2(request.clone(), params.clone()), Value::Json(serde_json::Value::Array(vec![r#type.clone().into()])), Value::Undefined).await);
+        let (mut symbol, mut timeframe, mut stored) = shift_3(self.watch_multiple(url.clone(), message_hashes.clone(), extend_2(request.clone(), params.clone()), Value::Json(serde_json::Value::Array(vec![r#type.clone().into()]))).await);
         if self.get("newUpdates".into()).is_truthy() {
             limit = stored.get_limit(symbol.clone(), limit.clone());
         };
@@ -1368,7 +1368,7 @@ pub trait Aster : Exchange {
             message_hashes.push(Value::from("unsubscribe:ohlcv:") + market.get(Value::from("symbol")) + Value::from(":") + unfied_timeframe.clone());
             i += 1;
         };
-        return self.watch_multiple(url.clone(), message_hashes.clone(), extend_2(request.clone(), params.clone()), Value::Json(serde_json::Value::Array(vec![r#type.clone().into()])), Value::Undefined).await;
+        return self.watch_multiple(url.clone(), message_hashes.clone(), extend_2(request.clone(), params.clone()), Value::Json(serde_json::Value::Array(vec![r#type.clone().into()]))).await;
     }
 
     fn handle_ohlcv(&mut self, mut client: Value, mut message: Value) -> Value {
@@ -1410,7 +1410,7 @@ pub trait Aster : Exchange {
         let mut symbol: Value = market.get(Value::from("symbol"));
         let mut kline: Value = self.safe_dict(data.clone(), Value::from("k"), Value::Undefined);
         let mut timeframe_id: Value = self.safe_string(kline.clone(), Value::from("i"), Value::Undefined);
-        let mut timeframe: Value = self.find_timeframe(timeframe_id.clone(), Value::Undefined);
+        let mut timeframe: Value = self.find_timeframe(timeframe_id.clone());
         let mut ohlcvs_by_timeframe: Value = self.safe_value(self.get("ohlcvs".into()), symbol.clone(), Value::Undefined);
         if ohlcvs_by_timeframe.clone().is_nullish() {
             self.get("ohlcvs".into()).set(symbol.clone(), Value::new_object());
@@ -1502,7 +1502,7 @@ pub trait Aster : Exchange {
         };
         let mut message_hash: Value = r#type.clone() + Value::from(":balance");
         let mut message: Value = Value::Undefined;
-        return self.watch(url.clone(), message_hash.clone(), message.clone(), r#type.clone(), Value::Undefined).await;
+        return self.watch(url.clone(), message_hash.clone(), message.clone(), r#type.clone()).await;
     }
 
     fn set_balance_cache(&mut self, mut client: Value, mut r#type: Value) -> Value {
@@ -1633,7 +1633,7 @@ pub trait Aster : Exchange {
         <Self as Aster>::set_positions_cache(self, client.clone());
         let mut message_hashes: Value = Value::new_array();
         let mut message_hash: Value = Value::from("positions");
-        symbols = self.market_symbols(symbols.clone(), Value::from("swap"), true.into(), true.into(), Value::Undefined);
+        symbols = self.market_symbols(symbols.clone(), Value::from("swap"), true.into(), true.into());
         if symbols.clone().is_nullish() {
             message_hashes.push(message_hash.clone());
         } else {
@@ -1651,7 +1651,7 @@ pub trait Aster : Exchange {
             let mut snapshot: Value = client.future(Value::from("fetchPositionsSnapshot")).await;
             return self.filter_by_symbols_since_limit(snapshot.clone(), symbols.clone(), since.clone(), limit.clone(), true.into());
         };
-        let mut new_positions: Value = self.watch_multiple(url.clone(), message_hashes.clone(), Value::Undefined, Value::Json(serde_json::Value::Array(vec![r#type.clone().into()])), Value::Undefined).await;
+        let mut new_positions: Value = self.watch_multiple(url.clone(), message_hashes.clone(), Value::Undefined, Value::Json(serde_json::Value::Array(vec![r#type.clone().into()]))).await;
         if self.get("newUpdates".into()).is_truthy() {
             return new_positions.clone();
         };
@@ -1676,7 +1676,7 @@ pub trait Aster : Exchange {
     }
 
     async fn load_positions_snapshot(&mut self, mut client: Value, mut message_hash: Value) -> Value {
-        let mut positions: Value = self.fetch_positions(Value::Undefined, Value::Undefined).await;
+        let mut positions: Value = self.fetch_positions().await;
         self.set("positions".into(), ArrayCacheBySymbolBySide::new());
         let mut cache: Value = self.get("positions".into());
         let mut i: usize = 0;
@@ -1740,7 +1740,7 @@ pub trait Aster : Exchange {
         let mut i: usize = 0;
         while i < raw_positions.len() {
             let mut raw_position: Value = raw_positions.get(i.into());
-            let mut position: Value = <Self as Aster>::parse_ws_position(self, raw_position.clone());
+            let mut position: Value = <Self as Aster>::parse_ws_position(self, raw_position.clone(), Value::Undefined);
             let mut timestamp: Value = self.safe_integer(message.clone(), Value::from("E"), Value::Undefined);
             position.set("timestamp".into(), timestamp.clone());
             position.set("datetime".into(), self.iso8601(timestamp.clone()));
@@ -1836,7 +1836,7 @@ pub trait Aster : Exchange {
         let mut url: Value = <Self as Aster>::get_private_url(self, r#type.clone());
         let mut client: Value = self.client(url.clone());
         <Self as Aster>::set_balance_cache(self, client.clone(), r#type.clone());
-        let mut orders: Value = self.watch_multiple(url.clone(), Value::Json(serde_json::Value::Array(vec![message_hash.clone().into()])), Value::Undefined, Value::Json(serde_json::Value::Array(vec![r#type.clone().into()])), Value::Undefined).await;
+        let mut orders: Value = self.watch_multiple(url.clone(), Value::Json(serde_json::Value::Array(vec![message_hash.clone().into()])), Value::Undefined, Value::Json(serde_json::Value::Array(vec![r#type.clone().into()]))).await;
         if self.get("newUpdates".into()).is_truthy() {
             limit = orders.get_limit(symbol.clone(), limit.clone());
         };
@@ -1861,7 +1861,7 @@ pub trait Aster : Exchange {
         let mut url: Value = <Self as Aster>::get_private_url(self, r#type.clone());
         let mut client: Value = self.client(url.clone());
         <Self as Aster>::set_balance_cache(self, client.clone(), r#type.clone());
-        let mut trades: Value = self.watch_multiple(url.clone(), Value::Json(serde_json::Value::Array(vec![message_hash.clone().into()])), Value::Undefined, Value::Json(serde_json::Value::Array(vec![r#type.clone().into()])), Value::Undefined).await;
+        let mut trades: Value = self.watch_multiple(url.clone(), Value::Json(serde_json::Value::Array(vec![message_hash.clone().into()])), Value::Undefined, Value::Json(serde_json::Value::Array(vec![r#type.clone().into()]))).await;
         if self.get("newUpdates".into()).is_truthy() {
             limit = trades.get_limit(symbol.clone(), limit.clone());
         };
@@ -1909,7 +1909,7 @@ pub trait Aster : Exchange {
                                 let mut order_fee: Value = fees.get(i.into());
                                 if order_fee.get(Value::from("currency")) == trade_fee.get(Value::from("currency")) {
                                     let mut fee_cost: Value = self.sum(trade_fee.get(Value::from("cost")), order_fee.get(Value::from("cost")));
-                                    order.get(Value::from("fees")).get(i.into()).set("cost".into(), parse_float(self.currency_to_precision(trade_fee.get(Value::from("currency")), fee_cost.clone(), Value::Undefined)));
+                                    order.get(Value::from("fees")).get(i.into()).set("cost".into(), parse_float(self.currency_to_precision(trade_fee.get(Value::from("currency")), fee_cost.clone())));
                                     insert_new_fee_currency = false.into();
                                     break;
                                 };
@@ -1921,7 +1921,7 @@ pub trait Aster : Exchange {
                         } else if fee.clone().is_nonnullish() {
                             if fee.get(Value::from("currency")) == trade_fee.get(Value::from("currency")) {
                                 let mut fee_cost: Value = self.sum(fee.get(Value::from("cost")), trade_fee.get(Value::from("cost")));
-                                order.get(Value::from("fee")).set("cost".into(), parse_float(self.currency_to_precision(trade_fee.get(Value::from("currency")), fee_cost.clone(), Value::Undefined)));
+                                order.get(Value::from("fee")).set("cost".into(), parse_float(self.currency_to_precision(trade_fee.get(Value::from("currency")), fee_cost.clone())));
                             } else if fee.get(Value::from("currency")).is_nullish() {
                                 order.set("fee".into(), trade_fee.clone());
                             } else {
@@ -2073,7 +2073,7 @@ pub trait Aster : Exchange {
             }))).unwrap());
         };
         let mut raw_status: Value = self.safe_string(order.clone(), Value::from("X"), Value::Undefined);
-        let mut status: Value = <Self as Aster>::parse_order_status(self, raw_status.clone());
+        let mut status: Value = self.parse_order_status(raw_status.clone());
         let mut client_order_id: Value = self.safe_string_2(order.clone(), Value::from("C"), Value::from("caid"), Value::Undefined);
         if client_order_id.clone().is_nullish() || client_order_id.len() == 0 {
             client_order_id = self.safe_string(order.clone(), Value::from("c"), Value::Undefined);
@@ -2093,7 +2093,7 @@ pub trait Aster : Exchange {
             "datetime": self.iso8601(timestamp.clone()),
             "lastTradeTimestamp": last_trade_timestamp,
             "lastUpdateTimestamp": last_update_timestamp,
-            "type": <Self as Aster>::parse_order_type(self, self.safe_string_lower(order.clone(), Value::from("o"), Value::Undefined)),
+            "type": self.parse_order_type(self.safe_string_lower(order.clone(), Value::from("o"), Value::Undefined)),
             "timeInForce": time_in_force,
             "postOnly": Value::Undefined,
             "reduceOnly": self.safe_bool(order.clone(), Value::from("R"), Value::Undefined),
@@ -2109,7 +2109,7 @@ pub trait Aster : Exchange {
             "status": status,
             "fee": fee,
             "trades": Value::Undefined
-        }))).unwrap()), Value::Undefined);
+        }))).unwrap()));
     }
 
     fn get_market_from_order(&mut self, mut client: Value, mut order: Value) -> Value {
@@ -2240,10 +2240,10 @@ pub trait Aster : Exchange {
                     "sapiprivateDeleteV1order" => self.request("v1/order".into(), "sapiPrivate".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "sapiprivateDeleteV1allopenorders" => self.request("v1/allOpenOrders".into(), "sapiPrivate".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "sapiprivateDeleteV1listenkey" => self.request("v1/listenKey".into(), "sapiPrivate".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    _ => unimplemented!(),
+                    _ => panic!("Unknown API method: {}", m),
                 }
             },
-            _ => unimplemented!()
+            _ => panic!("dispatch: method must be a string, got {:?}", method)
         }
     }
 }

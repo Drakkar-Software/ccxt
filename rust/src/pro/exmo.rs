@@ -378,7 +378,7 @@ pub trait Exmo : Exchange {
     async fn watch_balance(&mut self, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         <Self as Exmo>::authenticate(self, params.clone()).await;
-        let (mut r#type, mut query) = shift_2(self.handle_market_type_and_params(Value::from("watchBalance"), Value::Undefined, params.clone(), Value::Undefined));
+        let (mut r#type, mut query) = shift_2(self.handle_market_type_and_params(Value::from("watchBalance"), Value::Undefined, params.clone()));
         let mut message_hash: Value = Value::from("balance:") + r#type.clone();
         let mut url: Value = self.get("urls".into()).get(Value::from("api")).get(Value::from("ws")).get(r#type.clone());
         let mut subscribe: Value = Value::Json(normalize(&Value::Json(json!({
@@ -552,7 +552,7 @@ pub trait Exmo : Exchange {
     async fn watch_tickers(&mut self, mut symbols: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        symbols = self.market_symbols(symbols.clone(), Value::Undefined, false.into(), Value::Undefined, Value::Undefined);
+        symbols = self.market_symbols(symbols.clone(), Value::Undefined, false.into());
         let mut message_hashes: Value = Value::new_array();
         let mut args: Value = Value::new_array();
         let mut i: usize = 0;
@@ -570,7 +570,7 @@ pub trait Exmo : Exchange {
         }))).unwrap());
         let mut request: Value = self.deep_extend_2(message.clone(), params.clone());
         self.watch_multiple(url.clone(), message_hashes.clone(), request.clone(), message_hashes.clone(), request.clone()).await;
-        return self.filter_by_array(self.get("tickers".into()), Value::from("symbol"), symbols.clone(), Value::Undefined);
+        return self.filter_by_array(self.get("tickers".into()), Value::from("symbol"), symbols.clone());
     }
 
     fn handle_ticker(&mut self, mut client: Value, mut message: Value) -> Value {
@@ -668,7 +668,7 @@ pub trait Exmo : Exchange {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
         <Self as Exmo>::authenticate(self, params.clone()).await;
-        let (mut r#type, mut query) = shift_2(self.handle_market_type_and_params(Value::from("watchMyTrades"), Value::Undefined, params.clone(), Value::Undefined));
+        let (mut r#type, mut query) = shift_2(self.handle_market_type_and_params(Value::from("watchMyTrades"), Value::Undefined, params.clone()));
         let mut url: Value = self.get("urls".into()).get(Value::from("api")).get(Value::from("ws")).get(r#type.clone());
         let mut message_hash: Value = Value::Undefined;
         if symbol.clone().is_nullish() {
@@ -766,7 +766,7 @@ pub trait Exmo : Exchange {
             let mut raw_trade: Value = self.safe_value(message.clone(), Value::from("data"), Value::new_object());
             raw_trades = Value::Json(serde_json::Value::Array(vec![raw_trade.clone().into()]));
         };
-        let mut trades: Value = self.parse_trades(raw_trades.clone(), Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined);
+        let mut trades: Value = self.parse_trades(raw_trades.clone());
         let mut symbols: Value = Value::new_object();
         let mut j: usize = 0;
         while j < trades.len() {
@@ -801,7 +801,7 @@ pub trait Exmo : Exchange {
             "topics": Value::Json(serde_json::Value::Array(vec![Value::from("spot/order_book_updates:") + market.get(Value::from("id")).into()]))
         }))).unwrap());
         let mut request: Value = self.deep_extend_2(subscribe.clone(), params.clone());
-        let mut orderbook: Value = self.watch(url.clone(), message_hash.clone(), request.clone(), message_hash.clone(), Value::Undefined).await;
+        let mut orderbook: Value = self.watch(url.clone(), message_hash.clone(), request.clone(), message_hash.clone()).await;
         return orderbook.limit();
     }
 
@@ -847,7 +847,7 @@ pub trait Exmo : Exchange {
         let mut message_hash: Value = Value::from("orderbook:") + symbol.clone();
         let mut timestamp: Value = self.safe_integer(message.clone(), Value::from("ts"), Value::Undefined);
         if !self.get("orderbooks".into()).contains_key(symbol.clone()) {
-            self.get("orderbooks".into()).set(symbol.clone(), self.order_book(Value::new_object(), Value::Undefined));
+            self.get("orderbooks".into()).set(symbol.clone(), self.order_book(Value::new_object()));
         };
         let mut orderbook: Value = self.get("orderbooks".into()).get(symbol.clone());
         let mut event: Value = self.safe_string(message.clone(), Value::from("event"), Value::Undefined);
@@ -885,7 +885,7 @@ pub trait Exmo : Exchange {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
         <Self as Exmo>::authenticate(self, params.clone()).await;
-        let (mut r#type, mut query) = shift_2(self.handle_market_type_and_params(Value::from("watchOrders"), Value::Undefined, params.clone(), Value::Undefined));
+        let (mut r#type, mut query) = shift_2(self.handle_market_type_and_params(Value::from("watchOrders"), Value::Undefined, params.clone()));
         let mut url: Value = self.get("urls".into()).get(Value::from("api")).get(Value::from("ws")).get(r#type.clone());
         let mut message_hash: Value = Value::Undefined;
         if symbol.clone().is_nullish() {
@@ -1017,7 +1017,7 @@ pub trait Exmo : Exchange {
         let mut id: Value = self.safe_string(order.clone(), Value::from("order_id"), Value::Undefined);
         let mut timestamp: Value = self.safe_timestamp(order.clone(), Value::from("created"), Value::Undefined);
         let mut order_type: Value = self.safe_string(order.clone(), Value::from("type"), Value::Undefined);
-        let mut side: Value = <Self as Exmo>::parse_side(self, order_type.clone());
+        let mut side: Value = self.parse_side(order_type.clone());
         let mut market_id: Value = self.safe_string(order.clone(), Value::from("pair"), Value::Undefined);
         market = self.safe_market(market_id.clone(), market.clone(), Value::Undefined, Value::Undefined);
         let mut symbol: Value = market.get(Value::from("symbol"));
@@ -1044,7 +1044,7 @@ pub trait Exmo : Exchange {
             "datetime": self.iso8601(timestamp.clone()),
             "timestamp": timestamp,
             "lastTradeTimestamp": Value::Undefined,
-            "status": <Self as Exmo>::parse_status(self, self.safe_string(order.clone(), Value::from("status"), Value::Undefined)),
+            "status": self.parse_status(self.safe_string(order.clone(), Value::from("status"), Value::Undefined)),
             "symbol": symbol,
             "type": r#type,
             "timeInForce": Value::Undefined,
@@ -1067,7 +1067,7 @@ pub trait Exmo : Exchange {
     fn parse_ws_trade(&self, mut trade: Value, mut market: Value) -> Value {
         let mut id: Value = self.safe_string(trade.clone(), Value::from("order_id"), Value::Undefined);
         let mut order_type: Value = self.safe_string(trade.clone(), Value::from("type"), Value::Undefined);
-        let mut side: Value = <Self as Exmo>::parse_side(self, order_type.clone());
+        let mut side: Value = self.parse_side(order_type.clone());
         let mut market_id: Value = self.safe_string(trade.clone(), Value::from("pair"), Value::Undefined);
         market = self.safe_market(market_id.clone(), market.clone(), Value::Undefined, Value::Undefined);
         let mut symbol: Value = market.get(Value::from("symbol"));
@@ -1186,13 +1186,13 @@ pub trait Exmo : Exchange {
     async fn authenticate(&mut self, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         let mut message_hash: Value = Value::from("authenticated");
-        let (mut r#type, mut query) = shift_2(self.handle_market_type_and_params(Value::from("authenticate"), Value::Undefined, params.clone(), Value::Undefined));
+        let (mut r#type, mut query) = shift_2(self.handle_market_type_and_params(Value::from("authenticate"), Value::Undefined, params.clone()));
         let mut url: Value = self.get("urls".into()).get(Value::from("api")).get(Value::from("ws")).get(r#type.clone());
         let mut client: Value = self.client(url.clone());
         let mut future: Value = self.safe_value(client.get(subscriptions.clone()), message_hash.clone(), Value::Undefined);
         if future.clone().is_nullish() {
             let mut time: Value = self.milliseconds();
-            self.check_required_credentials(Value::Undefined);
+            self.check_required_credentials();
             let mut request_id: Value = <Self as Exmo>::request_id(self);
             let mut sign_data: Value = self.get("apiKey".into()) + time.to_string();
             let mut sign: Value = self.hmac(self.encode(sign_data.clone()), self.encode(self.get("secret".into())), sha512().clone(), Value::from("base64"));
@@ -1204,7 +1204,7 @@ pub trait Exmo : Exchange {
                 "nonce": time
             }))).unwrap());
             let mut message: Value = extend_2(request.clone(), query.clone());
-            future = self.watch(url.clone(), message_hash.clone(), message.clone(), message_hash.clone(), Value::Undefined).await;
+            future = self.watch(url.clone(), message_hash.clone(), message.clone(), message_hash.clone()).await;
             client.get(subscriptions.clone()).set(message_hash.clone(), future.clone());
         };
         return future.clone();
@@ -1266,10 +1266,10 @@ pub trait Exmo : Exchange {
                     "privatePostMarginusertradelist" => self.request("margin/user/trade/list".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privatePostMargintrades" => self.request("margin/trades".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privatePostMarginliquidationfeed" => self.request("margin/liquidation/feed".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    _ => unimplemented!(),
+                    _ => panic!("Unknown API method: {}", m),
                 }
             },
-            _ => unimplemented!()
+            _ => panic!("dispatch: method must be a string, got {:?}", method)
         }
     }
 }

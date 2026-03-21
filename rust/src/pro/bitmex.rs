@@ -477,7 +477,7 @@ pub trait Bitmex : Exchange {
     async fn watch_tickers(&mut self, mut symbols: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        symbols = self.market_symbols(symbols.clone(), Value::Undefined, true.into(), Value::Undefined, Value::Undefined);
+        symbols = self.market_symbols(symbols.clone(), Value::Undefined, true.into());
         let mut name: Value = Value::from("instrument");
         let mut url: Value = self.get("urls".into()).get(Value::from("api")).get(Value::from("ws"));
         let mut message_hashes: Value = Value::new_array();
@@ -501,13 +501,13 @@ pub trait Bitmex : Exchange {
             "op": "subscribe",
             "args": raw_subscriptions
         }))).unwrap());
-        let mut ticker: Value = self.watch_multiple(url.clone(), message_hashes.clone(), extend_2(request.clone(), params.clone()), raw_subscriptions.clone(), Value::Undefined).await;
+        let mut ticker: Value = self.watch_multiple(url.clone(), message_hashes.clone(), extend_2(request.clone(), params.clone()), raw_subscriptions.clone()).await;
         if self.get("newUpdates".into()).is_truthy() {
             let mut result: Value = Value::new_object();
             result.set(ticker.get(Value::from("symbol")), ticker.clone());
             return result.clone();
         };
-        return self.filter_by_array(self.get("tickers".into()), Value::from("symbol"), symbols.clone(), Value::Undefined);
+        return self.filter_by_array(self.get("tickers".into()), Value::from("symbol"), symbols.clone());
     }
 
     fn handle_ticker(&mut self, mut client: Value, mut message: Value) -> Value {
@@ -745,9 +745,9 @@ pub trait Bitmex : Exchange {
             let mut market_id: Value = self.safe_string(update.clone(), Value::from("symbol"), Value::Undefined);
             let mut symbol: Value = self.safe_symbol(market_id.clone(), Value::Undefined, Value::Undefined, Value::Undefined);
             if !self.get("tickers".into()).contains_key(symbol.clone()) {
-                self.get("tickers".into()).set(symbol.clone(), self.parse_ticker(Value::new_object(), Value::Undefined));
+                self.get("tickers".into()).set(symbol.clone(), self.parse_ticker(Value::new_object()));
             };
-            let mut updated_ticker: Value = self.parse_ticker(update.clone(), Value::Undefined);
+            let mut updated_ticker: Value = self.parse_ticker(update.clone());
             let mut full_parsed_ticker: Value = self.deep_extend_2(self.get("tickers".into()).get(symbol.clone()), updated_ticker.clone());
             tickers.set(symbol.clone(), full_parsed_ticker.clone());
             self.get("tickers".into()).set(symbol.clone(), full_parsed_ticker.clone());
@@ -767,7 +767,7 @@ pub trait Bitmex : Exchange {
     async fn watch_liquidations_for_symbols(&mut self, mut symbols: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        symbols = self.market_symbols(symbols.clone(), Value::Undefined, true.into(), true.into(), Value::Undefined);
+        symbols = self.market_symbols(symbols.clone(), Value::Undefined, true.into(), true.into());
         let mut message_hashes: Value = Value::new_array();
         let mut subscription_hashes: Value = Value::new_array();
         if self.is_empty(symbols.clone()).is_truthy() {
@@ -788,7 +788,7 @@ pub trait Bitmex : Exchange {
             "op": "subscribe",
             "args": subscription_hashes
         }))).unwrap());
-        let mut new_liquidations: Value = self.watch_multiple(url.clone(), message_hashes.clone(), self.deep_extend_2(request.clone(), params.clone()), subscription_hashes.clone(), Value::Undefined).await;
+        let mut new_liquidations: Value = self.watch_multiple(url.clone(), message_hashes.clone(), self.deep_extend_2(request.clone(), params.clone()), subscription_hashes.clone()).await;
         if self.get("newUpdates".into()).is_truthy() {
             return new_liquidations.clone();
         };
@@ -831,7 +831,7 @@ pub trait Bitmex : Exchange {
         let mut i: usize = 0;
         while i < raw_liquidations.len() {
             let mut raw_liquidation: Value = raw_liquidations.get(i.into());
-            let mut liquidation: Value = self.parse_liquidation(raw_liquidation.clone(), Value::Undefined);
+            let mut liquidation: Value = self.parse_liquidation(raw_liquidation.clone());
             cache.append(liquidation.clone());
             new_liquidations.push(liquidation.clone());
             i += 1;
@@ -851,14 +851,14 @@ pub trait Bitmex : Exchange {
     async fn watch_balance(&mut self, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        <Self as Bitmex>::authenticate(self).await;
+        <Self as Bitmex>::authenticate(self, Value::Undefined).await;
         let mut message_hash: Value = Value::from("margin");
         let mut url: Value = self.get("urls".into()).get(Value::from("api")).get(Value::from("ws"));
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
             "op": "subscribe",
             "args": Value::Json(serde_json::Value::Array(vec![message_hash.clone().into()]))
         }))).unwrap());
-        return self.watch(url.clone(), message_hash.clone(), extend_2(request.clone(), params.clone()), message_hash.clone(), Value::Undefined).await;
+        return self.watch(url.clone(), message_hash.clone(), extend_2(request.clone(), params.clone()), message_hash.clone()).await;
     }
 
     fn handle_balance(&mut self, mut client: Value, mut message: Value) -> Value {
@@ -1038,7 +1038,7 @@ pub trait Bitmex : Exchange {
             let mut market: Value = self.safe_market(market_id.clone(), Value::Undefined, Value::Undefined, Value::Undefined);
             let mut symbol: Value = market.get(Value::from("symbol"));
             let mut message_hash: Value = table.clone() + Value::from(":") + symbol.clone();
-            let mut trades: Value = self.parse_trades(data_by_market_ids.get(market_id.clone()), market.clone(), Value::Undefined, Value::Undefined, Value::Undefined);
+            let mut trades: Value = self.parse_trades(data_by_market_ids.get(market_id.clone()), market.clone());
             let mut stored: Value = self.safe_value(self.get("trades".into()), symbol.clone(), Value::Undefined);
             if stored.clone().is_nullish() {
                 let mut limit: Value = self.safe_integer(self.get("options".into()), Value::from("tradesLimit"), Value::from(1000));
@@ -1069,7 +1069,7 @@ pub trait Bitmex : Exchange {
         let mut future: Value = client.reusable_future(message_hash.clone());
         let mut authenticated: Value = self.safe_value(client.get(subscriptions.clone()), message_hash.clone(), Value::Undefined);
         if authenticated.clone().is_nullish() {
-            self.check_required_credentials(Value::Undefined);
+            self.check_required_credentials();
             let mut timestamp: Value = self.milliseconds();
             let mut payload: Value = Value::from("GET") + Value::from("/realtime") + timestamp.to_string();
             let mut signature: Value = self.hmac(self.encode(payload.clone()), self.encode(self.get("secret".into())), sha256().clone(), Value::Undefined);
@@ -1078,7 +1078,7 @@ pub trait Bitmex : Exchange {
                 "args": Value::Json(serde_json::Value::Array(vec![self.get("apiKey".into()).into(), timestamp.clone().into(), signature.clone().into()]))
             }))).unwrap());
             let mut message: Value = extend_2(request.clone(), params.clone());
-            self.watch(url.clone(), message_hash.clone(), message.clone(), message_hash.clone(), Value::Undefined);
+            self.watch(url.clone(), message_hash.clone(), message.clone(), message_hash.clone());
         };
         return future.clone();
     }
@@ -1103,7 +1103,7 @@ pub trait Bitmex : Exchange {
     async fn watch_positions(&mut self, mut symbols: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        <Self as Bitmex>::authenticate(self).await;
+        <Self as Bitmex>::authenticate(self, Value::Undefined).await;
         let mut subscription_hash: Value = Value::from("position");
         let mut message_hash: Value = Value::from("positions");
         if !self.is_empty(symbols.clone()).is_truthy() {
@@ -1114,7 +1114,7 @@ pub trait Bitmex : Exchange {
             "op": "subscribe",
             "args": Value::Json(serde_json::Value::Array(vec![subscription_hash.clone().into()]))
         }))).unwrap());
-        let mut new_positions: Value = self.watch(url.clone(), message_hash.clone(), request.clone(), subscription_hash.clone(), Value::Undefined).await;
+        let mut new_positions: Value = self.watch(url.clone(), message_hash.clone(), request.clone(), subscription_hash.clone()).await;
         if self.get("newUpdates".into()).is_truthy() {
             return new_positions.clone();
         };
@@ -1304,7 +1304,7 @@ pub trait Bitmex : Exchange {
     async fn watch_orders(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        <Self as Bitmex>::authenticate(self).await;
+        <Self as Bitmex>::authenticate(self, Value::Undefined).await;
         let mut name: Value = Value::from("order");
         let mut subscription_hash: Value = name.clone();
         let mut message_hash: Value = name.clone();
@@ -1317,7 +1317,7 @@ pub trait Bitmex : Exchange {
             "op": "subscribe",
             "args": Value::Json(serde_json::Value::Array(vec![subscription_hash.clone().into()]))
         }))).unwrap());
-        let mut orders: Value = self.watch(url.clone(), message_hash.clone(), request.clone(), subscription_hash.clone(), Value::Undefined).await;
+        let mut orders: Value = self.watch(url.clone(), message_hash.clone(), request.clone(), subscription_hash.clone()).await;
         if self.get("newUpdates".into()).is_truthy() {
             limit = orders.get_limit(symbol.clone(), limit.clone());
         };
@@ -1494,7 +1494,7 @@ pub trait Bitmex : Exchange {
                 if previous_order.clone().is_nonnullish() {
                     raw_order = extend_2(previous_order.get(Value::from("info")), current_order.clone());
                 };
-                let mut order: Value = self.parse_order(raw_order.clone(), Value::Undefined);
+                let mut order: Value = self.parse_order(raw_order.clone());
                 stored.append(order.clone());
                 let mut symbol: Value = order.get(Value::from("symbol"));
                 symbols.set(symbol.clone(), true.into());
@@ -1515,7 +1515,7 @@ pub trait Bitmex : Exchange {
     async fn watch_my_trades(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        <Self as Bitmex>::authenticate(self).await;
+        <Self as Bitmex>::authenticate(self, Value::Undefined).await;
         let mut name: Value = Value::from("execution");
         let mut subscription_hash: Value = name.clone();
         let mut message_hash: Value = name.clone();
@@ -1528,7 +1528,7 @@ pub trait Bitmex : Exchange {
             "op": "subscribe",
             "args": Value::Json(serde_json::Value::Array(vec![subscription_hash.clone().into()]))
         }))).unwrap());
-        let mut trades: Value = self.watch(url.clone(), message_hash.clone(), request.clone(), subscription_hash.clone(), Value::Undefined).await;
+        let mut trades: Value = self.watch(url.clone(), message_hash.clone(), request.clone(), subscription_hash.clone()).await;
         if self.get("newUpdates".into()).is_truthy() {
             limit = trades.get_limit(symbol.clone(), limit.clone());
         };
@@ -1597,7 +1597,7 @@ pub trait Bitmex : Exchange {
         let mut data: Value = self.safe_value(message.clone(), Value::from("data"), Value::new_array());
         let mut data_by_exec_type: Value = self.group_by(data.clone(), Value::from("execType"));
         let mut raw_trades: Value = self.safe_value(data_by_exec_type.clone(), Value::from("Trade"), Value::new_array());
-        let mut trades: Value = self.parse_trades(raw_trades.clone(), Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined);
+        let mut trades: Value = self.parse_trades(raw_trades.clone());
         if self.get("myTrades".into()).is_nullish() {
             let mut limit: Value = self.safe_integer(self.get("options".into()), Value::from("tradesLimit"), Value::from(1000));
             self.set("my_trades".into(), ArrayCacheBySymbolById::new(limit));
@@ -1643,7 +1643,7 @@ pub trait Bitmex : Exchange {
             panic!(r###"ExchangeError::new(self.get("id".into()) + Value::from(" watchOrderBookForSymbols limit argument must be undefined (L2), 25 (L2) or 10 (L3)"))"###);
         };
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        symbols = self.market_symbols(symbols.clone(), Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined);
+        symbols = self.market_symbols(symbols.clone());
         let mut topics: Value = Value::new_array();
         let mut message_hashes: Value = Value::new_array();
         let mut i: usize = 0;
@@ -1661,14 +1661,14 @@ pub trait Bitmex : Exchange {
             "op": "subscribe",
             "args": topics
         }))).unwrap());
-        let mut orderbook: Value = self.watch_multiple(url.clone(), message_hashes.clone(), self.deep_extend_2(request.clone(), params.clone()), topics.clone(), Value::Undefined).await;
+        let mut orderbook: Value = self.watch_multiple(url.clone(), message_hashes.clone(), self.deep_extend_2(request.clone(), params.clone()), topics.clone()).await;
         return orderbook.limit();
     }
 
     async fn watch_trades_for_symbols(&mut self, mut symbols: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        symbols = self.market_symbols(symbols.clone(), Value::Undefined, false.into(), Value::Undefined, Value::Undefined);
+        symbols = self.market_symbols(symbols.clone(), Value::Undefined, false.into());
         let mut table: Value = Value::from("trade");
         let mut topics: Value = Value::new_array();
         let mut message_hashes: Value = Value::new_array();
@@ -1687,7 +1687,7 @@ pub trait Bitmex : Exchange {
             "op": "subscribe",
             "args": topics
         }))).unwrap());
-        let mut trades: Value = self.watch_multiple(url.clone(), message_hashes.clone(), self.deep_extend_2(request.clone(), params.clone()), topics.clone(), Value::Undefined).await;
+        let mut trades: Value = self.watch_multiple(url.clone(), message_hashes.clone(), self.deep_extend_2(request.clone(), params.clone()), topics.clone()).await;
         if self.get("newUpdates".into()).is_truthy() {
             let mut first: Value = self.safe_value(trades.clone(), Value::from(0), Value::Undefined);
             let mut trade_symbol: Value = self.safe_string(first.clone(), Value::from("symbol"), Value::Undefined);
@@ -1709,7 +1709,7 @@ pub trait Bitmex : Exchange {
             "op": "subscribe",
             "args": Value::Json(serde_json::Value::Array(vec![message_hash.clone().into()]))
         }))).unwrap());
-        let mut ohlcv: Value = self.watch(url.clone(), message_hash.clone(), extend_2(request.clone(), params.clone()), message_hash.clone(), Value::Undefined).await;
+        let mut ohlcv: Value = self.watch(url.clone(), message_hash.clone(), extend_2(request.clone(), params.clone()), message_hash.clone()).await;
         if self.get("newUpdates".into()).is_truthy() {
             limit = ohlcv.get_limit(symbol.clone(), limit.clone());
         };
@@ -1784,7 +1784,7 @@ pub trait Bitmex : Exchange {
         //
         let mut table: Value = self.safe_string(message.clone(), Value::from("table"), Value::Undefined);
         let mut interval: Value = table.replace(Value::from("tradeBin"), Value::from(""));
-        let mut timeframe: Value = self.find_timeframe(interval.clone(), Value::Undefined);
+        let mut timeframe: Value = self.find_timeframe(interval.clone());
         let mut duration: Value = self.parse_timeframe(timeframe.clone());
         let mut candles: Value = self.safe_value(message.clone(), Value::from("data"), Value::new_array());
         let mut results: Value = Value::new_object();
@@ -1822,7 +1822,7 @@ pub trait Bitmex : Exchange {
         self.load_markets(Value::Undefined, Value::Undefined).await;
         let mut event: Value = Value::from("heartbeat");
         let mut url: Value = self.get("urls".into()).get(Value::from("api")).get(Value::from("ws"));
-        return self.watch(url.clone(), event.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+        return self.watch(url.clone(), event.clone()).await;
     }
 
     fn handle_order_book(&mut self, mut client: Value, mut message: Value) -> Value {
@@ -1893,7 +1893,7 @@ pub trait Bitmex : Exchange {
             let mut market: Value = self.safe_market(market_id.clone(), Value::Undefined, Value::Undefined, Value::Undefined);
             let mut symbol: Value = market.get(Value::from("symbol"));
             if table.clone() == Value::from("orderBookL2") {
-                self.get("orderbooks".into()).set(symbol.clone(), self.indexed_order_book(Value::Undefined, Value::Undefined));
+                self.get("orderbooks".into()).set(symbol.clone(), self.indexed_order_book());
             } else if table.clone() == Value::from("orderBookL2_25") {
                 self.get("orderbooks".into()).set(symbol.clone(), self.indexed_order_book(Value::new_object(), Value::from(25)));
             } else if table.clone() == Value::from("orderBook10") {
@@ -1904,7 +1904,7 @@ pub trait Bitmex : Exchange {
             let mut i: usize = 0;
             while i < data.len() {
                 let mut price: Value = self.safe_float(data.get(i.into()), Value::from("price"), Value::Undefined);
-                let mut size: Value = <Self as Bitmex>::convert_from_raw_quantity(self, symbol.clone(), self.safe_string(data.get(i.into()), Value::from("size"), Value::Undefined), Value::Undefined);
+                let mut size: Value = self.convert_from_raw_quantity(symbol.clone(), self.safe_string(data.get(i.into()), Value::from("size"), Value::Undefined));
                 let mut id: Value = self.safe_string(data.get(i.into()), Value::from("id"), Value::Undefined);
                 let mut side: Value = self.safe_string(data.get(i.into()), Value::from("side"), Value::Undefined);
                 side = if side.clone() == Value::from("Buy") { Value::from("bids") } else { Value::from("asks") };
@@ -1934,7 +1934,7 @@ pub trait Bitmex : Exchange {
                 let mut symbol: Value = market.get(Value::from("symbol"));
                 let mut orderbook: Value = self.get("orderbooks".into()).get(symbol.clone());
                 let mut price: Value = self.safe_number(data.get(i.into()), Value::from("price"), Value::Undefined);
-                let mut size: Value = if action.clone() == Value::from("delete") { Value::from(0) } else { <Self as Bitmex>::convert_from_raw_quantity(self, symbol.clone(), self.safe_string(data.get(i.into()), Value::from("size"), Value::from("0")), Value::Undefined) };
+                let mut size: Value = if action.clone() == Value::from("delete") { Value::from(0) } else { self.convert_from_raw_quantity(symbol.clone(), self.safe_string(data.get(i.into()), Value::from("size"), Value::from("0"))) };
                 let mut id: Value = self.safe_string(data.get(i.into()), Value::from("id"), Value::Undefined);
                 let mut side: Value = self.safe_string(data.get(i.into()), Value::from("side"), Value::Undefined);
                 side = if side.clone() == Value::from("Buy") { Value::from("bids") } else { Value::from("asks") };
@@ -2193,10 +2193,10 @@ pub trait Bitmex : Exchange {
                     "privateDeleteOrder" => self.request("order".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privateDeleteOrderall" => self.request("order/all".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privateDeleteUserunstakingrequests" => self.request("user/unstakingRequests".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    _ => unimplemented!(),
+                    _ => panic!("Unknown API method: {}", m),
                 }
             },
-            _ => unimplemented!()
+            _ => panic!("dispatch: method must be a string, got {:?}", method)
         }
     }
 }

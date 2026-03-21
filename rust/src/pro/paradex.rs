@@ -406,7 +406,7 @@ pub trait Paradex : Exchange {
         let mut future: Value = client.reusable_future(Value::from("authenticated"));
         let mut authenticated: Value = self.safe_value(client.get(subscriptions.clone()), message_hash.clone(), Value::Undefined);
         if authenticated.clone().is_nullish() {
-            let mut token: Value = <Self as Paradex>::authenticate_rest(self, Value::Undefined).await;
+            let mut token: Value = self.authenticate_rest().await;
             let mut request: Value = Value::Json(normalize(&Value::Json(json!({
                 "jsonrpc": "2.0",
                 "id": <Self as Paradex>::request_id(self),
@@ -415,7 +415,7 @@ pub trait Paradex : Exchange {
                     "bearer": token
                 }))).unwrap())
             }))).unwrap());
-            self.watch(url.clone(), message_hash.clone(), self.deep_extend_2(request.clone(), params.clone()), message_hash.clone(), Value::Undefined);
+            self.watch(url.clone(), message_hash.clone(), self.deep_extend_2(request.clone(), params.clone()), message_hash.clone());
         };
         return future.clone();
     }
@@ -457,7 +457,7 @@ pub trait Paradex : Exchange {
                 "channel": message_hash
             }))).unwrap())
         }))).unwrap());
-        let mut trades: Value = self.watch(url.clone(), message_hash.clone(), self.deep_extend_2(request.clone(), params.clone()), message_hash.clone(), Value::Undefined).await;
+        let mut trades: Value = self.watch(url.clone(), message_hash.clone(), self.deep_extend_2(request.clone(), params.clone()), message_hash.clone()).await;
         if self.get("newUpdates".into()).is_truthy() {
             limit = trades.get_limit(symbol.clone(), limit.clone());
         };
@@ -485,7 +485,7 @@ pub trait Paradex : Exchange {
         //
         let mut params: Value = self.safe_dict(message.clone(), Value::from("params"), Value::new_object());
         let mut data: Value = self.safe_dict(params.clone(), Value::from("data"), Value::new_object());
-        let mut parsed_trade: Value = self.parse_trade(data.clone(), Value::Undefined);
+        let mut parsed_trade: Value = self.parse_trade(data.clone());
         let mut symbol: Value = parsed_trade.get(Value::from("symbol"));
         let mut message_hash: Value = self.safe_string(params.clone(), Value::from("channel"), Value::Undefined);
         let mut stored: Value = self.safe_value(self.get("trades".into()), symbol.clone(), Value::Undefined);
@@ -511,7 +511,7 @@ pub trait Paradex : Exchange {
                 "channel": message_hash
             }))).unwrap())
         }))).unwrap());
-        let mut orderbook: Value = self.watch(url.clone(), message_hash.clone(), self.deep_extend_2(request.clone(), params.clone()), message_hash.clone(), Value::Undefined).await;
+        let mut orderbook: Value = self.watch(url.clone(), message_hash.clone(), self.deep_extend_2(request.clone(), params.clone()), message_hash.clone()).await;
         return orderbook.limit();
     }
 
@@ -552,7 +552,7 @@ pub trait Paradex : Exchange {
         let mut timestamp: Value = self.safe_integer(data.clone(), Value::from("last_updated_at"), Value::Undefined);
         let mut symbol: Value = market.get(Value::from("symbol"));
         if !self.get("orderbooks".into()).contains_key(symbol.clone()) {
-            self.get("orderbooks".into()).set(symbol.clone(), self.order_book(Value::Undefined, Value::Undefined));
+            self.get("orderbooks".into()).set(symbol.clone(), self.order_book());
         };
         let mut orderbook_data: Value = Value::Json(normalize(&Value::Json(json!({
             "bids": Value::new_array(),
@@ -595,13 +595,13 @@ pub trait Paradex : Exchange {
             }))).unwrap())
         }))).unwrap());
         let mut message_hash: Value = channel.clone() + Value::from(".") + symbol.clone();
-        return self.watch(url.clone(), message_hash.clone(), self.deep_extend_2(request.clone(), params.clone()), message_hash.clone(), Value::Undefined).await;
+        return self.watch(url.clone(), message_hash.clone(), self.deep_extend_2(request.clone(), params.clone()), message_hash.clone()).await;
     }
 
     async fn watch_tickers(&mut self, mut symbols: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        symbols = self.market_symbols(symbols.clone(), Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined);
+        symbols = self.market_symbols(symbols.clone());
         let mut channel: Value = Value::from("markets_summary");
         let mut url: Value = self.get("urls".into()).get(Value::from("api")).get(Value::from("ws"));
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
@@ -622,19 +622,19 @@ pub trait Paradex : Exchange {
         } else {
             message_hashes.push(channel.clone());
         };
-        let mut new_tickers: Value = self.watch_multiple(url.clone(), message_hashes.clone(), self.deep_extend_2(request.clone(), params.clone()), message_hashes.clone(), Value::Undefined).await;
+        let mut new_tickers: Value = self.watch_multiple(url.clone(), message_hashes.clone(), self.deep_extend_2(request.clone(), params.clone()), message_hashes.clone()).await;
         if self.get("newUpdates".into()).is_truthy() {
             let mut result: Value = Value::new_object();
             result.set(new_tickers.get(Value::from("symbol")), new_tickers.clone());
             return result.clone();
         };
-        return self.filter_by_array(self.get("tickers".into()), Value::from("symbol"), symbols.clone(), Value::Undefined);
+        return self.filter_by_array(self.get("tickers".into()), Value::from("symbol"), symbols.clone());
     }
 
     async fn watch_orders(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        <Self as Paradex>::authenticate(self).await;
+        <Self as Paradex>::authenticate(self, Value::Undefined).await;
         let mut message_hash: Value = Value::from("orders");
         let mut channel: Value = Value::from("orders.");
         if symbol.clone().is_nonnullish() {
@@ -653,7 +653,7 @@ pub trait Paradex : Exchange {
                 "channel": channel
             }))).unwrap())
         }))).unwrap());
-        let mut orders: Value = self.watch(url.clone(), message_hash.clone(), self.deep_extend_2(request.clone(), params.clone()), channel.clone(), Value::Undefined).await;
+        let mut orders: Value = self.watch(url.clone(), message_hash.clone(), self.deep_extend_2(request.clone(), params.clone()), channel.clone()).await;
         if self.get("newUpdates".into()).is_truthy() {
             limit = orders.get_limit(symbol.clone(), limit.clone());
         };
@@ -690,7 +690,7 @@ pub trait Paradex : Exchange {
         //
         let mut params: Value = self.safe_dict(message.clone(), Value::from("params"), Value::new_object());
         let mut data: Value = self.safe_dict(params.clone(), Value::from("data"), Value::new_object());
-        let mut parsed: Value = self.parse_order(data.clone(), Value::Undefined);
+        let mut parsed: Value = self.parse_order(data.clone());
         let mut symbol: Value = self.safe_string(parsed.clone(), Value::from("symbol"), Value::Undefined);
         if self.get("orders".into()).is_nullish() {
             let mut limit: Value = self.safe_integer(self.get("options".into()), Value::from("ordersLimit"), Value::from(1000));
@@ -898,10 +898,10 @@ pub trait Paradex : Exchange {
                     "privateDeleteOrdersbyclientidclientid" => self.request("orders/by_client_id/{client_id}".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privateDeleteOrdersorderid" => self.request("orders/{order_id}".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privateDeleteAlgoordersalgoid" => self.request("algo/orders/{algo_id}".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    _ => unimplemented!(),
+                    _ => panic!("Unknown API method: {}", m),
                 }
             },
-            _ => unimplemented!()
+            _ => panic!("dispatch: method must be a string, got {:?}", method)
         }
     }
 }

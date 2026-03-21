@@ -5164,10 +5164,10 @@ pub trait Mexc : Exchange {
                     "brokerPrivatePostSubaccountuniversaltransfer" => self.request("sub-account/universalTransfer".into(), "broker".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "brokerPrivatePostSubaccountfutures" => self.request("sub-account/futures".into(), "broker".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "brokerPrivateDeleteSubaccountapikey" => self.request("sub-account/apiKey".into(), "broker".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    _ => unimplemented!(),
+                    _ => panic!("Unknown API method: {}", m),
                 }
             },
-            _ => unimplemented!()
+            _ => panic!("dispatch: method must be a string, got {:?}", method)
         }
     }
 }

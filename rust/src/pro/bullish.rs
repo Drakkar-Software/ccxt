@@ -503,14 +503,14 @@ pub trait Bullish : Exchange {
             "id": id
         }))).unwrap());
         let mut full_url: Value = self.get("urls".into()).get(Value::from("api")).get(Value::from("ws")).get(Value::from("public")) + url.clone();
-        return self.watch(full_url.clone(), message_hash.clone(), self.deep_extend_2(message.clone(), params.clone()), message_hash.clone(), Value::Undefined).await;
+        return self.watch(full_url.clone(), message_hash.clone(), self.deep_extend_2(message.clone(), params.clone()), message_hash.clone()).await;
     }
 
     async fn watch_private(&mut self, mut message_hash: Value, mut subscribe_hash: Value, mut request: Value, mut params: Value) -> Value {
         request = request.or_default(Value::new_object());
         params = params.or_default(Value::new_object());
         let mut url: Value = self.get("urls".into()).get(Value::from("api")).get(Value::from("ws")).get(Value::from("private"));
-        let mut token: Value = <Self as Bullish>::handle_token(self, Value::Undefined).await;
+        let mut token: Value = self.handle_token().await;
         let mut cookies: Value = Value::Json(normalize(&Value::Json(json!({
             "JWT_COOKIE": token
         }))).unwrap());
@@ -523,7 +523,7 @@ pub trait Bullish : Exchange {
             "params": request,
             "id": id
         }))).unwrap());
-        let mut result: Value = self.watch(url.clone(), message_hash.clone(), self.deep_extend_2(message.clone(), params.clone()), subscribe_hash.clone(), Value::Undefined).await;
+        let mut result: Value = self.watch(url.clone(), message_hash.clone(), self.deep_extend_2(message.clone(), params.clone()), subscribe_hash.clone()).await;
         return result.clone();
     }
 
@@ -574,7 +574,7 @@ pub trait Bullish : Exchange {
         let mut symbol: Value = self.safe_symbol(market_id.clone(), Value::Undefined, Value::Undefined, Value::Undefined);
         let mut market: Value = self.market(symbol.clone());
         let mut raw_trades: Value = self.safe_list(data.clone(), Value::from("trades"), Value::new_array());
-        let mut trades: Value = self.parse_trades(raw_trades.clone(), market.clone(), Value::Undefined, Value::Undefined, Value::Undefined);
+        let mut trades: Value = self.parse_trades(raw_trades.clone(), market.clone());
         if !self.get("trades".into()).contains_key(symbol.clone()) {
             let mut limit: Value = self.safe_integer(self.get("options".into()), Value::from("tradesLimit"), Value::from(1000));
             let mut trades_array_cache: Value = ArrayCache::new(limit);
@@ -599,7 +599,7 @@ pub trait Bullish : Exchange {
         symbol = market.get(Value::from("symbol"));
         let mut url: Value = self.get("urls".into()).get(Value::from("api")).get(Value::from("ws")).get(Value::from("public")) + Value::from("/trading-api/v1/market-data/tick/") + market.get(Value::from("id"));
         let mut message_hash: Value = Value::from("ticker::") + symbol.clone();
-        return self.watch(url.clone(), message_hash.clone(), params.clone(), message_hash.clone(), Value::Undefined).await;
+        return self.watch(url.clone(), message_hash.clone(), params.clone(), message_hash.clone()).await;
     }
 
     fn handle_ticker(&mut self, mut client: Value, mut message: Value) -> Value {
@@ -710,7 +710,7 @@ pub trait Bullish : Exchange {
         let mut message_hash: Value = Value::from("orderbook::") + symbol.clone();
         let mut timestamp: Value = self.safe_integer(data.clone(), Value::from("timestamp"), Value::Undefined);
         if !self.get("orderbooks".into()).contains_key(symbol.clone()) {
-            self.get("orderbooks".into()).set(symbol.clone(), self.order_book(Value::Undefined, Value::Undefined));
+            self.get("orderbooks".into()).set(symbol.clone(), self.order_book());
         };
         let mut orderbook: Value = self.get("orderbooks".into()).get(symbol.clone());
         let mut bids: Value = <Self as Bullish>::separate_bids_or_asks(self, self.safe_list(data.clone(), Value::from("bids"), Value::new_array()));
@@ -838,7 +838,7 @@ pub trait Bullish : Exchange {
             let mut i: usize = 0;
             while i < raw_orders.len() {
                 let mut raw_order: Value = raw_orders.get(i.into());
-                let mut parsed_order: Value = self.parse_order(raw_order.clone(), Value::Undefined);
+                let mut parsed_order: Value = self.parse_order(raw_order.clone());
                 orders.append(parsed_order.clone());
                 let mut symbol: Value = self.safe_string(parsed_order.clone(), Value::from("symbol"), Value::Undefined);
                 symbols.set(symbol.clone(), true.into());
@@ -940,7 +940,7 @@ pub trait Bullish : Exchange {
             let mut i: usize = 0;
             while i < raw_trades.len() {
                 let mut raw_trade: Value = raw_trades.get(i.into());
-                let mut parsed_trade: Value = self.parse_trade(raw_trade.clone(), Value::Undefined);
+                let mut parsed_trade: Value = self.parse_trade(raw_trade.clone());
                 trades.append(parsed_trade.clone());
                 let mut symbol: Value = self.safe_string(parsed_trade.clone(), Value::from("symbol"), Value::Undefined);
                 symbols.set(symbol.clone(), true.into());
@@ -1050,7 +1050,7 @@ pub trait Bullish : Exchange {
         let mut subscribe_hash: Value = Value::from("positions");
         let mut message_hash: Value = subscribe_hash.clone();
         if !self.is_empty(symbols.clone()).is_truthy() {
-            symbols = self.market_symbols(symbols.clone(), Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined);
+            symbols = self.market_symbols(symbols.clone());
             message_hash = message_hash +  Value::from("::") + symbols.join(Value::from(","));
         };
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
@@ -1226,10 +1226,10 @@ pub trait Bullish : Exchange {
                     "privatePostV2mmpconfiguration" => self.request("v2/mmp-configuration".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privatePostV2otctrades" => self.request("v2/otc-trades".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privatePostV2otccommand" => self.request("v2/otc-command".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    _ => unimplemented!(),
+                    _ => panic!("Unknown API method: {}", m),
                 }
             },
-            _ => unimplemented!()
+            _ => panic!("dispatch: method must be a string, got {:?}", method)
         }
     }
 }

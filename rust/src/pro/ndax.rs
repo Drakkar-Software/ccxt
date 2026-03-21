@@ -482,7 +482,7 @@ pub trait Ndax : Exchange {
         }))).unwrap());
         // JSON-formatted string containing the data being sent with the message
         let mut message: Value = extend_2(request.clone(), params.clone());
-        return self.watch(url.clone(), message_hash.clone(), message.clone(), message_hash.clone(), Value::Undefined).await;
+        return self.watch(url.clone(), message_hash.clone(), message.clone(), message_hash.clone()).await;
     }
 
     fn handle_ticker(&mut self, mut client: Value, mut message: Value) -> Value {
@@ -512,7 +512,7 @@ pub trait Ndax : Exchange {
         //         "TimeStamp": "1534862990358"
         //     }
         //
-        let mut ticker: Value = self.parse_ticker(payload.clone(), Value::Undefined);
+        let mut ticker: Value = self.parse_ticker(payload.clone());
         let mut symbol: Value = ticker.get(Value::from("symbol"));
         let mut market: Value = self.market(symbol.clone());
         self.get("tickers".into()).set(symbol.clone(), ticker.clone());
@@ -546,7 +546,7 @@ pub trait Ndax : Exchange {
         }))).unwrap());
         // JSON-formatted string containing the data being sent with the message
         let mut message: Value = extend_2(request.clone(), params.clone());
-        let mut trades: Value = self.watch(url.clone(), message_hash.clone(), message.clone(), message_hash.clone(), Value::Undefined).await;
+        let mut trades: Value = self.watch(url.clone(), message_hash.clone(), message.clone(), message_hash.clone()).await;
         if self.get("newUpdates".into()).is_truthy() {
             limit = trades.get_limit(symbol.clone(), limit.clone());
         };
@@ -578,7 +578,7 @@ pub trait Ndax : Exchange {
         let mut updates: Value = Value::new_object();
         let mut i: usize = 0;
         while i < payload.len() {
-            let mut trade: Value = self.parse_trade(payload.get(i.into()), Value::Undefined);
+            let mut trade: Value = self.parse_trade(payload.get(i.into()));
             let mut symbol: Value = trade.get(Value::from("symbol"));
             let mut trades_array: Value = self.safe_value(self.get("trades".into()), symbol.clone(), Value::Undefined);
             if trades_array.clone().is_nullish() {
@@ -629,7 +629,7 @@ pub trait Ndax : Exchange {
         }))).unwrap());
         // JSON-formatted string containing the data being sent with the message
         let mut message: Value = extend_2(request.clone(), params.clone());
-        let mut ohlcv: Value = self.watch(url.clone(), message_hash.clone(), message.clone(), message_hash.clone(), Value::Undefined).await;
+        let mut ohlcv: Value = self.watch(url.clone(), message_hash.clone(), message.clone(), message_hash.clone()).await;
         if self.get("newUpdates".into()).is_truthy() {
             limit = ohlcv.get_limit(symbol.clone(), limit.clone());
         };
@@ -1043,10 +1043,10 @@ pub trait Ndax : Exchange {
                     "privatePostSubmitdepositticketcomment" => self.request("SubmitDepositTicketComment".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privatePostSubmitwithdrawticketcomment" => self.request("SubmitWithdrawTicketComment".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privatePostGetorderhistorybyorderid" => self.request("GetOrderHistoryByOrderId".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    _ => unimplemented!(),
+                    _ => panic!("Unknown API method: {}", m),
                 }
             },
-            _ => unimplemented!()
+            _ => panic!("dispatch: method must be a string, got {:?}", method)
         }
     }
 }

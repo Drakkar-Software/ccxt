@@ -589,7 +589,7 @@ pub trait Coincatch : Exchange {
     fn get_market_from_arg(&mut self, mut entry: Value) -> Value {
         let mut inst_id: Value = self.safe_string(entry.clone(), Value::from("instId"), Value::Undefined);
         let mut inst_type: Value = self.safe_string(entry.clone(), Value::from("instType"), Value::Undefined);
-        let mut base_and_quote: Value = <Self as Coincatch>::parse_spot_market_id(self, inst_id.clone());
+        let mut base_and_quote: Value = self.parse_spot_market_id(inst_id.clone());
         let mut base_id: Value = base_and_quote.get(Value::from("baseId"));
         let mut quote_id: Value = base_and_quote.get(Value::from("quoteId"));
         let mut suffix: Value = Value::from("_SPBL");
@@ -602,12 +602,12 @@ pub trait Coincatch : Exchange {
             };
         };
         let mut market_id: Value = self.safe_currency_code(base_id.clone(), Value::Undefined) + self.safe_currency_code(quote_id.clone(), Value::Undefined) + suffix.clone();
-        return <Self as Coincatch>::safe_market_custom(self, market_id.clone(), Value::Undefined, Value::Undefined);
+        return self.safe_market_custom(market_id.clone());
     }
 
     async fn authenticate(&mut self, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
-        self.check_required_credentials(Value::Undefined);
+        self.check_required_credentials();
         let mut url: Value = self.get("urls".into()).get(Value::from("api")).get(Value::from("ws")).get(Value::from("private"));
         let mut client: Value = self.client(url.clone());
         let mut message_hash: Value = Value::from("authenticated");
@@ -628,7 +628,7 @@ pub trait Coincatch : Exchange {
                 }))).unwrap()).into()]))
             }))).unwrap());
             let mut message: Value = extend_2(request.clone(), params.clone());
-            self.watch(url.clone(), message_hash.clone(), message.clone(), message_hash.clone(), Value::Undefined);
+            self.watch(url.clone(), message_hash.clone(), message.clone(), message_hash.clone());
         };
         return future.clone();
     }
@@ -641,7 +641,7 @@ pub trait Coincatch : Exchange {
             "args": Value::Json(serde_json::Value::Array(vec![args.clone().into()]))
         }))).unwrap());
         let mut message: Value = extend_2(request.clone(), params.clone());
-        return self.watch(url.clone(), message_hash.clone(), message.clone(), subscribe_hash.clone(), Value::Undefined).await;
+        return self.watch(url.clone(), message_hash.clone(), message.clone(), subscribe_hash.clone()).await;
     }
 
     async fn un_watch_public(&mut self, mut message_hash: Value, mut args: Value, mut params: Value) -> Value {
@@ -652,31 +652,31 @@ pub trait Coincatch : Exchange {
             "args": Value::Json(serde_json::Value::Array(vec![args.clone().into()]))
         }))).unwrap());
         let mut message: Value = extend_2(request.clone(), params.clone());
-        return self.watch(url.clone(), message_hash.clone(), message.clone(), message_hash.clone(), Value::Undefined).await;
+        return self.watch(url.clone(), message_hash.clone(), message.clone(), message_hash.clone()).await;
     }
 
     async fn watch_private(&mut self, mut message_hash: Value, mut subscribe_hash: Value, mut args: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
-        <Self as Coincatch>::authenticate(self).await;
+        <Self as Coincatch>::authenticate(self, Value::Undefined).await;
         let mut url: Value = self.get("urls".into()).get(Value::from("api")).get(Value::from("ws")).get(Value::from("private"));
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
             "op": "subscribe",
             "args": Value::Json(serde_json::Value::Array(vec![args.clone().into()]))
         }))).unwrap());
         let mut message: Value = extend_2(request.clone(), params.clone());
-        return self.watch(url.clone(), message_hash.clone(), message.clone(), subscribe_hash.clone(), Value::Undefined).await;
+        return self.watch(url.clone(), message_hash.clone(), message.clone(), subscribe_hash.clone()).await;
     }
 
     async fn watch_private_multiple(&mut self, mut message_hashes: Value, mut subscribe_hashes: Value, mut args: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
-        <Self as Coincatch>::authenticate(self).await;
+        <Self as Coincatch>::authenticate(self, Value::Undefined).await;
         let mut url: Value = self.get("urls".into()).get(Value::from("api")).get(Value::from("ws")).get(Value::from("private"));
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
             "op": "subscribe",
             "args": args
         }))).unwrap());
         let mut message: Value = extend_2(request.clone(), params.clone());
-        return self.watch_multiple(url.clone(), message_hashes.clone(), message.clone(), subscribe_hashes.clone(), Value::Undefined).await;
+        return self.watch_multiple(url.clone(), message_hashes.clone(), message.clone(), subscribe_hashes.clone()).await;
     }
 
     fn handle_authenticate(&mut self, mut client: Value, mut message: Value) -> Value {
@@ -697,7 +697,7 @@ pub trait Coincatch : Exchange {
             "args": args_array
         }))).unwrap());
         let mut message: Value = extend_2(request.clone(), params.clone());
-        return self.watch_multiple(url.clone(), message_hashes.clone(), message.clone(), subscribe_hashes.clone(), Value::Undefined).await;
+        return self.watch_multiple(url.clone(), message_hashes.clone(), message.clone(), subscribe_hashes.clone()).await;
     }
 
     async fn un_watch_channel(&mut self, mut symbol: Value, mut channel: Value, mut message_hash_topic: Value, mut params: Value) -> Value {
@@ -800,7 +800,7 @@ pub trait Coincatch : Exchange {
             result.set(tickers.get(Value::from("symbol")), tickers.clone());
             return result.clone();
         };
-        return self.filter_by_array(self.get("tickers".into()), Value::from("symbol"), symbols.clone(), Value::Undefined);
+        return self.filter_by_array(self.get("tickers".into()), Value::from("symbol"), symbols.clone());
     }
 
     fn handle_ticker(&mut self, mut client: Value, mut message: Value) -> Value {
@@ -833,7 +833,7 @@ pub trait Coincatch : Exchange {
         let mut market_id: Value = market.get(Value::from("id"));
         let mut hash: Value = Value::from("ticker:");
         if market_id.index_of(Value::from("_DMCBL")) >= Value::from(0) {
-            market = <Self as Coincatch>::handle_dmcbl_market_by_message_hashes(self, market.clone(), hash.clone(), client.clone());
+            market = <Self as Coincatch>::handle_dmcbl_market_by_message_hashes(self, market.clone(), hash.clone(), client.clone(), Value::Undefined);
         };
         let mut data: Value = self.safe_list(message.clone(), Value::from("data"), Value::new_array());
         let mut ticker: Value = <Self as Coincatch>::parse_ws_ticker(self, self.safe_dict(data.clone(), Value::from(0), Value::new_object()), market.clone());
@@ -975,7 +975,7 @@ pub trait Coincatch : Exchange {
         let mut data: Value = self.safe_list(message.clone(), Value::from("data"), Value::new_array());
         let mut channel: Value = self.safe_string(arg.clone(), Value::from("channel"), Value::Undefined);
         let mut kline_type: Value = channel.slice(Value::from(6), Value::Undefined);
-        let mut timeframe: Value = self.find_timeframe(kline_type.clone(), Value::Undefined);
+        let mut timeframe: Value = self.find_timeframe(kline_type.clone());
         if market_id.index_of(Value::from("_DMCBL")) >= Value::from(0) {
             market = <Self as Coincatch>::handle_dmcbl_market_by_message_hashes(self, market.clone(), hash.clone(), client.clone(), timeframe.clone());
         };
@@ -1034,7 +1034,7 @@ pub trait Coincatch : Exchange {
     async fn watch_order_book_for_symbols(&mut self, mut symbols: Value, mut limit: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        symbols = self.market_symbols(symbols.clone(), Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined);
+        symbols = self.market_symbols(symbols.clone());
         let mut channel: Value = Value::from("books");
         let mut topics: Value = Value::new_array();
         let mut message_hashes: Value = Value::new_array();
@@ -1077,7 +1077,7 @@ pub trait Coincatch : Exchange {
         let mut market_id: Value = market.get(Value::from("id"));
         let mut hash: Value = Value::from("books:");
         if market_id.index_of(Value::from("_DMCBL")) >= Value::from(0) {
-            market = <Self as Coincatch>::handle_dmcbl_market_by_message_hashes(self, market.clone(), hash.clone(), client.clone());
+            market = <Self as Coincatch>::handle_dmcbl_market_by_message_hashes(self, market.clone(), hash.clone(), client.clone(), Value::Undefined);
         };
         let mut symbol: Value = market.get(Value::from("symbol"));
         let mut channel: Value = self.safe_string(arg.clone(), Value::from("channel"), Value::Undefined);
@@ -1088,7 +1088,7 @@ pub trait Coincatch : Exchange {
         let mut incremental_book: Value = channel.clone();
         if incremental_book.is_truthy() {
             if !self.get("orderbooks".into()).contains_key(symbol.clone()) {
-                let mut ob: Value = self.counted_order_book(Value::new_object(), Value::Undefined);
+                let mut ob: Value = self.counted_order_book(Value::new_object());
                 ob.set("symbol".into(), symbol.clone());
                 self.get("orderbooks".into()).set(symbol.clone(), ob.clone());
             };
@@ -1128,7 +1128,7 @@ pub trait Coincatch : Exchange {
                 };
             };
         } else {
-            let mut orderbook: Value = self.order_book(Value::new_object(), Value::Undefined);
+            let mut orderbook: Value = self.order_book(Value::new_object());
             let mut parsed_orderbook: Value = self.parse_order_book(raw_order_book.clone(), symbol.clone(), timestamp.clone(), Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined);
             orderbook.reset(parsed_orderbook.clone());
             self.get("orderbooks".into()).set(symbol.clone(), orderbook.clone());
@@ -1172,7 +1172,7 @@ pub trait Coincatch : Exchange {
             panic!(r###"ArgumentsRequired::new(self.get("id".into()) + Value::from(" watchTradesForSymbols() requires a non-empty array of symbols"))"###);
         };
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        symbols = self.market_symbols(symbols.clone(), Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined);
+        symbols = self.market_symbols(symbols.clone());
         let mut topics: Value = Value::new_array();
         let mut message_hashes: Value = Value::new_array();
         let mut i: usize = 0;
@@ -1218,7 +1218,7 @@ pub trait Coincatch : Exchange {
         let mut market_id: Value = market.get(Value::from("id"));
         let mut hash: Value = Value::from("trade:");
         if market_id.index_of(Value::from("_DMCBL")) >= Value::from(0) {
-            market = <Self as Coincatch>::handle_dmcbl_market_by_message_hashes(self, market.clone(), hash.clone(), client.clone());
+            market = <Self as Coincatch>::handle_dmcbl_market_by_message_hashes(self, market.clone(), hash.clone(), client.clone(), Value::Undefined);
         };
         let mut symbol: Value = market.get(Value::from("symbol"));
         if !self.get("trades".into()).contains_key(symbol.clone()) {
@@ -1272,7 +1272,7 @@ pub trait Coincatch : Exchange {
     async fn watch_balance(&mut self, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         let mut r#type: Value = Value::Undefined;
-        (r#type, params) = shift_2(self.handle_market_type_and_params(Value::from("watchBalance"), Value::Undefined, params.clone(), Value::Undefined));
+        (r#type, params) = shift_2(self.handle_market_type_and_params(Value::from("watchBalance"), Value::Undefined, params.clone()));
         let mut inst_type: Value = Value::from("spbl");
         // must be lower case for spot
         if r#type.clone() == Value::from("swap") {
@@ -1360,7 +1360,7 @@ pub trait Coincatch : Exchange {
             market_id = market.get(Value::from("id"));
         };
         let mut market_type: Value = Value::Undefined;
-        (market_type, params) = shift_2(self.handle_market_type_and_params(method_name.clone(), market.clone(), params.clone(), Value::Undefined));
+        (market_type, params) = shift_2(self.handle_market_type_and_params(method_name.clone(), market.clone(), params.clone()));
         let mut inst_type: Value = Value::from("spbl");
         let mut inst_id: Value = market_id.clone();
         if market_type.clone() == Value::from("spot") {
@@ -1549,7 +1549,7 @@ pub trait Coincatch : Exchange {
         //
         let mut market_id: Value = self.safe_string(order.clone(), Value::from("instId"), Value::Undefined);
         let mut settle_id: Value = self.safe_string(order.clone(), Value::from("tgtCcy"), Value::Undefined);
-        market = <Self as Coincatch>::safe_market_custom(self, market_id.clone(), market.clone(), settle_id.clone());
+        market = self.safe_market_custom(market_id.clone(), market.clone(), settle_id.clone());
         let mut timestamp: Value = self.safe_integer(order.clone(), Value::from("cTime"), Value::Undefined);
         let mut symbol: Value = market.get(Value::from("symbol"));
         let mut raw_status: Value = self.safe_string(order.clone(), Value::from("status"), Value::Undefined);
@@ -1570,10 +1570,10 @@ pub trait Coincatch : Exchange {
             "datetime": self.iso8601(timestamp.clone()),
             "lastTradeTimestamp": Value::Undefined,
             "lastUpdateTimestamp": self.safe_integer(order.clone(), Value::from("uTime"), Value::Undefined),
-            "status": <Self as Coincatch>::parse_order_status(self, raw_status.clone()),
+            "status": self.parse_order_status(raw_status.clone()),
             "symbol": symbol,
             "type": r#type,
-            "timeInForce": <Self as Coincatch>::parse_order_time_in_force(self, self.safe_string_lower(order.clone(), Value::from("force"), Value::Undefined)),
+            "timeInForce": self.parse_order_time_in_force(self.safe_string_lower(order.clone(), Value::from("force"), Value::Undefined)),
             "side": self.safe_string_lower(order.clone(), Value::from("side"), Value::Undefined),
             "price": price,
             "average": self.safe_string(order.clone(), Value::from("avgPx"), Value::Undefined),
@@ -1598,7 +1598,7 @@ pub trait Coincatch : Exchange {
     async fn watch_positions(&mut self, mut symbols: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        symbols = self.market_symbols(symbols.clone(), Value::from("swap"), Value::Undefined, Value::Undefined, Value::Undefined);
+        symbols = self.market_symbols(symbols.clone(), Value::from("swap"));
         let mut message_hashes: Value = Value::new_array();
         let mut hash: Value = Value::from("positions");
         let mut inst_types: Value = Value::new_array();
@@ -1696,7 +1696,7 @@ pub trait Coincatch : Exchange {
         let mut i: usize = 0;
         while i < raw_positions.len() {
             let mut raw_position: Value = raw_positions.get(i.into());
-            let mut position: Value = <Self as Coincatch>::parse_ws_position(self, raw_position.clone());
+            let mut position: Value = <Self as Coincatch>::parse_ws_position(self, raw_position.clone(), Value::Undefined);
             symbols.push(position.get(Value::from("symbol")));
             new_positions.push(position.clone());
             cache.append(position.clone());
@@ -1757,7 +1757,7 @@ pub trait Coincatch : Exchange {
         //
         let mut market_id: Value = self.safe_string(position.clone(), Value::from("symbol"), Value::Undefined);
         let mut settle_id: Value = self.safe_string(position.clone(), Value::from("marginCoin"), Value::Undefined);
-        market = <Self as Coincatch>::safe_market_custom(self, market_id.clone(), market.clone(), settle_id.clone());
+        market = self.safe_market_custom(market_id.clone(), market.clone(), settle_id.clone());
         let mut timestamp: Value = self.safe_integer(position.clone(), Value::from("cTime"), Value::Undefined);
         let mut margin_mode_id: Value = self.safe_string(position.clone(), Value::from("marginMode"), Value::Undefined);
         let mut margin_mode: Value = self.get_supported_mapping(margin_mode_id.clone(), Value::Json(normalize(&Value::Json(json!({
@@ -2004,7 +2004,7 @@ pub trait Coincatch : Exchange {
                 self.get("ohlcvs".into()).get(symbol.clone()).get(timeframe.clone());
             };
         };
-        self.clean_unsubscription(client.clone(), sub_message_hash.clone(), message_hash.clone(), Value::Undefined);
+        self.clean_unsubscription(client.clone(), sub_message_hash.clone(), message_hash.clone());
         Value::Undefined
     }
 
@@ -2103,10 +2103,10 @@ pub trait Coincatch : Exchange {
                     "privatePostApimixv1plancancelplan" => self.request("api/mix/v1/plan/cancelPlan".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privatePostApimixv1plancancelsymbolplan" => self.request("api/mix/v1/plan/cancelSymbolPlan".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privatePostApimixv1plancancelallplan" => self.request("api/mix/v1/plan/cancelAllPlan".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    _ => unimplemented!(),
+                    _ => panic!("Unknown API method: {}", m),
                 }
             },
-            _ => unimplemented!()
+            _ => panic!("dispatch: method must be a string, got {:?}", method)
         }
     }
 }

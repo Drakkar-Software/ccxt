@@ -1009,10 +1009,10 @@ pub trait Coinspot : Exchange {
                     "privatePostRomysendreceive" => self.request("ro/my/sendreceive".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privatePostRomyaffiliatepayments" => self.request("ro/my/affiliatepayments".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privatePostRomyreferralpayments" => self.request("ro/my/referralpayments".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    _ => unimplemented!(),
+                    _ => panic!("Unknown API method: {}", m),
                 }
             },
-            _ => unimplemented!()
+            _ => panic!("dispatch: method must be a string, got {:?}", method)
         }
     }
 }

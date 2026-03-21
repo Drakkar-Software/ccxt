@@ -8153,10 +8153,10 @@ pub trait Bybit : Exchange {
                     "privatePostV5brokerawarddistributeaward" => self.request("v5/broker/award/distribute-award".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privatePostV5brokerawarddistributionrecord" => self.request("v5/broker/award/distribution-record".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privatePostV5earnplaceorder" => self.request("v5/earn/place-order".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    _ => unimplemented!(),
+                    _ => panic!("Unknown API method: {}", m),
                 }
             },
-            _ => unimplemented!()
+            _ => panic!("dispatch: method must be a string, got {:?}", method)
         }
     }
 }

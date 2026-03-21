@@ -733,10 +733,10 @@ pub trait Coinbaseadvanced : Exchange {
                     "v3PrivatePutBrokerageportfoliosportfoliouuid" => self.request("brokerage/portfolios/{portfolio_uuid}".into(), "v3".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "v3PrivateDeleteBrokerageportfoliosportfoliouuid" => self.request("brokerage/portfolios/{portfolio_uuid}".into(), "v3".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "v3PrivateDeleteBrokeragecfmsweeps" => self.request("brokerage/cfm/sweeps".into(), "v3".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    _ => unimplemented!(),
+                    _ => panic!("Unknown API method: {}", m),
                 }
             },
-            _ => unimplemented!()
+            _ => panic!("dispatch: method must be a string, got {:?}", method)
         }
     }
 }

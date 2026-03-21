@@ -616,7 +616,7 @@ pub trait Probit : Exchange {
             stored = ArrayCacheBySymbolById::new(limit);
             self.set("my_trades".into(), stored.clone());
         };
-        let mut trades: Value = self.parse_trades(raw_trades.clone(), Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined);
+        let mut trades: Value = self.parse_trades(raw_trades.clone());
         let mut trade_symbols: Value = Value::new_object();
         let mut j: usize = 0;
         while j < trades.length {
@@ -702,7 +702,7 @@ pub trait Probit : Exchange {
         let mut i: usize = 0;
         while i < raw_orders.length {
             let mut raw_order: Value = raw_orders.get(i.into());
-            let mut order: Value = self.parse_order(raw_order.clone(), Value::Undefined);
+            let mut order: Value = self.parse_order(raw_order.clone());
             order_symbols.set(order.get(Value::from("symbol")), true.into());
             stored.append(order.clone());
             i += 1;
@@ -735,7 +735,7 @@ pub trait Probit : Exchange {
         }))).unwrap());
         let mut request: Value = extend_2(subscribe.clone(), params.clone());
         let mut subscribe_hash: Value = message_hash.clone();
-        return self.watch(url.clone(), message_hash.clone(), request.clone(), subscribe_hash.clone(), Value::Undefined).await;
+        return self.watch(url.clone(), message_hash.clone(), request.clone(), subscribe_hash.clone()).await;
     }
 
     async fn subscribe_public(&mut self, mut method_name: Value, mut symbol: Value, mut data_type: Value, mut filter: Value, mut params: Value) -> Value {
@@ -791,7 +791,7 @@ pub trait Probit : Exchange {
         let mut message_hash: Value = Value::from("orderbook:") + symbol.clone();
         // let orderbook = this.safeValue (this.orderbooks, symbol);
         if !self.get("orderbooks".into()).contains_key(symbol.clone()) {
-            self.get("orderbooks".into()).set(symbol.clone(), self.order_book(Value::new_object(), Value::Undefined));
+            self.get("orderbooks".into()).set(symbol.clone(), self.order_book(Value::new_object()));
         };
         let mut orderbook: Value = self.get("orderbooks".into()).get(symbol.clone());
         let mut reset: Value = self.safe_bool(message.clone(), Value::from("reset"), false.into());
@@ -933,7 +933,7 @@ pub trait Probit : Exchange {
         let mut expires: Value = self.safe_integer(self.get("options".into()), Value::from("expires"), Value::from(0));
         let mut future: Value = self.safe_value(client.get(subscriptions.clone()), message_hash.clone(), Value::Undefined);
         if future.clone().is_nullish() || self.milliseconds() > expires.clone() {
-            let mut response: Value = self.sign_in(Value::Undefined).await;
+            let mut response: Value = self.sign_in().await;
             //
             //     {
             //         "access_token": "0ttDv/2hTTn3bLi8GP1gKaneiEQ6+0hOBenPrxNQt2s=",
@@ -946,7 +946,7 @@ pub trait Probit : Exchange {
                 "type": "authorization",
                 "token": access_token
             }))).unwrap());
-            future = self.watch(url.clone(), message_hash.clone(), extend_2(request.clone(), params.clone()), message_hash.clone(), Value::Undefined).await;
+            future = self.watch(url.clone(), message_hash.clone(), extend_2(request.clone(), params.clone()), message_hash.clone()).await;
             client.get(subscriptions.clone()).set(message_hash.clone(), future.clone());
         };
         return future.clone();
@@ -976,10 +976,10 @@ pub trait Probit : Exchange {
                     "privateGetDepositaddress" => self.request("deposit_address".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privateGetTransferpayment" => self.request("transfer/payment".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "accountsPostToken" => self.request("token".into(), "accounts".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    _ => unimplemented!(),
+                    _ => panic!("Unknown API method: {}", m),
                 }
             },
-            _ => unimplemented!()
+            _ => panic!("dispatch: method must be a string, got {:?}", method)
         }
     }
 }

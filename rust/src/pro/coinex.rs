@@ -827,7 +827,7 @@ pub trait Coinex : Exchange {
             let mut parts: Value = message_hash.split(Value::from("::"));
             let mut symbols_string: Value = parts.get(Value::from(1));
             let mut symbols: Value = symbols_string.split(Value::from(","));
-            let mut tickers: Value = self.filter_by_array(new_tickers.clone(), Value::from("symbol"), symbols.clone(), Value::Undefined);
+            let mut tickers: Value = self.filter_by_array(new_tickers.clone(), Value::from("symbol"), symbols.clone());
             let mut tickers_symbols: Value = tickers.clone().keys();
             let mut num_tickers: usize = tickers_symbols.len();
             if num_tickers.clone() > Value::from(0) {
@@ -933,7 +933,7 @@ pub trait Coinex : Exchange {
             "id": <Self as Coinex>::request_id(self)
         }))).unwrap());
         let mut request: Value = self.deep_extend_2(subscribe.clone(), params.clone());
-        return self.watch(url.clone(), message_hash.clone(), request.clone(), message_hash.clone(), Value::Undefined).await;
+        return self.watch(url.clone(), message_hash.clone(), request.clone(), message_hash.clone()).await;
     }
 
     fn handle_balance(&mut self, mut client: Value, mut message: Value) -> Value {
@@ -1098,7 +1098,7 @@ pub trait Coinex : Exchange {
             "id": <Self as Coinex>::request_id(self)
         }))).unwrap());
         let mut request: Value = self.deep_extend_2(message.clone(), params.clone());
-        let mut trades: Value = self.watch(url.clone(), message_hash.clone(), request.clone(), message_hash.clone(), Value::Undefined).await;
+        let mut trades: Value = self.watch(url.clone(), message_hash.clone(), request.clone(), message_hash.clone()).await;
         if self.get("newUpdates".into()).is_truthy() {
             limit = trades.get_limit(symbol.clone(), limit.clone());
         };
@@ -1310,7 +1310,7 @@ pub trait Coinex : Exchange {
             message_hashes.push(Value::from("tickers"));
         };
         let mut r#type: Value = Value::Undefined;
-        (r#type, params) = shift_2(self.handle_market_type_and_params(Value::from("watchTickers"), market.clone(), params.clone(), Value::Undefined));
+        (r#type, params) = shift_2(self.handle_market_type_and_params(Value::from("watchTickers"), market.clone(), params.clone()));
         let mut url: Value = self.get("urls".into()).get(Value::from("api")).get(Value::from("ws")).get(r#type.clone());
         let mut subscription_hashes: Value = Value::Json(serde_json::Value::Array(vec![Value::from("all@ticker").into()]));
         let mut subscribe: Value = Value::Json(normalize(&Value::Json(json!({
@@ -1320,11 +1320,11 @@ pub trait Coinex : Exchange {
             }))).unwrap()),
             "id": <Self as Coinex>::request_id(self)
         }))).unwrap());
-        let mut result: Value = self.watch_multiple(url.clone(), message_hashes.clone(), self.deep_extend_2(subscribe.clone(), params.clone()), subscription_hashes.clone(), Value::Undefined).await;
+        let mut result: Value = self.watch_multiple(url.clone(), message_hashes.clone(), self.deep_extend_2(subscribe.clone(), params.clone()), subscription_hashes.clone()).await;
         if self.get("newUpdates".into()).is_truthy() {
             return result.clone();
         };
-        return self.filter_by_array(self.get("tickers".into()), Value::from("symbol"), symbols.clone(), Value::Undefined);
+        return self.filter_by_array(self.get("tickers".into()), Value::from("symbol"), symbols.clone());
     }
 
     async fn watch_trades(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
@@ -1355,7 +1355,7 @@ pub trait Coinex : Exchange {
             message_hashes.push(Value::from("trades"));
         };
         let mut r#type: Value = Value::Undefined;
-        (r#type, params) = shift_2(self.handle_market_type_and_params(caller_method_name.clone(), market.clone(), params.clone(), Value::Undefined));
+        (r#type, params) = shift_2(self.handle_market_type_and_params(caller_method_name.clone(), market.clone(), params.clone()));
         let mut url: Value = self.get("urls".into()).get(Value::from("api")).get(Value::from("ws")).get(r#type.clone());
         // const subscriptionHashes = [ 'trades' ];
         let mut subscribe: Value = Value::Json(normalize(&Value::Json(json!({
@@ -1365,7 +1365,7 @@ pub trait Coinex : Exchange {
             }))).unwrap()),
             "id": <Self as Coinex>::request_id(self)
         }))).unwrap());
-        let mut trades: Value = self.watch_multiple(url.clone(), message_hashes.clone(), self.deep_extend_2(subscribe.clone(), params.clone()), message_hashes.clone(), Value::Undefined).await;
+        let mut trades: Value = self.watch_multiple(url.clone(), message_hashes.clone(), self.deep_extend_2(subscribe.clone(), params.clone()), message_hashes.clone()).await;
         if self.get("newUpdates".into()).is_truthy() {
             return trades.clone();
         };
@@ -1408,7 +1408,7 @@ pub trait Coinex : Exchange {
             watch_order_book_subscriptions.set(symbol.clone(), Value::Json(serde_json::Value::Array(vec![market.get(Value::from("id")).into(), limit.clone().into(), aggregation.clone().into(), true.into().into()])));
             i += 1;
         };
-        (r#type, params) = shift_2(self.handle_market_type_and_params(caller_method_name.clone(), market.clone(), params.clone(), Value::Undefined));
+        (r#type, params) = shift_2(self.handle_market_type_and_params(caller_method_name.clone(), market.clone(), params.clone()));
         let mut market_list: Value = watch_order_book_subscriptions.clone().values();
         let mut subscribe: Value = Value::Json(normalize(&Value::Json(json!({
             "method": "depth.subscribe",
@@ -1419,7 +1419,7 @@ pub trait Coinex : Exchange {
         }))).unwrap());
         // const subscriptionHashes = this.hash (this.encode (this.json (watchOrderBookSubscriptions)), sha256());
         let mut url: Value = self.get("urls".into()).get(Value::from("api")).get(Value::from("ws")).get(r#type.clone());
-        let mut orderbooks: Value = self.watch_multiple(url.clone(), message_hashes.clone(), self.deep_extend_2(subscribe.clone(), params.clone()), message_hashes.clone(), Value::Undefined).await;
+        let mut orderbooks: Value = self.watch_multiple(url.clone(), message_hashes.clone(), self.deep_extend_2(subscribe.clone(), params.clone()), message_hashes.clone()).await;
         if self.get("newUpdates".into()).is_truthy() {
             return orderbooks.clone();
         };
@@ -1490,7 +1490,7 @@ pub trait Coinex : Exchange {
         if full_order_book.is_truthy() {
             let mut snapshot: Value = self.parse_order_book(depth.clone(), symbol.clone(), timestamp.clone(), Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined);
             if current_order_book.clone().is_nullish() {
-                self.get("orderbooks".into()).set(symbol.clone(), self.order_book(snapshot.clone(), Value::Undefined));
+                self.get("orderbooks".into()).set(symbol.clone(), self.order_book(snapshot.clone()));
             } else {
                 let mut orderbook: Value = self.get("orderbooks".into()).get(symbol.clone());
                 orderbook.reset(snapshot.clone());
@@ -1852,7 +1852,7 @@ pub trait Coinex : Exchange {
             message_hashes.push(Value::from("bidsasks"));
         };
         let mut r#type: Value = Value::Undefined;
-        (r#type, params) = shift_2(self.handle_market_type_and_params(Value::from("watchBidsAsks"), market.clone(), params.clone(), Value::Undefined));
+        (r#type, params) = shift_2(self.handle_market_type_and_params(Value::from("watchBidsAsks"), market.clone(), params.clone()));
         let mut url: Value = self.get("urls".into()).get(Value::from("api")).get(Value::from("ws")).get(r#type.clone());
         let mut subscription_hashes: Value = Value::Json(serde_json::Value::Array(vec![Value::from("all@bidsasks").into()]));
         let mut subscribe: Value = Value::Json(normalize(&Value::Json(json!({
@@ -1862,11 +1862,11 @@ pub trait Coinex : Exchange {
             }))).unwrap()),
             "id": <Self as Coinex>::request_id(self)
         }))).unwrap());
-        let mut result: Value = self.watch_multiple(url.clone(), message_hashes.clone(), self.deep_extend_2(subscribe.clone(), params.clone()), subscription_hashes.clone(), Value::Undefined).await;
+        let mut result: Value = self.watch_multiple(url.clone(), message_hashes.clone(), self.deep_extend_2(subscribe.clone(), params.clone()), subscription_hashes.clone()).await;
         if self.get("newUpdates".into()).is_truthy() {
             return result.clone();
         };
-        return self.filter_by_array(self.get("bidsasks".into()), Value::from("symbol"), symbols.clone(), Value::Undefined);
+        return self.filter_by_array(self.get("bidsasks".into()), Value::from("symbol"), symbols.clone());
     }
 
     fn handle_bid_ask(&mut self, mut client: Value, mut message: Value) -> Value {
@@ -1885,7 +1885,7 @@ pub trait Coinex : Exchange {
         //     }
         //
         let mut data: Value = self.safe_dict(message.clone(), Value::from("data"), Value::new_object());
-        let mut parsed_ticker: Value = <Self as Coinex>::parse_ws_bid_ask(self, data.clone());
+        let mut parsed_ticker: Value = <Self as Coinex>::parse_ws_bid_ask(self, data.clone(), Value::Undefined);
         let mut symbol: Value = parsed_ticker.get(Value::from("symbol"));
         self.get("bidsasks".into()).set(symbol.clone(), parsed_ticker.clone());
         let mut message_hash: Value = Value::from("bidsasks:") + symbol.clone();
@@ -2282,10 +2282,10 @@ pub trait Coinex : Exchange {
                     "v2PrivatePostFuturesadjustpositionleverage" => self.request("futures/adjust-position-leverage".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "v2PrivatePostFuturessetpositionstoploss" => self.request("futures/set-position-stop-loss".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "v2PrivatePostFuturessetpositiontakeprofit" => self.request("futures/set-position-take-profit".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    _ => unimplemented!(),
+                    _ => panic!("Unknown API method: {}", m),
                 }
             },
-            _ => unimplemented!()
+            _ => panic!("dispatch: method must be a string, got {:?}", method)
         }
     }
 }

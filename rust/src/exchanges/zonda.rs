@@ -1860,10 +1860,10 @@ pub trait Zonda : Exchange {
                     "v101privateDeleteTradingoffersymbolidsideprice" => self.request("trading/offer/{symbol}/{id}/{side}/{price}".into(), "v1_01Private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "v101privateDeleteTradingstopoffersymbolidsideprice" => self.request("trading/stop/offer/{symbol}/{id}/{side}/{price}".into(), "v1_01Private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "v101privatePutBalancesbitbaybalanceid" => self.request("balances/BITBAY/balance/{id}".into(), "v1_01Private".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    _ => unimplemented!(),
+                    _ => panic!("Unknown API method: {}", m),
                 }
             },
-            _ => unimplemented!()
+            _ => panic!("dispatch: method must be a string, got {:?}", method)
         }
     }
 }

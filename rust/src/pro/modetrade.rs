@@ -553,7 +553,7 @@ pub trait Modetrade : Exchange {
         let mut symbol: Value = market.get(Value::from("symbol"));
         let mut topic: Value = self.safe_string(message.clone(), Value::from("topic"), Value::Undefined);
         if !self.get("orderbooks".into()).contains_key(symbol.clone()) {
-            self.get("orderbooks".into()).set(symbol.clone(), self.order_book(Value::Undefined, Value::Undefined));
+            self.get("orderbooks".into()).set(symbol.clone(), self.order_book());
         };
         let mut orderbook: Value = self.get("orderbooks".into()).get(symbol.clone());
         let mut timestamp: Value = self.safe_integer(message.clone(), Value::from("ts"), Value::Undefined);
@@ -648,7 +648,7 @@ pub trait Modetrade : Exchange {
     async fn watch_tickers(&mut self, mut symbols: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        symbols = self.market_symbols(symbols.clone(), Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined);
+        symbols = self.market_symbols(symbols.clone());
         let mut name: Value = Value::from("tickers");
         let mut topic: Value = name.clone();
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
@@ -657,7 +657,7 @@ pub trait Modetrade : Exchange {
         }))).unwrap());
         let mut message: Value = extend_2(request.clone(), params.clone());
         let mut tickers: Value = <Self as Modetrade>::watch_public(self, topic.clone(), message.clone()).await;
-        return self.filter_by_array(tickers.clone(), Value::from("symbol"), symbols.clone(), Value::Undefined);
+        return self.filter_by_array(tickers.clone(), Value::from("symbol"), symbols.clone());
     }
 
     fn handle_tickers(&mut self, mut client: Value, mut message: Value) -> Value {
@@ -702,7 +702,7 @@ pub trait Modetrade : Exchange {
     async fn watch_bids_asks(&mut self, mut symbols: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        symbols = self.market_symbols(symbols.clone(), Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined);
+        symbols = self.market_symbols(symbols.clone());
         let mut name: Value = Value::from("bbos");
         let mut topic: Value = name.clone();
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
@@ -711,7 +711,7 @@ pub trait Modetrade : Exchange {
         }))).unwrap());
         let mut message: Value = extend_2(request.clone(), params.clone());
         let mut tickers: Value = <Self as Modetrade>::watch_public(self, topic.clone(), message.clone()).await;
-        return self.filter_by_array(tickers.clone(), Value::from("symbol"), symbols.clone(), Value::Undefined);
+        return self.filter_by_array(tickers.clone(), Value::from("symbol"), symbols.clone());
     }
 
     fn handle_bid_ask(&mut self, mut client: Value, mut message: Value) -> Value {
@@ -738,7 +738,7 @@ pub trait Modetrade : Exchange {
         while i < data.len() {
             let mut ticker: Value = <Self as Modetrade>::parse_ws_bid_ask(self, extend_2(data.get(i.into()), Value::Json(normalize(&Value::Json(json!({
                 "ts": timestamp
-            }))).unwrap())));
+            }))).unwrap())), Value::Undefined);
             self.get("tickers".into()).set(ticker.get(Value::from("symbol")), ticker.clone());
             result.push(ticker.clone());
             i += 1;
@@ -812,7 +812,7 @@ pub trait Modetrade : Exchange {
         let mut market: Value = self.safe_market(market_id.clone(), Value::Undefined, Value::Undefined, Value::Undefined);
         let mut symbol: Value = market.get(Value::from("symbol"));
         let mut interval: Value = self.safe_string(data.clone(), Value::from("type"), Value::Undefined);
-        let mut timeframe: Value = self.find_timeframe(interval.clone(), Value::Undefined);
+        let mut timeframe: Value = self.find_timeframe(interval.clone());
         let mut parsed: Value = Value::Json(serde_json::Value::Array(vec![self.safe_integer(data.clone(), Value::from("startTime"), Value::Undefined).into(), self.safe_number(data.clone(), Value::from("open"), Value::Undefined).into(), self.safe_number(data.clone(), Value::from("high"), Value::Undefined).into(), self.safe_number(data.clone(), Value::from("low"), Value::Undefined).into(), self.safe_number(data.clone(), Value::from("close"), Value::Undefined).into(), self.safe_number(data.clone(), Value::from("volume"), Value::Undefined).into()]));
         self.get("ohlcvs".into()).set(symbol.clone(), self.safe_value(self.get("ohlcvs".into()), symbol.clone(), Value::new_object()));
         let mut stored: Value = self.safe_value(self.get("ohlcvs".into()).get(symbol.clone()), timeframe.clone(), Value::Undefined);
@@ -981,7 +981,7 @@ pub trait Modetrade : Exchange {
 
     async fn authenticate(&mut self, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
-        self.check_required_credentials(Value::Undefined);
+        self.check_required_credentials();
         let mut url: Value = self.get("urls".into()).get(Value::from("api")).get(Value::from("ws")).get(Value::from("private")) + Value::from("/") + self.get("accountId".into());
         let mut client: Value = self.client(url.clone());
         let mut message_hash: Value = Value::from("authenticated");
@@ -1006,7 +1006,7 @@ pub trait Modetrade : Exchange {
                 }))).unwrap())
             }))).unwrap());
             let mut message: Value = extend_2(request.clone(), params.clone());
-            self.watch(url.clone(), message_hash.clone(), message.clone(), message_hash.clone(), Value::Undefined);
+            self.watch(url.clone(), message_hash.clone(), message.clone(), message_hash.clone());
         };
         return future.clone();
     }
@@ -1052,7 +1052,7 @@ pub trait Modetrade : Exchange {
             "topic": topic
         }))).unwrap());
         let mut message: Value = extend_2(request.clone(), params.clone());
-        let mut orders: Value = <Self as Modetrade>::watch_private(self, message_hash.clone(), message.clone()).await;
+        let mut orders: Value = <Self as Modetrade>::watch_private(self, message_hash.clone(), message.clone(), Value::Undefined).await;
         if self.get("newUpdates".into()).is_truthy() {
             limit = orders.get_limit(symbol.clone(), limit.clone());
         };
@@ -1076,7 +1076,7 @@ pub trait Modetrade : Exchange {
             "topic": topic
         }))).unwrap());
         let mut message: Value = extend_2(request.clone(), params.clone());
-        let mut orders: Value = <Self as Modetrade>::watch_private(self, message_hash.clone(), message.clone()).await;
+        let mut orders: Value = <Self as Modetrade>::watch_private(self, message_hash.clone(), message.clone(), Value::Undefined).await;
         if self.get("newUpdates".into()).is_truthy() {
             limit = orders.get_limit(symbol.clone(), limit.clone());
         };
@@ -1174,7 +1174,7 @@ pub trait Modetrade : Exchange {
             remaining = Precise::string_sub(remaining.clone(), total_exec_quantity.clone());
         };
         let mut raw_status: Value = self.safe_string(order.clone(), Value::from("status"), Value::Undefined);
-        let mut status: Value = <Self as Modetrade>::parse_order_status(self, raw_status.clone());
+        let mut status: Value = self.parse_order_status(raw_status.clone());
         let mut trades: Value = Value::Undefined;
         let mut client_order_id: Value = self.safe_string(order.clone(), Value::from("clientOrderId"), Value::Undefined);
         let mut trigger_price: Value = self.safe_number(order.clone(), Value::from("triggerPrice"), Value::Undefined);
@@ -1201,7 +1201,7 @@ pub trait Modetrade : Exchange {
             "status": status,
             "fee": fee,
             "trades": trades
-        }))).unwrap()), Value::Undefined);
+        }))).unwrap()));
     }
 
     fn handle_order_update(&mut self, mut client: Value, mut message: Value) -> Value {
@@ -1342,7 +1342,7 @@ pub trait Modetrade : Exchange {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
         let mut message_hashes: Value = Value::new_array();
-        symbols = self.market_symbols(symbols.clone(), Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined);
+        symbols = self.market_symbols(symbols.clone());
         if !self.is_empty(symbols.clone()).is_truthy() {
             let mut i: usize = 0;
             while i < symbols.len() {
@@ -1355,7 +1355,7 @@ pub trait Modetrade : Exchange {
         };
         let mut url: Value = self.get("urls".into()).get(Value::from("api")).get(Value::from("ws")).get(Value::from("private")) + Value::from("/") + self.get("accountId".into());
         let mut client: Value = self.client(url.clone());
-        <Self as Modetrade>::set_positions_cache(self, client.clone(), symbols.clone());
+        <Self as Modetrade>::set_positions_cache(self, client.clone(), symbols.clone(), Value::Undefined);
         let mut fetch_positions_snapshot: Value = self.handle_option(Value::from("watchPositions"), Value::from("fetchPositionsSnapshot"), true.into());
         let mut await_positions_snapshot: Value = self.handle_option(Value::from("watchPositions"), Value::from("awaitPositionsSnapshot"), true.into());
         if fetch_positions_snapshot.is_truthy() && await_positions_snapshot.is_truthy() && self.get("positions".into()).is_nullish() {
@@ -1388,7 +1388,7 @@ pub trait Modetrade : Exchange {
     }
 
     async fn load_positions_snapshot(&mut self, mut client: Value, mut message_hash: Value) -> Value {
-        let mut positions: Value = self.fetch_positions(Value::Undefined, Value::Undefined).await;
+        let mut positions: Value = self.fetch_positions().await;
         self.set("positions".into(), ArrayCacheBySymbolBySide::new());
         let mut cache: Value = self.get("positions".into());
         let mut i: usize = 0;
@@ -1548,7 +1548,7 @@ pub trait Modetrade : Exchange {
             "topic": topic
         }))).unwrap());
         let mut message: Value = extend_2(request.clone(), params.clone());
-        return <Self as Modetrade>::watch_private(self, message_hash.clone(), message.clone()).await;
+        return <Self as Modetrade>::watch_private(self, message_hash.clone(), message.clone(), Value::Undefined).await;
     }
 
     fn handle_balance(&mut self, mut client: Value, mut message: Value) -> Value {
@@ -1834,10 +1834,10 @@ pub trait Modetrade : Exchange {
                     "v1PrivateDeleteOrders" => self.request("orders".into(), "v1".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "v1PrivateDeleteBatchorder" => self.request("batch-order".into(), "v1".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "v1PrivateDeleteClientbatchorder" => self.request("client/batch-order".into(), "v1".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    _ => unimplemented!(),
+                    _ => panic!("Unknown API method: {}", m),
                 }
             },
-            _ => unimplemented!()
+            _ => panic!("dispatch: method must be a string, got {:?}", method)
         }
     }
 }

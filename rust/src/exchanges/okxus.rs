@@ -1418,10 +1418,10 @@ pub trait Okxus : Exchange {
                     "privatePostBrokerdmasubaccountapikey" => self.request("broker/dma/subaccount/apikey".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privatePostBrokerdmatrades" => self.request("broker/dma/trades".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privatePostBrokerfdrebateperorders" => self.request("broker/fd/rebate-per-orders".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    _ => unimplemented!(),
+                    _ => panic!("Unknown API method: {}", m),
                 }
             },
-            _ => unimplemented!()
+            _ => panic!("dispatch: method must be a string, got {:?}", method)
         }
     }
 }

@@ -567,7 +567,7 @@ pub trait Alpaca : Exchange {
     async fn watch_ticker(&mut self, mut symbol: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         let mut url: Value = self.get("urls".into()).get(Value::from("api")).get(Value::from("ws")).get(Value::from("crypto"));
-        <Self as Alpaca>::authenticate(self, url.clone()).await;
+        <Self as Alpaca>::authenticate(self, url.clone(), Value::Undefined).await;
         self.load_markets(Value::Undefined, Value::Undefined).await;
         let mut market: Value = self.market(symbol.clone());
         let mut message_hash: Value = Value::from("ticker:") + market.get(Value::from("symbol"));
@@ -575,7 +575,7 @@ pub trait Alpaca : Exchange {
             "action": "subscribe",
             "quotes": Value::Json(serde_json::Value::Array(vec![market.get(Value::from("id")).into()]))
         }))).unwrap());
-        return self.watch(url.clone(), message_hash.clone(), extend_2(request.clone(), params.clone()), message_hash.clone(), Value::Undefined).await;
+        return self.watch(url.clone(), message_hash.clone(), extend_2(request.clone(), params.clone()), message_hash.clone()).await;
     }
 
     fn handle_ticker(&mut self, mut client: Value, mut message: Value) -> Value {
@@ -640,7 +640,7 @@ pub trait Alpaca : Exchange {
         timeframe = timeframe.or_default(Value::from("1m"));
         params = params.or_default(Value::new_object());
         let mut url: Value = self.get("urls".into()).get(Value::from("api")).get(Value::from("ws")).get(Value::from("crypto"));
-        <Self as Alpaca>::authenticate(self, url.clone()).await;
+        <Self as Alpaca>::authenticate(self, url.clone(), Value::Undefined).await;
         self.load_markets(Value::Undefined, Value::Undefined).await;
         let mut market: Value = self.market(symbol.clone());
         symbol = market.get(Value::from("symbol"));
@@ -649,7 +649,7 @@ pub trait Alpaca : Exchange {
             "bars": Value::Json(serde_json::Value::Array(vec![market.get(Value::from("id")).into()]))
         }))).unwrap());
         let mut message_hash: Value = Value::from("ohlcv:") + symbol.clone();
-        let mut ohlcv: Value = self.watch(url.clone(), message_hash.clone(), extend_2(request.clone(), params.clone()), message_hash.clone(), Value::Undefined).await;
+        let mut ohlcv: Value = self.watch(url.clone(), message_hash.clone(), extend_2(request.clone(), params.clone()), message_hash.clone()).await;
         if self.get("newUpdates".into()).is_truthy() {
             limit = ohlcv.get_limit(symbol.clone(), limit.clone());
         };
@@ -679,7 +679,7 @@ pub trait Alpaca : Exchange {
             stored = ArrayCacheByTimestamp::new(limit);
             self.get("ohlcvs".into()).set(symbol.clone(), stored.clone());
         };
-        let mut parsed: Value = self.parse_ohlcv(message.clone(), Value::Undefined);
+        let mut parsed: Value = self.parse_ohlcv(message.clone());
         stored.append(parsed.clone());
         let mut message_hash: Value = Value::from("ohlcv:") + symbol.clone();
         client.resolve(stored.clone(), message_hash.clone());
@@ -689,7 +689,7 @@ pub trait Alpaca : Exchange {
     async fn watch_order_book(&mut self, mut symbol: Value, mut limit: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         let mut url: Value = self.get("urls".into()).get(Value::from("api")).get(Value::from("ws")).get(Value::from("crypto"));
-        <Self as Alpaca>::authenticate(self, url.clone()).await;
+        <Self as Alpaca>::authenticate(self, url.clone(), Value::Undefined).await;
         self.load_markets(Value::Undefined, Value::Undefined).await;
         let mut market: Value = self.market(symbol.clone());
         symbol = market.get(Value::from("symbol"));
@@ -698,7 +698,7 @@ pub trait Alpaca : Exchange {
             "action": "subscribe",
             "orderbooks": Value::Json(serde_json::Value::Array(vec![market.get(Value::from("id")).into()]))
         }))).unwrap());
-        let mut orderbook: Value = self.watch(url.clone(), message_hash.clone(), extend_2(request.clone(), params.clone()), message_hash.clone(), Value::Undefined).await;
+        let mut orderbook: Value = self.watch(url.clone(), message_hash.clone(), extend_2(request.clone(), params.clone()), message_hash.clone()).await;
         return orderbook.limit();
     }
 
@@ -730,7 +730,7 @@ pub trait Alpaca : Exchange {
         let mut timestamp: Value = self.parse8601(datetime.clone());
         let mut is_snapshot: Value = self.safe_bool(message.clone(), Value::from("r"), false.into());
         if !self.get("orderbooks".into()).contains_key(symbol.clone()) {
-            self.get("orderbooks".into()).set(symbol.clone(), self.order_book(Value::Undefined, Value::Undefined));
+            self.get("orderbooks".into()).set(symbol.clone(), self.order_book());
         };
         let mut orderbook: Value = self.get("orderbooks".into()).get(symbol.clone());
         if is_snapshot.is_truthy() {
@@ -768,7 +768,7 @@ pub trait Alpaca : Exchange {
     async fn watch_trades(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         let mut url: Value = self.get("urls".into()).get(Value::from("api")).get(Value::from("ws")).get(Value::from("crypto"));
-        <Self as Alpaca>::authenticate(self, url.clone()).await;
+        <Self as Alpaca>::authenticate(self, url.clone(), Value::Undefined).await;
         self.load_markets(Value::Undefined, Value::Undefined).await;
         let mut market: Value = self.market(symbol.clone());
         symbol = market.get(Value::from("symbol"));
@@ -777,7 +777,7 @@ pub trait Alpaca : Exchange {
             "action": "subscribe",
             "trades": Value::Json(serde_json::Value::Array(vec![market.get(Value::from("id")).into()]))
         }))).unwrap());
-        let mut trades: Value = self.watch(url.clone(), message_hash.clone(), extend_2(request.clone(), params.clone()), message_hash.clone(), Value::Undefined).await;
+        let mut trades: Value = self.watch(url.clone(), message_hash.clone(), extend_2(request.clone(), params.clone()), message_hash.clone()).await;
         if self.get("newUpdates".into()).is_truthy() {
             limit = trades.get_limit(symbol.clone(), limit.clone());
         };
@@ -804,7 +804,7 @@ pub trait Alpaca : Exchange {
             stored = ArrayCache::new(limit);
             self.get("trades".into()).set(symbol.clone(), stored.clone());
         };
-        let mut parsed: Value = self.parse_trade(message.clone(), Value::Undefined);
+        let mut parsed: Value = self.parse_trade(message.clone());
         stored.append(parsed.clone());
         let mut message_hash: Value = Value::from("trade") + Value::from(":") + symbol.clone();
         client.resolve(stored.clone(), message_hash.clone());
@@ -814,7 +814,7 @@ pub trait Alpaca : Exchange {
     async fn watch_my_trades(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         let mut url: Value = self.get("urls".into()).get(Value::from("api")).get(Value::from("ws")).get(Value::from("trading"));
-        <Self as Alpaca>::authenticate(self, url.clone()).await;
+        <Self as Alpaca>::authenticate(self, url.clone(), Value::Undefined).await;
         let mut message_hash: Value = Value::from("myTrades");
         self.load_markets(Value::Undefined, Value::Undefined).await;
         if symbol.clone().is_nonnullish() {
@@ -827,7 +827,7 @@ pub trait Alpaca : Exchange {
                 "streams": Value::Json(serde_json::Value::Array(vec![Value::from("trade_updates").into()]))
             }))).unwrap())
         }))).unwrap());
-        let mut trades: Value = self.watch(url.clone(), message_hash.clone(), extend_2(request.clone(), params.clone()), message_hash.clone(), Value::Undefined).await;
+        let mut trades: Value = self.watch(url.clone(), message_hash.clone(), extend_2(request.clone(), params.clone()), message_hash.clone()).await;
         if self.get("newUpdates".into()).is_truthy() {
             limit = trades.get_limit(symbol.clone(), limit.clone());
         };
@@ -837,7 +837,7 @@ pub trait Alpaca : Exchange {
     async fn watch_orders(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         let mut url: Value = self.get("urls".into()).get(Value::from("api")).get(Value::from("ws")).get(Value::from("trading"));
-        <Self as Alpaca>::authenticate(self, url.clone()).await;
+        <Self as Alpaca>::authenticate(self, url.clone(), Value::Undefined).await;
         self.load_markets(Value::Undefined, Value::Undefined).await;
         let mut message_hash: Value = Value::from("orders");
         if symbol.clone().is_nonnullish() {
@@ -851,7 +851,7 @@ pub trait Alpaca : Exchange {
                 "streams": Value::Json(serde_json::Value::Array(vec![Value::from("trade_updates").into()]))
             }))).unwrap())
         }))).unwrap());
-        let mut orders: Value = self.watch(url.clone(), message_hash.clone(), extend_2(request.clone(), params.clone()), message_hash.clone(), Value::Undefined).await;
+        let mut orders: Value = self.watch(url.clone(), message_hash.clone(), extend_2(request.clone(), params.clone()), message_hash.clone()).await;
         if self.get("newUpdates".into()).is_truthy() {
             limit = orders.get_limit(symbol.clone(), limit.clone());
         };
@@ -917,7 +917,7 @@ pub trait Alpaca : Exchange {
             self.set("orders".into(), ArrayCacheBySymbolById::new(limit));
         };
         let mut orders: Value = self.get("orders".into());
-        let mut order: Value = self.parse_order(raw_order.clone(), Value::Undefined);
+        let mut order: Value = self.parse_order(raw_order.clone());
         orders.append(order.clone());
         let mut message_hash: Value = Value::from("orders");
         client.resolve(orders.clone(), message_hash.clone());
@@ -983,7 +983,7 @@ pub trait Alpaca : Exchange {
             let mut limit: Value = self.safe_integer(self.get("options".into()), Value::from("tradesLimit"), Value::from(1000));
             my_trades = ArrayCacheBySymbolById::new(limit);
         };
-        let mut trade: Value = <Self as Alpaca>::parse_my_trade(self, raw_order.clone());
+        let mut trade: Value = <Self as Alpaca>::parse_my_trade(self, raw_order.clone(), Value::Undefined);
         my_trades.append(trade.clone());
         let mut message_hash: Value = Value::from("myTrades:") + trade.get(Value::from("symbol"));
         client.resolve(my_trades.clone(), message_hash.clone());
@@ -1056,7 +1056,7 @@ pub trait Alpaca : Exchange {
 
     async fn authenticate(&mut self, mut url: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
-        self.check_required_credentials(Value::Undefined);
+        self.check_required_credentials();
         let mut message_hash: Value = Value::from("authenticated");
         let mut client: Value = self.client(url.clone());
         let mut future: Value = client.reusable_future(message_hash.clone());
@@ -1297,10 +1297,10 @@ pub trait Alpaca : Exchange {
                     "marketPrivateGetV2stockssymbolsnapshot" => self.request("v2/stocks/{symbol}/snapshot".into(), "market".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "marketPrivateGetV2stockssymboltrades" => self.request("v2/stocks/{symbol}/trades".into(), "market".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "marketPrivateGetV2stockssymboltradeslatest" => self.request("v2/stocks/{symbol}/trades/latest".into(), "market".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    _ => unimplemented!(),
+                    _ => panic!("Unknown API method: {}", m),
                 }
             },
-            _ => unimplemented!()
+            _ => panic!("dispatch: method must be a string, got {:?}", method)
         }
     }
 }

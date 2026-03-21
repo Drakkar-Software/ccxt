@@ -1633,10 +1633,10 @@ pub trait Zebpay : Exchange {
                     "privateSwapPostV1tradepositionclose" => self.request("v1/trade/position/close".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privateSwapPostV1tradeupdateuserleverage" => self.request("v1/trade/update/userLeverage".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privateSwapDeleteV1tradeorder" => self.request("v1/trade/order".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    _ => unimplemented!(),
+                    _ => panic!("Unknown API method: {}", m),
                 }
             },
-            _ => unimplemented!()
+            _ => panic!("dispatch: method must be a string, got {:?}", method)
         }
     }
 }

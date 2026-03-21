@@ -3205,10 +3205,10 @@ pub trait Cryptocom : Exchange {
                     "derivativesPrivatePostPrivatecreatesubaccounttransfer" => self.request("private/create-subaccount-transfer".into(), "derivatives".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "derivativesPrivatePostPrivategetsubaccountbalances" => self.request("private/get-subaccount-balances".into(), "derivatives".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "derivativesPrivatePostPrivategetorderlist" => self.request("private/get-order-list".into(), "derivatives".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    _ => unimplemented!(),
+                    _ => panic!("Unknown API method: {}", m),
                 }
             },
-            _ => unimplemented!()
+            _ => panic!("dispatch: method must be a string, got {:?}", method)
         }
     }
 }

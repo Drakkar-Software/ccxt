@@ -4633,10 +4633,10 @@ pub trait Coincatch : Exchange {
                     "privatePostApimixv1plancancelplan" => self.request("api/mix/v1/plan/cancelPlan".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privatePostApimixv1plancancelsymbolplan" => self.request("api/mix/v1/plan/cancelSymbolPlan".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privatePostApimixv1plancancelallplan" => self.request("api/mix/v1/plan/cancelAllPlan".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    _ => unimplemented!(),
+                    _ => panic!("Unknown API method: {}", m),
                 }
             },
-            _ => unimplemented!()
+            _ => panic!("dispatch: method must be a string, got {:?}", method)
         }
     }
 }

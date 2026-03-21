@@ -1025,10 +1025,10 @@ pub trait Bitbank : Exchange {
                     "privatePostUserconfirmdepositsall" => self.request("user/confirm_deposits_all".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privatePostUserrequestwithdrawal" => self.request("user/request_withdrawal".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "marketsGetSpotpairs" => self.request("spot/pairs".into(), "markets".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    _ => unimplemented!(),
+                    _ => panic!("Unknown API method: {}", m),
                 }
             },
-            _ => unimplemented!()
+            _ => panic!("dispatch: method must be a string, got {:?}", method)
         }
     }
 }

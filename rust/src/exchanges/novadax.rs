@@ -1453,10 +1453,10 @@ pub trait Novadax : Exchange {
                     "privatePostAccountsubstransfer" => self.request("account/subs/transfer".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privatePostWalletwithdrawcoin" => self.request("wallet/withdraw/coin".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privatePostAccountwithdrawcoin" => self.request("account/withdraw/coin".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    _ => unimplemented!(),
+                    _ => panic!("Unknown API method: {}", m),
                 }
             },
-            _ => unimplemented!()
+            _ => panic!("dispatch: method must be a string, got {:?}", method)
         }
     }
 }

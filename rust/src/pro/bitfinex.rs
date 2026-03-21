@@ -730,9 +730,9 @@ pub trait Bitfinex : Exchange {
 
     async fn subscribe_private(&mut self, mut message_hash: Value) -> Value {
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        <Self as Bitfinex>::authenticate(self).await;
+        <Self as Bitfinex>::authenticate(self, Value::Undefined).await;
         let mut url: Value = self.get("urls".into()).get(Value::from("api")).get(Value::from("ws")).get(Value::from("private"));
-        return self.watch(url.clone(), message_hash.clone(), Value::Undefined, Value::from(1), Value::Undefined).await;
+        return self.watch(url.clone(), message_hash.clone(), Value::Undefined, Value::from(1)).await;
     }
 
     async fn watch_ohlcv(&mut self, mut symbol: Value, mut timeframe: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
@@ -752,7 +752,7 @@ pub trait Bitfinex : Exchange {
         }))).unwrap());
         let mut url: Value = self.get("urls".into()).get(Value::from("api")).get(Value::from("ws")).get(Value::from("public"));
         // not using subscribe here because this message has a different format
-        let mut ohlcv: Value = self.watch(url.clone(), message_hash.clone(), self.deep_extend_2(request.clone(), params.clone()), message_hash.clone(), Value::Undefined).await;
+        let mut ohlcv: Value = self.watch(url.clone(), message_hash.clone(), self.deep_extend_2(request.clone(), params.clone()), message_hash.clone()).await;
         if self.get("newUpdates".into()).is_truthy() {
             limit = ohlcv.get_limit(symbol.clone(), limit.clone());
         };
@@ -854,7 +854,7 @@ pub trait Bitfinex : Exchange {
         market_id = market_id.replace(Value::from("trade:"), Value::from(""));
         market_id = market_id.replace(interval.clone() + Value::from(":"), Value::from(""));
         let mut market: Value = self.safe_market(market_id.clone(), Value::Undefined, Value::Undefined, Value::Undefined);
-        let mut timeframe: Value = self.find_timeframe(interval.clone(), Value::Undefined);
+        let mut timeframe: Value = self.find_timeframe(interval.clone());
         let mut symbol: Value = market.get(Value::from("symbol"));
         let mut message_hash: Value = channel.clone() + Value::from(":") + interval.clone() + Value::from(":") + market_id.clone();
         self.get("ohlcvs".into()).set(symbol.clone(), self.safe_value(self.get("ohlcvs".into()), symbol.clone(), Value::new_object()));
@@ -1540,7 +1540,7 @@ pub trait Bitfinex : Exchange {
         while i < message_hashes.len() {
             let mut message_hash: Value = message_hashes.get(i.into());
             let mut sub_hash: Value = sub_message_hashes.get(i.into());
-            self.clean_unsubscription(client.clone(), sub_hash.clone(), message_hash.clone(), Value::Undefined);
+            self.clean_unsubscription(client.clone(), sub_hash.clone(), message_hash.clone());
             i += 1;
         };
         self.clean_cache(subscription.clone());
@@ -1613,7 +1613,7 @@ pub trait Bitfinex : Exchange {
                 "event": event
             }))).unwrap());
             let mut message: Value = extend_2(request.clone(), params.clone());
-            self.watch(url.clone(), message_hash.clone(), message.clone(), message_hash.clone(), Value::Undefined);
+            self.watch(url.clone(), message_hash.clone(), message.clone(), message_hash.clone());
         };
         return future.clone();
     }
@@ -2050,10 +2050,10 @@ pub trait Bitfinex : Exchange {
                     "privatePostAuthrpulsehist" => self.request("auth/r/pulse/hist".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privatePostAuthwpulseadd" => self.request("auth/w/pulse/add".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privatePostAuthwpulsedel" => self.request("auth/w/pulse/del".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    _ => unimplemented!(),
+                    _ => panic!("Unknown API method: {}", m),
                 }
             },
-            _ => unimplemented!()
+            _ => panic!("dispatch: method must be a string, got {:?}", method)
         }
     }
 }

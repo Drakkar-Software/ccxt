@@ -3212,10 +3212,10 @@ pub trait Kraken : Exchange {
                     "privatePostEarndeallocatestatus" => self.request("Earn/DeallocateStatus".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privatePostEarnstrategies" => self.request("Earn/Strategies".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privatePostEarnallocations" => self.request("Earn/Allocations".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    _ => unimplemented!(),
+                    _ => panic!("Unknown API method: {}", m),
                 }
             },
-            _ => unimplemented!()
+            _ => panic!("dispatch: method must be a string, got {:?}", method)
         }
     }
 }

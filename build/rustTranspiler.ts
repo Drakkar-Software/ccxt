@@ -2222,10 +2222,10 @@ async fn dispatch(&mut self, method: Value, params: Value, context: Value) -> Va
             `                "${k}" => ${requestCall}"${v.path}".into(), "${v.apiName}".into(), "${v.method.toUpperCase()}".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,`
         );
     }
-    bodyParts.push(`                _ => unimplemented!(),
+    bodyParts.push(`                _ => panic!("Unknown API method: {}", m),
             }
         },
-        _ => unimplemented!()
+        _ => panic!("dispatch: method must be a string, got {:?}", method)
     }
 }`);
     return bodyParts.map((part) => part.split('\n').map((l) => `    ${l}`).join('\n')).join('\n');

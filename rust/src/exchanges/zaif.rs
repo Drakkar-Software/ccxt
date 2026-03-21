@@ -820,10 +820,10 @@ pub trait Zaif : Exchange {
                     "fapiGetTickergroupidpair" => self.request("ticker/{group_id}/{pair}".into(), "fapi".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "fapiGetTradesgroupidpair" => self.request("trades/{group_id}/{pair}".into(), "fapi".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "fapiGetDepthgroupidpair" => self.request("depth/{group_id}/{pair}".into(), "fapi".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    _ => unimplemented!(),
+                    _ => panic!("Unknown API method: {}", m),
                 }
             },
-            _ => unimplemented!()
+            _ => panic!("dispatch: method must be a string, got {:?}", method)
         }
     }
 }

@@ -3350,10 +3350,10 @@ pub trait Ascendex : Exchange {
                     "v2PrivateAccountgroupDeleteFuturesorder" => self.request("futures/order".into(), "v2".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "v2PrivateAccountgroupDeleteFuturesorderbatch" => self.request("futures/order/batch".into(), "v2".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "v2PrivateAccountgroupDeleteFuturesorderall" => self.request("futures/order/all".into(), "v2".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    _ => unimplemented!(),
+                    _ => panic!("Unknown API method: {}", m),
                 }
             },
-            _ => unimplemented!()
+            _ => panic!("dispatch: method must be a string, got {:?}", method)
         }
     }
 }

@@ -394,7 +394,7 @@ pub trait Apex : Exchange {
     async fn watch_trades_for_symbols(&mut self, mut symbols: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        symbols = self.market_symbols(symbols.clone(), Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined);
+        symbols = self.market_symbols(symbols.clone());
         let mut symbols_length: usize = symbols.len();
         if symbols_length.clone() == Value::from(0) {
             panic!(r###"ArgumentsRequired::new(self.get("id".into()) + Value::from(" watchTradesForSymbols() requires a non-empty array of symbols"))"###);
@@ -520,7 +520,7 @@ pub trait Apex : Exchange {
         if symbols_length.clone() == Value::from(0) {
             panic!(r###"ArgumentsRequired::new(self.get("id".into()) + Value::from(" watchOrderBookForSymbols() requires a non-empty array of symbols"))"###);
         };
-        symbols = self.market_symbols(symbols.clone(), Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined);
+        symbols = self.market_symbols(symbols.clone());
         let mut time_stamp: Value = self.milliseconds().to_string();
         let mut url: Value = self.get("urls".into()).get(Value::from("api")).get(Value::from("ws")).get(Value::from("public")) + Value::from("&timestamp=") + time_stamp.clone();
         let mut topics: Value = Value::new_array();
@@ -549,7 +549,7 @@ pub trait Apex : Exchange {
             "args": topics
         }))).unwrap());
         let mut message: Value = extend_2(request.clone(), params.clone());
-        return self.watch_multiple(url.clone(), message_hashes.clone(), message.clone(), message_hashes.clone(), Value::Undefined).await;
+        return self.watch_multiple(url.clone(), message_hashes.clone(), message.clone(), message_hashes.clone()).await;
     }
 
     fn handle_order_book(&mut self, mut client: Value, mut message: Value) -> Value {
@@ -594,7 +594,7 @@ pub trait Apex : Exchange {
         let mut symbol: Value = market.get(Value::from("symbol"));
         let mut timestamp: Value = self.safe_integer_product(message.clone(), Value::from("ts"), Value::from(0.001), Value::Undefined);
         if !self.get("orderbooks".into()).contains_key(symbol.clone()) {
-            self.get("orderbooks".into()).set(symbol.clone(), self.order_book(Value::Undefined, Value::Undefined));
+            self.get("orderbooks".into()).set(symbol.clone(), self.order_book());
         };
         let mut orderbook: Value = self.get("orderbooks".into()).get(symbol.clone());
         if is_snapshot.is_truthy() {
@@ -645,7 +645,7 @@ pub trait Apex : Exchange {
     async fn watch_tickers(&mut self, mut symbols: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        symbols = self.market_symbols(symbols.clone(), Value::Undefined, false.into(), Value::Undefined, Value::Undefined);
+        symbols = self.market_symbols(symbols.clone(), Value::Undefined, false.into());
         let mut message_hashes: Value = Value::new_array();
         let mut time_stamp: Value = self.milliseconds().to_string();
         let mut url: Value = self.get("urls".into()).get(Value::from("api")).get(Value::from("ws")).get(Value::from("public")) + Value::from("&timestamp=") + time_stamp.clone();
@@ -666,7 +666,7 @@ pub trait Apex : Exchange {
             result.set(ticker.get(Value::from("symbol")), ticker.clone());
             return result.clone();
         };
-        return self.filter_by_array(self.get("tickers".into()), Value::from("symbol"), symbols.clone(), Value::Undefined);
+        return self.filter_by_array(self.get("tickers".into()), Value::from("symbol"), symbols.clone());
     }
 
     fn handle_ticker(&mut self, mut client: Value, mut message: Value) -> Value {
@@ -697,7 +697,7 @@ pub trait Apex : Exchange {
         let mut symbol: Value = Value::Undefined;
         let mut parsed: Value = Value::Undefined;
         if update_type.clone() == Value::from("snapshot") {
-            parsed = self.parse_ticker(data.clone(), Value::Undefined);
+            parsed = self.parse_ticker(data.clone());
             symbol = parsed.get(Value::from("symbol"));
         } else if update_type.clone() == Value::from("delta") {
             let mut topic_parts: Value = topic.split(Value::from("."));
@@ -708,7 +708,7 @@ pub trait Apex : Exchange {
             let mut ticker: Value = self.safe_dict(self.get("tickers".into()), symbol.clone(), Value::new_object());
             let mut raw_ticker: Value = self.safe_dict(ticker.clone(), Value::from("info"), Value::new_object());
             let mut merged: Value = extend_2(raw_ticker.clone(), data.clone());
-            parsed = self.parse_ticker(merged.clone(), Value::Undefined);
+            parsed = self.parse_ticker(merged.clone());
         };
         let mut timestamp: Value = self.safe_integer_product(message.clone(), Value::from("ts"), Value::from(0.001), Value::Undefined);
         parsed.set("timestamp".into(), timestamp.clone());
@@ -782,7 +782,7 @@ pub trait Apex : Exchange {
         let mut topic_parts: Value = topic.split(Value::from("."));
         let mut topic_length: usize = topic_parts.len();
         let mut timeframe_id: Value = self.safe_string(topic_parts.clone(), Value::from(1), Value::Undefined);
-        let mut timeframe: Value = self.find_timeframe(timeframe_id.clone(), Value::Undefined);
+        let mut timeframe: Value = self.find_timeframe(timeframe_id.clone());
         let mut market_id: Value = self.safe_string(topic_parts.clone(), topic_length.clone() - Value::from(1), Value::Undefined);
         let mut is_spot: Value = (client.get(url.clone()).index_of(Value::from("spot")) > Value::from(1).neg()).into();
         let mut market_type: Value = if is_spot.is_truthy() { Value::from("spot") } else { Value::from("contract") };
@@ -837,7 +837,7 @@ pub trait Apex : Exchange {
         };
         let mut time_stamp: Value = self.milliseconds().to_string();
         let mut url: Value = self.get("urls".into()).get(Value::from("api")).get(Value::from("ws")).get(Value::from("private")) + Value::from("&timestamp=") + time_stamp.clone();
-        <Self as Apex>::authenticate(self, url.clone()).await;
+        <Self as Apex>::authenticate(self, url.clone(), Value::Undefined).await;
         let mut trades: Value = <Self as Apex>::watch_topics(self, url.clone(), Value::Json(serde_json::Value::Array(vec![message_hash.clone().into()])), Value::Json(serde_json::Value::Array(vec![Value::from("myTrades").into()])), params.clone()).await;
         if self.get("newUpdates".into()).is_truthy() {
             limit = trades.get_limit(symbol.clone(), limit.clone());
@@ -850,14 +850,14 @@ pub trait Apex : Exchange {
         self.load_markets(Value::Undefined, Value::Undefined).await;
         let mut message_hash: Value = Value::from("");
         if !self.is_empty(symbols.clone()).is_truthy() {
-            symbols = self.market_symbols(symbols.clone(), Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined);
+            symbols = self.market_symbols(symbols.clone());
             message_hash = Value::from("::") + symbols.join(Value::from(","));
         };
         let mut time_stamp: Value = self.milliseconds().to_string();
         let mut url: Value = self.get("urls".into()).get(Value::from("api")).get(Value::from("ws")).get(Value::from("private")) + Value::from("&timestamp=") + time_stamp.clone();
         message_hash = Value::from("positions") + message_hash.clone();
         let mut client: Value = self.client(url.clone());
-        <Self as Apex>::authenticate(self, url.clone()).await;
+        <Self as Apex>::authenticate(self, url.clone(), Value::Undefined).await;
         <Self as Apex>::set_positions_cache(self, client.clone(), symbols.clone());
         let mut cache: Value = self.get("positions".into());
         if cache.clone().is_nullish() {
@@ -882,7 +882,7 @@ pub trait Apex : Exchange {
         };
         let mut time_stamp: Value = self.milliseconds().to_string();
         let mut url: Value = self.get("urls".into()).get(Value::from("api")).get(Value::from("ws")).get(Value::from("private")) + Value::from("&timestamp=") + time_stamp.clone();
-        <Self as Apex>::authenticate(self, url.clone()).await;
+        <Self as Apex>::authenticate(self, url.clone(), Value::Undefined).await;
         let mut topics: Value = Value::Json(serde_json::Value::Array(vec![Value::from("orders").into()]));
         let mut orders: Value = <Self as Apex>::watch_topics(self, url.clone(), Value::Json(serde_json::Value::Array(vec![message_hash.clone().into()])), topics.clone(), params.clone()).await;
         if self.get("newUpdates".into()).is_truthy() {
@@ -977,7 +977,7 @@ pub trait Apex : Exchange {
         let mut i: usize = 0;
         while i < lists.len() {
             let mut parsed: Value = Value::Undefined;
-            parsed = self.parse_order(lists.get(i.into()), Value::Undefined);
+            parsed = self.parse_order(lists.get(i.into()));
             let mut symbol: Value = parsed.get(Value::from("symbol"));
             symbols.set(symbol.clone(), true.into());
             orders.append(parsed.clone());
@@ -1009,7 +1009,7 @@ pub trait Apex : Exchange {
 
     async fn load_positions_snapshot(&mut self, mut client: Value, mut message_hash: Value) -> Value {
         // as only one ws channel gives positions for all types, for snapshot must load all positions
-        let mut fetch_functions: Value = Value::Json(serde_json::Value::Array(vec![self.fetch_positions(Value::Undefined, Value::Undefined).into()]));
+        let mut fetch_functions: Value = Value::Json(serde_json::Value::Array(vec![self.fetch_positions(Value::Undefined).into()]));
         let mut promises: Value = Promise::all(fetch_functions.clone()).await;
         self.set("positions".into(), ArrayCacheBySymbolBySide::new());
         let mut cache: Value = self.get("positions".into());
@@ -1102,7 +1102,7 @@ pub trait Apex : Exchange {
 
     async fn authenticate(&mut self, mut url: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
-        self.check_required_credentials(Value::Undefined);
+        self.check_required_credentials();
         let mut timestamp: Value = self.milliseconds().to_string();
         let mut request_path: Value = Value::from("/ws/accounts");
         let mut http_method: Value = Value::from("GET");
@@ -1128,7 +1128,7 @@ pub trait Apex : Exchange {
                 "op": "login",
                 "args": Value::Json(serde_json::Value::Array(vec![request.clone().to_string().into()]))
             }))).unwrap());
-            self.watch(url.clone(), message_hash.clone(), message.clone(), message_hash.clone(), Value::Undefined);
+            self.watch(url.clone(), message_hash.clone(), message.clone(), message_hash.clone());
         };
         return future.clone();
     }
@@ -1380,10 +1380,10 @@ pub trait Apex : Exchange {
                     "privatePostV3setinitialmarginrate" => self.request("v3/set-initial-margin-rate".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privatePostV3transferout" => self.request("v3/transfer-out".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privatePostV3contracttransferout" => self.request("v3/contract-transfer-out".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    _ => unimplemented!(),
+                    _ => panic!("Unknown API method: {}", m),
                 }
             },
-            _ => unimplemented!()
+            _ => panic!("dispatch: method must be a string, got {:?}", method)
         }
     }
 }

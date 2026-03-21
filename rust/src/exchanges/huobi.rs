@@ -1880,10 +1880,10 @@ pub trait Huobi : Exchange {
                     "contractPrivatePostV5positionlever" => self.request("v5/position/lever".into(), "contract".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "contractPrivatePostV5positionmode" => self.request("v5/position/mode".into(), "contract".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "contractPrivatePostV5accountfeedeductioncurrency" => self.request("v5/account/fee_deduction_currency".into(), "contract".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    _ => unimplemented!(),
+                    _ => panic!("Unknown API method: {}", m),
                 }
             },
-            _ => unimplemented!()
+            _ => panic!("dispatch: method must be a string, got {:?}", method)
         }
     }
 }

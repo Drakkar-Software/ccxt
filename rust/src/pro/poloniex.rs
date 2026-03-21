@@ -562,7 +562,7 @@ pub trait Poloniex : Exchange {
 
     async fn authenticate(&mut self, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
-        self.check_required_credentials(Value::Undefined);
+        self.check_required_credentials();
         let mut timestamp: Value = self.number_to_string(self.milliseconds());
         let mut url: Value = self.get("urls".into()).get(Value::from("api")).get(Value::from("ws")).get(Value::from("private"));
         let mut message_hash: Value = Value::from("authenticated");
@@ -587,7 +587,7 @@ signTimestamp=") + timestamp.clone();
             }))).unwrap());
             // optional
             let mut message: Value = extend_2(request.clone(), params.clone());
-            future = self.watch(url.clone(), message_hash.clone(), message.clone(), message_hash.clone(), Value::Undefined).await;
+            future = self.watch(url.clone(), message_hash.clone(), message.clone(), message_hash.clone()).await;
             //
             //    {
             //        "data": {
@@ -632,7 +632,7 @@ signTimestamp=") + timestamp.clone();
             subscribe.set("symbols".into(), market_ids.clone());
         };
         let mut request: Value = extend_2(subscribe.clone(), params.clone());
-        return self.watch(url.clone(), message_hash.clone(), request.clone(), message_hash.clone(), Value::Undefined).await;
+        return self.watch(url.clone(), message_hash.clone(), request.clone(), message_hash.clone()).await;
     }
 
     async fn trade_request(&mut self, mut name: Value, mut params: Value) -> Value {
@@ -644,13 +644,13 @@ signTimestamp=") + timestamp.clone();
             "event": name,
             "params": params
         }))).unwrap());
-        return self.watch(url.clone(), message_hash.clone(), subscribe.clone(), message_hash.clone(), Value::Undefined).await;
+        return self.watch(url.clone(), message_hash.clone(), subscribe.clone(), message_hash.clone()).await;
     }
 
     async fn create_order_ws(&mut self, mut symbol: Value, mut r#type: Value, mut side: Value, mut amount: Value, mut price: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
-        <Self as Poloniex>::load_markets(self, Value::Undefined, Value::Undefined).await;
-        <Self as Poloniex>::authenticate(self).await;
+        self.load_markets(Value::Undefined, Value::Undefined).await;
+        <Self as Poloniex>::authenticate(self, Value::Undefined).await;
         let mut market: Value = self.market(symbol.clone());
         let mut uppercase_type: Value = r#type.to_upper_case();
         let mut uppercase_side: Value = side.to_upper_case();
@@ -709,8 +709,8 @@ signTimestamp=") + timestamp.clone();
 
     async fn cancel_orders_ws(&mut self, mut ids: Value, mut symbol: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
-        <Self as Poloniex>::load_markets(self, Value::Undefined, Value::Undefined).await;
-        <Self as Poloniex>::authenticate(self).await;
+        self.load_markets(Value::Undefined, Value::Undefined).await;
+        <Self as Poloniex>::authenticate(self, Value::Undefined).await;
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
             "orderIds": ids
         }))).unwrap());
@@ -719,8 +719,8 @@ signTimestamp=") + timestamp.clone();
 
     async fn cancel_all_orders_ws(&mut self, mut symbol: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
-        <Self as Poloniex>::load_markets(self, Value::Undefined, Value::Undefined).await;
-        <Self as Poloniex>::authenticate(self).await;
+        self.load_markets(Value::Undefined, Value::Undefined).await;
+        <Self as Poloniex>::authenticate(self, Value::Undefined).await;
         return self.dispatch("tradeRequest".into(), Value::from("cancelAllOrders"), params.clone()).await;
     }
 
@@ -753,7 +753,7 @@ signTimestamp=") + timestamp.clone();
     async fn watch_ohlcv(&mut self, mut symbol: Value, mut timeframe: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
         timeframe = timeframe.or_default(Value::from("1m"));
         params = params.or_default(Value::new_object());
-        <Self as Poloniex>::load_markets(self, Value::Undefined, Value::Undefined).await;
+        self.load_markets(Value::Undefined, Value::Undefined).await;
         let mut timeframes: Value = self.safe_value(self.get("options".into()), Value::from("timeframes"), Value::new_object());
         let mut channel: Value = self.safe_string(timeframes.clone(), timeframe.clone(), timeframe.clone());
         if channel.clone().is_nullish() {
@@ -768,7 +768,7 @@ signTimestamp=") + timestamp.clone();
 
     async fn watch_ticker(&mut self, mut symbol: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
-        <Self as Poloniex>::load_markets(self, Value::Undefined, Value::Undefined).await;
+        self.load_markets(Value::Undefined, Value::Undefined).await;
         symbol = self.symbol(symbol.clone());
         let mut tickers: Value = <Self as Poloniex>::watch_tickers(self, Value::Json(serde_json::Value::Array(vec![symbol.clone().into()])), params.clone()).await;
         return self.safe_value(tickers.clone(), symbol.clone(), Value::Undefined);
@@ -776,14 +776,14 @@ signTimestamp=") + timestamp.clone();
 
     async fn watch_tickers(&mut self, mut symbols: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
-        <Self as Poloniex>::load_markets(self, Value::Undefined, Value::Undefined).await;
+        self.load_markets(Value::Undefined, Value::Undefined).await;
         let mut name: Value = Value::from("ticker");
-        symbols = self.market_symbols(symbols.clone(), Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined);
+        symbols = self.market_symbols(symbols.clone());
         let mut new_tickers: Value = <Self as Poloniex>::subscribe(self, name.clone(), name.clone(), false.into(), symbols.clone(), params.clone()).await;
         if self.get("newUpdates".into()).is_truthy() {
             return new_tickers.clone();
         };
-        return self.filter_by_array(self.get("tickers".into()), Value::from("symbol"), symbols.clone(), Value::Undefined);
+        return self.filter_by_array(self.get("tickers".into()), Value::from("symbol"), symbols.clone());
     }
 
     async fn watch_trades(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
@@ -793,7 +793,7 @@ signTimestamp=") + timestamp.clone();
 
     async fn watch_trades_for_symbols(&mut self, mut symbols: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
-        <Self as Poloniex>::load_markets(self, Value::Undefined, Value::Undefined).await;
+        self.load_markets(Value::Undefined, Value::Undefined).await;
         symbols = self.market_symbols(symbols.clone(), Value::Undefined, false.into(), true.into(), true.into());
         let mut name: Value = Value::from("trades");
         let mut url: Value = self.get("urls".into()).get(Value::from("api")).get(Value::from("ws")).get(Value::from("public"));
@@ -812,7 +812,7 @@ signTimestamp=") + timestamp.clone();
                 i += 1;
             };
         };
-        let mut trades: Value = self.watch_multiple(url.clone(), message_hashes.clone(), request.clone(), message_hashes.clone(), Value::Undefined).await;
+        let mut trades: Value = self.watch_multiple(url.clone(), message_hashes.clone(), request.clone(), message_hashes.clone()).await;
         if self.get("newUpdates".into()).is_truthy() {
             let mut first: Value = self.safe_value(trades.clone(), Value::from(0), Value::Undefined);
             let mut trade_symbol: Value = self.safe_string(first.clone(), Value::from("symbol"), Value::Undefined);
@@ -823,7 +823,7 @@ signTimestamp=") + timestamp.clone();
 
     async fn watch_order_book(&mut self, mut symbol: Value, mut limit: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
-        <Self as Poloniex>::load_markets(self, Value::Undefined, Value::Undefined).await;
+        self.load_markets(Value::Undefined, Value::Undefined).await;
         let mut watch_order_book_options: Value = self.safe_value(self.get("options".into()), Value::from("watchOrderBook"), Value::Undefined);
         let mut name: Value = self.safe_string(watch_order_book_options.clone(), Value::from("name"), Value::from("book_lv2"));
         (name, params) = shift_2(self.handle_option_and_params(params.clone(), Value::from("method"), Value::from("name"), name.clone()));
@@ -833,9 +833,9 @@ signTimestamp=") + timestamp.clone();
 
     async fn watch_orders(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
-        <Self as Poloniex>::load_markets(self, Value::Undefined, Value::Undefined).await;
+        self.load_markets(Value::Undefined, Value::Undefined).await;
         let mut name: Value = Value::from("orders");
-        <Self as Poloniex>::authenticate(self).await;
+        <Self as Poloniex>::authenticate(self, Value::Undefined).await;
         if symbol.clone().is_nonnullish() {
             symbol = self.symbol(symbol.clone());
         };
@@ -849,10 +849,10 @@ signTimestamp=") + timestamp.clone();
 
     async fn watch_my_trades(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
-        <Self as Poloniex>::load_markets(self, Value::Undefined, Value::Undefined).await;
+        self.load_markets(Value::Undefined, Value::Undefined).await;
         let mut name: Value = Value::from("orders");
         let mut message_hash: Value = Value::from("myTrades");
-        <Self as Poloniex>::authenticate(self).await;
+        <Self as Poloniex>::authenticate(self, Value::Undefined).await;
         if symbol.clone().is_nonnullish() {
             symbol = self.symbol(symbol.clone());
         };
@@ -866,9 +866,9 @@ signTimestamp=") + timestamp.clone();
 
     async fn watch_balance(&mut self, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
-        <Self as Poloniex>::load_markets(self, Value::Undefined, Value::Undefined).await;
+        self.load_markets(Value::Undefined, Value::Undefined).await;
         let mut name: Value = Value::from("balances");
-        <Self as Poloniex>::authenticate(self).await;
+        <Self as Poloniex>::authenticate(self, Value::Undefined).await;
         return <Self as Poloniex>::subscribe(self, name.clone(), name.clone(), true.into(), Value::Undefined, params.clone()).await;
     }
 
@@ -1306,7 +1306,7 @@ signTimestamp=") + timestamp.clone();
                 "currency": self.safe_string(order.clone(), Value::from("feeCurrency"), Value::Undefined)
             }))).unwrap()),
             "trades": trades
-        }))).unwrap()), Value::Undefined);
+        }))).unwrap()));
     }
 
     fn handle_ticker(&mut self, mut client: Value, mut message: Value) -> Value {
@@ -1339,7 +1339,7 @@ signTimestamp=") + timestamp.clone();
             let mut item: Value = data.get(i.into());
             let mut market_id: Value = self.safe_string(item.clone(), Value::from("symbol"), Value::Undefined);
             if market_id.clone().is_nonnullish() {
-                let mut ticker: Value = self.parse_ticker(item.clone(), Value::Undefined);
+                let mut ticker: Value = self.parse_ticker(item.clone());
                 let mut symbol: Value = ticker.get(Value::from("symbol"));
                 self.get("tickers".into()).set(symbol.clone(), ticker.clone());
                 new_tickers.set(symbol.clone(), ticker.clone());
@@ -1353,7 +1353,7 @@ signTimestamp=") + timestamp.clone();
             let mut parts: Value = message_hash.split(Value::from("::"));
             let mut symbols_string: Value = parts.get(Value::from(1));
             let mut symbols: Value = symbols_string.split(Value::from(","));
-            let mut tickers: Value = self.filter_by_array(new_tickers.clone(), Value::from("symbol"), symbols.clone(), Value::Undefined);
+            let mut tickers: Value = self.filter_by_array(new_tickers.clone(), Value::from("symbol"), symbols.clone());
             if !self.is_empty(tickers.clone()).is_truthy() {
                 client.resolve(tickers.clone(), message_hash.clone());
             };
@@ -1785,10 +1785,10 @@ signTimestamp=") + timestamp.clone();
                     "swapprivateDeleteV3tradeorder" => self.request("v3/trade/order".into(), "swapPrivate".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "swapprivateDeleteV3tradebatchorders" => self.request("v3/trade/batchOrders".into(), "swapPrivate".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "swapprivateDeleteV3tradeallorders" => self.request("v3/trade/allOrders".into(), "swapPrivate".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    _ => unimplemented!(),
+                    _ => panic!("Unknown API method: {}", m),
                 }
             },
-            _ => unimplemented!()
+            _ => panic!("dispatch: method must be a string, got {:?}", method)
         }
     }
 }

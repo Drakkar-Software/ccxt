@@ -896,10 +896,10 @@ pub trait Btcbox : Exchange {
                     "privatePostTradeview" => <Self as Btcbox>::request(self, "trade_view".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privatePostWallet" => <Self as Btcbox>::request(self, "wallet".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "webapiGetAjaxcoincoininfo" => <Self as Btcbox>::request(self, "ajax/coin/coinInfo".into(), "webApi".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    _ => unimplemented!(),
+                    _ => panic!("Unknown API method: {}", m),
                 }
             },
-            _ => unimplemented!()
+            _ => panic!("dispatch: method must be a string, got {:?}", method)
         }
     }
 }

@@ -1679,10 +1679,10 @@ pub trait Foxbit : Exchange {
                     "v3PrivatePostWithdrawals" => self.request("withdrawals".into(), "v3".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "v3PrivatePutOrderscancel" => self.request("orders/cancel".into(), "v3".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "statusPublicGetStatus" => self.request("status".into(), "status".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    _ => unimplemented!(),
+                    _ => panic!("Unknown API method: {}", m),
                 }
             },
-            _ => unimplemented!()
+            _ => panic!("dispatch: method must be a string, got {:?}", method)
         }
     }
 }

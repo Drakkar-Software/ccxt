@@ -1172,10 +1172,10 @@ pub trait Bit2c : Exchange {
                     "privateGetOrdergetbyid" => self.request("Order/GetById".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privateGetOrderaccounthistory" => self.request("Order/AccountHistory".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privateGetOrderorderhistory" => self.request("Order/OrderHistory".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    _ => unimplemented!(),
+                    _ => panic!("Unknown API method: {}", m),
                 }
             },
-            _ => unimplemented!()
+            _ => panic!("dispatch: method must be a string, got {:?}", method)
         }
     }
 }

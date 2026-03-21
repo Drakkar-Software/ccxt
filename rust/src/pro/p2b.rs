@@ -475,7 +475,7 @@ pub trait P2b : Exchange {
             "id": self.milliseconds()
         }))).unwrap());
         let mut query: Value = extend_2(subscribe.clone(), params.clone());
-        return self.watch(url.clone(), message_hash.clone(), query.clone(), message_hash.clone(), Value::Undefined).await;
+        return self.watch(url.clone(), message_hash.clone(), query.clone(), message_hash.clone()).await;
     }
 
     async fn watch_ohlcv(&mut self, mut symbol: Value, mut timeframe: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
@@ -517,7 +517,7 @@ pub trait P2b : Exchange {
     async fn watch_tickers(&mut self, mut symbols: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        symbols = self.market_symbols(symbols.clone(), Value::Undefined, false.into(), Value::Undefined, Value::Undefined);
+        symbols = self.market_symbols(symbols.clone(), Value::Undefined, false.into());
         let mut watch_ticker_options: Value = self.safe_dict(self.get("options".into()), Value::from("watchTicker"), Value::Undefined);
         let mut name: Value = self.safe_string(watch_ticker_options.clone(), Value::from("name"), Value::from("state"));
         // or price
@@ -537,8 +537,8 @@ pub trait P2b : Exchange {
             "params": args,
             "id": self.milliseconds()
         }))).unwrap());
-        self.watch_multiple(url.clone(), message_hashes.clone(), extend_2(request.clone(), params.clone()), message_hashes.clone(), Value::Undefined).await;
-        return self.filter_by_array(self.get("tickers".into()), Value::from("symbol"), symbols.clone(), Value::Undefined);
+        self.watch_multiple(url.clone(), message_hashes.clone(), extend_2(request.clone(), params.clone()), message_hashes.clone()).await;
+        return self.filter_by_array(self.get("tickers".into()), Value::from("symbol"), symbols.clone());
     }
 
     async fn watch_trades(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
@@ -566,7 +566,7 @@ pub trait P2b : Exchange {
             "id": self.milliseconds()
         }))).unwrap());
         let mut query: Value = extend_2(subscribe.clone(), params.clone());
-        let mut trades: Value = self.watch_multiple(url.clone(), message_hashes.clone(), query.clone(), message_hashes.clone(), Value::Undefined).await;
+        let mut trades: Value = self.watch_multiple(url.clone(), message_hashes.clone(), query.clone(), message_hashes.clone()).await;
         if self.get("newUpdates".into()).is_truthy() {
             let mut first: Value = self.safe_value(trades.clone(), Value::from(0), Value::Undefined);
             let mut trade_symbol: Value = self.safe_string(first.clone(), Value::from("symbol"), Value::Undefined);
@@ -725,7 +725,7 @@ pub trait P2b : Exchange {
                 "last": last_price,
                 "close": last_price,
                 "symbol": market.get(Value::from("symbol"))
-            }))).unwrap()), Value::Undefined);
+            }))).unwrap()));
         } else {
             ticker = self.parse_ticker(ticker_data.clone(), market.clone());
         };
@@ -889,10 +889,10 @@ pub trait P2b : Exchange {
                     "privatePostAccountorder" => self.request("account/order".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privatePostAccountorderhistory" => self.request("account/order_history".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privatePostAccountexecutedhistory" => self.request("account/executed_history".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    _ => unimplemented!(),
+                    _ => panic!("Unknown API method: {}", m),
                 }
             },
-            _ => unimplemented!()
+            _ => panic!("dispatch: method must be a string, got {:?}", method)
         }
     }
 }

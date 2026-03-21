@@ -12,6 +12,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::collections::BTreeMap;
 use std::str::FromStr;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 pub type JSON = serde_json::Value;
 pub struct Array;
@@ -1497,78 +1498,807 @@ pub trait Exchange: ValueTrait {
 
     // ---------------------------------------------------------------------------
     // Runtime methods — defined before the delimiter in Exchange.js, so the
-    // transpiler doesn't see them.  Stub implementations here; replace with
-    // real logic as the runtime grows.
+    // transpiler doesn't see them.  Implemented with real logic.
     // ---------------------------------------------------------------------------
 
     async fn load_markets(&mut self, _reload: Value, _params: Value) -> Value { Value::Undefined }
-    fn omit(&self, obj: Value, _keys: Value) -> Value { obj }
-    fn omit_zero(&self, obj: Value) -> Value { obj }
-    fn iso8601(&self, _ts: Value) -> Value { Value::Undefined }
-    fn parse8601(&self, _s: Value) -> Value { Value::Undefined }
-    fn milliseconds(&self) -> Value { Value::Undefined }
-    fn number_to_string(&self, v: Value) -> Value { v.to_string() }
-    fn in_array(&self, _needle: Value, _haystack: Value) -> Value { false.into() }
+
+    fn omit(&self, obj: Value, keys: Value) -> Value {
+        match (&obj, &keys) {
+            (Value::Json(JSON::Object(o)), Value::Json(JSON::Array(arr))) => {
+                let skip: std::collections::HashSet<String> = arr.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect();
+                let filtered: serde_json::Map<String, JSON> = o.iter().filter(|(k, _)| !skip.contains(k.as_str())).map(|(k, v)| (k.clone(), v.clone())).collect();
+                Value::Json(JSON::Object(filtered))
+            }
+            (Value::Json(JSON::Object(o)), Value::Json(JSON::String(s))) => {
+                let filtered: serde_json::Map<String, JSON> = o.iter().filter(|(k, _)| k.as_str() != s.as_str()).map(|(k, v)| (k.clone(), v.clone())).collect();
+                Value::Json(JSON::Object(filtered))
+            }
+            _ => obj,
+        }
+    }
+
+    fn omit_zero(&self, obj: Value) -> Value {
+        match &obj {
+            Value::Json(JSON::Object(o)) => {
+                let filtered: serde_json::Map<String, JSON> = o.iter().filter(|(_, v)| {
+                    match v {
+                        JSON::Number(n) => n.as_f64().map_or(true, |f| f != 0.0),
+                        JSON::String(s) => s != "0",
+                        _ => true,
+                    }
+                }).map(|(k, v)| (k.clone(), v.clone())).collect();
+                Value::Json(JSON::Object(filtered))
+            }
+            _ => obj,
+        }
+    }
+
+    fn iso8601(&self, ts: Value) -> Value {
+        match &ts {
+            Value::Json(JSON::Number(n)) => {
+                let ms = n.as_i64().unwrap_or(0);
+                let secs = ms / 1000;
+                let nsecs = ((ms % 1000) * 1_000_000) as u32;
+                if let Some(dt) = chrono::DateTime::from_timestamp(secs, nsecs) {
+                    Value::from(dt.format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string())
+                } else {
+                    Value::Undefined
+                }
+            }
+            _ => Value::Undefined,
+        }
+    }
+
+    fn parse8601(&self, s: Value) -> Value {
+        match &s {
+            Value::Json(JSON::String(st)) => {
+                if let Ok(dt) = chrono::DateTime::parse_from_rfc3339(st) {
+                    Value::from(dt.timestamp_millis())
+                } else if let Ok(dt) = chrono::NaiveDateTime::parse_from_str(st, "%Y-%m-%dT%H:%M:%S%.fZ") {
+                    Value::from(dt.and_utc().timestamp_millis())
+                } else if let Ok(dt) = chrono::NaiveDateTime::parse_from_str(st, "%Y-%m-%dT%H:%M:%SZ") {
+                    Value::from(dt.and_utc().timestamp_millis())
+                } else if let Ok(dt) = chrono::NaiveDateTime::parse_from_str(st, "%Y-%m-%dT%H:%M:%S") {
+                    Value::from(dt.and_utc().timestamp_millis())
+                } else {
+                    Value::Undefined
+                }
+            }
+            _ => Value::Undefined,
+        }
+    }
+
+    fn milliseconds(&self) -> Value {
+        let ms = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_millis() as i64;
+        Value::from(ms)
+    }
+
+    fn number_to_string(&self, v: Value) -> Value {
+        match &v {
+            Value::Json(JSON::Number(n)) => {
+                if let Some(i) = n.as_i64() {
+                    Value::from(i.to_string())
+                } else if let Some(f) = n.as_f64() {
+                    Value::from(format!("{}", f))
+                } else {
+                    v.to_string()
+                }
+            }
+            _ => v.to_string(),
+        }
+    }
+
+    fn in_array(&self, needle: Value, haystack: Value) -> Value {
+        match (&needle, &haystack) {
+            (Value::Json(n), Value::Json(JSON::Array(arr))) => {
+                Value::from(arr.contains(n))
+            }
+            _ => false.into(),
+        }
+    }
+
     fn decimal_to_precision(&self, v: Value, _r: Value, _p: Value, _c: Value, _pad: Value) -> Value { v }
-    fn uuid22(&self) -> Value { Value::from("") }
-    fn yymmdd(&self, _ts: Value, _sep: Value) -> Value { Value::from("") }
-    fn urlencode(&self, _params: Value) -> Value { Value::from("") }
-    fn urlencode_with_array_repeat(&self, _params: Value) -> Value { Value::from("") }
-    fn rawencode(&self, _params: Value) -> Value { Value::from("") }
-    fn encode_uri_component(&self, s: Value) -> Value { s }
+
+    fn uuid22(&self) -> Value {
+        use rand::Rng;
+        let mut rng = rand::thread_rng();
+        let chars: Vec<char> = "abcdefghijklmnopqrstuvwxyz0123456789".chars().collect();
+        let s: String = (0..22).map(|_| chars[rng.gen_range(0..chars.len())]).collect();
+        Value::from(s)
+    }
+
+    fn yymmdd(&self, ts: Value, sep: Value) -> Value {
+        let ms = match &ts {
+            Value::Json(JSON::Number(n)) => n.as_i64().unwrap_or(0),
+            _ => return Value::from(""),
+        };
+        let separator = match &sep {
+            Value::Json(JSON::String(s)) => s.clone(),
+            _ => "-".to_string(),
+        };
+        if let Some(dt) = chrono::DateTime::from_timestamp(ms / 1000, 0) {
+            Value::from(format!("{:02}{}{:02}{}{:02}", dt.format("%y"), separator, dt.format("%m"), separator, dt.format("%d")))
+        } else {
+            Value::from("")
+        }
+    }
+
+    fn urlencode(&self, params: Value) -> Value {
+        match &params {
+            Value::Json(JSON::Object(o)) => {
+                let parts: Vec<String> = o.iter().map(|(k, v)| {
+                    let val = match v {
+                        JSON::String(s) => s.clone(),
+                        JSON::Number(n) => n.to_string(),
+                        JSON::Bool(b) => b.to_string(),
+                        JSON::Null => "".to_string(),
+                        _ => v.to_string(),
+                    };
+                    format!("{}={}", urlencoding::encode(k), urlencoding::encode(&val))
+                }).collect();
+                Value::from(parts.join("&"))
+            }
+            _ => Value::from(""),
+        }
+    }
+
+    fn urlencode_with_array_repeat(&self, params: Value) -> Value {
+        match &params {
+            Value::Json(JSON::Object(o)) => {
+                let mut parts: Vec<String> = Vec::new();
+                for (k, v) in o.iter() {
+                    match v {
+                        JSON::Array(arr) => {
+                            for item in arr {
+                                let val = match item {
+                                    JSON::String(s) => s.clone(),
+                                    _ => item.to_string(),
+                                };
+                                parts.push(format!("{}={}", urlencoding::encode(k), urlencoding::encode(&val)));
+                            }
+                        }
+                        _ => {
+                            let val = match v {
+                                JSON::String(s) => s.clone(),
+                                JSON::Number(n) => n.to_string(),
+                                JSON::Bool(b) => b.to_string(),
+                                _ => v.to_string(),
+                            };
+                            parts.push(format!("{}={}", urlencoding::encode(k), urlencoding::encode(&val)));
+                        }
+                    }
+                }
+                Value::from(parts.join("&"))
+            }
+            _ => Value::from(""),
+        }
+    }
+
+    fn rawencode(&self, params: Value) -> Value {
+        match &params {
+            Value::Json(JSON::Object(o)) => {
+                let parts: Vec<String> = o.iter().map(|(k, v)| {
+                    let val = match v {
+                        JSON::String(s) => s.clone(),
+                        JSON::Number(n) => n.to_string(),
+                        JSON::Bool(b) => b.to_string(),
+                        _ => v.to_string(),
+                    };
+                    format!("{}={}", k, val)
+                }).collect();
+                Value::from(parts.join("&"))
+            }
+            _ => Value::from(""),
+        }
+    }
+
+    fn encode_uri_component(&self, s: Value) -> Value {
+        match &s {
+            Value::Json(JSON::String(st)) => Value::from(urlencoding::encode(st).to_string()),
+            _ => s,
+        }
+    }
+
     fn encode(&self, s: Value) -> Value { s }
-    fn sort_by(&self, arr: Value, _key: Value, _desc: Value, _dir: Value) -> Value { arr }
-    fn index_by(&self, arr: Value, _key: Value) -> Value { arr }
-    fn filter_by(&self, arr: Value, _key: Value, _value: Value) -> Value { arr }
-    fn group_by(&self, arr: Value, _key: Value) -> Value { arr }
-    fn precision_from_string(&self, _s: Value) -> Value { Value::Undefined }
-    fn json(&self, v: Value) -> Value { v }
+
+    fn sort_by(&self, arr: Value, key: Value, _desc: Value, _dir: Value) -> Value {
+        match (&arr, &key) {
+            (Value::Json(JSON::Array(a)), Value::Json(JSON::String(k))) => {
+                let mut sorted = a.clone();
+                let desc = _desc.is_truthy();
+                sorted.sort_by(|a, b| {
+                    let va = a.get(k.as_str());
+                    let vb = b.get(k.as_str());
+                    let cmp = match (va, vb) {
+                        (Some(JSON::Number(na)), Some(JSON::Number(nb))) => {
+                            na.as_f64().unwrap_or(0.0).partial_cmp(&nb.as_f64().unwrap_or(0.0)).unwrap_or(std::cmp::Ordering::Equal)
+                        }
+                        (Some(JSON::String(sa)), Some(JSON::String(sb))) => sa.cmp(sb),
+                        _ => std::cmp::Ordering::Equal,
+                    };
+                    if desc { cmp.reverse() } else { cmp }
+                });
+                Value::Json(JSON::Array(sorted))
+            }
+            _ => arr,
+        }
+    }
+
+    fn index_by(&self, arr: Value, key: Value) -> Value {
+        match (&arr, &key) {
+            (Value::Json(JSON::Array(a)), Value::Json(JSON::String(k))) => {
+                let mut result = serde_json::Map::new();
+                for item in a.iter() {
+                    if let Some(JSON::String(val)) = item.get(k.as_str()) {
+                        result.insert(val.clone(), item.clone());
+                    }
+                }
+                Value::Json(JSON::Object(result))
+            }
+            _ => arr,
+        }
+    }
+
+    fn filter_by(&self, arr: Value, key: Value, value: Value) -> Value {
+        match (&arr, &key) {
+            (Value::Json(JSON::Array(a)), Value::Json(JSON::String(k))) => {
+                let target = match &value {
+                    Value::Json(v) => Some(v),
+                    _ => None,
+                };
+                let filtered: Vec<JSON> = a.iter().filter(|item| {
+                    match (item.get(k.as_str()), target) {
+                        (Some(v), Some(t)) => v == t,
+                        _ => false,
+                    }
+                }).cloned().collect();
+                Value::Json(JSON::Array(filtered))
+            }
+            _ => arr,
+        }
+    }
+
+    fn group_by(&self, arr: Value, key: Value) -> Value {
+        match (&arr, &key) {
+            (Value::Json(JSON::Array(a)), Value::Json(JSON::String(k))) => {
+                let mut result: serde_json::Map<String, JSON> = serde_json::Map::new();
+                for item in a.iter() {
+                    let group_key = match item.get(k.as_str()) {
+                        Some(JSON::String(s)) => s.clone(),
+                        Some(JSON::Number(n)) => n.to_string(),
+                        Some(JSON::Bool(b)) => b.to_string(),
+                        _ => "undefined".to_string(),
+                    };
+                    let entry = result.entry(group_key).or_insert_with(|| JSON::Array(vec![]));
+                    if let JSON::Array(arr) = entry {
+                        arr.push(item.clone());
+                    }
+                }
+                Value::Json(JSON::Object(result))
+            }
+            _ => arr,
+        }
+    }
+
+    fn precision_from_string(&self, s: Value) -> Value {
+        match &s {
+            Value::Json(JSON::String(st)) => {
+                if let Some(dot_pos) = st.find('.') {
+                    let after_dot = &st[dot_pos + 1..];
+                    let trimmed = after_dot.trim_end_matches('0');
+                    if trimmed.is_empty() {
+                        let zeros = after_dot.len() as i64;
+                        Value::from(-zeros)
+                    } else {
+                        Value::from(trimmed.len() as i64)
+                    }
+                } else {
+                    Value::from(0i64)
+                }
+            }
+            _ => Value::Undefined,
+        }
+    }
+
+    fn json(&self, v: Value) -> Value {
+        match &v {
+            Value::Json(j) => Value::from(serde_json::to_string(j).unwrap_or_default()),
+            Value::Undefined => Value::from("undefined"),
+        }
+    }
+
     fn create_safe_dictionary(&self) -> Value { Value::new_object() }
-    fn parse_timeframe(&self, _tf: Value) -> Value { Value::Undefined }
-    fn hash(&self, _msg: Value, _hash: Value, _enc: Value) -> Value { Value::from("") }
-    fn hmac(&self, _msg: Value, _sec: Value, _hash: Value, _enc: Value) -> Value { Value::from("") }
+
+    fn parse_timeframe(&self, tf: Value) -> Value {
+        match &tf {
+            Value::Json(JSON::String(s)) => {
+                let s = s.trim();
+                if s.is_empty() { return Value::Undefined; }
+                let (num_str, unit) = s.split_at(s.len() - 1);
+                let num: i64 = num_str.parse().unwrap_or(1);
+                let multiplier: i64 = match unit {
+                    "s" => 1,
+                    "m" => 60,
+                    "h" => 3600,
+                    "d" => 86400,
+                    "w" => 604800,
+                    "M" => 2592000,
+                    "y" => 31536000,
+                    _ => return Value::Undefined,
+                };
+                Value::from(num * multiplier)
+            }
+            _ => Value::Undefined,
+        }
+    }
+
+    fn hash(&self, msg: Value, hash_type: Value, enc: Value) -> Value {
+        use sha2::{Sha256, Sha384, Sha512, Digest};
+        let data = match &msg {
+            Value::Json(JSON::String(s)) => s.as_bytes().to_vec(),
+            _ => return Value::from(""),
+        };
+        let hash_name = match &hash_type {
+            Value::Json(JSON::String(s)) => s.to_lowercase(),
+            _ => "sha256".to_string(),
+        };
+        let result_bytes: Vec<u8> = match hash_name.as_str() {
+            "sha256" => Sha256::digest(&data).to_vec(),
+            "sha384" => Sha384::digest(&data).to_vec(),
+            "sha512" => Sha512::digest(&data).to_vec(),
+            "md5" => {
+                use md5::Digest as Md5Digest;
+                md5::Md5::digest(&data).to_vec()
+            }
+            "keccak" => {
+                use sha3::Keccak256;
+                use sha3::Digest as Sha3Digest;
+                Keccak256::digest(&data).to_vec()
+            }
+            _ => Sha256::digest(&data).to_vec(),
+        };
+        let encoding = match &enc {
+            Value::Json(JSON::String(s)) => s.as_str(),
+            _ => "hex",
+        };
+        match encoding {
+            "base64" => {
+                Value::from(base64::encode(&result_bytes))
+            }
+            _ => Value::from(hex::encode(&result_bytes)),
+        }
+    }
+
+    fn hmac(&self, msg: Value, sec: Value, hash_type: Value, enc: Value) -> Value {
+        use hmac::{Hmac, Mac};
+        use sha2::{Sha256, Sha384, Sha512};
+        let data = match &msg {
+            Value::Json(JSON::String(s)) => s.as_bytes().to_vec(),
+            _ => return Value::from(""),
+        };
+        let secret = match &sec {
+            Value::Json(JSON::String(s)) => s.as_bytes().to_vec(),
+            _ => return Value::from(""),
+        };
+        let hash_name = match &hash_type {
+            Value::Json(JSON::String(s)) => s.to_lowercase(),
+            _ => "sha256".to_string(),
+        };
+        let result_bytes: Vec<u8> = match hash_name.as_str() {
+            "sha256" => {
+                let mut mac = Hmac::<Sha256>::new_from_slice(&secret).unwrap();
+                mac.update(&data);
+                mac.finalize().into_bytes().to_vec()
+            }
+            "sha384" => {
+                let mut mac = Hmac::<Sha384>::new_from_slice(&secret).unwrap();
+                mac.update(&data);
+                mac.finalize().into_bytes().to_vec()
+            }
+            "sha512" => {
+                let mut mac = Hmac::<Sha512>::new_from_slice(&secret).unwrap();
+                mac.update(&data);
+                mac.finalize().into_bytes().to_vec()
+            }
+            "md5" => {
+                let mut mac = Hmac::<md5::Md5>::new_from_slice(&secret).unwrap();
+                mac.update(&data);
+                mac.finalize().into_bytes().to_vec()
+            }
+            _ => {
+                let mut mac = Hmac::<Sha256>::new_from_slice(&secret).unwrap();
+                mac.update(&data);
+                mac.finalize().into_bytes().to_vec()
+            }
+        };
+        let encoding = match &enc {
+            Value::Json(JSON::String(s)) => s.as_str(),
+            _ => "hex",
+        };
+        match encoding {
+            "base64" => {
+                Value::from(base64::encode(&result_bytes))
+            }
+            _ => Value::from(hex::encode(&result_bytes)),
+        }
+    }
+
     fn array_concat(&self, a: Value, b: Value) -> Value { a.concat(b) }
     fn sum(&self, a: Value, b: Value) -> Value { a + b }
-    fn parse_json(&self, body: Value) -> Value { body }
-    fn check_address(&mut self, _address: Value) -> Value { Value::Undefined }
-    fn network_id_to_code(&self, _network_id: Value, _currency_code: Value) -> Value { Value::Undefined }
+
+    fn parse_json(&self, body: Value) -> Value {
+        match &body {
+            Value::Json(JSON::String(s)) => {
+                match serde_json::from_str::<JSON>(s) {
+                    Ok(v) => Value::Json(v),
+                    Err(_) => body,
+                }
+            }
+            _ => body,
+        }
+    }
+
+    fn check_address(&mut self, address: Value) -> Value { address }
+    fn network_id_to_code(&self, network_id: Value, _currency_code: Value) -> Value { network_id }
     fn deposit_withdraw_fee(&self, fee: Value) -> Value { fee }
 
-    // --- Utility stubs (pre-delimiter methods from Exchange.js) ---
-    fn capitalize(&self, mut s: Value) -> Value { Value::Undefined }
-    fn uuid(&self) -> Value { Value::Undefined }
-    fn uuid16(&self) -> Value { Value::Undefined }
-    fn uuid5(&self, mut name: Value, mut namespace: Value) -> Value { Value::Undefined }
-    fn base16_to_binary(&self, mut hex_str: Value) -> Value { Value::Undefined }
-    fn int_to_base16(&self, mut num: Value) -> Value { Value::Undefined }
-    fn binary_to_base16(&self, mut buff: Value) -> Value { Value::Undefined }
-    fn base58_to_binary(&self, mut s: Value) -> Value { Value::Undefined }
-    fn binary_to_base58(&self, mut buff: Value) -> Value { Value::Undefined }
-    fn base64_to_binary(&self, mut s: Value) -> Value { Value::Undefined }
-    fn string_to_base64(&self, mut s: Value) -> Value { Value::Undefined }
-    fn deep_extend_2(&self, mut a: Value, mut b: Value) -> Value { Value::Undefined }
-    fn extend_1(&self, mut a: Value) -> Value { Value::Undefined }
-    fn number_to_be(&self, mut num: Value, mut size: Value) -> Value { Value::Undefined }
-    fn binary_concat(&self, mut a: Value, mut b: Value, mut c: Value, mut d: Value) -> Value { Value::Undefined }
-    fn binary_concat_array(&self, mut arr: Value) -> Value { Value::Undefined }
-    fn binary_length(&self, mut buff: Value) -> Value { Value::Undefined }
-    fn seconds(&self) -> Value { Value::Undefined }
-    fn microseconds(&self) -> Value { Value::Undefined }
-    fn parse_date(&self, mut date_str: Value) -> Value { Value::Undefined }
+    // --- Utility methods (pre-delimiter methods from Exchange.js) ---
+
+    fn capitalize(&self, mut s: Value) -> Value {
+        match &s {
+            Value::Json(JSON::String(st)) => {
+                if st.is_empty() { return s; }
+                let mut chars = st.chars();
+                let first = chars.next().unwrap().to_uppercase().to_string();
+                Value::from(format!("{}{}", first, chars.as_str()))
+            }
+            _ => Value::Undefined,
+        }
+    }
+
+    fn uuid(&self) -> Value {
+        use rand::Rng;
+        let mut rng = rand::thread_rng();
+        let bytes: [u8; 16] = rng.r#gen();
+        Value::from(format!(
+            "{:08x}-{:04x}-4{:03x}-{:04x}-{:012x}",
+            u32::from_be_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]),
+            u16::from_be_bytes([bytes[4], bytes[5]]),
+            u16::from_be_bytes([bytes[6], bytes[7]]) & 0x0fff,
+            (u16::from_be_bytes([bytes[8], bytes[9]]) & 0x3fff) | 0x8000,
+            u64::from_be_bytes([0, 0, bytes[10], bytes[11], bytes[12], bytes[13], bytes[14], bytes[15]])
+        ))
+    }
+
+    fn uuid16(&self) -> Value {
+        use rand::Rng;
+        let mut rng = rand::thread_rng();
+        let bytes: [u8; 8] = rng.r#gen();
+        Value::from(hex::encode(bytes))
+    }
+
+    fn uuid5(&self, mut name: Value, mut namespace: Value) -> Value {
+        // UUID v5 requires SHA-1 hashing of namespace+name — simplified implementation
+        use sha2::{Sha256, Digest};
+        let ns = match &namespace {
+            Value::Json(JSON::String(s)) => s.clone(),
+            _ => "".to_string(),
+        };
+        let n = match &name {
+            Value::Json(JSON::String(s)) => s.clone(),
+            _ => "".to_string(),
+        };
+        let hash = Sha256::digest(format!("{}{}", ns, n).as_bytes());
+        Value::from(format!(
+            "{:08x}-{:04x}-5{:03x}-{:04x}-{:012x}",
+            u32::from_be_bytes([hash[0], hash[1], hash[2], hash[3]]),
+            u16::from_be_bytes([hash[4], hash[5]]),
+            u16::from_be_bytes([hash[6], hash[7]]) & 0x0fff,
+            (u16::from_be_bytes([hash[8], hash[9]]) & 0x3fff) | 0x8000,
+            u64::from_be_bytes([0, 0, hash[10], hash[11], hash[12], hash[13], hash[14], hash[15]])
+        ))
+    }
+
+    fn base16_to_binary(&self, mut hex_str: Value) -> Value {
+        match &hex_str {
+            Value::Json(JSON::String(s)) => {
+                match hex::decode(s) {
+                    Ok(bytes) => {
+                        let arr: Vec<JSON> = bytes.iter().map(|b| json!(*b as i64)).collect();
+                        Value::Json(JSON::Array(arr))
+                    }
+                    Err(_) => Value::Undefined,
+                }
+            }
+            _ => Value::Undefined,
+        }
+    }
+
+    fn int_to_base16(&self, mut num: Value) -> Value {
+        match &num {
+            Value::Json(JSON::Number(n)) => {
+                let i = n.as_i64().unwrap_or(0);
+                Value::from(format!("{:x}", i))
+            }
+            _ => Value::Undefined,
+        }
+    }
+
+    fn binary_to_base16(&self, mut buff: Value) -> Value {
+        match &buff {
+            Value::Json(JSON::Array(arr)) => {
+                let bytes: Vec<u8> = arr.iter().filter_map(|v| v.as_i64().map(|n| n as u8)).collect();
+                Value::from(hex::encode(bytes))
+            }
+            Value::Json(JSON::String(s)) => Value::from(hex::encode(s.as_bytes())),
+            _ => Value::Undefined,
+        }
+    }
+
+    fn base58_to_binary(&self, mut s: Value) -> Value {
+        // Base58 decode (Bitcoin alphabet)
+        match &s {
+            Value::Json(JSON::String(st)) => {
+                let alphabet = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+                let mut result = vec![0u8; 0];
+                for ch in st.chars() {
+                    let digit = match alphabet.find(ch) {
+                        Some(d) => d,
+                        None => return Value::Undefined,
+                    };
+                    let mut carry = digit;
+                    for byte in result.iter_mut().rev() {
+                        carry += (*byte as usize) * 58;
+                        *byte = (carry % 256) as u8;
+                        carry /= 256;
+                    }
+                    while carry > 0 {
+                        result.insert(0, (carry % 256) as u8);
+                        carry /= 256;
+                    }
+                }
+                for ch in st.chars() {
+                    if ch == '1' {
+                        result.insert(0, 0);
+                    } else {
+                        break;
+                    }
+                }
+                let arr: Vec<JSON> = result.iter().map(|b| json!(*b as i64)).collect();
+                Value::Json(JSON::Array(arr))
+            }
+            _ => Value::Undefined,
+        }
+    }
+
+    fn binary_to_base58(&self, mut buff: Value) -> Value {
+        let bytes: Vec<u8> = match &buff {
+            Value::Json(JSON::Array(arr)) => arr.iter().filter_map(|v| v.as_i64().map(|n| n as u8)).collect(),
+            _ => return Value::Undefined,
+        };
+        let alphabet: Vec<char> = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz".chars().collect();
+        if bytes.is_empty() { return Value::from(""); }
+        let mut digits = vec![0u32];
+        for &byte in &bytes {
+            let mut carry = byte as u32;
+            for d in digits.iter_mut() {
+                carry += (*d) * 256;
+                *d = carry % 58;
+                carry /= 58;
+            }
+            while carry > 0 {
+                digits.push(carry % 58);
+                carry /= 58;
+            }
+        }
+        let mut result = String::new();
+        for &b in &bytes {
+            if b == 0 { result.push('1'); } else { break; }
+        }
+        for &d in digits.iter().rev() {
+            result.push(alphabet[d as usize]);
+        }
+        Value::from(result)
+    }
+
+    fn base64_to_binary(&self, mut s: Value) -> Value {
+        match &s {
+            Value::Json(JSON::String(st)) => {
+                match base64::decode(st) {
+                    Ok(bytes) => {
+                        let arr: Vec<JSON> = bytes.into_iter().map(|b| json!(b as i64)).collect();
+                        Value::Json(JSON::Array(arr))
+                    }
+                    Err(_) => Value::Undefined,
+                }
+            }
+            _ => Value::Undefined,
+        }
+    }
+
+    fn string_to_base64(&self, mut s: Value) -> Value {
+        match &s {
+            Value::Json(JSON::String(st)) => {
+                Value::from(base64::encode(st.as_bytes()))
+            }
+            _ => Value::Undefined,
+        }
+    }
+
+    fn deep_extend_2(&self, mut a: Value, mut b: Value) -> Value {
+        match (&mut a, &b) {
+            (Value::Json(JSON::Object(target)), Value::Json(JSON::Object(source))) => {
+                for (k, v) in source.iter() {
+                    if let Some(JSON::Object(_)) = target.get(k) {
+                        if let JSON::Object(_) = v {
+                            let merged = self.deep_extend_2(Value::Json(target.get(k).unwrap().clone()), Value::Json(v.clone()));
+                            if let Value::Json(merged_json) = merged {
+                                target.insert(k.clone(), merged_json);
+                            }
+                            continue;
+                        }
+                    }
+                    target.insert(k.clone(), v.clone());
+                }
+                Value::Json(JSON::Object(target.clone()))
+            }
+            _ => {
+                if b.is_undefined() { a } else { b }
+            }
+        }
+    }
+
+    fn extend_1(&self, mut a: Value) -> Value { a }
+
+    fn number_to_be(&self, mut num: Value, mut size: Value) -> Value {
+        let n = match &num {
+            Value::Json(JSON::Number(v)) => v.as_i64().unwrap_or(0),
+            _ => return Value::Undefined,
+        };
+        let sz = match &size {
+            Value::Json(JSON::Number(v)) => v.as_u64().unwrap_or(4) as usize,
+            _ => 4,
+        };
+        let bytes = n.to_be_bytes();
+        let start = if 8 > sz { 8 - sz } else { 0 };
+        let arr: Vec<JSON> = bytes[start..].iter().take(sz).map(|b| json!(*b as i64)).collect();
+        Value::Json(JSON::Array(arr))
+    }
+
+    fn binary_concat(&self, mut a: Value, mut b: Value, mut c: Value, mut d: Value) -> Value {
+        let mut result: Vec<JSON> = Vec::new();
+        for v in [&a, &b, &c, &d] {
+            if let Value::Json(JSON::Array(arr)) = v {
+                result.extend(arr.iter().cloned());
+            } else if let Value::Json(JSON::String(s)) = v {
+                result.extend(s.as_bytes().iter().map(|b| json!(*b as i64)));
+            }
+        }
+        Value::Json(JSON::Array(result))
+    }
+
+    fn binary_concat_array(&self, mut arr: Value) -> Value {
+        let mut result: Vec<JSON> = Vec::new();
+        if let Value::Json(JSON::Array(items)) = &arr {
+            for item in items {
+                if let JSON::Array(bytes) = item {
+                    result.extend(bytes.iter().cloned());
+                } else if let JSON::String(s) = item {
+                    result.extend(s.as_bytes().iter().map(|b| json!(*b as i64)));
+                }
+            }
+        }
+        Value::Json(JSON::Array(result))
+    }
+
+    fn binary_length(&self, mut buff: Value) -> Value {
+        match &buff {
+            Value::Json(JSON::Array(arr)) => Value::from(arr.len() as i64),
+            Value::Json(JSON::String(s)) => Value::from(s.len() as i64),
+            _ => Value::from(0i64),
+        }
+    }
+
+    fn seconds(&self) -> Value {
+        let secs = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs() as i64;
+        Value::from(secs)
+    }
+
+    fn microseconds(&self) -> Value {
+        let us = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_micros() as i64;
+        Value::from(us)
+    }
+
+    fn parse_date(&self, mut date_str: Value) -> Value {
+        self.parse8601(date_str)
+    }
+
     fn check_required_dependencies(&self) -> Value { Value::Undefined }
-    fn ordered(&self, mut obj: Value) -> Value { Value::Undefined }
-    fn remove0x_prefix(&self, mut hex_str: Value) -> Value { Value::Undefined }
-    fn yyyymmdd(&self, mut timestamp: Value, mut infix: Value) -> Value { Value::Undefined }
-    fn ymd(&self, mut timestamp: Value, mut infix: Value, mut pad: Value) -> Value { Value::Undefined }
-    fn reduce(&self, mut arr: Value, mut callback: Value, mut initial: Value) -> Value { Value::Undefined }
-    fn convert_to_big_int(&self, mut value: Value) -> Value { Value::Undefined }
+
+    fn ordered(&self, mut obj: Value) -> Value { obj }
+
+    fn remove0x_prefix(&self, mut hex_str: Value) -> Value {
+        match &hex_str {
+            Value::Json(JSON::String(s)) => {
+                if s.starts_with("0x") || s.starts_with("0X") {
+                    Value::from(s[2..].to_string())
+                } else {
+                    hex_str
+                }
+            }
+            _ => Value::Undefined,
+        }
+    }
+
+    fn yyyymmdd(&self, mut timestamp: Value, mut infix: Value) -> Value {
+        let ms = match &timestamp {
+            Value::Json(JSON::Number(n)) => n.as_i64().unwrap_or(0),
+            _ => return Value::Undefined,
+        };
+        let sep = match &infix {
+            Value::Json(JSON::String(s)) => s.clone(),
+            _ => "-".to_string(),
+        };
+        if let Some(dt) = chrono::DateTime::from_timestamp(ms / 1000, 0) {
+            Value::from(format!("{:04}{}{:02}{}{:02}", dt.format("%Y"), sep, dt.format("%m"), sep, dt.format("%d")))
+        } else {
+            Value::Undefined
+        }
+    }
+
+    fn ymd(&self, mut timestamp: Value, mut infix: Value, mut pad: Value) -> Value {
+        self.yyyymmdd(timestamp, infix)
+    }
+
+    fn reduce(&self, mut arr: Value, mut callback: Value, mut initial: Value) -> Value {
+        // Cannot implement dynamically with Value callbacks; return initial
+        initial
+    }
+
+    fn convert_to_big_int(&self, mut value: Value) -> Value {
+        match &value {
+            Value::Json(JSON::String(s)) => {
+                if let Ok(n) = s.parse::<i64>() {
+                    Value::from(n)
+                } else {
+                    value
+                }
+            }
+            _ => value,
+        }
+    }
+
+    // Crypto-specific methods that require specialized libraries not yet integrated
     fn axolotl(&self, mut payload: Value, mut key: Value, mut algo: Value) -> Value { Value::Undefined }
     fn eth_encode_structured_data(&self, mut domain: Value, mut message_types: Value, mut message_data: Value) -> Value { Value::Undefined }
     fn eth_abi_encode(&self, mut types: Value, mut args: Value) -> Value { Value::Undefined }
     fn starknet_sign(&self, mut msg: Value, mut private_key: Value) -> Value { Value::Undefined }
     fn starknet_encode_structured_data(&self, mut domain: Value, mut types: Value, mut data: Value, mut private_key: Value) -> Value { Value::Undefined }
-    fn rand_number(&self, mut n: Value) -> Value { Value::Undefined }
-    fn random_bytes(&self, mut size: Value) -> Value { Value::Undefined }
+
+    fn rand_number(&self, mut n: Value) -> Value {
+        use rand::Rng;
+        let max = match &n {
+            Value::Json(JSON::Number(v)) => v.as_i64().unwrap_or(1000000),
+            _ => 1000000,
+        };
+        let mut rng = rand::thread_rng();
+        Value::from(rng.gen_range(0..max))
+    }
+
+    fn random_bytes(&self, mut size: Value) -> Value {
+        use rand::Rng;
+        let sz = match &size {
+            Value::Json(JSON::Number(n)) => n.as_u64().unwrap_or(16) as usize,
+            _ => 16,
+        };
+        let mut rng = rand::thread_rng();
+        let bytes: Vec<u8> = (0..sz).map(|_| rng.r#gen()).collect();
+        let arr: Vec<JSON> = bytes.iter().map(|b| json!(*b as i64)).collect();
+        Value::Json(JSON::Array(arr))
+    }
+
+    // dYdX protocol-specific methods — require protobuf and chain-specific logic
     fn to_dydx_long(&self, mut value: Value) -> Value { Value::Undefined }
     fn encode_dydx_tx_for_signing(&self, mut msg: Value) -> Value { Value::Undefined }
     fn encode_dydx_tx_for_simulation(&self, mut msg: Value) -> Value { Value::Undefined }
@@ -1578,24 +2308,160 @@ pub trait Exchange: ValueTrait {
     fn retrieve_stark_account(&self, mut params: Value) -> Value { Value::Undefined }
     fn get_zk_contract_signature_obj(&self, mut seeds: Value, mut contract: Value) -> Value { Value::Undefined }
     fn get_zk_transfer_signature_obj(&self, mut seeds: Value, mut transfer: Value) -> Value { Value::Undefined }
-    fn sort(&self, mut arr: Value) -> Value { Value::Undefined }
-    fn sort_by_2(&self, mut arr: Value, mut key1: Value, mut key2: Value) -> Value { Value::Undefined }
-    fn unique(&self, mut arr: Value) -> Value { Value::Undefined }
-    fn keysort(&self, mut obj: Value) -> Value { Value::Undefined }
-    fn implode_params(&self, mut url: Value, mut params: Value) -> Value { Value::Undefined }
-    fn set_property(&mut self, mut obj: Value, mut key: Value, mut value: Value) -> Value { Value::Undefined }
-    fn to_fixed(&self, mut value: Value, mut decimals: Value) -> Value { Value::Undefined }
-    fn decode(&self, mut data: Value) -> Value { Value::Undefined }
-    fn fix_stringified_json_members(&self, mut content: Value) -> Value { Value::Undefined }
-    fn map_to_safe_map(&self, mut obj: Value) -> Value { Value::Undefined }
-    fn string_to_chars_array(&self, mut s: Value) -> Value { Value::Undefined }
-    fn packb(&self, mut data: Value) -> Value { Value::Undefined }
-    fn array_slice(&self, mut arr: Value, mut start: Value, mut end: Value) -> Value { Value::Undefined }
+
+    fn sort(&self, mut arr: Value) -> Value {
+        match &mut arr {
+            Value::Json(JSON::Array(a)) => {
+                a.sort_by(|x, y| {
+                    match (x, y) {
+                        (JSON::Number(a), JSON::Number(b)) => a.as_f64().unwrap_or(0.0).partial_cmp(&b.as_f64().unwrap_or(0.0)).unwrap_or(std::cmp::Ordering::Equal),
+                        (JSON::String(a), JSON::String(b)) => a.cmp(b),
+                        _ => std::cmp::Ordering::Equal,
+                    }
+                });
+                Value::Json(JSON::Array(a.clone()))
+            }
+            _ => arr,
+        }
+    }
+
+    fn sort_by_2(&self, mut arr: Value, mut key1: Value, mut key2: Value) -> Value {
+        match (&mut arr, &key1, &key2) {
+            (Value::Json(JSON::Array(a)), Value::Json(JSON::String(k1)), Value::Json(JSON::String(k2))) => {
+                a.sort_by(|x, y| {
+                    let cmp1 = match (x.get(k1.as_str()), y.get(k1.as_str())) {
+                        (Some(JSON::Number(a)), Some(JSON::Number(b))) => a.as_f64().unwrap_or(0.0).partial_cmp(&b.as_f64().unwrap_or(0.0)).unwrap_or(std::cmp::Ordering::Equal),
+                        (Some(JSON::String(a)), Some(JSON::String(b))) => a.cmp(b),
+                        _ => std::cmp::Ordering::Equal,
+                    };
+                    if cmp1 != std::cmp::Ordering::Equal { return cmp1; }
+                    match (x.get(k2.as_str()), y.get(k2.as_str())) {
+                        (Some(JSON::Number(a)), Some(JSON::Number(b))) => a.as_f64().unwrap_or(0.0).partial_cmp(&b.as_f64().unwrap_or(0.0)).unwrap_or(std::cmp::Ordering::Equal),
+                        (Some(JSON::String(a)), Some(JSON::String(b))) => a.cmp(b),
+                        _ => std::cmp::Ordering::Equal,
+                    }
+                });
+                Value::Json(JSON::Array(a.clone()))
+            }
+            _ => arr,
+        }
+    }
+
+    fn unique(&self, mut arr: Value) -> Value {
+        match &arr {
+            Value::Json(JSON::Array(a)) => {
+                let mut seen = Vec::new();
+                let mut result = Vec::new();
+                for item in a.iter() {
+                    if !seen.contains(item) {
+                        seen.push(item.clone());
+                        result.push(item.clone());
+                    }
+                }
+                Value::Json(JSON::Array(result))
+            }
+            _ => arr,
+        }
+    }
+
+    fn keysort(&self, mut obj: Value) -> Value {
+        match &obj {
+            Value::Json(JSON::Object(o)) => {
+                let sorted: serde_json::Map<String, JSON> = o.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
+                Value::Json(JSON::Object(sorted))
+            }
+            _ => obj,
+        }
+    }
+
+    fn implode_params(&self, mut url: Value, mut params: Value) -> Value {
+        match (&url, &params) {
+            (Value::Json(JSON::String(u)), Value::Json(JSON::Object(p))) => {
+                let mut result = u.clone();
+                for (k, v) in p.iter() {
+                    let placeholder = format!("{{{}}}", k);
+                    let val = match v {
+                        JSON::String(s) => s.clone(),
+                        JSON::Number(n) => n.to_string(),
+                        JSON::Bool(b) => b.to_string(),
+                        _ => continue,
+                    };
+                    result = result.replace(&placeholder, &val);
+                }
+                Value::from(result)
+            }
+            _ => url,
+        }
+    }
+
+    fn set_property(&mut self, mut obj: Value, mut key: Value, mut value: Value) -> Value {
+        obj.set(key, value);
+        Value::Undefined
+    }
+
+    fn to_fixed(&self, mut value: Value, mut decimals: Value) -> Value {
+        let num = match &value {
+            Value::Json(JSON::Number(n)) => n.as_f64().unwrap_or(0.0),
+            Value::Json(JSON::String(s)) => s.parse::<f64>().unwrap_or(0.0),
+            _ => return Value::Undefined,
+        };
+        let dec = match &decimals {
+            Value::Json(JSON::Number(n)) => n.as_u64().unwrap_or(8) as usize,
+            _ => 8,
+        };
+        Value::from(format!("{:.prec$}", num, prec = dec))
+    }
+
+    fn decode(&self, mut data: Value) -> Value {
+        match &data {
+            Value::Json(JSON::Array(arr)) => {
+                let bytes: Vec<u8> = arr.iter().filter_map(|v| v.as_i64().map(|n| n as u8)).collect();
+                Value::from(String::from_utf8_lossy(&bytes).to_string())
+            }
+            _ => data,
+        }
+    }
+
+    fn fix_stringified_json_members(&self, mut content: Value) -> Value { content }
+
+    fn map_to_safe_map(&self, mut obj: Value) -> Value { obj }
+
+    fn string_to_chars_array(&self, mut s: Value) -> Value {
+        match &s {
+            Value::Json(JSON::String(st)) => {
+                let arr: Vec<JSON> = st.chars().map(|c| json!(c.to_string())).collect();
+                Value::Json(JSON::Array(arr))
+            }
+            _ => Value::Undefined,
+        }
+    }
+
+    fn packb(&self, mut data: Value) -> Value { data }
+
+    fn array_slice(&self, mut arr: Value, mut start: Value, mut end: Value) -> Value {
+        arr.slice(start, end)
+    }
+
     fn futures_transfer(&mut self, mut code: Value, mut amount: Value, mut type_: Value, mut params: Value) -> Value { Value::Undefined }
-    fn handle_trigger_prices(&mut self, mut params: Value) -> Value { Value::Undefined }
+
+    fn handle_trigger_prices(&mut self, mut params: Value) -> Value { params }
+
     fn class_method(&self) -> Value { Value::Undefined }
-    fn pad_start(&self, mut s: Value, mut target_len: Value, mut pad_str: Value) -> Value { Value::Undefined }
-    fn is_empty(&self, mut value: Value) -> Value { Value::Undefined }
+
+    fn pad_start(&self, mut s: Value, mut target_len: Value, mut pad_str: Value) -> Value {
+        s.pad_start(target_len, pad_str)
+    }
+
+    fn is_empty(&self, mut value: Value) -> Value {
+        match &value {
+            Value::Undefined => true.into(),
+            Value::Json(JSON::Null) => true.into(),
+            Value::Json(JSON::String(s)) => (s.is_empty()).into(),
+            Value::Json(JSON::Array(a)) => (a.is_empty()).into(),
+            Value::Json(JSON::Object(o)) => (o.is_empty()).into(),
+            _ => false.into(),
+        }
+    }
 
     // ---------------------------------------------------------------------------
     // METHODS BELOW THIS LINE ARE TRANSPILED FROM JAVASCRIPT

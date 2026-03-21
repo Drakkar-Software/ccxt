@@ -496,7 +496,7 @@ pub trait Coinbaseexchange : Exchange {
     }
 
     fn authenticate(&mut self) -> Value {
-        self.check_required_credentials(Value::Undefined);
+        self.check_required_credentials();
         let mut path: Value = Value::from("/users/self/verify");
         let mut nonce: Value = self.nonce();
         let mut payload: Value = nonce.to_string() + Value::from("GET") + path.clone();
@@ -531,7 +531,7 @@ pub trait Coinbaseexchange : Exchange {
             "channels": Value::Json(serde_json::Value::Array(vec![name.clone().into()]))
         }))).unwrap());
         let mut request: Value = extend_2(subscribe.clone(), params.clone());
-        return self.watch(url.clone(), message_hash.clone(), request.clone(), message_hash.clone(), Value::Undefined).await;
+        return self.watch(url.clone(), message_hash.clone(), request.clone(), message_hash.clone()).await;
     }
 
     async fn subscribe_multiple(&mut self, mut name: Value, mut symbols: Value, mut message_hash_start: Value, mut params: Value) -> Value {
@@ -539,7 +539,7 @@ pub trait Coinbaseexchange : Exchange {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
         let mut market: Value = Value::Undefined;
-        symbols = self.market_symbols(symbols.clone(), Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined);
+        symbols = self.market_symbols(symbols.clone());
         let mut message_hashes: Value = Value::new_array();
         let mut product_ids: Value = Value::new_array();
         let mut i: usize = 0;
@@ -561,7 +561,7 @@ pub trait Coinbaseexchange : Exchange {
             "channels": Value::Json(serde_json::Value::Array(vec![name.clone().into()]))
         }))).unwrap());
         let mut request: Value = extend_2(subscribe.clone(), params.clone());
-        return self.watch_multiple(url.clone(), message_hashes.clone(), request.clone(), message_hashes.clone(), Value::Undefined).await;
+        return self.watch_multiple(url.clone(), message_hashes.clone(), request.clone(), message_hashes.clone()).await;
     }
 
     async fn watch_ticker(&mut self, mut symbol: Value, mut params: Value) -> Value {
@@ -585,7 +585,7 @@ pub trait Coinbaseexchange : Exchange {
             result.set(ticker.get(Value::from("symbol")), ticker.clone());
             return result.clone();
         };
-        return self.filter_by_array(self.get("tickers".into()), Value::from("symbol"), symbols.clone(), Value::Undefined);
+        return self.filter_by_array(self.get("tickers".into()), Value::from("symbol"), symbols.clone());
     }
 
     async fn watch_trades(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
@@ -607,7 +607,7 @@ pub trait Coinbaseexchange : Exchange {
             panic!(r###"BadRequest::new(self.get("id".into()) + Value::from(" watchTradesForSymbols() requires a non-empty array of symbols"))"###);
         };
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        symbols = self.market_symbols(symbols.clone(), Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined);
+        symbols = self.market_symbols(symbols.clone());
         let mut name: Value = Value::from("matches");
         let mut trades: Value = <Self as Coinbaseexchange>::subscribe_multiple(self, name.clone(), symbols.clone(), name.clone(), params.clone()).await;
         if self.get("newUpdates".into()).is_truthy() {
@@ -637,7 +637,7 @@ pub trait Coinbaseexchange : Exchange {
 
     async fn watch_my_trades_for_symbols(&mut self, mut symbols: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
-        symbols = self.market_symbols(symbols.clone(), Value::Undefined, false.into(), Value::Undefined, Value::Undefined);
+        symbols = self.market_symbols(symbols.clone(), Value::Undefined, false.into());
         self.load_markets(Value::Undefined, Value::Undefined).await;
         let mut name: Value = Value::from("user");
         let mut message_hash: Value = Value::from("myTrades");
@@ -654,7 +654,7 @@ pub trait Coinbaseexchange : Exchange {
     async fn watch_orders_for_symbols(&mut self, mut symbols: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        symbols = self.market_symbols(symbols.clone(), Value::Undefined, false.into(), Value::Undefined, Value::Undefined);
+        symbols = self.market_symbols(symbols.clone(), Value::Undefined, false.into());
         let mut name: Value = Value::from("user");
         let mut message_hash: Value = Value::from("orders");
         let mut authentication: Value = <Self as Coinbaseexchange>::authenticate(self);
@@ -692,7 +692,7 @@ pub trait Coinbaseexchange : Exchange {
         };
         let mut name: Value = Value::from("level2");
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        symbols = self.market_symbols(symbols.clone(), Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined);
+        symbols = self.market_symbols(symbols.clone());
         let mut market_ids: Value = self.market_ids(symbols.clone());
         let mut message_hashes: Value = Value::new_array();
         let mut i: usize = 0;
@@ -849,7 +849,7 @@ pub trait Coinbaseexchange : Exchange {
         //     "side": "buy",
         //     "order_type": "limit"
         // }
-        let mut parsed: Value = coinbaseexchangeRest::parse_trade(self, trade.clone(), Value::Undefined);
+        let mut parsed: Value = coinbaseexchangeRest::parse_trade(self, trade.clone());
         let mut fee_rate: Value = Value::Undefined;
         let mut is_maker: Value = false.into();
         if trade.contains_key(Value::from("maker_fee_rate")) {
@@ -1109,7 +1109,7 @@ pub trait Coinbaseexchange : Exchange {
             "status": status,
             "fee": Value::Undefined,
             "trades": Value::Undefined
-        }))).unwrap()), Value::Undefined);
+        }))).unwrap()));
     }
 
     fn handle_ticker(&mut self, mut client: Value, mut message: Value) -> Value {
@@ -1196,7 +1196,7 @@ pub trait Coinbaseexchange : Exchange {
             "baseVolume": self.safe_string(ticker.clone(), Value::from("volume_24h"), Value::Undefined),
             "quoteVolume": Value::Undefined,
             "info": ticker
-        }))).unwrap()), Value::Undefined);
+        }))).unwrap()));
     }
 
     fn handle_delta(&mut self, mut bookside: Value, mut delta: Value) -> Value {
@@ -1442,10 +1442,10 @@ pub trait Coinbaseexchange : Exchange {
                     "privateDeleteOrders" => self.request("orders".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privateDeleteOrdersclientclientoid" => self.request("orders/client:{client_oid}".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privateDeleteOrdersid" => self.request("orders/{id}".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    _ => unimplemented!(),
+                    _ => panic!("Unknown API method: {}", m),
                 }
             },
-            _ => unimplemented!()
+            _ => panic!("dispatch: method must be a string, got {:?}", method)
         }
     }
 }

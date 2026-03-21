@@ -562,7 +562,7 @@ pub trait Derive : Exchange {
         let mut raw_data: Value = self.safe_dict(params.clone(), Value::from("data"), Value::Undefined);
         let mut data: Value = self.safe_dict(raw_data.clone(), Value::from("instrument_ticker"), Value::Undefined);
         let mut topic: Value = self.safe_value(params.clone(), Value::from("channel"), Value::Undefined);
-        let mut ticker: Value = self.parse_ticker(data.clone(), Value::Undefined);
+        let mut ticker: Value = self.parse_ticker(data.clone());
         self.get("tickers".into()).set(ticker.get(Value::from("symbol")), ticker.clone());
         client.resolve(ticker.clone(), topic.clone());
         return message.clone();
@@ -723,7 +723,7 @@ pub trait Derive : Exchange {
         };
         let mut i: usize = 0;
         while i < data.len() {
-            let mut trade: Value = self.parse_trade(data.get(i.into()), Value::Undefined);
+            let mut trade: Value = self.parse_trade(data.get(i.into()));
             trades_array.append(trade.clone());
             i += 1;
         };
@@ -734,7 +734,7 @@ pub trait Derive : Exchange {
 
     async fn authenticate(&mut self, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
-        self.check_required_credentials(Value::Undefined);
+        self.check_required_credentials();
         let mut url: Value = self.get("urls".into()).get(Value::from("api")).get(Value::from("ws"));
         let mut client: Value = self.client(url.clone());
         let mut message_hash: Value = Value::from("authenticated");
@@ -743,7 +743,7 @@ pub trait Derive : Exchange {
         if authenticated.clone().is_nullish() {
             let mut request_id: Value = <Self as Derive>::request_id(self, url.clone());
             let mut now: Value = self.milliseconds().to_string();
-            let mut signature: Value = <Self as Derive>::sign_message(self, now.clone(), self.get("privateKey".into()));
+            let mut signature: Value = self.sign_message(now.clone(), self.get("privateKey".into()));
             let mut derive_wallet_address: Value = self.safe_string(self.get("options".into()), Value::from("deriveWalletAddress"), Value::Undefined);
             let mut request: Value = Value::Json(normalize(&Value::Json(json!({
                 "id": request_id,
@@ -766,7 +766,7 @@ pub trait Derive : Exchange {
     }
 
     async fn watch_private(&mut self, mut message_hash: Value, mut message: Value, mut subscription: Value) -> Value {
-        <Self as Derive>::authenticate(self).await;
+        <Self as Derive>::authenticate(self, Value::Undefined).await;
         let mut url: Value = self.get("urls".into()).get(Value::from("api")).get(Value::from("ws"));
         let mut request_id: Value = <Self as Derive>::request_id(self, url.clone());
         let mut request: Value = extend_2(message.clone(), Value::Json(normalize(&Value::Json(json!({
@@ -783,7 +783,7 @@ pub trait Derive : Exchange {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
         let mut subaccount_id: Value = Value::Undefined;
-        (subaccount_id, params) = shift_2(<Self as Derive>::handle_derive_subaccount_id(self, Value::from("watchOrders"), params.clone()));
+        (subaccount_id, params) = shift_2(self.handle_derive_subaccount_id(Value::from("watchOrders"), params.clone()));
         let mut topic: Value = self.number_to_string(subaccount_id.clone()) + Value::from(".orders");
         let mut message_hash: Value = topic.clone();
         if symbol.clone().is_nonnullish() {
@@ -857,7 +857,7 @@ pub trait Derive : Exchange {
         let mut i: usize = 0;
         while i < raw_orders.len() {
             let mut data: Value = raw_orders.get(i.into());
-            let mut parsed: Value = self.parse_order(data.clone(), Value::Undefined);
+            let mut parsed: Value = self.parse_order(data.clone());
             let mut symbol: Value = self.safe_string(parsed.clone(), Value::from("symbol"), Value::Undefined);
             let mut order_id: Value = self.safe_string(parsed.clone(), Value::from("id"), Value::Undefined);
             if symbol.clone().is_nonnullish() {
@@ -895,7 +895,7 @@ pub trait Derive : Exchange {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
         let mut subaccount_id: Value = Value::Undefined;
-        (subaccount_id, params) = shift_2(<Self as Derive>::handle_derive_subaccount_id(self, Value::from("watchMyTrades"), params.clone()));
+        (subaccount_id, params) = shift_2(self.handle_derive_subaccount_id(Value::from("watchMyTrades"), params.clone()));
         let mut topic: Value = self.number_to_string(subaccount_id.clone()) + Value::from(".trades");
         let mut message_hash: Value = topic.clone();
         if symbol.clone().is_nonnullish() {
@@ -934,7 +934,7 @@ pub trait Derive : Exchange {
         let mut raw_trades: Value = self.safe_list(params.clone(), Value::from("data"), Value::Undefined);
         let mut i: usize = 0;
         while i < raw_trades.len() {
-            let mut trade: Value = self.parse_trade(message.clone(), Value::Undefined);
+            let mut trade: Value = self.parse_trade(message.clone());
             my_trades.append(trade.clone());
             client.resolve(my_trades.clone(), topic.clone());
             let mut message_hash: Value = topic.clone() + trade.get(Value::from("symbol"));
@@ -1157,10 +1157,10 @@ pub trait Derive : Exchange {
                     "privatePostSetcancelondisconnect" => self.request("set_cancel_on_disconnect".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privatePostGetinvitecode" => self.request("get_invite_code".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privatePostRegisterinvite" => self.request("register_invite".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    _ => unimplemented!(),
+                    _ => panic!("Unknown API method: {}", m),
                 }
             },
-            _ => unimplemented!()
+            _ => panic!("dispatch: method must be a string, got {:?}", method)
         }
     }
 }

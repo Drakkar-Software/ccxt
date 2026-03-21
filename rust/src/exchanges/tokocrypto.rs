@@ -2007,10 +2007,10 @@ pub trait Tokocrypto : Exchange {
                     "privatePostOpenv1ordersoco" => self.request("open/v1/orders/oco".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privatePostOpenv1withdraws" => self.request("open/v1/withdraws".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privatePostOpenv1userdatastream" => self.request("open/v1/user-data-stream".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    _ => unimplemented!(),
+                    _ => panic!("Unknown API method: {}", m),
                 }
             },
-            _ => unimplemented!()
+            _ => panic!("dispatch: method must be a string, got {:?}", method)
         }
     }
 }

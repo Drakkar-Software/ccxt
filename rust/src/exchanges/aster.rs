@@ -2634,10 +2634,10 @@ pub trait Aster : Exchange {
                     "sapiprivateDeleteV1order" => self.request("v1/order".into(), "sapiPrivate".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "sapiprivateDeleteV1allopenorders" => self.request("v1/allOpenOrders".into(), "sapiPrivate".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "sapiprivateDeleteV1listenkey" => self.request("v1/listenKey".into(), "sapiPrivate".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    _ => unimplemented!(),
+                    _ => panic!("Unknown API method: {}", m),
                 }
             },
-            _ => unimplemented!()
+            _ => panic!("dispatch: method must be a string, got {:?}", method)
         }
     }
 }

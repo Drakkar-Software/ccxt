@@ -1423,7 +1423,7 @@ pub trait Htx : Exchange {
         let mut message_hash: Value = self.implode_params(topic.clone(), Value::Json(normalize(&Value::Json(json!({
             "marketId": market.get(Value::from("id"))
         }))).unwrap()));
-        let mut url: Value = <Self as Htx>::get_url_by_market_type(self, market.get(Value::from("type")), market.get(Value::from("linear")));
+        let mut url: Value = <Self as Htx>::get_url_by_market_type(self, market.get(Value::from("type")), market.get(Value::from("linear")), Value::Undefined, Value::Undefined);
         return <Self as Htx>::subscribe_public(self, url.clone(), symbol.clone(), message_hash.clone(), Value::Undefined, params.clone()).await;
     }
 
@@ -1497,7 +1497,7 @@ pub trait Htx : Exchange {
         let mut market: Value = self.market(symbol.clone());
         symbol = market.get(Value::from("symbol"));
         let mut message_hash: Value = Value::from("market.") + market.get(Value::from("id")) + Value::from(".trade.detail");
-        let mut url: Value = <Self as Htx>::get_url_by_market_type(self, market.get(Value::from("type")), market.get(Value::from("linear")));
+        let mut url: Value = <Self as Htx>::get_url_by_market_type(self, market.get(Value::from("type")), market.get(Value::from("linear")), Value::Undefined, Value::Undefined);
         let mut trades: Value = <Self as Htx>::subscribe_public(self, url.clone(), symbol.clone(), message_hash.clone(), Value::Undefined, params.clone()).await;
         if self.get("newUpdates".into()).is_truthy() {
             limit = trades.get_limit(symbol.clone(), limit.clone());
@@ -1570,7 +1570,7 @@ pub trait Htx : Exchange {
         symbol = market.get(Value::from("symbol"));
         let mut interval: Value = self.safe_string(self.get("timeframes".into()), timeframe.clone(), timeframe.clone());
         let mut message_hash: Value = Value::from("market.") + market.get(Value::from("id")) + Value::from(".kline.") + interval.clone();
-        let mut url: Value = <Self as Htx>::get_url_by_market_type(self, market.get(Value::from("type")), market.get(Value::from("linear")));
+        let mut url: Value = <Self as Htx>::get_url_by_market_type(self, market.get(Value::from("type")), market.get(Value::from("linear")), Value::Undefined, Value::Undefined);
         let mut ohlcv: Value = <Self as Htx>::subscribe_public(self, url.clone(), symbol.clone(), message_hash.clone(), Value::Undefined, params.clone()).await;
         if self.get("newUpdates".into()).is_truthy() {
             limit = ohlcv.get_limit(symbol.clone(), limit.clone());
@@ -1613,7 +1613,7 @@ pub trait Htx : Exchange {
         let mut market: Value = self.safe_market(market_id.clone(), Value::Undefined, Value::Undefined, Value::Undefined);
         let mut symbol: Value = market.get(Value::from("symbol"));
         let mut interval: Value = self.safe_string(parts.clone(), Value::from(3), Value::Undefined);
-        let mut timeframe: Value = self.find_timeframe(interval.clone(), Value::Undefined);
+        let mut timeframe: Value = self.find_timeframe(interval.clone());
         self.get("ohlcvs".into()).set(symbol.clone(), self.safe_value(self.get("ohlcvs".into()), symbol.clone(), Value::new_object()));
         let mut stored: Value = self.safe_value(self.get("ohlcvs".into()).get(symbol.clone()), timeframe.clone(), Value::Undefined);
         if stored.clone().is_nullish() {
@@ -1990,7 +1990,7 @@ pub trait Htx : Exchange {
 
     async fn watch_my_trades(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
-        self.check_required_credentials(Value::Undefined);
+        self.check_required_credentials();
         self.load_markets(Value::Undefined, Value::Undefined).await;
         let mut r#type: Value = Value::Undefined;
         let mut market_id: Value = Value::from("*");
@@ -2030,7 +2030,7 @@ pub trait Htx : Exchange {
             // like symbol/margin/subtype/type variations
             message_hash = order_message_hash.clone() + Value::from(":") + Value::from("trade");
         };
-        trades = <Self as Htx>::subscribe_private(self, channel.clone(), message_hash.clone(), r#type.clone(), sub_type.clone(), params.clone()).await;
+        trades = <Self as Htx>::subscribe_private(self, channel.clone(), message_hash.clone(), r#type.clone(), sub_type.clone(), params.clone(), Value::Undefined).await;
         if self.get("newUpdates".into()).is_truthy() {
             limit = trades.get_limit(symbol.clone(), limit.clone());
         };
@@ -2111,7 +2111,7 @@ pub trait Htx : Exchange {
             channel = self.safe_string(channel_and_message_hash.clone(), Value::from(0), Value::Undefined);
             message_hash = self.safe_string(channel_and_message_hash.clone(), Value::from(1), Value::Undefined);
         };
-        let mut orders: Value = <Self as Htx>::subscribe_private(self, channel.clone(), message_hash.clone(), r#type.clone(), sub_type.clone(), params.clone()).await;
+        let mut orders: Value = <Self as Htx>::subscribe_private(self, channel.clone(), message_hash.clone(), r#type.clone(), sub_type.clone(), params.clone(), Value::Undefined).await;
         if self.get("newUpdates".into()).is_truthy() {
             limit = orders.get_limit(symbol.clone(), limit.clone());
         };
@@ -2257,7 +2257,7 @@ pub trait Htx : Exchange {
                 // inject trade in existing order by faking an order object
                 let mut order_id: Value = self.safe_string(parsed_trade.clone(), Value::from("order"), Value::Undefined);
                 let mut trades: Value = Value::Json(serde_json::Value::Array(vec![parsed_trade.clone().into()]));
-                let mut status: Value = <Self as Htx>::parse_order_status(self, self.safe_string_2(data.clone(), Value::from("orderStatus"), Value::from("status"), Value::from("closed")));
+                let mut status: Value = self.parse_order_status(self.safe_string_2(data.clone(), Value::from("orderStatus"), Value::from("status"), Value::from("closed")));
                 let mut filled: Value = self.safe_string(data.clone(), Value::from("execAmt"), Value::Undefined);
                 let mut remaining: Value = self.safe_string(data.clone(), Value::from("remainAmt"), Value::Undefined);
                 let mut order: Value = Value::Json(normalize(&Value::Json(json!({
@@ -2434,7 +2434,7 @@ pub trait Htx : Exchange {
         market = self.safe_market(market_id.clone(), market.clone(), Value::Undefined, Value::Undefined);
         let mut symbol: Value = self.safe_symbol(market_id.clone(), market.clone(), Value::Undefined, Value::Undefined);
         let mut amount: Value = self.safe_string_2(order.clone(), Value::from("orderSize"), Value::from("volume"), Value::Undefined);
-        let mut status: Value = <Self as Htx>::parse_order_status(self, self.safe_string_2(order.clone(), Value::from("orderStatus"), Value::from("status"), Value::Undefined));
+        let mut status: Value = self.parse_order_status(self.safe_string_2(order.clone(), Value::from("orderStatus"), Value::from("status"), Value::Undefined));
         let mut id: Value = self.safe_string_2(order.clone(), Value::from("orderId"), Value::from("order_id"), Value::Undefined);
         let mut client_order_id: Value = self.safe_string_2(order.clone(), Value::from("clientOrderId"), Value::from("client_order_id"), Value::Undefined);
         let mut price: Value = self.safe_string_2(order.clone(), Value::from("orderPrice"), Value::from("price"), Value::Undefined);
@@ -2560,20 +2560,20 @@ pub trait Htx : Exchange {
             r#type = market.get(Value::from("type"));
             sub_type = if market.get(Value::from("linear")).is_truthy() { Value::from("linear") } else { Value::from("inverse") };
         } else {
-            (r#type, params) = shift_2(self.handle_market_type_and_params(Value::from("watchPositions"), market.clone(), params.clone(), Value::Undefined));
+            (r#type, params) = shift_2(self.handle_market_type_and_params(Value::from("watchPositions"), market.clone(), params.clone()));
             if r#type.clone() == Value::from("spot") {
                 r#type = Value::from("future");
             };
             (sub_type, params) = shift_2(self.handle_option_and_params(params.clone(), Value::from("watchPositions"), Value::from("subType"), sub_type.clone()));
         };
-        symbols = self.market_symbols(symbols.clone(), Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined);
+        symbols = self.market_symbols(symbols.clone());
         let mut margin_mode: Value = Value::Undefined;
         (margin_mode, params) = shift_2(self.handle_margin_mode_and_params(Value::from("watchPositions"), params.clone(), Value::from("cross")));
         let mut is_linear: Value = (sub_type.clone() == Value::from("linear")).into();
-        let mut url: Value = <Self as Htx>::get_url_by_market_type(self, r#type.clone(), is_linear.clone(), true.into());
+        let mut url: Value = <Self as Htx>::get_url_by_market_type(self, r#type.clone(), is_linear.clone(), true.into(), Value::Undefined);
         message_hash = margin_mode.clone() + Value::from(":positions") + message_hash.clone();
         let mut channel: Value = if margin_mode.clone() == Value::from("cross") { Value::from("positions_cross.*") } else { Value::from("positions.*") };
-        let mut new_positions: Value = <Self as Htx>::subscribe_private(self, channel.clone(), message_hash.clone(), r#type.clone(), sub_type.clone(), params.clone()).await;
+        let mut new_positions: Value = <Self as Htx>::subscribe_private(self, channel.clone(), message_hash.clone(), r#type.clone(), sub_type.clone(), params.clone(), Value::Undefined).await;
         if self.get("newUpdates".into()).is_truthy() {
             return new_positions.clone();
         };
@@ -2664,7 +2664,7 @@ pub trait Htx : Exchange {
     async fn watch_balance(&mut self, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         let mut r#type: Value = Value::Undefined;
-        (r#type, params) = shift_2(self.handle_market_type_and_params(Value::from("watchBalance"), Value::Undefined, params.clone(), Value::Undefined));
+        (r#type, params) = shift_2(self.handle_market_type_and_params(Value::from("watchBalance"), Value::Undefined, params.clone()));
         let mut sub_type: Value = Value::Undefined;
         (sub_type, params) = shift_2(self.handle_sub_type_and_params(Value::from("watchBalance"), Value::Undefined, params.clone(), Value::from("linear")));
         let mut is_unified_account: Value = self.safe_value_2(params.clone(), Value::from("isUnifiedAccount"), Value::from("unified"), false.into());
@@ -3035,7 +3035,7 @@ pub trait Htx : Exchange {
         while i < message_hashes.len() {
             let mut unsub_hash: Value = message_hashes.get(i.into());
             let mut sub_hash: Value = sub_message_hashes.get(i.into());
-            self.clean_unsubscription(client.clone(), sub_hash.clone(), unsub_hash.clone(), Value::Undefined);
+            self.clean_unsubscription(client.clone(), sub_hash.clone(), unsub_hash.clone());
             i += 1;
         };
         self.clean_cache(subscription.clone());
@@ -3159,7 +3159,7 @@ pub trait Htx : Exchange {
         let mut private_parts: Value = ch.split(Value::from("#"));
         let mut private_type: Value = self.safe_string(private_parts.clone(), Value::from(0), Value::from(""));
         if private_type.clone() == Value::from("trade.clearing") {
-            <Self as Htx>::handle_my_trade(self, client.clone(), message.clone());
+            <Self as Htx>::handle_my_trade(self, client.clone(), message.clone(), Value::Undefined);
             return Value::Undefined;
         };
         if private_type.index_of(Value::from("accounts.update")) >= Value::from(0) {
@@ -3680,7 +3680,7 @@ pub trait Htx : Exchange {
             }))).unwrap());
         };
         let mut is_linear: Value = (subtype.clone() == Value::from("linear")).into();
-        let mut url: Value = <Self as Htx>::get_url_by_market_type(self, r#type.clone(), is_linear.clone(), true.into());
+        let mut url: Value = <Self as Htx>::get_url_by_market_type(self, r#type.clone(), is_linear.clone(), true.into(), Value::Undefined);
         let mut hostname: Value = if r#type.clone() == Value::from("spot") { self.get("urls".into()).get(Value::from("hostnames")).get(Value::from("spot")) } else { self.get("urls".into()).get(Value::from("hostnames")).get(Value::from("contract")) };
         let mut auth_params: Value = Value::Json(normalize(&Value::Json(json!({
             "type": r#type,
@@ -3699,7 +3699,7 @@ pub trait Htx : Exchange {
         if url.clone().is_nullish() || hostname.clone().is_nullish() || r#type.clone().is_nullish() {
             panic!(r###"ArgumentsRequired::new(self.get("id".into()) + Value::from(" authenticate requires a url, hostname and type argument"))"###);
         };
-        self.check_required_credentials(Value::Undefined);
+        self.check_required_credentials();
         let mut message_hash: Value = Value::from("auth");
         let mut relative_path: Value = url.replace(Value::from("wss://") + hostname.clone(), Value::from(""));
         let mut client: Value = self.client(url.clone());
@@ -4341,10 +4341,10 @@ pub trait Htx : Exchange {
                     "contractPrivatePostV5positionlever" => self.request("v5/position/lever".into(), "contract".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "contractPrivatePostV5positionmode" => self.request("v5/position/mode".into(), "contract".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "contractPrivatePostV5accountfeedeductioncurrency" => self.request("v5/account/fee_deduction_currency".into(), "contract".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    _ => unimplemented!(),
+                    _ => panic!("Unknown API method: {}", m),
                 }
             },
-            _ => unimplemented!()
+            _ => panic!("dispatch: method must be a string, got {:?}", method)
         }
     }
 }

@@ -2380,10 +2380,10 @@ pub trait Ndax : Exchange {
                     "privatePostSubmitdepositticketcomment" => self.request("SubmitDepositTicketComment".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privatePostSubmitwithdrawticketcomment" => self.request("SubmitWithdrawTicketComment".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "privatePostGetorderhistorybyorderid" => self.request("GetOrderHistoryByOrderId".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    _ => unimplemented!(),
+                    _ => panic!("Unknown API method: {}", m),
                 }
             },
-            _ => unimplemented!()
+            _ => panic!("dispatch: method must be a string, got {:?}", method)
         }
     }
 }

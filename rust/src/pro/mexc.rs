@@ -905,7 +905,7 @@ pub trait Mexc : Exchange {
     async fn watch_tickers(&mut self, mut symbols: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        symbols = self.market_symbols(symbols.clone(), Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined);
+        symbols = self.market_symbols(symbols.clone(), Value::Undefined);
         let mut message_hashes: Value = Value::new_array();
         let mut first_symbol: Value = self.safe_string(symbols.clone(), Value::from(0), Value::Undefined);
         let mut market: Value = Value::Undefined;
@@ -913,7 +913,7 @@ pub trait Mexc : Exchange {
             market = self.market(first_symbol.clone());
         };
         let mut r#type: Value = Value::Undefined;
-        (r#type, params) = shift_2(self.handle_market_type_and_params(Value::from("watchTickers"), market.clone(), params.clone(), Value::Undefined));
+        (r#type, params) = shift_2(self.handle_market_type_and_params(Value::from("watchTickers"), market.clone(), params.clone()));
         let mut is_spot: Value = (r#type.clone() == Value::from("spot")).into();
         let mut url: Value = if is_spot.is_truthy() { self.get("urls".into()).get(Value::from("api")).get(Value::from("ws")).get(Value::from("spot")) } else { self.get("urls".into()).get(Value::from("api")).get(Value::from("ws")).get(Value::from("swap")) };
         let mut request: Value = Value::new_object();
@@ -950,13 +950,13 @@ pub trait Mexc : Exchange {
             request.set("params".into(), Value::new_object());
             message_hashes.push(Value::from("ticker"));
         };
-        let mut ticker: Value = self.watch_multiple(url.clone(), message_hashes.clone(), extend_2(request.clone(), params.clone()), message_hashes.clone(), Value::Undefined).await;
+        let mut ticker: Value = self.watch_multiple(url.clone(), message_hashes.clone(), extend_2(request.clone(), params.clone()), message_hashes.clone()).await;
         if is_spot.is_truthy() && self.get("newUpdates".into()).is_truthy() {
             let mut result: Value = Value::new_object();
             result.set(ticker.get(Value::from("symbol")), ticker.clone());
             return result.clone();
         };
-        return self.filter_by_array(self.get("tickers".into()), Value::from("symbol"), symbols.clone(), Value::Undefined);
+        return self.filter_by_array(self.get("tickers".into()), Value::from("symbol"), symbols.clone());
     }
 
     fn handle_tickers(&mut self, mut client: Value, mut message: Value) -> Value {
@@ -1038,7 +1038,7 @@ pub trait Mexc : Exchange {
             if is_spot.is_truthy() {
                 ticker = <Self as Mexc>::parse_ws_ticker(self, entry.clone(), market.clone());
             } else {
-                ticker = self.parse_ticker(entry.clone(), Value::Undefined);
+                ticker = self.parse_ticker(entry.clone());
             };
             let mut symbol: Value = ticker.get(Value::from("symbol"));
             self.get("tickers".into()).set(symbol.clone(), ticker.clone());
@@ -1120,7 +1120,7 @@ pub trait Mexc : Exchange {
             panic!(r###"ArgumentsRequired::new(self.get("id".into()) + Value::from(" watchBidsAsks required symbols argument"))"###);
         };
         let mut markets: Value = self.markets_for_symbols(symbols.clone());
-        (market_type, params) = shift_2(self.handle_market_type_and_params(Value::from("watchBidsAsks"), markets.get(Value::from(0)), params.clone(), Value::Undefined));
+        (market_type, params) = shift_2(self.handle_market_type_and_params(Value::from("watchBidsAsks"), markets.get(Value::from(0)), params.clone()));
         let mut is_spot: Value = (market_type.clone() == Value::from("spot")).into();
         if !is_spot.is_truthy() {
             panic!(r###"NotSupported::new(self.get("id".into()) + Value::from(" watchBidsAsks only support spot market"))"###);
@@ -1141,13 +1141,13 @@ pub trait Mexc : Exchange {
             "method": "SUBSCRIPTION",
             "params": topics
         }))).unwrap());
-        let mut ticker: Value = self.watch_multiple(url.clone(), message_hashes.clone(), extend_2(request.clone(), params.clone()), message_hashes.clone(), Value::Undefined).await;
+        let mut ticker: Value = self.watch_multiple(url.clone(), message_hashes.clone(), extend_2(request.clone(), params.clone()), message_hashes.clone()).await;
         if self.get("newUpdates".into()).is_truthy() {
             let mut tickers: Value = Value::new_object();
             tickers.set(ticker.get(Value::from("symbol")), ticker.clone());
             return tickers.clone();
         };
-        return self.filter_by_array(self.get("bidsasks".into()), Value::from("symbol"), symbols.clone(), Value::Undefined);
+        return self.filter_by_array(self.get("bidsasks".into()), Value::from("symbol"), symbols.clone());
     }
 
     fn handle_bid_ask(&mut self, mut client: Value, mut message: Value) -> Value {
@@ -1164,7 +1164,7 @@ pub trait Mexc : Exchange {
         //        "t": 1678643605721
         //    }
         //
-        let mut parsed_ticker: Value = <Self as Mexc>::parse_ws_bid_ask(self, message.clone());
+        let mut parsed_ticker: Value = <Self as Mexc>::parse_ws_bid_ask(self, message.clone(), Value::Undefined);
         let mut symbol: Value = self.safe_string(parsed_ticker.clone(), Value::from("symbol"), Value::Undefined);
         if symbol.clone().is_nullish() {
             return Value::Undefined;
@@ -1203,19 +1203,19 @@ pub trait Mexc : Exchange {
             "method": method,
             "params": Value::Json(serde_json::Value::Array(vec![channel.clone().into()]))
         }))).unwrap());
-        return self.watch(url.clone(), message_hash.clone(), extend_2(request.clone(), params.clone()), message_hash.clone(), Value::Undefined).await;
+        return self.watch(url.clone(), message_hash.clone(), extend_2(request.clone(), params.clone()), message_hash.clone()).await;
     }
 
     async fn watch_spot_private(&mut self, mut channel: Value, mut message_hash: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
-        self.check_required_credentials(Value::Undefined);
-        let mut listen_key: Value = <Self as Mexc>::authenticate(self, channel.clone()).await;
+        self.check_required_credentials();
+        let mut listen_key: Value = <Self as Mexc>::authenticate(self, channel.clone(), Value::Undefined).await;
         let mut url: Value = self.get("urls".into()).get(Value::from("api")).get(Value::from("ws")).get(Value::from("spot")) + Value::from("?listenKey=") + listen_key.clone();
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
             "method": "SUBSCRIPTION",
             "params": Value::Json(serde_json::Value::Array(vec![channel.clone().into()]))
         }))).unwrap());
-        return self.watch(url.clone(), message_hash.clone(), extend_2(request.clone(), params.clone()), channel.clone(), Value::Undefined).await;
+        return self.watch(url.clone(), message_hash.clone(), extend_2(request.clone(), params.clone()), channel.clone()).await;
     }
 
     async fn watch_swap_public(&mut self, mut channel: Value, mut message_hash: Value, mut request_params: Value, mut params: Value) -> Value {
@@ -1226,12 +1226,12 @@ pub trait Mexc : Exchange {
             "param": request_params
         }))).unwrap());
         let mut message: Value = extend_2(request.clone(), params.clone());
-        return self.watch(url.clone(), message_hash.clone(), message.clone(), message_hash.clone(), Value::Undefined).await;
+        return self.watch(url.clone(), message_hash.clone(), message.clone(), message_hash.clone()).await;
     }
 
     async fn watch_swap_private(&mut self, mut message_hash: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
-        self.check_required_credentials(Value::Undefined);
+        self.check_required_credentials();
         let mut channel: Value = Value::from("login");
         let mut url: Value = self.get("urls".into()).get(Value::from("api")).get(Value::from("ws")).get(Value::from("swap"));
         let mut timestamp: Value = self.milliseconds().to_string();
@@ -1246,7 +1246,7 @@ pub trait Mexc : Exchange {
             }))).unwrap())
         }))).unwrap());
         let mut message: Value = extend_2(request.clone(), params.clone());
-        return self.watch(url.clone(), message_hash.clone(), message.clone(), channel.clone(), Value::Undefined).await;
+        return self.watch(url.clone(), message_hash.clone(), message.clone(), channel.clone()).await;
     }
 
     async fn watch_ohlcv(&mut self, mut symbol: Value, mut timeframe: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
@@ -1451,7 +1451,7 @@ pub trait Mexc : Exchange {
         let mut parts: Value = msg.split(Value::from("@"));
         let mut market_id: Value = self.safe_string(parts.clone(), Value::from(2), Value::Undefined);
         let mut symbol: Value = self.safe_symbol(market_id.clone(), Value::Undefined, Value::Undefined, Value::Undefined);
-        self.get("orderbooks".into()).set(symbol.clone(), self.order_book(Value::new_object(), Value::Undefined));
+        self.get("orderbooks".into()).set(symbol.clone(), self.order_book(Value::new_object()));
         Value::Undefined
     }
 
@@ -1549,7 +1549,7 @@ pub trait Mexc : Exchange {
         let mut subscription: Value = self.safe_value(client.get(subscriptions.clone()), message_hash.clone(), Value::Undefined);
         let mut limit: Value = self.safe_integer(subscription.clone(), Value::from("limit"), Value::Undefined);
         if !self.get("orderbooks".into()).contains_key(symbol.clone()) {
-            self.get("orderbooks".into()).set(symbol.clone(), self.order_book(Value::Undefined, Value::Undefined));
+            self.get("orderbooks".into()).set(symbol.clone(), self.order_book());
         };
         let mut stored_order_book: Value = self.get("orderbooks".into()).get(symbol.clone());
         let mut nonce: Value = self.safe_integer(stored_order_book.clone(), Value::from("nonce"), Value::Undefined);
@@ -1733,7 +1733,7 @@ pub trait Mexc : Exchange {
             message_hash = message_hash.clone() + Value::from(":") + symbol.clone();
         };
         let mut r#type: Value = Value::Undefined;
-        (r#type, params) = shift_2(self.handle_market_type_and_params(Value::from("watchMyTrades"), market.clone(), params.clone(), Value::Undefined));
+        (r#type, params) = shift_2(self.handle_market_type_and_params(Value::from("watchMyTrades"), market.clone(), params.clone()));
         let mut trades: Value = Value::Undefined;
         if r#type.clone() == Value::from("spot") {
             let mut channel: Value = Value::from("spot@private.deals.v3.api.pb");
@@ -1901,7 +1901,7 @@ pub trait Mexc : Exchange {
             message_hash = message_hash.clone() + Value::from(":") + symbol.clone();
         };
         let mut r#type: Value = Value::Undefined;
-        (r#type, params) = shift_2(self.handle_market_type_and_params(Value::from("watchOrders"), market.clone(), params.clone(), Value::Undefined));
+        (r#type, params) = shift_2(self.handle_market_type_and_params(Value::from("watchOrders"), market.clone(), params.clone()));
         let mut orders: Value = Value::Undefined;
         if r#type.clone() == Value::from("spot") {
             let mut channel: Value = Value::from("spot@private.orders.v3.api.pb");
@@ -2163,7 +2163,7 @@ pub trait Mexc : Exchange {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
         let mut r#type: Value = Value::Undefined;
-        (r#type, params) = shift_2(self.handle_market_type_and_params(Value::from("watchBalance"), Value::Undefined, params.clone(), Value::Undefined));
+        (r#type, params) = shift_2(self.handle_market_type_and_params(Value::from("watchBalance"), Value::Undefined, params.clone()));
         let mut message_hash: Value = Value::from("balance:") + r#type.clone();
         if r#type.clone() == Value::from("spot") {
             let mut channel: Value = Value::from("spot@private.account.v3.api.pb");
@@ -2260,7 +2260,7 @@ pub trait Mexc : Exchange {
     async fn un_watch_tickers(&mut self, mut symbols: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        symbols = self.market_symbols(symbols.clone(), Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined);
+        symbols = self.market_symbols(symbols.clone(), Value::Undefined);
         let mut message_hashes: Value = Value::new_array();
         let mut first_symbol: Value = self.safe_string(symbols.clone(), Value::from(0), Value::Undefined);
         let mut market: Value = Value::Undefined;
@@ -2268,7 +2268,7 @@ pub trait Mexc : Exchange {
             market = self.market(first_symbol.clone());
         };
         let mut r#type: Value = Value::Undefined;
-        (r#type, params) = shift_2(self.handle_market_type_and_params(Value::from("watchTickers"), market.clone(), params.clone(), Value::Undefined));
+        (r#type, params) = shift_2(self.handle_market_type_and_params(Value::from("watchTickers"), market.clone(), params.clone()));
         let mut is_spot: Value = (r#type.clone() == Value::from("spot")).into();
         let mut url: Value = if is_spot.is_truthy() { self.get("urls".into()).get(Value::from("api")).get(Value::from("ws")).get(Value::from("spot")) } else { self.get("urls".into()).get(Value::from("api")).get(Value::from("ws")).get(Value::from("swap")) };
         let mut request: Value = Value::new_object();
@@ -2306,7 +2306,7 @@ pub trait Mexc : Exchange {
             message_hashes.push(Value::from("unsubscribe:ticker"));
         };
         let mut client: Value = self.client(url.clone());
-        self.watch_multiple(url.clone(), message_hashes.clone(), extend_2(request.clone(), params.clone()), message_hashes.clone(), Value::Undefined);
+        self.watch_multiple(url.clone(), message_hashes.clone(), extend_2(request.clone(), params.clone()), message_hashes.clone());
         <Self as Mexc>::handle_unsubscriptions(self, client.clone(), message_hashes.clone());
         return Value::Undefined;
     }
@@ -2320,7 +2320,7 @@ pub trait Mexc : Exchange {
             panic!(r###"ArgumentsRequired::new(self.get("id".into()) + Value::from(" watchBidsAsks required symbols argument"))"###);
         };
         let mut markets: Value = self.markets_for_symbols(symbols.clone());
-        (market_type, params) = shift_2(self.handle_market_type_and_params(Value::from("watchBidsAsks"), markets.get(Value::from(0)), params.clone(), Value::Undefined));
+        (market_type, params) = shift_2(self.handle_market_type_and_params(Value::from("watchBidsAsks"), markets.get(Value::from(0)), params.clone()));
         let mut is_spot: Value = (market_type.clone() == Value::from("spot")).into();
         if !is_spot.is_truthy() {
             panic!(r###"NotSupported::new(self.get("id".into()) + Value::from(" watchBidsAsks only support spot market"))"###);
@@ -2342,7 +2342,7 @@ pub trait Mexc : Exchange {
             "params": topics
         }))).unwrap());
         let mut client: Value = self.client(url.clone());
-        self.watch_multiple(url.clone(), message_hashes.clone(), extend_2(request.clone(), params.clone()), message_hashes.clone(), Value::Undefined);
+        self.watch_multiple(url.clone(), message_hashes.clone(), extend_2(request.clone(), params.clone()), message_hashes.clone());
         <Self as Mexc>::handle_unsubscriptions(self, client.clone(), message_hashes.clone());
         return Value::Undefined;
     }
@@ -2433,7 +2433,7 @@ pub trait Mexc : Exchange {
         while i < message_hashes.len() {
             let mut message_hash: Value = message_hashes.get(i.into());
             let mut sub_message_hash: Value = message_hash.replace(Value::from("unsubscribe:"), Value::from(""));
-            self.clean_unsubscription(client.clone(), sub_message_hash.clone(), message_hash.clone(), Value::Undefined);
+            self.clean_unsubscription(client.clone(), sub_message_hash.clone(), message_hash.clone());
             if message_hash.index_of(Value::from("ticker")) >= Value::from(0) {
                 let mut symbol: Value = message_hash.replace(Value::from("unsubscribe:ticker:"), Value::from(""));
                 if symbol.index_of(Value::from("unsubscribe")) >= Value::from(0) {
@@ -2577,7 +2577,7 @@ pub trait Mexc : Exchange {
         } else if channel_id.clone() == Value::from("private.account.v3.api.pb") {
             <Self as Mexc>::handle_balance(self, client.clone(), message.clone());
         } else if channel_id.clone() == Value::from("private.deals.v3.api.pb") {
-            <Self as Mexc>::handle_my_trade(self, client.clone(), message.clone());
+            <Self as Mexc>::handle_my_trade(self, client.clone(), message.clone(), Value::Undefined);
         } else if channel_id.clone() == Value::from("private.orders.v3.api.pb") {
             <Self as Mexc>::handle_order(self, client.clone(), message.clone());
         };
@@ -2831,10 +2831,10 @@ pub trait Mexc : Exchange {
                     "brokerPrivatePostSubaccountuniversaltransfer" => self.request("sub-account/universalTransfer".into(), "broker".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "brokerPrivatePostSubaccountfutures" => self.request("sub-account/futures".into(), "broker".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "brokerPrivateDeleteSubaccountapikey" => self.request("sub-account/apiKey".into(), "broker".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    _ => unimplemented!(),
+                    _ => panic!("Unknown API method: {}", m),
                 }
             },
-            _ => unimplemented!()
+            _ => panic!("dispatch: method must be a string, got {:?}", method)
         }
     }
 }
