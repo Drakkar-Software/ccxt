@@ -13,14 +13,38 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, BoolExt, JSON, Array, Object, Math, Promise, parse_int, shift_2, extend_2, normalize};
 // Crypto hash identifiers
-fn sha256() -> Value { Value::from("sha256") }
-fn sha384() -> Value { Value::from("sha384") }
-fn sha512() -> Value { Value::from("sha512") }
-fn md5() -> Value { Value::from("md5") }
-fn ed25519() -> Value { Value::from("ed25519") }
+fn sha256() -> Value { Value::from("sha256()") }
+fn sha384() -> Value { Value::from("sha384()") }
+fn sha512() -> Value { Value::from("sha512()") }
+fn md5() -> Value { Value::from("md5()") }
+fn ed25519() -> Value { Value::from("ed25519()") }
 fn rsa(msg: Value, secret: Value, _hash: Value) -> Value { msg }
 fn eddsa(msg: Value, secret: Value, _curve: Value) -> Value { msg }
-fn secp256k1() -> Value { Value::from("secp256k1") }
+fn secp256k1() -> Value { Value::from("secp256k1()") }
+fn keccak() -> Value { Value::from("keccak()") }
+fn ecdsa(msg: Value, secret: Value, algo: Value, hash_fn: Value) -> Value { msg }
+fn totp(secret: Value) -> Value { Value::Undefined }
+fn jwt(data: Value, secret: Value, hash: Value, is_rsa: Value) -> Value { Value::Undefined }
+fn parse_float(value: Value) -> Value { value }
+fn decimals(value: Value) -> Value { Value::from(0) }
+fn shift_1(value: Value) -> Value { value }
+fn shift_3(value: Value) -> (Value, Value, Value) { (value.clone(), Value::Undefined, Value::Undefined) }
+fn shift_4(value: Value) -> (Value, Value, Value, Value) { (value.clone(), Value::Undefined, Value::Undefined, Value::Undefined) }
+// Error type constructors
+fn BadRequest(msg: Value) -> Value { msg }
+fn InvalidOrder(msg: Value) -> Value { msg }
+fn ExchangeError(msg: Value) -> Value { msg }
+fn InsufficientFunds(msg: Value) -> Value { msg }
+fn OrderNotFound(msg: Value) -> Value { msg }
+fn AuthenticationError(msg: Value) -> Value { msg }
+fn PermissionDenied(msg: Value) -> Value { msg }
+fn ExchangeNotAvailable(msg: Value) -> Value { msg }
+fn ArgumentsRequired(msg: Value) -> Value { msg }
+fn RateLimitExceeded(msg: Value) -> Value { msg }
+fn OrderNotFillable(msg: Value) -> Value { msg }
+fn OrderImmediatelyFillable(msg: Value) -> Value { msg }
+fn NotSupported(msg: Value) -> Value { msg }
+fn DuplicateOrderId(msg: Value) -> Value { msg }
 
 use crate::exchange::{PRECISE_BASE, TRUNCATE, ROUND, ROUND_UP, ROUND_DOWN};
 use crate::exchange::{DECIMAL_PLACES, SIGNIFICANT_DIGITS, TICK_SIZE, NO_PADDING, PAD_WITH_ZERO};
@@ -734,14 +758,14 @@ pub trait Coinsph : Exchange {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = <Self as Coinsph>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() { return rv; }
                 }
             }
         }
         let candidates = vec![("public", "GET", "status"), ("public", "GET", "ping"), ("public", "GET", "time"), ("sapi", "GET", "system/status")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Coinsph>::request(self,path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -751,7 +775,7 @@ pub trait Coinsph : Exchange {
     async fn fetch_time(&mut self, mut params: Value) -> Value {
         let candidates = vec![("public", "GET", "time"), ("public", "GET", "server/time"), ("public", "GET", "timestamp")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Coinsph>::request(self,path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -775,14 +799,14 @@ pub trait Coinsph : Exchange {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = <Self as Coinsph>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() { return rv; }
                 }
             }
         }
         let candidates = vec![("public", "GET", "ticker/24hr"), ("public", "GET", "tickers"), ("public", "GET", "ticker")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Coinsph>::request(self,path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -806,14 +830,14 @@ pub trait Coinsph : Exchange {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = <Self as Coinsph>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() { return rv; }
                 }
             }
         }
         let candidates = vec![("public", "GET", "ticker/24hr"), ("public", "GET", "ticker"), ("public", "GET", "ticker/price")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Coinsph>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -917,14 +941,14 @@ pub trait Coinsph : Exchange {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = <Self as Coinsph>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() { return rv; }
                 }
             }
         }
         let candidates = vec![("public", "GET", "depth"), ("public", "GET", "orderbook"), ("public", "GET", "order_book")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Coinsph>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -952,14 +976,14 @@ pub trait Coinsph : Exchange {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = <Self as Coinsph>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() { return rv; }
                 }
             }
         }
         let candidates = vec![("public", "GET", "klines"), ("public", "GET", "candles"), ("public", "GET", "ohlcv")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Coinsph>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -977,7 +1001,7 @@ pub trait Coinsph : Exchange {
         if limit.is_nonnullish() { request.set("limit".into(), limit.clone()); }
         let candidates = vec![("public", "GET", "trades"), ("public", "GET", "recent_trades"), ("public", "GET", "aggTrades")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Coinsph>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -1894,77 +1918,77 @@ pub trait Coinsph : Exchange {
         match method {
             Value::Json(serde_json::Value::String(ref m)) => {
                 match m.as_ref() {
-                    "publicGetOpenapiv1ping" => Coinsph::request(self, "openapi/v1/ping".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetOpenapiv1time" => Coinsph::request(self, "openapi/v1/time".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetOpenapiv1userip" => Coinsph::request(self, "openapi/v1/user/ip".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetOpenapiquotev1ticker24hr" => Coinsph::request(self, "openapi/quote/v1/ticker/24hr".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetOpenapiquotev1tickerprice" => Coinsph::request(self, "openapi/quote/v1/ticker/price".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetOpenapiquotev1tickerbookticker" => Coinsph::request(self, "openapi/quote/v1/ticker/bookTicker".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetOpenapiv1exchangeinfo" => Coinsph::request(self, "openapi/v1/exchangeInfo".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetOpenapiquotev1depth" => Coinsph::request(self, "openapi/quote/v1/depth".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetOpenapiquotev1klines" => Coinsph::request(self, "openapi/quote/v1/klines".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetOpenapiquotev1trades" => Coinsph::request(self, "openapi/quote/v1/trades".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetOpenapiv1pairs" => Coinsph::request(self, "openapi/v1/pairs".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetOpenapiquotev1avgprice" => Coinsph::request(self, "openapi/quote/v1/avgPrice".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetOpenapiv1checksysstatus" => Coinsph::request(self, "openapi/v1/check-sys-status".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetOpenapiwalletv1configgetall" => Coinsph::request(self, "openapi/wallet/v1/config/getall".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetOpenapiwalletv1depositaddress" => Coinsph::request(self, "openapi/wallet/v1/deposit/address".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetOpenapiwalletv1deposithistory" => Coinsph::request(self, "openapi/wallet/v1/deposit/history".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetOpenapiwalletv1withdrawhistory" => Coinsph::request(self, "openapi/wallet/v1/withdraw/history".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetOpenapiwalletv1withdrawaddresswhitelist" => Coinsph::request(self, "openapi/wallet/v1/withdraw/address-whitelist".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetOpenapiv1account" => Coinsph::request(self, "openapi/v1/account".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetOpenapiv1apikeys" => Coinsph::request(self, "openapi/v1/api-keys".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetOpenapiv1openorders" => Coinsph::request(self, "openapi/v1/openOrders".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetOpenapiv1assettradefee" => Coinsph::request(self, "openapi/v1/asset/tradeFee".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetOpenapiv1order" => Coinsph::request(self, "openapi/v1/order".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetOpenapiv1historyorders" => Coinsph::request(self, "openapi/v1/historyOrders".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetOpenapiv1mytrades" => Coinsph::request(self, "openapi/v1/myTrades".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetOpenapiv1capitaldeposithistory" => Coinsph::request(self, "openapi/v1/capital/deposit/history".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetOpenapiv1capitalwithdrawhistory" => Coinsph::request(self, "openapi/v1/capital/withdraw/history".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetOpenapiv3paymentrequestgetpaymentrequest" => Coinsph::request(self, "openapi/v3/payment-request/get-payment-request".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetMerchantapiv1getinvoices" => Coinsph::request(self, "merchant-api/v1/get-invoices".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetOpenapiaccountv3cryptoaccounts" => Coinsph::request(self, "openapi/account/v3/crypto-accounts".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetOpenapitransferv3transfersid" => Coinsph::request(self, "openapi/transfer/v3/transfers/{id}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetOpenapiv1subaccountlist" => Coinsph::request(self, "openapi/v1/sub-account/list".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetOpenapiv1subaccountasset" => Coinsph::request(self, "openapi/v1/sub-account/asset".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetOpenapiv1subaccounttransferuniversaltransferhistory" => Coinsph::request(self, "openapi/v1/sub-account/transfer/universal-transfer-history".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetOpenapiv1subaccounttransfersubhistory" => Coinsph::request(self, "openapi/v1/sub-account/transfer/sub-history".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetOpenapiv1subaccountapikeyiprestriction" => Coinsph::request(self, "openapi/v1/sub-account/apikey/ip-restriction".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetOpenapiv1subaccountwalletdepositaddress" => Coinsph::request(self, "openapi/v1/sub-account/wallet/deposit/address".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetOpenapiv1subaccountwalletdeposithistory" => Coinsph::request(self, "openapi/v1/sub-account/wallet/deposit/history".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetOpenapiv1fundcollectgetfundrecord" => Coinsph::request(self, "openapi/v1/fund-collect/get-fund-record".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetOpenapiv1assettransactionhistory" => Coinsph::request(self, "openapi/v1/asset/transaction/history".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostOpenapiwalletv1withdrawapply" => Coinsph::request(self, "openapi/wallet/v1/withdraw/apply".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostOpenapiv1ordertest" => Coinsph::request(self, "openapi/v1/order/test".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostOpenapiv1order" => Coinsph::request(self, "openapi/v1/order".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostOpenapiv1capitalwithdrawapply" => Coinsph::request(self, "openapi/v1/capital/withdraw/apply".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostOpenapiv1capitaldepositapply" => Coinsph::request(self, "openapi/v1/capital/deposit/apply".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostOpenapiv3paymentrequestpaymentrequests" => Coinsph::request(self, "openapi/v3/payment-request/payment-requests".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostOpenapiv3paymentrequestdeletepaymentrequest" => Coinsph::request(self, "openapi/v3/payment-request/delete-payment-request".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostOpenapiv3paymentrequestpaymentrequestreminder" => Coinsph::request(self, "openapi/v3/payment-request/payment-request-reminder".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostOpenapiv1userdatastream" => Coinsph::request(self, "openapi/v1/userDataStream".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostMerchantapiv1invoices" => Coinsph::request(self, "merchant-api/v1/invoices".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostMerchantapiv1invoicescancel" => Coinsph::request(self, "merchant-api/v1/invoices-cancel".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostOpenapiconvertv1getsupportedtradingpairs" => Coinsph::request(self, "openapi/convert/v1/get-supported-trading-pairs".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostOpenapiconvertv1getquote" => Coinsph::request(self, "openapi/convert/v1/get-quote".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostOpenapiconvertv1accpetquote" => Coinsph::request(self, "openapi/convert/v1/accpet-quote".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostOpenapiconvertv1queryorderhistory" => Coinsph::request(self, "openapi/convert/v1/query-order-history".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostOpenapifiatv1supportchannel" => Coinsph::request(self, "openapi/fiat/v1/support-channel".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostOpenapifiatv1cashout" => Coinsph::request(self, "openapi/fiat/v1/cash-out".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostOpenapifiatv1history" => Coinsph::request(self, "openapi/fiat/v1/history".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostOpenapimigrationv4sellorder" => Coinsph::request(self, "openapi/migration/v4/sellorder".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostOpenapimigrationv4validatefield" => Coinsph::request(self, "openapi/migration/v4/validate-field".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostOpenapitransferv3transfers" => Coinsph::request(self, "openapi/transfer/v3/transfers".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostOpenapiv1subaccountcreate" => Coinsph::request(self, "openapi/v1/sub-account/create".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostOpenapiv1subaccounttransferuniversaltransfer" => Coinsph::request(self, "openapi/v1/sub-account/transfer/universal-transfer".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostOpenapiv1subaccounttransfersubtomaster" => Coinsph::request(self, "openapi/v1/sub-account/transfer/sub-to-master".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostOpenapiv1subaccountapikeyaddiprestriction" => Coinsph::request(self, "openapi/v1/sub-account/apikey/add-ip-restriction".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostOpenapiv1subaccountapikeydeleteiprestriction" => Coinsph::request(self, "openapi/v1/sub-account/apikey/delete-ip-restriction".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostOpenapiv1fundcollectcollectfromsubaccount" => Coinsph::request(self, "openapi/v1/fund-collect/collect-from-sub-account".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePutOpenapiv1userdatastream" => Coinsph::request(self, "openapi/v1/userDataStream".into(), "private".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateDeleteOpenapiv1order" => Coinsph::request(self, "openapi/v1/order".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateDeleteOpenapiv1openorders" => Coinsph::request(self, "openapi/v1/openOrders".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateDeleteOpenapiv1userdatastream" => Coinsph::request(self, "openapi/v1/userDataStream".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetOpenapiv1ping" => self.request("openapi/v1/ping".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetOpenapiv1time" => self.request("openapi/v1/time".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetOpenapiv1userip" => self.request("openapi/v1/user/ip".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetOpenapiquotev1ticker24hr" => self.request("openapi/quote/v1/ticker/24hr".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetOpenapiquotev1tickerprice" => self.request("openapi/quote/v1/ticker/price".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetOpenapiquotev1tickerbookticker" => self.request("openapi/quote/v1/ticker/bookTicker".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetOpenapiv1exchangeinfo" => self.request("openapi/v1/exchangeInfo".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetOpenapiquotev1depth" => self.request("openapi/quote/v1/depth".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetOpenapiquotev1klines" => self.request("openapi/quote/v1/klines".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetOpenapiquotev1trades" => self.request("openapi/quote/v1/trades".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetOpenapiv1pairs" => self.request("openapi/v1/pairs".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetOpenapiquotev1avgprice" => self.request("openapi/quote/v1/avgPrice".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetOpenapiv1checksysstatus" => self.request("openapi/v1/check-sys-status".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetOpenapiwalletv1configgetall" => self.request("openapi/wallet/v1/config/getall".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetOpenapiwalletv1depositaddress" => self.request("openapi/wallet/v1/deposit/address".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetOpenapiwalletv1deposithistory" => self.request("openapi/wallet/v1/deposit/history".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetOpenapiwalletv1withdrawhistory" => self.request("openapi/wallet/v1/withdraw/history".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetOpenapiwalletv1withdrawaddresswhitelist" => self.request("openapi/wallet/v1/withdraw/address-whitelist".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetOpenapiv1account" => self.request("openapi/v1/account".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetOpenapiv1apikeys" => self.request("openapi/v1/api-keys".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetOpenapiv1openorders" => self.request("openapi/v1/openOrders".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetOpenapiv1assettradefee" => self.request("openapi/v1/asset/tradeFee".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetOpenapiv1order" => self.request("openapi/v1/order".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetOpenapiv1historyorders" => self.request("openapi/v1/historyOrders".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetOpenapiv1mytrades" => self.request("openapi/v1/myTrades".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetOpenapiv1capitaldeposithistory" => self.request("openapi/v1/capital/deposit/history".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetOpenapiv1capitalwithdrawhistory" => self.request("openapi/v1/capital/withdraw/history".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetOpenapiv3paymentrequestgetpaymentrequest" => self.request("openapi/v3/payment-request/get-payment-request".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetMerchantapiv1getinvoices" => self.request("merchant-api/v1/get-invoices".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetOpenapiaccountv3cryptoaccounts" => self.request("openapi/account/v3/crypto-accounts".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetOpenapitransferv3transfersid" => self.request("openapi/transfer/v3/transfers/{id}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetOpenapiv1subaccountlist" => self.request("openapi/v1/sub-account/list".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetOpenapiv1subaccountasset" => self.request("openapi/v1/sub-account/asset".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetOpenapiv1subaccounttransferuniversaltransferhistory" => self.request("openapi/v1/sub-account/transfer/universal-transfer-history".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetOpenapiv1subaccounttransfersubhistory" => self.request("openapi/v1/sub-account/transfer/sub-history".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetOpenapiv1subaccountapikeyiprestriction" => self.request("openapi/v1/sub-account/apikey/ip-restriction".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetOpenapiv1subaccountwalletdepositaddress" => self.request("openapi/v1/sub-account/wallet/deposit/address".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetOpenapiv1subaccountwalletdeposithistory" => self.request("openapi/v1/sub-account/wallet/deposit/history".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetOpenapiv1fundcollectgetfundrecord" => self.request("openapi/v1/fund-collect/get-fund-record".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetOpenapiv1assettransactionhistory" => self.request("openapi/v1/asset/transaction/history".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostOpenapiwalletv1withdrawapply" => self.request("openapi/wallet/v1/withdraw/apply".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostOpenapiv1ordertest" => self.request("openapi/v1/order/test".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostOpenapiv1order" => self.request("openapi/v1/order".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostOpenapiv1capitalwithdrawapply" => self.request("openapi/v1/capital/withdraw/apply".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostOpenapiv1capitaldepositapply" => self.request("openapi/v1/capital/deposit/apply".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostOpenapiv3paymentrequestpaymentrequests" => self.request("openapi/v3/payment-request/payment-requests".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostOpenapiv3paymentrequestdeletepaymentrequest" => self.request("openapi/v3/payment-request/delete-payment-request".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostOpenapiv3paymentrequestpaymentrequestreminder" => self.request("openapi/v3/payment-request/payment-request-reminder".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostOpenapiv1userdatastream" => self.request("openapi/v1/userDataStream".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostMerchantapiv1invoices" => self.request("merchant-api/v1/invoices".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostMerchantapiv1invoicescancel" => self.request("merchant-api/v1/invoices-cancel".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostOpenapiconvertv1getsupportedtradingpairs" => self.request("openapi/convert/v1/get-supported-trading-pairs".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostOpenapiconvertv1getquote" => self.request("openapi/convert/v1/get-quote".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostOpenapiconvertv1accpetquote" => self.request("openapi/convert/v1/accpet-quote".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostOpenapiconvertv1queryorderhistory" => self.request("openapi/convert/v1/query-order-history".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostOpenapifiatv1supportchannel" => self.request("openapi/fiat/v1/support-channel".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostOpenapifiatv1cashout" => self.request("openapi/fiat/v1/cash-out".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostOpenapifiatv1history" => self.request("openapi/fiat/v1/history".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostOpenapimigrationv4sellorder" => self.request("openapi/migration/v4/sellorder".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostOpenapimigrationv4validatefield" => self.request("openapi/migration/v4/validate-field".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostOpenapitransferv3transfers" => self.request("openapi/transfer/v3/transfers".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostOpenapiv1subaccountcreate" => self.request("openapi/v1/sub-account/create".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostOpenapiv1subaccounttransferuniversaltransfer" => self.request("openapi/v1/sub-account/transfer/universal-transfer".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostOpenapiv1subaccounttransfersubtomaster" => self.request("openapi/v1/sub-account/transfer/sub-to-master".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostOpenapiv1subaccountapikeyaddiprestriction" => self.request("openapi/v1/sub-account/apikey/add-ip-restriction".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostOpenapiv1subaccountapikeydeleteiprestriction" => self.request("openapi/v1/sub-account/apikey/delete-ip-restriction".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostOpenapiv1fundcollectcollectfromsubaccount" => self.request("openapi/v1/fund-collect/collect-from-sub-account".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePutOpenapiv1userdatastream" => self.request("openapi/v1/userDataStream".into(), "private".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateDeleteOpenapiv1order" => self.request("openapi/v1/order".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateDeleteOpenapiv1openorders" => self.request("openapi/v1/openOrders".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateDeleteOpenapiv1userdatastream" => self.request("openapi/v1/userDataStream".into(), "private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     _ => unimplemented!(),
                 }
             },
@@ -2008,7 +2032,7 @@ impl ValueTrait for CoinsphImpl {
     fn join(&self, glue: Value) -> Value { self.0.join(glue) }
     fn to_string(&self) -> Value { self.0.to_string() }
     fn typeof_(&self) -> Value { self.0.typeof_() }
-    fn slice(&self, start: Value) -> Value { self.0.slice(start) }
+    fn slice(&self, start: Value, end: Value) -> Value { self.0.slice(start, end) }
 }
 
 impl CoinsphImpl {

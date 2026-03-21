@@ -13,14 +13,38 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, BoolExt, JSON, Array, Object, Math, Promise, parse_int, shift_2, extend_2, normalize};
 // Crypto hash identifiers
-fn sha256() -> Value { Value::from("sha256") }
-fn sha384() -> Value { Value::from("sha384") }
-fn sha512() -> Value { Value::from("sha512") }
-fn md5() -> Value { Value::from("md5") }
-fn ed25519() -> Value { Value::from("ed25519") }
+fn sha256() -> Value { Value::from("sha256()") }
+fn sha384() -> Value { Value::from("sha384()") }
+fn sha512() -> Value { Value::from("sha512()") }
+fn md5() -> Value { Value::from("md5()") }
+fn ed25519() -> Value { Value::from("ed25519()") }
 fn rsa(msg: Value, secret: Value, _hash: Value) -> Value { msg }
 fn eddsa(msg: Value, secret: Value, _curve: Value) -> Value { msg }
-fn secp256k1() -> Value { Value::from("secp256k1") }
+fn secp256k1() -> Value { Value::from("secp256k1()") }
+fn keccak() -> Value { Value::from("keccak()") }
+fn ecdsa(msg: Value, secret: Value, algo: Value, hash_fn: Value) -> Value { msg }
+fn totp(secret: Value) -> Value { Value::Undefined }
+fn jwt(data: Value, secret: Value, hash: Value, is_rsa: Value) -> Value { Value::Undefined }
+fn parse_float(value: Value) -> Value { value }
+fn decimals(value: Value) -> Value { Value::from(0) }
+fn shift_1(value: Value) -> Value { value }
+fn shift_3(value: Value) -> (Value, Value, Value) { (value.clone(), Value::Undefined, Value::Undefined) }
+fn shift_4(value: Value) -> (Value, Value, Value, Value) { (value.clone(), Value::Undefined, Value::Undefined, Value::Undefined) }
+// Error type constructors
+fn BadRequest(msg: Value) -> Value { msg }
+fn InvalidOrder(msg: Value) -> Value { msg }
+fn ExchangeError(msg: Value) -> Value { msg }
+fn InsufficientFunds(msg: Value) -> Value { msg }
+fn OrderNotFound(msg: Value) -> Value { msg }
+fn AuthenticationError(msg: Value) -> Value { msg }
+fn PermissionDenied(msg: Value) -> Value { msg }
+fn ExchangeNotAvailable(msg: Value) -> Value { msg }
+fn ArgumentsRequired(msg: Value) -> Value { msg }
+fn RateLimitExceeded(msg: Value) -> Value { msg }
+fn OrderNotFillable(msg: Value) -> Value { msg }
+fn OrderImmediatelyFillable(msg: Value) -> Value { msg }
+fn NotSupported(msg: Value) -> Value { msg }
+fn DuplicateOrderId(msg: Value) -> Value { msg }
 
 use crate::exchange::{PRECISE_BASE, TRUNCATE, ROUND, ROUND_UP, ROUND_DOWN};
 use crate::exchange::{DECIMAL_PLACES, SIGNIFICANT_DIGITS, TICK_SIZE, NO_PADDING, PAD_WITH_ZERO};
@@ -533,14 +557,14 @@ pub trait Woo : Exchange {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = <Self as Woo>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() { return rv; }
                 }
             }
         }
         let candidates = vec![("public", "GET", "status"), ("public", "GET", "ping"), ("public", "GET", "time"), ("sapi", "GET", "system/status")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Woo>::request(self,path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -550,7 +574,7 @@ pub trait Woo : Exchange {
     async fn fetch_time(&mut self, mut params: Value) -> Value {
         let candidates = vec![("public", "GET", "time"), ("public", "GET", "server/time"), ("public", "GET", "timestamp")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Woo>::request(self,path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -653,7 +677,7 @@ pub trait Woo : Exchange {
         if limit.is_nonnullish() { request.set("limit".into(), limit.clone()); }
         let candidates = vec![("public", "GET", "trades"), ("public", "GET", "recent_trades"), ("public", "GET", "aggTrades")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Woo>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -1835,14 +1859,14 @@ pub trait Woo : Exchange {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = <Self as Woo>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() { return rv; }
                 }
             }
         }
         let candidates = vec![("public", "GET", "depth"), ("public", "GET", "orderbook"), ("public", "GET", "order_book")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Woo>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -1870,14 +1894,14 @@ pub trait Woo : Exchange {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = <Self as Woo>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() { return rv; }
                 }
             }
         }
         let candidates = vec![("public", "GET", "klines"), ("public", "GET", "candles"), ("public", "GET", "ohlcv")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Woo>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -3532,140 +3556,140 @@ pub trait Woo : Exchange {
         match method {
             Value::Json(serde_json::Value::String(ref m)) => {
                 match m.as_ref() {
-                    "v1PubGetHistkline" => Woo::request(self, "hist/kline".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PubGetHisttrades" => Woo::request(self, "hist/trades".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetInfo" => Woo::request(self, "info".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetInfosymbol" => Woo::request(self, "info/{symbol}".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetSysteminfo" => Woo::request(self, "system_info".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetMarkettrades" => Woo::request(self, "market_trades".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetToken" => Woo::request(self, "token".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetTokennetwork" => Woo::request(self, "token_network".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetFundingrates" => Woo::request(self, "funding_rates".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetFundingratesymbol" => Woo::request(self, "funding_rate/{symbol}".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetFundingratehistory" => Woo::request(self, "funding_rate_history".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetFutures" => Woo::request(self, "futures".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetFuturessymbol" => Woo::request(self, "futures/{symbol}".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetOrderbooksymbol" => Woo::request(self, "orderbook/{symbol}".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetKline" => Woo::request(self, "kline".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetClienttoken" => Woo::request(self, "client/token".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetOrderoid" => Woo::request(self, "order/{oid}".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetClientorderclientorderid" => Woo::request(self, "client/order/{client_order_id}".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetOrders" => Woo::request(self, "orders".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetClienttradetid" => Woo::request(self, "client/trade/{tid}".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetOrderoidtrades" => Woo::request(self, "order/{oid}/trades".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetClienttrades" => Woo::request(self, "client/trades".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetClienthisttrades" => Woo::request(self, "client/hist_trades".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetStakingyieldhistory" => Woo::request(self, "staking/yield_history".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetClientholding" => Woo::request(self, "client/holding".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetAssetdeposit" => Woo::request(self, "asset/deposit".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetAssethistory" => Woo::request(self, "asset/history".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetSubaccountall" => Woo::request(self, "sub_account/all".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetSubaccountassets" => Woo::request(self, "sub_account/assets".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetSubaccountassetdetail" => Woo::request(self, "sub_account/asset_detail".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetSubaccountiprestriction" => Woo::request(self, "sub_account/ip_restriction".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetAssetmainsubtransferhistory" => Woo::request(self, "asset/main_sub_transfer_history".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetTokeninterest" => Woo::request(self, "token_interest".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetTokeninteresttoken" => Woo::request(self, "token_interest/{token}".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetInteresthistory" => Woo::request(self, "interest/history".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetInterestrepay" => Woo::request(self, "interest/repay".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetFundingfeehistory" => Woo::request(self, "funding_fee/history".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetPositions" => Woo::request(self, "positions".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetPositionsymbol" => Woo::request(self, "position/{symbol}".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetClienttransactionhistory" => Woo::request(self, "client/transaction_history".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetClientfuturesleverage" => Woo::request(self, "client/futures_leverage".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostOrder" => Woo::request(self, "order".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostOrdercancelallafter" => Woo::request(self, "order/cancel_all_after".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostAssetltv" => Woo::request(self, "asset/ltv".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostAssetinternalwithdraw" => Woo::request(self, "asset/internal_withdraw".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostInterestrepay" => Woo::request(self, "interest/repay".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostClientaccountmode" => Woo::request(self, "client/account_mode".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostClientpositionmode" => Woo::request(self, "client/position_mode".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostClientleverage" => Woo::request(self, "client/leverage".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostClientfuturesleverage" => Woo::request(self, "client/futures_leverage".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostClientisolatedmargin" => Woo::request(self, "client/isolated_margin".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateDeleteOrder" => Woo::request(self, "order".into(), "v1".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateDeleteClientorder" => Woo::request(self, "client/order".into(), "v1".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateDeleteOrders" => Woo::request(self, "orders".into(), "v1".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateDeleteAssetwithdraw" => Woo::request(self, "asset/withdraw".into(), "v1".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivateGetClientholding" => Woo::request(self, "client/holding".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v3PublicGetSysteminfo" => Woo::request(self, "systemInfo".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v3PublicGetInstruments" => Woo::request(self, "instruments".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v3PublicGetToken" => Woo::request(self, "token".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v3PublicGetTokennetwork" => Woo::request(self, "tokenNetwork".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v3PublicGetTokeninfo" => Woo::request(self, "tokenInfo".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v3PublicGetMarkettrades" => Woo::request(self, "marketTrades".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v3PublicGetMarkettradeshistory" => Woo::request(self, "marketTradesHistory".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v3PublicGetOrderbook" => Woo::request(self, "orderbook".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v3PublicGetKline" => Woo::request(self, "kline".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v3PublicGetKlinehistory" => Woo::request(self, "klineHistory".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v3PublicGetFutures" => Woo::request(self, "futures".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v3PublicGetFundingrate" => Woo::request(self, "fundingRate".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v3PublicGetFundingratehistory" => Woo::request(self, "fundingRateHistory".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v3PublicGetInsurancefund" => Woo::request(self, "insuranceFund".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v3PrivateGetTradeorder" => Woo::request(self, "trade/order".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v3PrivateGetTradeorders" => Woo::request(self, "trade/orders".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v3PrivateGetTradealgoorder" => Woo::request(self, "trade/algoOrder".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v3PrivateGetTradealgoorders" => Woo::request(self, "trade/algoOrders".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v3PrivateGetTradetransaction" => Woo::request(self, "trade/transaction".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v3PrivateGetTradetransactionhistory" => Woo::request(self, "trade/transactionHistory".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v3PrivateGetTradetradingfee" => Woo::request(self, "trade/tradingFee".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v3PrivateGetAccountinfo" => Woo::request(self, "account/info".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v3PrivateGetAccounttokenconfig" => Woo::request(self, "account/tokenConfig".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v3PrivateGetAccountsymbolconfig" => Woo::request(self, "account/symbolConfig".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v3PrivateGetAccountsubaccountsall" => Woo::request(self, "account/subAccounts/all".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v3PrivateGetAccountreferralsummary" => Woo::request(self, "account/referral/summary".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v3PrivateGetAccountreferralrewardhistory" => Woo::request(self, "account/referral/rewardHistory".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v3PrivateGetAccountcredentials" => Woo::request(self, "account/credentials".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v3PrivateGetAssetbalances" => Woo::request(self, "asset/balances".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v3PrivateGetAssettokenhistory" => Woo::request(self, "asset/token/history".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v3PrivateGetAssettransferhistory" => Woo::request(self, "asset/transfer/history".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v3PrivateGetAssetwallethistory" => Woo::request(self, "asset/wallet/history".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v3PrivateGetAssetwalletdeposit" => Woo::request(self, "asset/wallet/deposit".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v3PrivateGetAssetstakingyieldhistory" => Woo::request(self, "asset/staking/yieldHistory".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v3PrivateGetFuturespositions" => Woo::request(self, "futures/positions".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v3PrivateGetFuturesleverage" => Woo::request(self, "futures/leverage".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v3PrivateGetFuturesdefaultmarginmode" => Woo::request(self, "futures/defaultMarginMode".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v3PrivateGetFuturesfundingfeehistory" => Woo::request(self, "futures/fundingFee/history".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v3PrivateGetSpotmargininterestrate" => Woo::request(self, "spotMargin/interestRate".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v3PrivateGetSpotmargininteresthistory" => Woo::request(self, "spotMargin/interestHistory".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v3PrivateGetSpotmarginmaxmargin" => Woo::request(self, "spotMargin/maxMargin".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v3PrivateGetAlgoorderoid" => Woo::request(self, "algo/order/{oid}".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v3PrivateGetAlgoorders" => Woo::request(self, "algo/orders".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v3PrivateGetPositions" => Woo::request(self, "positions".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v3PrivateGetBuypower" => Woo::request(self, "buypower".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v3PrivateGetConvertexchangeinfo" => Woo::request(self, "convert/exchangeInfo".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v3PrivateGetConvertassetinfo" => Woo::request(self, "convert/assetInfo".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v3PrivateGetConvertrfq" => Woo::request(self, "convert/rfq".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v3PrivateGetConverttrade" => Woo::request(self, "convert/trade".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v3PrivateGetConverttrades" => Woo::request(self, "convert/trades".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v3PrivatePostTradeorder" => Woo::request(self, "trade/order".into(), "v3".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v3PrivatePostTradealgoorder" => Woo::request(self, "trade/algoOrder".into(), "v3".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v3PrivatePostTradecancelallafter" => Woo::request(self, "trade/cancelAllAfter".into(), "v3".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v3PrivatePostAccounttradingmode" => Woo::request(self, "account/tradingMode".into(), "v3".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v3PrivatePostAccountlistenkey" => Woo::request(self, "account/listenKey".into(), "v3".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v3PrivatePostAssettransfer" => Woo::request(self, "asset/transfer".into(), "v3".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v3PrivatePostAssetwalletwithdraw" => Woo::request(self, "asset/wallet/withdraw".into(), "v3".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v3PrivatePostSpotmarginleverage" => Woo::request(self, "spotMargin/leverage".into(), "v3".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v3PrivatePostSpotmargininterestrepay" => Woo::request(self, "spotMargin/interestRepay".into(), "v3".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v3PrivatePostAlgoorder" => Woo::request(self, "algo/order".into(), "v3".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v3PrivatePostConvertrft" => Woo::request(self, "convert/rft".into(), "v3".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v3PrivatePutTradeorder" => Woo::request(self, "trade/order".into(), "v3".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v3PrivatePutTradealgoorder" => Woo::request(self, "trade/algoOrder".into(), "v3".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v3PrivatePutFuturesleverage" => Woo::request(self, "futures/leverage".into(), "v3".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v3PrivatePutFuturespositionmode" => Woo::request(self, "futures/positionMode".into(), "v3".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v3PrivatePutOrderoid" => Woo::request(self, "order/{oid}".into(), "v3".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v3PrivatePutOrderclientclientorderid" => Woo::request(self, "order/client/{client_order_id}".into(), "v3".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v3PrivatePutAlgoorderoid" => Woo::request(self, "algo/order/{oid}".into(), "v3".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v3PrivatePutAlgoorderclientclientorderid" => Woo::request(self, "algo/order/client/{client_order_id}".into(), "v3".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v3PrivateDeleteTradeorder" => Woo::request(self, "trade/order".into(), "v3".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v3PrivateDeleteTradeorders" => Woo::request(self, "trade/orders".into(), "v3".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v3PrivateDeleteTradealgoorder" => Woo::request(self, "trade/algoOrder".into(), "v3".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v3PrivateDeleteTradealgoorders" => Woo::request(self, "trade/algoOrders".into(), "v3".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v3PrivateDeleteTradeallorders" => Woo::request(self, "trade/allOrders".into(), "v3".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v3PrivateDeleteAlgoorderorderid" => Woo::request(self, "algo/order/{order_id}".into(), "v3".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v3PrivateDeleteAlgoorderspending" => Woo::request(self, "algo/orders/pending".into(), "v3".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v3PrivateDeleteAlgoorderspendingsymbol" => Woo::request(self, "algo/orders/pending/{symbol}".into(), "v3".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v3PrivateDeleteOrderspending" => Woo::request(self, "orders/pending".into(), "v3".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PubGetHistkline" => self.request("hist/kline".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PubGetHisttrades" => self.request("hist/trades".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetInfo" => self.request("info".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetInfosymbol" => self.request("info/{symbol}".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetSysteminfo" => self.request("system_info".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetMarkettrades" => self.request("market_trades".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetToken" => self.request("token".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetTokennetwork" => self.request("token_network".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetFundingrates" => self.request("funding_rates".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetFundingratesymbol" => self.request("funding_rate/{symbol}".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetFundingratehistory" => self.request("funding_rate_history".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetFutures" => self.request("futures".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetFuturessymbol" => self.request("futures/{symbol}".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetOrderbooksymbol" => self.request("orderbook/{symbol}".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetKline" => self.request("kline".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetClienttoken" => self.request("client/token".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetOrderoid" => self.request("order/{oid}".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetClientorderclientorderid" => self.request("client/order/{client_order_id}".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetOrders" => self.request("orders".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetClienttradetid" => self.request("client/trade/{tid}".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetOrderoidtrades" => self.request("order/{oid}/trades".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetClienttrades" => self.request("client/trades".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetClienthisttrades" => self.request("client/hist_trades".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetStakingyieldhistory" => self.request("staking/yield_history".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetClientholding" => self.request("client/holding".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetAssetdeposit" => self.request("asset/deposit".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetAssethistory" => self.request("asset/history".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetSubaccountall" => self.request("sub_account/all".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetSubaccountassets" => self.request("sub_account/assets".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetSubaccountassetdetail" => self.request("sub_account/asset_detail".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetSubaccountiprestriction" => self.request("sub_account/ip_restriction".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetAssetmainsubtransferhistory" => self.request("asset/main_sub_transfer_history".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetTokeninterest" => self.request("token_interest".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetTokeninteresttoken" => self.request("token_interest/{token}".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetInteresthistory" => self.request("interest/history".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetInterestrepay" => self.request("interest/repay".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetFundingfeehistory" => self.request("funding_fee/history".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetPositions" => self.request("positions".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetPositionsymbol" => self.request("position/{symbol}".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetClienttransactionhistory" => self.request("client/transaction_history".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetClientfuturesleverage" => self.request("client/futures_leverage".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostOrder" => self.request("order".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostOrdercancelallafter" => self.request("order/cancel_all_after".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostAssetltv" => self.request("asset/ltv".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostAssetinternalwithdraw" => self.request("asset/internal_withdraw".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostInterestrepay" => self.request("interest/repay".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostClientaccountmode" => self.request("client/account_mode".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostClientpositionmode" => self.request("client/position_mode".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostClientleverage" => self.request("client/leverage".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostClientfuturesleverage" => self.request("client/futures_leverage".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostClientisolatedmargin" => self.request("client/isolated_margin".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateDeleteOrder" => self.request("order".into(), "v1".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateDeleteClientorder" => self.request("client/order".into(), "v1".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateDeleteOrders" => self.request("orders".into(), "v1".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateDeleteAssetwithdraw" => self.request("asset/withdraw".into(), "v1".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivateGetClientholding" => self.request("client/holding".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PublicGetSysteminfo" => self.request("systemInfo".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PublicGetInstruments" => self.request("instruments".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PublicGetToken" => self.request("token".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PublicGetTokennetwork" => self.request("tokenNetwork".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PublicGetTokeninfo" => self.request("tokenInfo".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PublicGetMarkettrades" => self.request("marketTrades".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PublicGetMarkettradeshistory" => self.request("marketTradesHistory".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PublicGetOrderbook" => self.request("orderbook".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PublicGetKline" => self.request("kline".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PublicGetKlinehistory" => self.request("klineHistory".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PublicGetFutures" => self.request("futures".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PublicGetFundingrate" => self.request("fundingRate".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PublicGetFundingratehistory" => self.request("fundingRateHistory".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PublicGetInsurancefund" => self.request("insuranceFund".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivateGetTradeorder" => self.request("trade/order".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivateGetTradeorders" => self.request("trade/orders".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivateGetTradealgoorder" => self.request("trade/algoOrder".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivateGetTradealgoorders" => self.request("trade/algoOrders".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivateGetTradetransaction" => self.request("trade/transaction".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivateGetTradetransactionhistory" => self.request("trade/transactionHistory".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivateGetTradetradingfee" => self.request("trade/tradingFee".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivateGetAccountinfo" => self.request("account/info".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivateGetAccounttokenconfig" => self.request("account/tokenConfig".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivateGetAccountsymbolconfig" => self.request("account/symbolConfig".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivateGetAccountsubaccountsall" => self.request("account/subAccounts/all".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivateGetAccountreferralsummary" => self.request("account/referral/summary".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivateGetAccountreferralrewardhistory" => self.request("account/referral/rewardHistory".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivateGetAccountcredentials" => self.request("account/credentials".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivateGetAssetbalances" => self.request("asset/balances".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivateGetAssettokenhistory" => self.request("asset/token/history".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivateGetAssettransferhistory" => self.request("asset/transfer/history".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivateGetAssetwallethistory" => self.request("asset/wallet/history".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivateGetAssetwalletdeposit" => self.request("asset/wallet/deposit".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivateGetAssetstakingyieldhistory" => self.request("asset/staking/yieldHistory".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivateGetFuturespositions" => self.request("futures/positions".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivateGetFuturesleverage" => self.request("futures/leverage".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivateGetFuturesdefaultmarginmode" => self.request("futures/defaultMarginMode".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivateGetFuturesfundingfeehistory" => self.request("futures/fundingFee/history".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivateGetSpotmargininterestrate" => self.request("spotMargin/interestRate".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivateGetSpotmargininteresthistory" => self.request("spotMargin/interestHistory".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivateGetSpotmarginmaxmargin" => self.request("spotMargin/maxMargin".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivateGetAlgoorderoid" => self.request("algo/order/{oid}".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivateGetAlgoorders" => self.request("algo/orders".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivateGetPositions" => self.request("positions".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivateGetBuypower" => self.request("buypower".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivateGetConvertexchangeinfo" => self.request("convert/exchangeInfo".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivateGetConvertassetinfo" => self.request("convert/assetInfo".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivateGetConvertrfq" => self.request("convert/rfq".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivateGetConverttrade" => self.request("convert/trade".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivateGetConverttrades" => self.request("convert/trades".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivatePostTradeorder" => self.request("trade/order".into(), "v3".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivatePostTradealgoorder" => self.request("trade/algoOrder".into(), "v3".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivatePostTradecancelallafter" => self.request("trade/cancelAllAfter".into(), "v3".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivatePostAccounttradingmode" => self.request("account/tradingMode".into(), "v3".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivatePostAccountlistenkey" => self.request("account/listenKey".into(), "v3".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivatePostAssettransfer" => self.request("asset/transfer".into(), "v3".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivatePostAssetwalletwithdraw" => self.request("asset/wallet/withdraw".into(), "v3".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivatePostSpotmarginleverage" => self.request("spotMargin/leverage".into(), "v3".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivatePostSpotmargininterestrepay" => self.request("spotMargin/interestRepay".into(), "v3".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivatePostAlgoorder" => self.request("algo/order".into(), "v3".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivatePostConvertrft" => self.request("convert/rft".into(), "v3".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivatePutTradeorder" => self.request("trade/order".into(), "v3".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivatePutTradealgoorder" => self.request("trade/algoOrder".into(), "v3".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivatePutFuturesleverage" => self.request("futures/leverage".into(), "v3".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivatePutFuturespositionmode" => self.request("futures/positionMode".into(), "v3".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivatePutOrderoid" => self.request("order/{oid}".into(), "v3".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivatePutOrderclientclientorderid" => self.request("order/client/{client_order_id}".into(), "v3".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivatePutAlgoorderoid" => self.request("algo/order/{oid}".into(), "v3".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivatePutAlgoorderclientclientorderid" => self.request("algo/order/client/{client_order_id}".into(), "v3".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivateDeleteTradeorder" => self.request("trade/order".into(), "v3".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivateDeleteTradeorders" => self.request("trade/orders".into(), "v3".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivateDeleteTradealgoorder" => self.request("trade/algoOrder".into(), "v3".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivateDeleteTradealgoorders" => self.request("trade/algoOrders".into(), "v3".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivateDeleteTradeallorders" => self.request("trade/allOrders".into(), "v3".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivateDeleteAlgoorderorderid" => self.request("algo/order/{order_id}".into(), "v3".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivateDeleteAlgoorderspending" => self.request("algo/orders/pending".into(), "v3".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivateDeleteAlgoorderspendingsymbol" => self.request("algo/orders/pending/{symbol}".into(), "v3".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivateDeleteOrderspending" => self.request("orders/pending".into(), "v3".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     _ => unimplemented!(),
                 }
             },
@@ -3709,7 +3733,7 @@ impl ValueTrait for WooImpl {
     fn join(&self, glue: Value) -> Value { self.0.join(glue) }
     fn to_string(&self) -> Value { self.0.to_string() }
     fn typeof_(&self) -> Value { self.0.typeof_() }
-    fn slice(&self, start: Value) -> Value { self.0.slice(start) }
+    fn slice(&self, start: Value, end: Value) -> Value { self.0.slice(start, end) }
 }
 
 impl WooImpl {

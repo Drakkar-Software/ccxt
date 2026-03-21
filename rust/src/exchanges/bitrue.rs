@@ -13,14 +13,38 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, BoolExt, JSON, Array, Object, Math, Promise, parse_int, shift_2, extend_2, normalize};
 // Crypto hash identifiers
-fn sha256() -> Value { Value::from("sha256") }
-fn sha384() -> Value { Value::from("sha384") }
-fn sha512() -> Value { Value::from("sha512") }
-fn md5() -> Value { Value::from("md5") }
-fn ed25519() -> Value { Value::from("ed25519") }
+fn sha256() -> Value { Value::from("sha256()") }
+fn sha384() -> Value { Value::from("sha384()") }
+fn sha512() -> Value { Value::from("sha512()") }
+fn md5() -> Value { Value::from("md5()") }
+fn ed25519() -> Value { Value::from("ed25519()") }
 fn rsa(msg: Value, secret: Value, _hash: Value) -> Value { msg }
 fn eddsa(msg: Value, secret: Value, _curve: Value) -> Value { msg }
-fn secp256k1() -> Value { Value::from("secp256k1") }
+fn secp256k1() -> Value { Value::from("secp256k1()") }
+fn keccak() -> Value { Value::from("keccak()") }
+fn ecdsa(msg: Value, secret: Value, algo: Value, hash_fn: Value) -> Value { msg }
+fn totp(secret: Value) -> Value { Value::Undefined }
+fn jwt(data: Value, secret: Value, hash: Value, is_rsa: Value) -> Value { Value::Undefined }
+fn parse_float(value: Value) -> Value { value }
+fn decimals(value: Value) -> Value { Value::from(0) }
+fn shift_1(value: Value) -> Value { value }
+fn shift_3(value: Value) -> (Value, Value, Value) { (value.clone(), Value::Undefined, Value::Undefined) }
+fn shift_4(value: Value) -> (Value, Value, Value, Value) { (value.clone(), Value::Undefined, Value::Undefined, Value::Undefined) }
+// Error type constructors
+fn BadRequest(msg: Value) -> Value { msg }
+fn InvalidOrder(msg: Value) -> Value { msg }
+fn ExchangeError(msg: Value) -> Value { msg }
+fn InsufficientFunds(msg: Value) -> Value { msg }
+fn OrderNotFound(msg: Value) -> Value { msg }
+fn AuthenticationError(msg: Value) -> Value { msg }
+fn PermissionDenied(msg: Value) -> Value { msg }
+fn ExchangeNotAvailable(msg: Value) -> Value { msg }
+fn ArgumentsRequired(msg: Value) -> Value { msg }
+fn RateLimitExceeded(msg: Value) -> Value { msg }
+fn OrderNotFillable(msg: Value) -> Value { msg }
+fn OrderImmediatelyFillable(msg: Value) -> Value { msg }
+fn NotSupported(msg: Value) -> Value { msg }
+fn DuplicateOrderId(msg: Value) -> Value { msg }
 
 use crate::exchange::{PRECISE_BASE, TRUNCATE, ROUND, ROUND_UP, ROUND_DOWN};
 use crate::exchange::{DECIMAL_PLACES, SIGNIFICANT_DIGITS, TICK_SIZE, NO_PADDING, PAD_WITH_ZERO};
@@ -793,14 +817,14 @@ pub trait Bitrue : Exchange {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = <Self as Bitrue>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() { return rv; }
                 }
             }
         }
         let candidates = vec![("public", "GET", "status"), ("public", "GET", "ping"), ("public", "GET", "time"), ("sapi", "GET", "system/status")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Bitrue>::request(self,path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -810,7 +834,7 @@ pub trait Bitrue : Exchange {
     async fn fetch_time(&mut self, mut params: Value) -> Value {
         let candidates = vec![("public", "GET", "time"), ("public", "GET", "server/time"), ("public", "GET", "timestamp")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Bitrue>::request(self,path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -1220,14 +1244,14 @@ pub trait Bitrue : Exchange {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = <Self as Bitrue>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() { return rv; }
                 }
             }
         }
         let candidates = vec![("public", "GET", "depth"), ("public", "GET", "orderbook"), ("public", "GET", "order_book")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Bitrue>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -1320,14 +1344,14 @@ pub trait Bitrue : Exchange {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = <Self as Bitrue>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() { return rv; }
                 }
             }
         }
         let candidates = vec![("public", "GET", "ticker/24hr"), ("public", "GET", "ticker"), ("public", "GET", "ticker/price")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Bitrue>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -1355,14 +1379,14 @@ pub trait Bitrue : Exchange {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = <Self as Bitrue>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() { return rv; }
                 }
             }
         }
         let candidates = vec![("public", "GET", "klines"), ("public", "GET", "candles"), ("public", "GET", "ohlcv")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Bitrue>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -1406,7 +1430,7 @@ pub trait Bitrue : Exchange {
         if symbols.is_nonnullish() { request.set("symbols".into(), symbols.clone()); }
         let candidates = vec![("public", "GET", "ticker/bookTicker"), ("public", "GET", "bookticker"), ("public", "GET", "bidsasks"), ("public", "GET", "tickers")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Bitrue>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -1428,14 +1452,14 @@ pub trait Bitrue : Exchange {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = <Self as Bitrue>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() { return rv; }
                 }
             }
         }
         let candidates = vec![("public", "GET", "ticker/24hr"), ("public", "GET", "tickers"), ("public", "GET", "ticker")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Bitrue>::request(self,path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -1545,7 +1569,7 @@ pub trait Bitrue : Exchange {
         if limit.is_nonnullish() { request.set("limit".into(), limit.clone()); }
         let candidates = vec![("public", "GET", "trades"), ("public", "GET", "recent_trades"), ("public", "GET", "aggTrades")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Bitrue>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -2759,71 +2783,71 @@ pub trait Bitrue : Exchange {
         match method {
             Value::Json(serde_json::Value::String(ref m)) => {
                 match m.as_ref() {
-                    "spotKlinePublicGetPublicjson" => Bitrue::request(self, "public.json".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotKlinePublicGetPubliccurrencyjson" => Bitrue::request(self, "public{currency}.json".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotV1PublicGetPing" => Bitrue::request(self, "ping".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotV1PublicGetTime" => Bitrue::request(self, "time".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotV1PublicGetExchangeinfo" => Bitrue::request(self, "exchangeInfo".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotV1PublicGetDepth" => Bitrue::request(self, "depth".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotV1PublicGetTrades" => Bitrue::request(self, "trades".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotV1PublicGetHistoricaltrades" => Bitrue::request(self, "historicalTrades".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotV1PublicGetAggtrades" => Bitrue::request(self, "aggTrades".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotV1PublicGetTicker24hr" => Bitrue::request(self, "ticker/24hr".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotV1PublicGetTickerprice" => Bitrue::request(self, "ticker/price".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotV1PublicGetTickerbookticker" => Bitrue::request(self, "ticker/bookTicker".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotV1PublicGetMarketkline" => Bitrue::request(self, "market/kline".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotV1PrivateGetOrder" => Bitrue::request(self, "order".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotV1PrivateGetOpenorders" => Bitrue::request(self, "openOrders".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotV1PrivateGetAllorders" => Bitrue::request(self, "allOrders".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotV1PrivateGetAccount" => Bitrue::request(self, "account".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotV1PrivateGetMytrades" => Bitrue::request(self, "myTrades".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotV1PrivateGetEtfnetvaluesymbol" => Bitrue::request(self, "etf/net-value/{symbol}".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotV1PrivateGetWithdrawhistory" => Bitrue::request(self, "withdraw/history".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotV1PrivateGetDeposithistory" => Bitrue::request(self, "deposit/history".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotV1PrivatePostOrder" => Bitrue::request(self, "order".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotV1PrivatePostWithdrawcommit" => Bitrue::request(self, "withdraw/commit".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotV1PrivateDeleteOrder" => Bitrue::request(self, "order".into(), "spot".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotV2PrivateGetMytrades" => Bitrue::request(self, "myTrades".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "fapiV1PublicGetPing" => Bitrue::request(self, "ping".into(), "fapi".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "fapiV1PublicGetTime" => Bitrue::request(self, "time".into(), "fapi".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "fapiV1PublicGetContracts" => Bitrue::request(self, "contracts".into(), "fapi".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "fapiV1PublicGetDepth" => Bitrue::request(self, "depth".into(), "fapi".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "fapiV1PublicGetTicker" => Bitrue::request(self, "ticker".into(), "fapi".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "fapiV1PublicGetKlines" => Bitrue::request(self, "klines".into(), "fapi".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "fapiV2PrivateGetMytrades" => Bitrue::request(self, "myTrades".into(), "fapi".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "fapiV2PrivateGetOpenorders" => Bitrue::request(self, "openOrders".into(), "fapi".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "fapiV2PrivateGetOrder" => Bitrue::request(self, "order".into(), "fapi".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "fapiV2PrivateGetAccount" => Bitrue::request(self, "account".into(), "fapi".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "fapiV2PrivateGetLeveragebracket" => Bitrue::request(self, "leverageBracket".into(), "fapi".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "fapiV2PrivateGetCommissionrate" => Bitrue::request(self, "commissionRate".into(), "fapi".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "fapiV2PrivateGetFuturestransferhistory" => Bitrue::request(self, "futures_transfer_history".into(), "fapi".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "fapiV2PrivateGetForceordershistory" => Bitrue::request(self, "forceOrdersHistory".into(), "fapi".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "fapiV2PrivatePostPositionmargin" => Bitrue::request(self, "positionMargin".into(), "fapi".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "fapiV2PrivatePostLeveledit" => Bitrue::request(self, "level_edit".into(), "fapi".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "fapiV2PrivatePostCancel" => Bitrue::request(self, "cancel".into(), "fapi".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "fapiV2PrivatePostOrder" => Bitrue::request(self, "order".into(), "fapi".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "fapiV2PrivatePostAllopenorders" => Bitrue::request(self, "allOpenOrders".into(), "fapi".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "fapiV2PrivatePostFuturestransfer" => Bitrue::request(self, "futures_transfer".into(), "fapi".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "dapiV1PublicGetPing" => Bitrue::request(self, "ping".into(), "dapi".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "dapiV1PublicGetTime" => Bitrue::request(self, "time".into(), "dapi".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "dapiV1PublicGetContracts" => Bitrue::request(self, "contracts".into(), "dapi".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "dapiV1PublicGetDepth" => Bitrue::request(self, "depth".into(), "dapi".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "dapiV1PublicGetTicker" => Bitrue::request(self, "ticker".into(), "dapi".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "dapiV1PublicGetKlines" => Bitrue::request(self, "klines".into(), "dapi".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "dapiV2PrivateGetMytrades" => Bitrue::request(self, "myTrades".into(), "dapi".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "dapiV2PrivateGetOpenorders" => Bitrue::request(self, "openOrders".into(), "dapi".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "dapiV2PrivateGetOrder" => Bitrue::request(self, "order".into(), "dapi".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "dapiV2PrivateGetAccount" => Bitrue::request(self, "account".into(), "dapi".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "dapiV2PrivateGetLeveragebracket" => Bitrue::request(self, "leverageBracket".into(), "dapi".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "dapiV2PrivateGetCommissionrate" => Bitrue::request(self, "commissionRate".into(), "dapi".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "dapiV2PrivateGetFuturestransferhistory" => Bitrue::request(self, "futures_transfer_history".into(), "dapi".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "dapiV2PrivateGetForceordershistory" => Bitrue::request(self, "forceOrdersHistory".into(), "dapi".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "dapiV2PrivatePostPositionmargin" => Bitrue::request(self, "positionMargin".into(), "dapi".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "dapiV2PrivatePostLeveledit" => Bitrue::request(self, "level_edit".into(), "dapi".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "dapiV2PrivatePostCancel" => Bitrue::request(self, "cancel".into(), "dapi".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "dapiV2PrivatePostOrder" => Bitrue::request(self, "order".into(), "dapi".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "dapiV2PrivatePostAllopenorders" => Bitrue::request(self, "allOpenOrders".into(), "dapi".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "dapiV2PrivatePostFuturestransfer" => Bitrue::request(self, "futures_transfer".into(), "dapi".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotKlinePublicGetPublicjson" => self.request("public.json".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotKlinePublicGetPubliccurrencyjson" => self.request("public{currency}.json".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotV1PublicGetPing" => self.request("ping".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotV1PublicGetTime" => self.request("time".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotV1PublicGetExchangeinfo" => self.request("exchangeInfo".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotV1PublicGetDepth" => self.request("depth".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotV1PublicGetTrades" => self.request("trades".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotV1PublicGetHistoricaltrades" => self.request("historicalTrades".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotV1PublicGetAggtrades" => self.request("aggTrades".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotV1PublicGetTicker24hr" => self.request("ticker/24hr".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotV1PublicGetTickerprice" => self.request("ticker/price".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotV1PublicGetTickerbookticker" => self.request("ticker/bookTicker".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotV1PublicGetMarketkline" => self.request("market/kline".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotV1PrivateGetOrder" => self.request("order".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotV1PrivateGetOpenorders" => self.request("openOrders".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotV1PrivateGetAllorders" => self.request("allOrders".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotV1PrivateGetAccount" => self.request("account".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotV1PrivateGetMytrades" => self.request("myTrades".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotV1PrivateGetEtfnetvaluesymbol" => self.request("etf/net-value/{symbol}".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotV1PrivateGetWithdrawhistory" => self.request("withdraw/history".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotV1PrivateGetDeposithistory" => self.request("deposit/history".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotV1PrivatePostOrder" => self.request("order".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotV1PrivatePostWithdrawcommit" => self.request("withdraw/commit".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotV1PrivateDeleteOrder" => self.request("order".into(), "spot".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotV2PrivateGetMytrades" => self.request("myTrades".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "fapiV1PublicGetPing" => self.request("ping".into(), "fapi".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "fapiV1PublicGetTime" => self.request("time".into(), "fapi".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "fapiV1PublicGetContracts" => self.request("contracts".into(), "fapi".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "fapiV1PublicGetDepth" => self.request("depth".into(), "fapi".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "fapiV1PublicGetTicker" => self.request("ticker".into(), "fapi".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "fapiV1PublicGetKlines" => self.request("klines".into(), "fapi".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "fapiV2PrivateGetMytrades" => self.request("myTrades".into(), "fapi".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "fapiV2PrivateGetOpenorders" => self.request("openOrders".into(), "fapi".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "fapiV2PrivateGetOrder" => self.request("order".into(), "fapi".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "fapiV2PrivateGetAccount" => self.request("account".into(), "fapi".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "fapiV2PrivateGetLeveragebracket" => self.request("leverageBracket".into(), "fapi".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "fapiV2PrivateGetCommissionrate" => self.request("commissionRate".into(), "fapi".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "fapiV2PrivateGetFuturestransferhistory" => self.request("futures_transfer_history".into(), "fapi".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "fapiV2PrivateGetForceordershistory" => self.request("forceOrdersHistory".into(), "fapi".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "fapiV2PrivatePostPositionmargin" => self.request("positionMargin".into(), "fapi".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "fapiV2PrivatePostLeveledit" => self.request("level_edit".into(), "fapi".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "fapiV2PrivatePostCancel" => self.request("cancel".into(), "fapi".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "fapiV2PrivatePostOrder" => self.request("order".into(), "fapi".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "fapiV2PrivatePostAllopenorders" => self.request("allOpenOrders".into(), "fapi".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "fapiV2PrivatePostFuturestransfer" => self.request("futures_transfer".into(), "fapi".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "dapiV1PublicGetPing" => self.request("ping".into(), "dapi".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "dapiV1PublicGetTime" => self.request("time".into(), "dapi".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "dapiV1PublicGetContracts" => self.request("contracts".into(), "dapi".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "dapiV1PublicGetDepth" => self.request("depth".into(), "dapi".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "dapiV1PublicGetTicker" => self.request("ticker".into(), "dapi".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "dapiV1PublicGetKlines" => self.request("klines".into(), "dapi".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "dapiV2PrivateGetMytrades" => self.request("myTrades".into(), "dapi".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "dapiV2PrivateGetOpenorders" => self.request("openOrders".into(), "dapi".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "dapiV2PrivateGetOrder" => self.request("order".into(), "dapi".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "dapiV2PrivateGetAccount" => self.request("account".into(), "dapi".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "dapiV2PrivateGetLeveragebracket" => self.request("leverageBracket".into(), "dapi".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "dapiV2PrivateGetCommissionrate" => self.request("commissionRate".into(), "dapi".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "dapiV2PrivateGetFuturestransferhistory" => self.request("futures_transfer_history".into(), "dapi".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "dapiV2PrivateGetForceordershistory" => self.request("forceOrdersHistory".into(), "dapi".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "dapiV2PrivatePostPositionmargin" => self.request("positionMargin".into(), "dapi".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "dapiV2PrivatePostLeveledit" => self.request("level_edit".into(), "dapi".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "dapiV2PrivatePostCancel" => self.request("cancel".into(), "dapi".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "dapiV2PrivatePostOrder" => self.request("order".into(), "dapi".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "dapiV2PrivatePostAllopenorders" => self.request("allOpenOrders".into(), "dapi".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "dapiV2PrivatePostFuturestransfer" => self.request("futures_transfer".into(), "dapi".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     _ => unimplemented!(),
                 }
             },
@@ -2867,7 +2891,7 @@ impl ValueTrait for BitrueImpl {
     fn join(&self, glue: Value) -> Value { self.0.join(glue) }
     fn to_string(&self) -> Value { self.0.to_string() }
     fn typeof_(&self) -> Value { self.0.typeof_() }
-    fn slice(&self, start: Value) -> Value { self.0.slice(start) }
+    fn slice(&self, start: Value, end: Value) -> Value { self.0.slice(start, end) }
 }
 
 impl BitrueImpl {

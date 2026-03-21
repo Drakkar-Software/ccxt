@@ -13,14 +13,38 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, BoolExt, JSON, Array, Object, Math, Promise, parse_int, shift_2, extend_2, normalize};
 // Crypto hash identifiers
-fn sha256() -> Value { Value::from("sha256") }
-fn sha384() -> Value { Value::from("sha384") }
-fn sha512() -> Value { Value::from("sha512") }
-fn md5() -> Value { Value::from("md5") }
-fn ed25519() -> Value { Value::from("ed25519") }
+fn sha256() -> Value { Value::from("sha256()") }
+fn sha384() -> Value { Value::from("sha384()") }
+fn sha512() -> Value { Value::from("sha512()") }
+fn md5() -> Value { Value::from("md5()") }
+fn ed25519() -> Value { Value::from("ed25519()") }
 fn rsa(msg: Value, secret: Value, _hash: Value) -> Value { msg }
 fn eddsa(msg: Value, secret: Value, _curve: Value) -> Value { msg }
-fn secp256k1() -> Value { Value::from("secp256k1") }
+fn secp256k1() -> Value { Value::from("secp256k1()") }
+fn keccak() -> Value { Value::from("keccak()") }
+fn ecdsa(msg: Value, secret: Value, algo: Value, hash_fn: Value) -> Value { msg }
+fn totp(secret: Value) -> Value { Value::Undefined }
+fn jwt(data: Value, secret: Value, hash: Value, is_rsa: Value) -> Value { Value::Undefined }
+fn parse_float(value: Value) -> Value { value }
+fn decimals(value: Value) -> Value { Value::from(0) }
+fn shift_1(value: Value) -> Value { value }
+fn shift_3(value: Value) -> (Value, Value, Value) { (value.clone(), Value::Undefined, Value::Undefined) }
+fn shift_4(value: Value) -> (Value, Value, Value, Value) { (value.clone(), Value::Undefined, Value::Undefined, Value::Undefined) }
+// Error type constructors
+fn BadRequest(msg: Value) -> Value { msg }
+fn InvalidOrder(msg: Value) -> Value { msg }
+fn ExchangeError(msg: Value) -> Value { msg }
+fn InsufficientFunds(msg: Value) -> Value { msg }
+fn OrderNotFound(msg: Value) -> Value { msg }
+fn AuthenticationError(msg: Value) -> Value { msg }
+fn PermissionDenied(msg: Value) -> Value { msg }
+fn ExchangeNotAvailable(msg: Value) -> Value { msg }
+fn ArgumentsRequired(msg: Value) -> Value { msg }
+fn RateLimitExceeded(msg: Value) -> Value { msg }
+fn OrderNotFillable(msg: Value) -> Value { msg }
+fn OrderImmediatelyFillable(msg: Value) -> Value { msg }
+fn NotSupported(msg: Value) -> Value { msg }
+fn DuplicateOrderId(msg: Value) -> Value { msg }
 
 use crate::exchange::{PRECISE_BASE, TRUNCATE, ROUND, ROUND_UP, ROUND_DOWN};
 use crate::exchange::{DECIMAL_PLACES, SIGNIFICANT_DIGITS, TICK_SIZE, NO_PADDING, PAD_WITH_ZERO};
@@ -664,7 +688,7 @@ pub trait Gemini : Exchange {
         //     }
         //
         let mut r#type: Value = self.safe_string(message.clone(), Value::from("type"), Value::from(""));
-        let mut timeframe_id: Value = r#type.slice(Value::from(8));
+        let mut timeframe_id: Value = r#type.slice(Value::from(8), Value::Undefined);
         let mut timeframe_end_index: Value = timeframe_id.index_of(Value::from("_"));
         timeframe_id = timeframe_id.slice(Value::from(0), timeframe_end_index.clone());
         let mut market_id: Value = self.safe_string(message.clone(), Value::from("symbol"), Value::from("")).to_lower_case();
@@ -1249,7 +1273,7 @@ pub trait Gemini : Exchange {
             "nonce": self.nonce()
         }))).unwrap());
         let mut b64: Value = self.string_to_base64(self.json(payload.clone()));
-        let mut signature: Value = self.hmac(self.encode(b64.clone()), self.encode(self.get("secret".into())), sha384.clone(), Value::from("hex"));
+        let mut signature: Value = self.hmac(self.encode(b64.clone()), self.encode(self.get("secret".into())), sha384().clone(), Value::from("hex"));
         let mut default_options: Value = Value::Json(normalize(&Value::Json(json!({
             "ws": Value::Json(normalize(&Value::Json(json!({
                 "options": Value::Json(normalize(&Value::Json(json!({
@@ -1276,61 +1300,61 @@ pub trait Gemini : Exchange {
         match method {
             Value::Json(serde_json::Value::String(ref m)) => {
                 match m.as_ref() {
-                    "webexchangeGet" => Gemini::request(self, "".into(), "webExchange".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "webGetRestapi" => Gemini::request(self, "rest-api".into(), "web".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetV1symbols" => Gemini::request(self, "v1/symbols".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetV1symbolsdetailssymbol" => Gemini::request(self, "v1/symbols/details/{symbol}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetV1stakingrates" => Gemini::request(self, "v1/staking/rates".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetV1pubtickersymbol" => Gemini::request(self, "v1/pubticker/{symbol}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetV2tickersymbol" => Gemini::request(self, "v2/ticker/{symbol}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetV2candlessymboltimeframe" => Gemini::request(self, "v2/candles/{symbol}/{timeframe}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetV1tradessymbol" => Gemini::request(self, "v1/trades/{symbol}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetV1auctionsymbol" => Gemini::request(self, "v1/auction/{symbol}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetV1auctionsymbolhistory" => Gemini::request(self, "v1/auction/{symbol}/history".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetV1pricefeed" => Gemini::request(self, "v1/pricefeed".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetV1booksymbol" => Gemini::request(self, "v1/book/{symbol}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetV1earnrates" => Gemini::request(self, "v1/earn/rates".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostV1stakingunstake" => Gemini::request(self, "v1/staking/unstake".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostV1stakingstake" => Gemini::request(self, "v1/staking/stake".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostV1stakingrewards" => Gemini::request(self, "v1/staking/rewards".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostV1stakinghistory" => Gemini::request(self, "v1/staking/history".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostV1ordernew" => Gemini::request(self, "v1/order/new".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostV1ordercancel" => Gemini::request(self, "v1/order/cancel".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostV1wrapsymbol" => Gemini::request(self, "v1/wrap/{symbol}".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostV1ordercancelsession" => Gemini::request(self, "v1/order/cancel/session".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostV1ordercancelall" => Gemini::request(self, "v1/order/cancel/all".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostV1orderstatus" => Gemini::request(self, "v1/order/status".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostV1orders" => Gemini::request(self, "v1/orders".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostV1mytrades" => Gemini::request(self, "v1/mytrades".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostV1notionalvolume" => Gemini::request(self, "v1/notionalvolume".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostV1tradevolume" => Gemini::request(self, "v1/tradevolume".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostV1clearingnew" => Gemini::request(self, "v1/clearing/new".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostV1clearingstatus" => Gemini::request(self, "v1/clearing/status".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostV1clearingcancel" => Gemini::request(self, "v1/clearing/cancel".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostV1clearingconfirm" => Gemini::request(self, "v1/clearing/confirm".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostV1balances" => Gemini::request(self, "v1/balances".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostV1balancesstaking" => Gemini::request(self, "v1/balances/staking".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostV1notionalbalancescurrency" => Gemini::request(self, "v1/notionalbalances/{currency}".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostV1transfers" => Gemini::request(self, "v1/transfers".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostV1addressesnetwork" => Gemini::request(self, "v1/addresses/{network}".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostV1depositnetworknewaddress" => Gemini::request(self, "v1/deposit/{network}/newAddress".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostV1depositcurrencynewaddress" => Gemini::request(self, "v1/deposit/{currency}/newAddress".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostV1withdrawcurrency" => Gemini::request(self, "v1/withdraw/{currency}".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostV1accounttransfercurrency" => Gemini::request(self, "v1/account/transfer/{currency}".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostV1paymentsaddbank" => Gemini::request(self, "v1/payments/addbank".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostV1paymentsmethods" => Gemini::request(self, "v1/payments/methods".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostV1paymentssenwithdraw" => Gemini::request(self, "v1/payments/sen/withdraw".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostV1balancesearn" => Gemini::request(self, "v1/balances/earn".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostV1earninterest" => Gemini::request(self, "v1/earn/interest".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostV1earnhistory" => Gemini::request(self, "v1/earn/history".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostV1approvedaddressesnetworkrequest" => Gemini::request(self, "v1/approvedAddresses/{network}/request".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostV1approvedaddressesaccountnetwork" => Gemini::request(self, "v1/approvedAddresses/account/{network}".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostV1approvedaddressesnetworkremove" => Gemini::request(self, "v1/approvedAddresses/{network}/remove".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostV1account" => Gemini::request(self, "v1/account".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostV1accountcreate" => Gemini::request(self, "v1/account/create".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostV1accountlist" => Gemini::request(self, "v1/account/list".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostV1heartbeat" => Gemini::request(self, "v1/heartbeat".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostV1roles" => Gemini::request(self, "v1/roles".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "webexchangeGet" => self.request("".into(), "webExchange".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "webGetRestapi" => self.request("rest-api".into(), "web".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetV1symbols" => self.request("v1/symbols".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetV1symbolsdetailssymbol" => self.request("v1/symbols/details/{symbol}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetV1stakingrates" => self.request("v1/staking/rates".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetV1pubtickersymbol" => self.request("v1/pubticker/{symbol}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetV2tickersymbol" => self.request("v2/ticker/{symbol}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetV2candlessymboltimeframe" => self.request("v2/candles/{symbol}/{timeframe}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetV1tradessymbol" => self.request("v1/trades/{symbol}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetV1auctionsymbol" => self.request("v1/auction/{symbol}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetV1auctionsymbolhistory" => self.request("v1/auction/{symbol}/history".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetV1pricefeed" => self.request("v1/pricefeed".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetV1booksymbol" => self.request("v1/book/{symbol}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetV1earnrates" => self.request("v1/earn/rates".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostV1stakingunstake" => self.request("v1/staking/unstake".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostV1stakingstake" => self.request("v1/staking/stake".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostV1stakingrewards" => self.request("v1/staking/rewards".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostV1stakinghistory" => self.request("v1/staking/history".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostV1ordernew" => self.request("v1/order/new".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostV1ordercancel" => self.request("v1/order/cancel".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostV1wrapsymbol" => self.request("v1/wrap/{symbol}".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostV1ordercancelsession" => self.request("v1/order/cancel/session".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostV1ordercancelall" => self.request("v1/order/cancel/all".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostV1orderstatus" => self.request("v1/order/status".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostV1orders" => self.request("v1/orders".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostV1mytrades" => self.request("v1/mytrades".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostV1notionalvolume" => self.request("v1/notionalvolume".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostV1tradevolume" => self.request("v1/tradevolume".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostV1clearingnew" => self.request("v1/clearing/new".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostV1clearingstatus" => self.request("v1/clearing/status".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostV1clearingcancel" => self.request("v1/clearing/cancel".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostV1clearingconfirm" => self.request("v1/clearing/confirm".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostV1balances" => self.request("v1/balances".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostV1balancesstaking" => self.request("v1/balances/staking".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostV1notionalbalancescurrency" => self.request("v1/notionalbalances/{currency}".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostV1transfers" => self.request("v1/transfers".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostV1addressesnetwork" => self.request("v1/addresses/{network}".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostV1depositnetworknewaddress" => self.request("v1/deposit/{network}/newAddress".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostV1depositcurrencynewaddress" => self.request("v1/deposit/{currency}/newAddress".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostV1withdrawcurrency" => self.request("v1/withdraw/{currency}".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostV1accounttransfercurrency" => self.request("v1/account/transfer/{currency}".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostV1paymentsaddbank" => self.request("v1/payments/addbank".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostV1paymentsmethods" => self.request("v1/payments/methods".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostV1paymentssenwithdraw" => self.request("v1/payments/sen/withdraw".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostV1balancesearn" => self.request("v1/balances/earn".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostV1earninterest" => self.request("v1/earn/interest".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostV1earnhistory" => self.request("v1/earn/history".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostV1approvedaddressesnetworkrequest" => self.request("v1/approvedAddresses/{network}/request".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostV1approvedaddressesaccountnetwork" => self.request("v1/approvedAddresses/account/{network}".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostV1approvedaddressesnetworkremove" => self.request("v1/approvedAddresses/{network}/remove".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostV1account" => self.request("v1/account".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostV1accountcreate" => self.request("v1/account/create".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostV1accountlist" => self.request("v1/account/list".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostV1heartbeat" => self.request("v1/heartbeat".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostV1roles" => self.request("v1/roles".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     _ => unimplemented!(),
                 }
             },
@@ -1374,7 +1398,7 @@ impl ValueTrait for GeminiImpl {
     fn join(&self, glue: Value) -> Value { self.0.join(glue) }
     fn to_string(&self) -> Value { self.0.to_string() }
     fn typeof_(&self) -> Value { self.0.typeof_() }
-    fn slice(&self, start: Value) -> Value { self.0.slice(start) }
+    fn slice(&self, start: Value, end: Value) -> Value { self.0.slice(start, end) }
 }
 
 impl GeminiImpl {

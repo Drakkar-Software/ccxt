@@ -13,14 +13,38 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, BoolExt, JSON, Array, Object, Math, Promise, parse_int, shift_2, extend_2, normalize};
 // Crypto hash identifiers
-fn sha256() -> Value { Value::from("sha256") }
-fn sha384() -> Value { Value::from("sha384") }
-fn sha512() -> Value { Value::from("sha512") }
-fn md5() -> Value { Value::from("md5") }
-fn ed25519() -> Value { Value::from("ed25519") }
+fn sha256() -> Value { Value::from("sha256()") }
+fn sha384() -> Value { Value::from("sha384()") }
+fn sha512() -> Value { Value::from("sha512()") }
+fn md5() -> Value { Value::from("md5()") }
+fn ed25519() -> Value { Value::from("ed25519()") }
 fn rsa(msg: Value, secret: Value, _hash: Value) -> Value { msg }
 fn eddsa(msg: Value, secret: Value, _curve: Value) -> Value { msg }
-fn secp256k1() -> Value { Value::from("secp256k1") }
+fn secp256k1() -> Value { Value::from("secp256k1()") }
+fn keccak() -> Value { Value::from("keccak()") }
+fn ecdsa(msg: Value, secret: Value, algo: Value, hash_fn: Value) -> Value { msg }
+fn totp(secret: Value) -> Value { Value::Undefined }
+fn jwt(data: Value, secret: Value, hash: Value, is_rsa: Value) -> Value { Value::Undefined }
+fn parse_float(value: Value) -> Value { value }
+fn decimals(value: Value) -> Value { Value::from(0) }
+fn shift_1(value: Value) -> Value { value }
+fn shift_3(value: Value) -> (Value, Value, Value) { (value.clone(), Value::Undefined, Value::Undefined) }
+fn shift_4(value: Value) -> (Value, Value, Value, Value) { (value.clone(), Value::Undefined, Value::Undefined, Value::Undefined) }
+// Error type constructors
+fn BadRequest(msg: Value) -> Value { msg }
+fn InvalidOrder(msg: Value) -> Value { msg }
+fn ExchangeError(msg: Value) -> Value { msg }
+fn InsufficientFunds(msg: Value) -> Value { msg }
+fn OrderNotFound(msg: Value) -> Value { msg }
+fn AuthenticationError(msg: Value) -> Value { msg }
+fn PermissionDenied(msg: Value) -> Value { msg }
+fn ExchangeNotAvailable(msg: Value) -> Value { msg }
+fn ArgumentsRequired(msg: Value) -> Value { msg }
+fn RateLimitExceeded(msg: Value) -> Value { msg }
+fn OrderNotFillable(msg: Value) -> Value { msg }
+fn OrderImmediatelyFillable(msg: Value) -> Value { msg }
+fn NotSupported(msg: Value) -> Value { msg }
+fn DuplicateOrderId(msg: Value) -> Value { msg }
 
 use crate::exchange::{PRECISE_BASE, TRUNCATE, ROUND, ROUND_UP, ROUND_DOWN};
 use crate::exchange::{DECIMAL_PLACES, SIGNIFICANT_DIGITS, TICK_SIZE, NO_PADDING, PAD_WITH_ZERO};
@@ -411,7 +435,7 @@ pub trait Timex : Exchange {
     async fn fetch_time(&mut self, mut params: Value) -> Value {
         let candidates = vec![("public", "GET", "time"), ("public", "GET", "server/time"), ("public", "GET", "timestamp")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Timex>::request(self,path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -573,14 +597,14 @@ pub trait Timex : Exchange {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = <Self as Timex>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() { return rv; }
                 }
             }
         }
         let candidates = vec![("public", "GET", "ticker/24hr"), ("public", "GET", "tickers"), ("public", "GET", "ticker")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Timex>::request(self,path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -604,14 +628,14 @@ pub trait Timex : Exchange {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = <Self as Timex>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() { return rv; }
                 }
             }
         }
         let candidates = vec![("public", "GET", "ticker/24hr"), ("public", "GET", "ticker"), ("public", "GET", "ticker/price")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Timex>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -636,14 +660,14 @@ pub trait Timex : Exchange {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = <Self as Timex>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() { return rv; }
                 }
             }
         }
         let candidates = vec![("public", "GET", "depth"), ("public", "GET", "orderbook"), ("public", "GET", "order_book")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Timex>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -657,7 +681,7 @@ pub trait Timex : Exchange {
         if limit.is_nonnullish() { request.set("limit".into(), limit.clone()); }
         let candidates = vec![("public", "GET", "trades"), ("public", "GET", "recent_trades"), ("public", "GET", "aggTrades")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Timex>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -685,14 +709,14 @@ pub trait Timex : Exchange {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = <Self as Timex>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() { return rv; }
                 }
             }
         }
         let candidates = vec![("public", "GET", "klines"), ("public", "GET", "candles"), ("public", "GET", "ohlcv")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Timex>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -1285,7 +1309,7 @@ pub trait Timex : Exchange {
             let mut dot_index: Value = fee_string_len.clone() - trade_decimals.clone();
             if dot_index.clone() > Value::from(0) {
                 let mut whole: Value = fee_string.slice(Value::from(0), dot_index.clone());
-                let mut fraction: Value = fee_string.slice(dot_index.clone().neg());
+                let mut fraction: Value = fee_string.slice(dot_index.clone().neg(), Value::Undefined);
                 fee = self.parse_number(whole.clone() + Value::from(".") + fraction.clone(), Value::Undefined);
             } else {
                 let mut fraction: Value = Value::from(".");
@@ -1580,64 +1604,64 @@ pub trait Timex : Exchange {
         match method {
             Value::Json(serde_json::Value::String(ref m)) => {
                 match m.as_ref() {
-                    "addressbookGetMe" => Timex::request(self, "me".into(), "addressbook".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "addressbookPost" => Timex::request(self, "".into(), "addressbook".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "addressbookPostIdid" => Timex::request(self, "id/{id}".into(), "addressbook".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "addressbookPostIdidremove" => Timex::request(self, "id/{id}/remove".into(), "addressbook".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "custodyGetCredentials" => Timex::request(self, "credentials".into(), "custody".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "custodyGetCredentialshhash" => Timex::request(self, "credentials/h/{hash}".into(), "custody".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "custodyGetCredentialskkey" => Timex::request(self, "credentials/k/{key}".into(), "custody".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "custodyGetCredentialsme" => Timex::request(self, "credentials/me".into(), "custody".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "custodyGetCredentialsmeaddress" => Timex::request(self, "credentials/me/address".into(), "custody".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "custodyGetDepositaddresses" => Timex::request(self, "deposit-addresses".into(), "custody".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "custodyGetDepositaddresseshhash" => Timex::request(self, "deposit-addresses/h/{hash}".into(), "custody".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "historyGetOrders" => Timex::request(self, "orders".into(), "history".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "historyGetOrdersdetails" => Timex::request(self, "orders/details".into(), "history".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "historyGetOrdersexportcsv" => Timex::request(self, "orders/export/csv".into(), "history".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "historyGetTrades" => Timex::request(self, "trades".into(), "history".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "historyGetTradesexportcsv" => Timex::request(self, "trades/export/csv".into(), "history".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "currenciesGetAaddress" => Timex::request(self, "a/{address}".into(), "currencies".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "currenciesGetIid" => Timex::request(self, "i/{id}".into(), "currencies".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "currenciesGetSsymbol" => Timex::request(self, "s/{symbol}".into(), "currencies".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "currenciesPostPerform" => Timex::request(self, "perform".into(), "currencies".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "currenciesPostPrepare" => Timex::request(self, "prepare".into(), "currencies".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "currenciesPostRemoveperform" => Timex::request(self, "remove/perform".into(), "currencies".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "currenciesPostSsymbolremoveprepare" => Timex::request(self, "s/{symbol}/remove/prepare".into(), "currencies".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "currenciesPostSsymbolupdateperform" => Timex::request(self, "s/{symbol}/update/perform".into(), "currencies".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "currenciesPostSsymbolupdateprepare" => Timex::request(self, "s/{symbol}/update/prepare".into(), "currencies".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "managerGetDeposits" => Timex::request(self, "deposits".into(), "manager".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "managerGetTransfers" => Timex::request(self, "transfers".into(), "manager".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "managerGetWithdrawals" => Timex::request(self, "withdrawals".into(), "manager".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "marketsGetIid" => Timex::request(self, "i/{id}".into(), "markets".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "marketsGetSsymbol" => Timex::request(self, "s/{symbol}".into(), "markets".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "marketsPostPerform" => Timex::request(self, "perform".into(), "markets".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "marketsPostPrepare" => Timex::request(self, "prepare".into(), "markets".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "marketsPostRemoveperform" => Timex::request(self, "remove/perform".into(), "markets".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "marketsPostSsymbolremoveprepare" => Timex::request(self, "s/{symbol}/remove/prepare".into(), "markets".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "marketsPostSsymbolupdateperform" => Timex::request(self, "s/{symbol}/update/perform".into(), "markets".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "marketsPostSsymbolupdateprepare" => Timex::request(self, "s/{symbol}/update/prepare".into(), "markets".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetCandles" => Timex::request(self, "candles".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetCurrencies" => Timex::request(self, "currencies".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetMarkets" => Timex::request(self, "markets".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetOrderbook" => Timex::request(self, "orderbook".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetOrderbookraw" => Timex::request(self, "orderbook/raw".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetOrderbookv2" => Timex::request(self, "orderbook/v2".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetTickers" => Timex::request(self, "tickers".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetTrades" => Timex::request(self, "trades".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "statisticsGetAddress" => Timex::request(self, "address".into(), "statistics".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "tradingGetBalances" => Timex::request(self, "balances".into(), "trading".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "tradingGetFees" => Timex::request(self, "fees".into(), "trading".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "tradingGetOrders" => Timex::request(self, "orders".into(), "trading".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "tradingPostOrders" => Timex::request(self, "orders".into(), "trading".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "tradingPostOrdersjson" => Timex::request(self, "orders/json".into(), "trading".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "tradingPutOrders" => Timex::request(self, "orders".into(), "trading".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "tradingPutOrdersjson" => Timex::request(self, "orders/json".into(), "trading".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "tradingDeleteOrders" => Timex::request(self, "orders".into(), "trading".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "tradingDeleteOrdersjson" => Timex::request(self, "orders/json".into(), "trading".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "tradingviewGetConfig" => Timex::request(self, "config".into(), "tradingview".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "tradingviewGetHistory" => Timex::request(self, "history".into(), "tradingview".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "tradingviewGetSymbolinfo" => Timex::request(self, "symbol_info".into(), "tradingview".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "tradingviewGetTime" => Timex::request(self, "time".into(), "tradingview".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "addressbookGetMe" => self.request("me".into(), "addressbook".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "addressbookPost" => self.request("".into(), "addressbook".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "addressbookPostIdid" => self.request("id/{id}".into(), "addressbook".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "addressbookPostIdidremove" => self.request("id/{id}/remove".into(), "addressbook".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "custodyGetCredentials" => self.request("credentials".into(), "custody".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "custodyGetCredentialshhash" => self.request("credentials/h/{hash}".into(), "custody".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "custodyGetCredentialskkey" => self.request("credentials/k/{key}".into(), "custody".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "custodyGetCredentialsme" => self.request("credentials/me".into(), "custody".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "custodyGetCredentialsmeaddress" => self.request("credentials/me/address".into(), "custody".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "custodyGetDepositaddresses" => self.request("deposit-addresses".into(), "custody".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "custodyGetDepositaddresseshhash" => self.request("deposit-addresses/h/{hash}".into(), "custody".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "historyGetOrders" => self.request("orders".into(), "history".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "historyGetOrdersdetails" => self.request("orders/details".into(), "history".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "historyGetOrdersexportcsv" => self.request("orders/export/csv".into(), "history".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "historyGetTrades" => self.request("trades".into(), "history".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "historyGetTradesexportcsv" => self.request("trades/export/csv".into(), "history".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "currenciesGetAaddress" => self.request("a/{address}".into(), "currencies".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "currenciesGetIid" => self.request("i/{id}".into(), "currencies".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "currenciesGetSsymbol" => self.request("s/{symbol}".into(), "currencies".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "currenciesPostPerform" => self.request("perform".into(), "currencies".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "currenciesPostPrepare" => self.request("prepare".into(), "currencies".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "currenciesPostRemoveperform" => self.request("remove/perform".into(), "currencies".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "currenciesPostSsymbolremoveprepare" => self.request("s/{symbol}/remove/prepare".into(), "currencies".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "currenciesPostSsymbolupdateperform" => self.request("s/{symbol}/update/perform".into(), "currencies".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "currenciesPostSsymbolupdateprepare" => self.request("s/{symbol}/update/prepare".into(), "currencies".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "managerGetDeposits" => self.request("deposits".into(), "manager".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "managerGetTransfers" => self.request("transfers".into(), "manager".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "managerGetWithdrawals" => self.request("withdrawals".into(), "manager".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "marketsGetIid" => self.request("i/{id}".into(), "markets".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "marketsGetSsymbol" => self.request("s/{symbol}".into(), "markets".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "marketsPostPerform" => self.request("perform".into(), "markets".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "marketsPostPrepare" => self.request("prepare".into(), "markets".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "marketsPostRemoveperform" => self.request("remove/perform".into(), "markets".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "marketsPostSsymbolremoveprepare" => self.request("s/{symbol}/remove/prepare".into(), "markets".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "marketsPostSsymbolupdateperform" => self.request("s/{symbol}/update/perform".into(), "markets".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "marketsPostSsymbolupdateprepare" => self.request("s/{symbol}/update/prepare".into(), "markets".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetCandles" => self.request("candles".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetCurrencies" => self.request("currencies".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetMarkets" => self.request("markets".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetOrderbook" => self.request("orderbook".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetOrderbookraw" => self.request("orderbook/raw".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetOrderbookv2" => self.request("orderbook/v2".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetTickers" => self.request("tickers".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetTrades" => self.request("trades".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "statisticsGetAddress" => self.request("address".into(), "statistics".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "tradingGetBalances" => self.request("balances".into(), "trading".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "tradingGetFees" => self.request("fees".into(), "trading".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "tradingGetOrders" => self.request("orders".into(), "trading".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "tradingPostOrders" => self.request("orders".into(), "trading".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "tradingPostOrdersjson" => self.request("orders/json".into(), "trading".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "tradingPutOrders" => self.request("orders".into(), "trading".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "tradingPutOrdersjson" => self.request("orders/json".into(), "trading".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "tradingDeleteOrders" => self.request("orders".into(), "trading".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "tradingDeleteOrdersjson" => self.request("orders/json".into(), "trading".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "tradingviewGetConfig" => self.request("config".into(), "tradingview".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "tradingviewGetHistory" => self.request("history".into(), "tradingview".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "tradingviewGetSymbolinfo" => self.request("symbol_info".into(), "tradingview".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "tradingviewGetTime" => self.request("time".into(), "tradingview".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     _ => unimplemented!(),
                 }
             },
@@ -1681,7 +1705,7 @@ impl ValueTrait for TimexImpl {
     fn join(&self, glue: Value) -> Value { self.0.join(glue) }
     fn to_string(&self) -> Value { self.0.to_string() }
     fn typeof_(&self) -> Value { self.0.typeof_() }
-    fn slice(&self, start: Value) -> Value { self.0.slice(start) }
+    fn slice(&self, start: Value, end: Value) -> Value { self.0.slice(start, end) }
 }
 
 impl TimexImpl {

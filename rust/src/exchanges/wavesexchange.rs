@@ -13,14 +13,38 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, BoolExt, JSON, Array, Object, Math, Promise, parse_int, shift_2, extend_2, normalize};
 // Crypto hash identifiers
-fn sha256() -> Value { Value::from("sha256") }
-fn sha384() -> Value { Value::from("sha384") }
-fn sha512() -> Value { Value::from("sha512") }
-fn md5() -> Value { Value::from("md5") }
-fn ed25519() -> Value { Value::from("ed25519") }
+fn sha256() -> Value { Value::from("sha256()") }
+fn sha384() -> Value { Value::from("sha384()") }
+fn sha512() -> Value { Value::from("sha512()") }
+fn md5() -> Value { Value::from("md5()") }
+fn ed25519() -> Value { Value::from("ed25519()") }
 fn rsa(msg: Value, secret: Value, _hash: Value) -> Value { msg }
 fn eddsa(msg: Value, secret: Value, _curve: Value) -> Value { msg }
-fn secp256k1() -> Value { Value::from("secp256k1") }
+fn secp256k1() -> Value { Value::from("secp256k1()") }
+fn keccak() -> Value { Value::from("keccak()") }
+fn ecdsa(msg: Value, secret: Value, algo: Value, hash_fn: Value) -> Value { msg }
+fn totp(secret: Value) -> Value { Value::Undefined }
+fn jwt(data: Value, secret: Value, hash: Value, is_rsa: Value) -> Value { Value::Undefined }
+fn parse_float(value: Value) -> Value { value }
+fn decimals(value: Value) -> Value { Value::from(0) }
+fn shift_1(value: Value) -> Value { value }
+fn shift_3(value: Value) -> (Value, Value, Value) { (value.clone(), Value::Undefined, Value::Undefined) }
+fn shift_4(value: Value) -> (Value, Value, Value, Value) { (value.clone(), Value::Undefined, Value::Undefined, Value::Undefined) }
+// Error type constructors
+fn BadRequest(msg: Value) -> Value { msg }
+fn InvalidOrder(msg: Value) -> Value { msg }
+fn ExchangeError(msg: Value) -> Value { msg }
+fn InsufficientFunds(msg: Value) -> Value { msg }
+fn OrderNotFound(msg: Value) -> Value { msg }
+fn AuthenticationError(msg: Value) -> Value { msg }
+fn PermissionDenied(msg: Value) -> Value { msg }
+fn ExchangeNotAvailable(msg: Value) -> Value { msg }
+fn ArgumentsRequired(msg: Value) -> Value { msg }
+fn RateLimitExceeded(msg: Value) -> Value { msg }
+fn OrderNotFillable(msg: Value) -> Value { msg }
+fn OrderImmediatelyFillable(msg: Value) -> Value { msg }
+fn NotSupported(msg: Value) -> Value { msg }
+fn DuplicateOrderId(msg: Value) -> Value { msg }
 
 use crate::exchange::{PRECISE_BASE, TRUNCATE, ROUND, ROUND_UP, ROUND_DOWN};
 use crate::exchange::{DECIMAL_PLACES, SIGNIFICANT_DIGITS, TICK_SIZE, NO_PADDING, PAD_WITH_ZERO};
@@ -668,14 +692,14 @@ pub trait Wavesexchange : Exchange {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = <Self as Wavesexchange>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() { return rv; }
                 }
             }
         }
         let candidates = vec![("public", "GET", "depth"), ("public", "GET", "orderbook"), ("public", "GET", "order_book")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Wavesexchange>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -754,7 +778,7 @@ pub trait Wavesexchange : Exchange {
             let mut message_hex: Value = self.binary_to_base16(self.encode(message.clone()));
             let mut payload: Value = prefix.clone() + message_hex.clone();
             let mut hex_key: Value = self.binary_to_base16(self.base58_to_binary(self.get("secret".into())));
-            let mut signature: Value = self.axolotl(payload.clone(), hex_key.clone(), ed25519.clone());
+            let mut signature: Value = self.axolotl(payload.clone(), hex_key.clone(), ed25519().clone());
             let mut request: Value = Value::Json(normalize(&Value::Json(json!({
                 "grant_type": "password",
                 "scope": "general",
@@ -866,14 +890,14 @@ pub trait Wavesexchange : Exchange {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = <Self as Wavesexchange>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() { return rv; }
                 }
             }
         }
         let candidates = vec![("public", "GET", "ticker/24hr"), ("public", "GET", "ticker"), ("public", "GET", "ticker/price")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Wavesexchange>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -895,14 +919,14 @@ pub trait Wavesexchange : Exchange {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = <Self as Wavesexchange>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() { return rv; }
                 }
             }
         }
         let candidates = vec![("public", "GET", "ticker/24hr"), ("public", "GET", "tickers"), ("public", "GET", "ticker")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Wavesexchange>::request(self,path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -930,14 +954,14 @@ pub trait Wavesexchange : Exchange {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = <Self as Wavesexchange>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() { return rv; }
                 }
             }
         }
         let candidates = vec![("public", "GET", "klines"), ("public", "GET", "candles"), ("public", "GET", "ohlcv")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Wavesexchange>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -1135,7 +1159,7 @@ pub trait Wavesexchange : Exchange {
         if currency_id.clone() == Value::from("WAVES") {
             return self.number_to_be(Value::from(0), Value::from(1));
         } else {
-            return self.binary_concat(self.number_to_be(Value::from(1), Value::from(1)), self.base58_to_binary(currency_id.clone()));
+            return self.binary_concat(self.number_to_be(Value::from(1), Value::from(1)), self.base58_to_binary(currency_id.clone()), Value::Undefined, Value::Undefined);
         };
         Value::Undefined
     }
@@ -1333,7 +1357,7 @@ pub trait Wavesexchange : Exchange {
         if serialized_order.get(Value::from(0)) == Value::from(r#"""#) && serialized_order.get(serialized_order.len().into() - Value::from(1).clone()) == Value::from(r#"""#) {
             serialized_order = serialized_order.slice(Value::from(1), serialized_order.len().into() - Value::from(1));
         };
-        let mut signature: Value = self.axolotl(self.binary_to_base16(self.base58_to_binary(serialized_order.clone())), self.binary_to_base16(self.base58_to_binary(self.get("secret".into()))), ed25519.clone());
+        let mut signature: Value = self.axolotl(self.binary_to_base16(self.base58_to_binary(serialized_order.clone())), self.binary_to_base16(self.base58_to_binary(self.get("secret".into()))), ed25519().clone());
         body.set("signature".into(), signature.clone());
         //
         //     {
@@ -1432,7 +1456,7 @@ pub trait Wavesexchange : Exchange {
         let mut byte_array: Value = Value::Json(serde_json::Value::Array(vec![self.base58_to_binary(self.get("apiKey".into())).into(), self.number_to_be(timestamp.clone(), Value::from(8)).into()]));
         let mut binary: Value = self.binary_concat_array(byte_array.clone());
         let mut hex_secret: Value = self.binary_to_base16(self.base58_to_binary(self.get("secret".into())));
-        let mut signature: Value = self.axolotl(self.binary_to_base16(binary.clone()), hex_secret.clone(), ed25519.clone());
+        let mut signature: Value = self.axolotl(self.binary_to_base16(binary.clone()), hex_secret.clone(), ed25519().clone());
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
             "Timestamp": timestamp.to_string(),
             "Signature": signature,
@@ -1456,7 +1480,7 @@ pub trait Wavesexchange : Exchange {
         let mut byte_array: Value = Value::Json(serde_json::Value::Array(vec![self.base58_to_binary(self.get("apiKey".into())).into(), self.number_to_be(timestamp.clone(), Value::from(8)).into()]));
         let mut binary: Value = self.binary_concat_array(byte_array.clone());
         let mut hex_secret: Value = self.binary_to_base16(self.base58_to_binary(self.get("secret".into())));
-        let mut signature: Value = self.axolotl(self.binary_to_base16(binary.clone()), hex_secret.clone(), ed25519.clone());
+        let mut signature: Value = self.axolotl(self.binary_to_base16(binary.clone()), hex_secret.clone(), ed25519().clone());
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
             "Accept": "application/json",
             "Timestamp": timestamp.to_string(),
@@ -1798,7 +1822,7 @@ pub trait Wavesexchange : Exchange {
         let mut byte_array: Value = Value::Json(serde_json::Value::Array(vec![self.base58_to_binary(self.get("apiKey".into())).into(), self.number_to_be(current_timestamp.clone(), Value::from(8)).into()]));
         let mut binary: Value = self.binary_concat_array(byte_array.clone());
         let mut hex_secret: Value = self.binary_to_base16(self.base58_to_binary(self.get("secret".into())));
-        let mut signature: Value = self.axolotl(self.binary_to_base16(binary.clone()), hex_secret.clone(), ed25519.clone());
+        let mut signature: Value = self.axolotl(self.binary_to_base16(binary.clone()), hex_secret.clone(), ed25519().clone());
         let mut matcher_request: Value = Value::Json(normalize(&Value::Json(json!({
             "publicKey": self.get("apiKey".into()),
             "signature": signature,
@@ -1940,7 +1964,7 @@ pub trait Wavesexchange : Exchange {
         if limit.is_nonnullish() { request.set("limit".into(), limit.clone()); }
         let candidates = vec![("public", "GET", "trades"), ("public", "GET", "recent_trades"), ("public", "GET", "aggTrades")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Wavesexchange>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -2297,7 +2321,7 @@ pub trait Wavesexchange : Exchange {
         let mut byte_array: Value = Value::Json(serde_json::Value::Array(vec![self.number_to_be(Value::from(4), Value::from(1)).into(), self.number_to_be(Value::from(2), Value::from(1)).into(), self.base58_to_binary(self.get("apiKey".into())).into(), <Self as Wavesexchange>::get_asset_bytes(self, currency.get(Value::from("id"))).into(), <Self as Wavesexchange>::get_asset_bytes(self, fee_asset_id.clone()).into(), self.number_to_be(timestamp.clone(), Value::from(8)).into(), self.number_to_be(amount_integer.clone(), Value::from(8)).into(), self.number_to_be(fee.clone(), Value::from(8)).into(), self.base58_to_binary(proxy_address.clone()).into(), self.number_to_be(Value::from(0), Value::from(2)).into()]));
         let mut binary: Value = self.binary_concat_array(byte_array.clone());
         let mut hex_secret: Value = self.binary_to_base16(self.base58_to_binary(self.get("secret".into())));
-        let mut signature: Value = self.axolotl(self.binary_to_base16(binary.clone()), hex_secret.clone(), ed25519.clone());
+        let mut signature: Value = self.axolotl(self.binary_to_base16(binary.clone()), hex_secret.clone(), ed25519().clone());
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
             "senderPublicKey": self.get("apiKey".into()),
             "amount": amount_integer,
@@ -2399,156 +2423,156 @@ pub trait Wavesexchange : Exchange {
         match method {
             Value::Json(serde_json::Value::String(ref m)) => {
                 match m.as_ref() {
-                    "matcherGetMatcher" => Wavesexchange::request(self, "matcher".into(), "matcher".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "matcherGetMatchersettings" => Wavesexchange::request(self, "matcher/settings".into(), "matcher".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "matcherGetMatchersettingsrates" => Wavesexchange::request(self, "matcher/settings/rates".into(), "matcher".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "matcherGetMatcherbalancereservedpublickey" => Wavesexchange::request(self, "matcher/balance/reserved/{publicKey}".into(), "matcher".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "matcherGetMatcherdebugallsnashotoffsets" => Wavesexchange::request(self, "matcher/debug/allSnashotOffsets".into(), "matcher".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "matcherGetMatcherdebugcurrentoffset" => Wavesexchange::request(self, "matcher/debug/currentOffset".into(), "matcher".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "matcherGetMatcherdebuglastoffset" => Wavesexchange::request(self, "matcher/debug/lastOffset".into(), "matcher".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "matcherGetMatcherdebugoldestsnapshotoffset" => Wavesexchange::request(self, "matcher/debug/oldestSnapshotOffset".into(), "matcher".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "matcherGetMatcherdebugconfig" => Wavesexchange::request(self, "matcher/debug/config".into(), "matcher".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "matcherGetMatcherdebugaddressaddress" => Wavesexchange::request(self, "matcher/debug/address/{address}".into(), "matcher".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "matcherGetMatcherdebugstatus" => Wavesexchange::request(self, "matcher/debug/status".into(), "matcher".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "matcherGetMatcherdebugaddressaddresscheck" => Wavesexchange::request(self, "matcher/debug/address/{address}/check".into(), "matcher".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "matcherGetMatcherorderbook" => Wavesexchange::request(self, "matcher/orderbook".into(), "matcher".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "matcherGetMatcherorderbookbaseidquoteid" => Wavesexchange::request(self, "matcher/orderbook/{baseId}/{quoteId}".into(), "matcher".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "matcherGetMatcherorderbookbaseidquoteidpublickeypublickey" => Wavesexchange::request(self, "matcher/orderbook/{baseId}/{quoteId}/publicKey/{publicKey}".into(), "matcher".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "matcherGetMatcherorderbookbaseidquoteidorderid" => Wavesexchange::request(self, "matcher/orderbook/{baseId}/{quoteId}/{orderId}".into(), "matcher".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "matcherGetMatcherorderbookbaseidquoteidinfo" => Wavesexchange::request(self, "matcher/orderbook/{baseId}/{quoteId}/info".into(), "matcher".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "matcherGetMatcherorderbookbaseidquoteidstatus" => Wavesexchange::request(self, "matcher/orderbook/{baseId}/{quoteId}/status".into(), "matcher".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "matcherGetMatcherorderbookbaseidquoteidtradablebalanceaddress" => Wavesexchange::request(self, "matcher/orderbook/{baseId}/{quoteId}/tradableBalance/{address}".into(), "matcher".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "matcherGetMatcherorderbookpublickey" => Wavesexchange::request(self, "matcher/orderbook/{publicKey}".into(), "matcher".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "matcherGetMatcherorderbookpublickeyorderid" => Wavesexchange::request(self, "matcher/orderbook/{publicKey}/{orderId}".into(), "matcher".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "matcherGetMatcherordersaddress" => Wavesexchange::request(self, "matcher/orders/{address}".into(), "matcher".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "matcherGetMatcherordersaddressorderid" => Wavesexchange::request(self, "matcher/orders/{address}/{orderId}".into(), "matcher".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "matcherGetMatchertransactionsorderid" => Wavesexchange::request(self, "matcher/transactions/{orderId}".into(), "matcher".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "matcherGetApiv1orderbookbaseidquoteid" => Wavesexchange::request(self, "api/v1/orderbook/{baseId}/{quoteId}".into(), "matcher".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "matcherPostMatcherorderbook" => Wavesexchange::request(self, "matcher/orderbook".into(), "matcher".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "matcherPostMatcherorderbookmarket" => Wavesexchange::request(self, "matcher/orderbook/market".into(), "matcher".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "matcherPostMatcherorderbookcancel" => Wavesexchange::request(self, "matcher/orderbook/cancel".into(), "matcher".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "matcherPostMatcherorderbookbaseidquoteidcancel" => Wavesexchange::request(self, "matcher/orderbook/{baseId}/{quoteId}/cancel".into(), "matcher".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "matcherPostMatcherorderbookbaseidquoteidcalculatefee" => Wavesexchange::request(self, "matcher/orderbook/{baseId}/{quoteId}/calculateFee".into(), "matcher".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "matcherPostMatcherorderbookbaseidquoteiddelete" => Wavesexchange::request(self, "matcher/orderbook/{baseId}/{quoteId}/delete".into(), "matcher".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "matcherPostMatcherorderbookbaseidquoteidcancelall" => Wavesexchange::request(self, "matcher/orderbook/{baseId}/{quoteId}/cancelAll".into(), "matcher".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "matcherPostMatcherdebugsavesnapshots" => Wavesexchange::request(self, "matcher/debug/saveSnapshots".into(), "matcher".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "matcherPostMatcherordersaddresscancel" => Wavesexchange::request(self, "matcher/orders/{address}/cancel".into(), "matcher".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "matcherPostMatcherorderscancelorderid" => Wavesexchange::request(self, "matcher/orders/cancel/{orderId}".into(), "matcher".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "matcherPostMatcherordersserialize" => Wavesexchange::request(self, "matcher/orders/serialize".into(), "matcher".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "matcherDeleteMatcherorderbookbaseidquoteid" => Wavesexchange::request(self, "matcher/orderbook/{baseId}/{quoteId}".into(), "matcher".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "matcherDeleteMatchersettingsratesassetid" => Wavesexchange::request(self, "matcher/settings/rates/{assetId}".into(), "matcher".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "matcherPutMatchersettingsratesassetid" => Wavesexchange::request(self, "matcher/settings/rates/{assetId}".into(), "matcher".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "nodeGetAddresses" => Wavesexchange::request(self, "addresses".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "nodeGetAddressesbalanceaddress" => Wavesexchange::request(self, "addresses/balance/{address}".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "nodeGetAddressesbalanceaddressconfirmations" => Wavesexchange::request(self, "addresses/balance/{address}/{confirmations}".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "nodeGetAddressesbalancedetailsaddress" => Wavesexchange::request(self, "addresses/balance/details/{address}".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "nodeGetAddressesdataaddress" => Wavesexchange::request(self, "addresses/data/{address}".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "nodeGetAddressesdataaddresskey" => Wavesexchange::request(self, "addresses/data/{address}/{key}".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "nodeGetAddresseseffectivebalanceaddress" => Wavesexchange::request(self, "addresses/effectiveBalance/{address}".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "nodeGetAddresseseffectivebalanceaddressconfirmations" => Wavesexchange::request(self, "addresses/effectiveBalance/{address}/{confirmations}".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "nodeGetAddressespublickeypublickey" => Wavesexchange::request(self, "addresses/publicKey/{publicKey}".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "nodeGetAddressesscriptinfoaddress" => Wavesexchange::request(self, "addresses/scriptInfo/{address}".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "nodeGetAddressesscriptinfoaddressmeta" => Wavesexchange::request(self, "addresses/scriptInfo/{address}/meta".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "nodeGetAddressesseedaddress" => Wavesexchange::request(self, "addresses/seed/{address}".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "nodeGetAddressesseqfromto" => Wavesexchange::request(self, "addresses/seq/{from}/{to}".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "nodeGetAddressesvalidateaddress" => Wavesexchange::request(self, "addresses/validate/{address}".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "nodeGetAliasbyaddressaddress" => Wavesexchange::request(self, "alias/by-address/{address}".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "nodeGetAliasbyaliasalias" => Wavesexchange::request(self, "alias/by-alias/{alias}".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "nodeGetAssetsassetiddistributionheightlimit" => Wavesexchange::request(self, "assets/{assetId}/distribution/{height}/{limit}".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "nodeGetAssetsbalanceaddress" => Wavesexchange::request(self, "assets/balance/{address}".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "nodeGetAssetsbalanceaddressassetid" => Wavesexchange::request(self, "assets/balance/{address}/{assetId}".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "nodeGetAssetsdetailsassetid" => Wavesexchange::request(self, "assets/details/{assetId}".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "nodeGetAssetsnftaddresslimitlimit" => Wavesexchange::request(self, "assets/nft/{address}/limit/{limit}".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "nodeGetBlockchainrewards" => Wavesexchange::request(self, "blockchain/rewards".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "nodeGetBlockchainrewardsheight" => Wavesexchange::request(self, "blockchain/rewards/height".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "nodeGetBlocksaddressaddressfromto" => Wavesexchange::request(self, "blocks/address/{address}/{from}/{to}/".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "nodeGetBlocksatheight" => Wavesexchange::request(self, "blocks/at/{height}".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "nodeGetBlocksdelaysignatureblocknum" => Wavesexchange::request(self, "blocks/delay/{signature}/{blockNum}".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "nodeGetBlocksfirst" => Wavesexchange::request(self, "blocks/first".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "nodeGetBlocksheaderslast" => Wavesexchange::request(self, "blocks/headers/last".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "nodeGetBlocksheadersseqfromto" => Wavesexchange::request(self, "blocks/headers/seq/{from}/{to}".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "nodeGetBlocksheight" => Wavesexchange::request(self, "blocks/height".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "nodeGetBlocksheightsignature" => Wavesexchange::request(self, "blocks/height/{signature}".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "nodeGetBlockslast" => Wavesexchange::request(self, "blocks/last".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "nodeGetBlocksseqfromto" => Wavesexchange::request(self, "blocks/seq/{from}/{to}".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "nodeGetBlockssignaturesignature" => Wavesexchange::request(self, "blocks/signature/{signature}".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "nodeGetConsensusalgo" => Wavesexchange::request(self, "consensus/algo".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "nodeGetConsensusbasetarget" => Wavesexchange::request(self, "consensus/basetarget".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "nodeGetConsensusbasetargetblockid" => Wavesexchange::request(self, "consensus/basetarget/{blockId}".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "nodeGetConsensusgeneratingbalanceaddress" => Wavesexchange::request(self, "consensus/{generatingbalance}/address".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "nodeGetConsensusgenerationsignature" => Wavesexchange::request(self, "consensus/generationsignature".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "nodeGetConsensusgenerationsignatureblockid" => Wavesexchange::request(self, "consensus/generationsignature/{blockId}".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "nodeGetDebugbalanceshistoryaddress" => Wavesexchange::request(self, "debug/balances/history/{address}".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "nodeGetDebugblockshowmany" => Wavesexchange::request(self, "debug/blocks/{howMany}".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "nodeGetDebugconfiginfo" => Wavesexchange::request(self, "debug/configInfo".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "nodeGetDebughistoryinfo" => Wavesexchange::request(self, "debug/historyInfo".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "nodeGetDebuginfo" => Wavesexchange::request(self, "debug/info".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "nodeGetDebugminerinfo" => Wavesexchange::request(self, "debug/minerInfo".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "nodeGetDebugportfoliosaddress" => Wavesexchange::request(self, "debug/portfolios/{address}".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "nodeGetDebugstate" => Wavesexchange::request(self, "debug/state".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "nodeGetDebugstatechangesaddressaddress" => Wavesexchange::request(self, "debug/stateChanges/address/{address}".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "nodeGetDebugstatechangesinfoid" => Wavesexchange::request(self, "debug/stateChanges/info/{id}".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "nodeGetDebugstatewavesheight" => Wavesexchange::request(self, "debug/stateWaves/{height}".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "nodeGetLeasingactiveaddress" => Wavesexchange::request(self, "leasing/active/{address}".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "nodeGetNodestate" => Wavesexchange::request(self, "node/state".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "nodeGetNodeversion" => Wavesexchange::request(self, "node/version".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "nodeGetPeersall" => Wavesexchange::request(self, "peers/all".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "nodeGetPeersblacklisted" => Wavesexchange::request(self, "peers/blacklisted".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "nodeGetPeersconnected" => Wavesexchange::request(self, "peers/connected".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "nodeGetPeerssuspended" => Wavesexchange::request(self, "peers/suspended".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "nodeGetTransactionsaddressaddresslimitlimit" => Wavesexchange::request(self, "transactions/address/{address}/limit/{limit}".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "nodeGetTransactionsinfoid" => Wavesexchange::request(self, "transactions/info/{id}".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "nodeGetTransactionsstatus" => Wavesexchange::request(self, "transactions/status".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "nodeGetTransactionsunconfirmed" => Wavesexchange::request(self, "transactions/unconfirmed".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "nodeGetTransactionsunconfirmedinfoid" => Wavesexchange::request(self, "transactions/unconfirmed/info/{id}".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "nodeGetTransactionsunconfirmedsize" => Wavesexchange::request(self, "transactions/unconfirmed/size".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "nodeGetUtilsseed" => Wavesexchange::request(self, "utils/seed".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "nodeGetUtilsseedlength" => Wavesexchange::request(self, "utils/seed/{length}".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "nodeGetUtilstime" => Wavesexchange::request(self, "utils/time".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "nodeGetWalletseed" => Wavesexchange::request(self, "wallet/seed".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "nodePostAddresses" => Wavesexchange::request(self, "addresses".into(), "node".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "nodePostAddressesdataaddress" => Wavesexchange::request(self, "addresses/data/{address}".into(), "node".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "nodePostAddressessignaddress" => Wavesexchange::request(self, "addresses/sign/{address}".into(), "node".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "nodePostAddressessigntextaddress" => Wavesexchange::request(self, "addresses/signText/{address}".into(), "node".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "nodePostAddressesverifyaddress" => Wavesexchange::request(self, "addresses/verify/{address}".into(), "node".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "nodePostAddressesverifytextaddress" => Wavesexchange::request(self, "addresses/verifyText/{address}".into(), "node".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "nodePostDebugblacklist" => Wavesexchange::request(self, "debug/blacklist".into(), "node".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "nodePostDebugprint" => Wavesexchange::request(self, "debug/print".into(), "node".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "nodePostDebugrollback" => Wavesexchange::request(self, "debug/rollback".into(), "node".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "nodePostDebugvalidate" => Wavesexchange::request(self, "debug/validate".into(), "node".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "nodePostNodestop" => Wavesexchange::request(self, "node/stop".into(), "node".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "nodePostPeersclearblacklist" => Wavesexchange::request(self, "peers/clearblacklist".into(), "node".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "nodePostPeersconnect" => Wavesexchange::request(self, "peers/connect".into(), "node".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "nodePostTransactionsbroadcast" => Wavesexchange::request(self, "transactions/broadcast".into(), "node".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "nodePostTransactionscalculatefee" => Wavesexchange::request(self, "transactions/calculateFee".into(), "node".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "nodePostTranasctionssign" => Wavesexchange::request(self, "tranasctions/sign".into(), "node".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "nodePostTransactionssignsigneraddress" => Wavesexchange::request(self, "transactions/sign/{signerAddress}".into(), "node".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "nodePostTranasctionsstatus" => Wavesexchange::request(self, "tranasctions/status".into(), "node".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "nodePostUtilshashfast" => Wavesexchange::request(self, "utils/hash/fast".into(), "node".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "nodePostUtilshashsecure" => Wavesexchange::request(self, "utils/hash/secure".into(), "node".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "nodePostUtilsscriptcompilecode" => Wavesexchange::request(self, "utils/script/compileCode".into(), "node".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "nodePostUtilsscriptcompilewithimports" => Wavesexchange::request(self, "utils/script/compileWithImports".into(), "node".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "nodePostUtilsscriptdecompile" => Wavesexchange::request(self, "utils/script/decompile".into(), "node".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "nodePostUtilsscriptestimate" => Wavesexchange::request(self, "utils/script/estimate".into(), "node".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "nodePostUtilssignprivatekey" => Wavesexchange::request(self, "utils/sign/{privateKey}".into(), "node".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "nodePostUtilstransactionsserialize" => Wavesexchange::request(self, "utils/transactionsSerialize".into(), "node".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "nodeDeleteAddressesaddress" => Wavesexchange::request(self, "addresses/{address}".into(), "node".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "nodeDeleteDebugrollbacktosignature" => Wavesexchange::request(self, "debug/rollback-to/{signature}".into(), "node".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetAssets" => Wavesexchange::request(self, "assets".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetPairs" => Wavesexchange::request(self, "pairs".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetCandlesbaseidquoteid" => Wavesexchange::request(self, "candles/{baseId}/{quoteId}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetTransactionsexchange" => Wavesexchange::request(self, "transactions/exchange".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetDepositaddressescurrency" => Wavesexchange::request(self, "deposit/addresses/{currency}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetDepositaddressescurrencyplatform" => Wavesexchange::request(self, "deposit/addresses/{currency}/{platform}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetPlatforms" => Wavesexchange::request(self, "platforms".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetDepositcurrencies" => Wavesexchange::request(self, "deposit/currencies".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetWithdrawcurrencies" => Wavesexchange::request(self, "withdraw/currencies".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetWithdrawaddressescurrencyaddress" => Wavesexchange::request(self, "withdraw/addresses/{currency}/{address}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostOauth2token" => Wavesexchange::request(self, "oauth2/token".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "forwardGetMatcherordersaddress" => Wavesexchange::request(self, "matcher/orders/{address}".into(), "forward".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "forwardGetMatcherordersaddressorderid" => Wavesexchange::request(self, "matcher/orders/{address}/{orderId}".into(), "forward".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "forwardPostMatcherorderswavesaddresscancel" => Wavesexchange::request(self, "matcher/orders/{wavesAddress}/cancel".into(), "forward".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "marketGetTickers" => Wavesexchange::request(self, "tickers".into(), "market".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "matcherGetMatcher" => self.request("matcher".into(), "matcher".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "matcherGetMatchersettings" => self.request("matcher/settings".into(), "matcher".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "matcherGetMatchersettingsrates" => self.request("matcher/settings/rates".into(), "matcher".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "matcherGetMatcherbalancereservedpublickey" => self.request("matcher/balance/reserved/{publicKey}".into(), "matcher".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "matcherGetMatcherdebugallsnashotoffsets" => self.request("matcher/debug/allSnashotOffsets".into(), "matcher".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "matcherGetMatcherdebugcurrentoffset" => self.request("matcher/debug/currentOffset".into(), "matcher".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "matcherGetMatcherdebuglastoffset" => self.request("matcher/debug/lastOffset".into(), "matcher".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "matcherGetMatcherdebugoldestsnapshotoffset" => self.request("matcher/debug/oldestSnapshotOffset".into(), "matcher".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "matcherGetMatcherdebugconfig" => self.request("matcher/debug/config".into(), "matcher".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "matcherGetMatcherdebugaddressaddress" => self.request("matcher/debug/address/{address}".into(), "matcher".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "matcherGetMatcherdebugstatus" => self.request("matcher/debug/status".into(), "matcher".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "matcherGetMatcherdebugaddressaddresscheck" => self.request("matcher/debug/address/{address}/check".into(), "matcher".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "matcherGetMatcherorderbook" => self.request("matcher/orderbook".into(), "matcher".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "matcherGetMatcherorderbookbaseidquoteid" => self.request("matcher/orderbook/{baseId}/{quoteId}".into(), "matcher".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "matcherGetMatcherorderbookbaseidquoteidpublickeypublickey" => self.request("matcher/orderbook/{baseId}/{quoteId}/publicKey/{publicKey}".into(), "matcher".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "matcherGetMatcherorderbookbaseidquoteidorderid" => self.request("matcher/orderbook/{baseId}/{quoteId}/{orderId}".into(), "matcher".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "matcherGetMatcherorderbookbaseidquoteidinfo" => self.request("matcher/orderbook/{baseId}/{quoteId}/info".into(), "matcher".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "matcherGetMatcherorderbookbaseidquoteidstatus" => self.request("matcher/orderbook/{baseId}/{quoteId}/status".into(), "matcher".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "matcherGetMatcherorderbookbaseidquoteidtradablebalanceaddress" => self.request("matcher/orderbook/{baseId}/{quoteId}/tradableBalance/{address}".into(), "matcher".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "matcherGetMatcherorderbookpublickey" => self.request("matcher/orderbook/{publicKey}".into(), "matcher".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "matcherGetMatcherorderbookpublickeyorderid" => self.request("matcher/orderbook/{publicKey}/{orderId}".into(), "matcher".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "matcherGetMatcherordersaddress" => self.request("matcher/orders/{address}".into(), "matcher".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "matcherGetMatcherordersaddressorderid" => self.request("matcher/orders/{address}/{orderId}".into(), "matcher".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "matcherGetMatchertransactionsorderid" => self.request("matcher/transactions/{orderId}".into(), "matcher".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "matcherGetApiv1orderbookbaseidquoteid" => self.request("api/v1/orderbook/{baseId}/{quoteId}".into(), "matcher".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "matcherPostMatcherorderbook" => self.request("matcher/orderbook".into(), "matcher".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "matcherPostMatcherorderbookmarket" => self.request("matcher/orderbook/market".into(), "matcher".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "matcherPostMatcherorderbookcancel" => self.request("matcher/orderbook/cancel".into(), "matcher".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "matcherPostMatcherorderbookbaseidquoteidcancel" => self.request("matcher/orderbook/{baseId}/{quoteId}/cancel".into(), "matcher".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "matcherPostMatcherorderbookbaseidquoteidcalculatefee" => self.request("matcher/orderbook/{baseId}/{quoteId}/calculateFee".into(), "matcher".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "matcherPostMatcherorderbookbaseidquoteiddelete" => self.request("matcher/orderbook/{baseId}/{quoteId}/delete".into(), "matcher".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "matcherPostMatcherorderbookbaseidquoteidcancelall" => self.request("matcher/orderbook/{baseId}/{quoteId}/cancelAll".into(), "matcher".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "matcherPostMatcherdebugsavesnapshots" => self.request("matcher/debug/saveSnapshots".into(), "matcher".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "matcherPostMatcherordersaddresscancel" => self.request("matcher/orders/{address}/cancel".into(), "matcher".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "matcherPostMatcherorderscancelorderid" => self.request("matcher/orders/cancel/{orderId}".into(), "matcher".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "matcherPostMatcherordersserialize" => self.request("matcher/orders/serialize".into(), "matcher".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "matcherDeleteMatcherorderbookbaseidquoteid" => self.request("matcher/orderbook/{baseId}/{quoteId}".into(), "matcher".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "matcherDeleteMatchersettingsratesassetid" => self.request("matcher/settings/rates/{assetId}".into(), "matcher".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "matcherPutMatchersettingsratesassetid" => self.request("matcher/settings/rates/{assetId}".into(), "matcher".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "nodeGetAddresses" => self.request("addresses".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "nodeGetAddressesbalanceaddress" => self.request("addresses/balance/{address}".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "nodeGetAddressesbalanceaddressconfirmations" => self.request("addresses/balance/{address}/{confirmations}".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "nodeGetAddressesbalancedetailsaddress" => self.request("addresses/balance/details/{address}".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "nodeGetAddressesdataaddress" => self.request("addresses/data/{address}".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "nodeGetAddressesdataaddresskey" => self.request("addresses/data/{address}/{key}".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "nodeGetAddresseseffectivebalanceaddress" => self.request("addresses/effectiveBalance/{address}".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "nodeGetAddresseseffectivebalanceaddressconfirmations" => self.request("addresses/effectiveBalance/{address}/{confirmations}".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "nodeGetAddressespublickeypublickey" => self.request("addresses/publicKey/{publicKey}".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "nodeGetAddressesscriptinfoaddress" => self.request("addresses/scriptInfo/{address}".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "nodeGetAddressesscriptinfoaddressmeta" => self.request("addresses/scriptInfo/{address}/meta".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "nodeGetAddressesseedaddress" => self.request("addresses/seed/{address}".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "nodeGetAddressesseqfromto" => self.request("addresses/seq/{from}/{to}".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "nodeGetAddressesvalidateaddress" => self.request("addresses/validate/{address}".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "nodeGetAliasbyaddressaddress" => self.request("alias/by-address/{address}".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "nodeGetAliasbyaliasalias" => self.request("alias/by-alias/{alias}".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "nodeGetAssetsassetiddistributionheightlimit" => self.request("assets/{assetId}/distribution/{height}/{limit}".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "nodeGetAssetsbalanceaddress" => self.request("assets/balance/{address}".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "nodeGetAssetsbalanceaddressassetid" => self.request("assets/balance/{address}/{assetId}".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "nodeGetAssetsdetailsassetid" => self.request("assets/details/{assetId}".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "nodeGetAssetsnftaddresslimitlimit" => self.request("assets/nft/{address}/limit/{limit}".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "nodeGetBlockchainrewards" => self.request("blockchain/rewards".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "nodeGetBlockchainrewardsheight" => self.request("blockchain/rewards/height".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "nodeGetBlocksaddressaddressfromto" => self.request("blocks/address/{address}/{from}/{to}/".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "nodeGetBlocksatheight" => self.request("blocks/at/{height}".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "nodeGetBlocksdelaysignatureblocknum" => self.request("blocks/delay/{signature}/{blockNum}".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "nodeGetBlocksfirst" => self.request("blocks/first".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "nodeGetBlocksheaderslast" => self.request("blocks/headers/last".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "nodeGetBlocksheadersseqfromto" => self.request("blocks/headers/seq/{from}/{to}".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "nodeGetBlocksheight" => self.request("blocks/height".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "nodeGetBlocksheightsignature" => self.request("blocks/height/{signature}".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "nodeGetBlockslast" => self.request("blocks/last".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "nodeGetBlocksseqfromto" => self.request("blocks/seq/{from}/{to}".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "nodeGetBlockssignaturesignature" => self.request("blocks/signature/{signature}".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "nodeGetConsensusalgo" => self.request("consensus/algo".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "nodeGetConsensusbasetarget" => self.request("consensus/basetarget".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "nodeGetConsensusbasetargetblockid" => self.request("consensus/basetarget/{blockId}".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "nodeGetConsensusgeneratingbalanceaddress" => self.request("consensus/{generatingbalance}/address".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "nodeGetConsensusgenerationsignature" => self.request("consensus/generationsignature".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "nodeGetConsensusgenerationsignatureblockid" => self.request("consensus/generationsignature/{blockId}".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "nodeGetDebugbalanceshistoryaddress" => self.request("debug/balances/history/{address}".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "nodeGetDebugblockshowmany" => self.request("debug/blocks/{howMany}".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "nodeGetDebugconfiginfo" => self.request("debug/configInfo".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "nodeGetDebughistoryinfo" => self.request("debug/historyInfo".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "nodeGetDebuginfo" => self.request("debug/info".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "nodeGetDebugminerinfo" => self.request("debug/minerInfo".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "nodeGetDebugportfoliosaddress" => self.request("debug/portfolios/{address}".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "nodeGetDebugstate" => self.request("debug/state".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "nodeGetDebugstatechangesaddressaddress" => self.request("debug/stateChanges/address/{address}".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "nodeGetDebugstatechangesinfoid" => self.request("debug/stateChanges/info/{id}".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "nodeGetDebugstatewavesheight" => self.request("debug/stateWaves/{height}".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "nodeGetLeasingactiveaddress" => self.request("leasing/active/{address}".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "nodeGetNodestate" => self.request("node/state".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "nodeGetNodeversion" => self.request("node/version".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "nodeGetPeersall" => self.request("peers/all".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "nodeGetPeersblacklisted" => self.request("peers/blacklisted".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "nodeGetPeersconnected" => self.request("peers/connected".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "nodeGetPeerssuspended" => self.request("peers/suspended".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "nodeGetTransactionsaddressaddresslimitlimit" => self.request("transactions/address/{address}/limit/{limit}".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "nodeGetTransactionsinfoid" => self.request("transactions/info/{id}".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "nodeGetTransactionsstatus" => self.request("transactions/status".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "nodeGetTransactionsunconfirmed" => self.request("transactions/unconfirmed".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "nodeGetTransactionsunconfirmedinfoid" => self.request("transactions/unconfirmed/info/{id}".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "nodeGetTransactionsunconfirmedsize" => self.request("transactions/unconfirmed/size".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "nodeGetUtilsseed" => self.request("utils/seed".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "nodeGetUtilsseedlength" => self.request("utils/seed/{length}".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "nodeGetUtilstime" => self.request("utils/time".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "nodeGetWalletseed" => self.request("wallet/seed".into(), "node".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "nodePostAddresses" => self.request("addresses".into(), "node".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "nodePostAddressesdataaddress" => self.request("addresses/data/{address}".into(), "node".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "nodePostAddressessignaddress" => self.request("addresses/sign/{address}".into(), "node".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "nodePostAddressessigntextaddress" => self.request("addresses/signText/{address}".into(), "node".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "nodePostAddressesverifyaddress" => self.request("addresses/verify/{address}".into(), "node".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "nodePostAddressesverifytextaddress" => self.request("addresses/verifyText/{address}".into(), "node".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "nodePostDebugblacklist" => self.request("debug/blacklist".into(), "node".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "nodePostDebugprint" => self.request("debug/print".into(), "node".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "nodePostDebugrollback" => self.request("debug/rollback".into(), "node".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "nodePostDebugvalidate" => self.request("debug/validate".into(), "node".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "nodePostNodestop" => self.request("node/stop".into(), "node".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "nodePostPeersclearblacklist" => self.request("peers/clearblacklist".into(), "node".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "nodePostPeersconnect" => self.request("peers/connect".into(), "node".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "nodePostTransactionsbroadcast" => self.request("transactions/broadcast".into(), "node".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "nodePostTransactionscalculatefee" => self.request("transactions/calculateFee".into(), "node".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "nodePostTranasctionssign" => self.request("tranasctions/sign".into(), "node".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "nodePostTransactionssignsigneraddress" => self.request("transactions/sign/{signerAddress}".into(), "node".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "nodePostTranasctionsstatus" => self.request("tranasctions/status".into(), "node".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "nodePostUtilshashfast" => self.request("utils/hash/fast".into(), "node".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "nodePostUtilshashsecure" => self.request("utils/hash/secure".into(), "node".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "nodePostUtilsscriptcompilecode" => self.request("utils/script/compileCode".into(), "node".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "nodePostUtilsscriptcompilewithimports" => self.request("utils/script/compileWithImports".into(), "node".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "nodePostUtilsscriptdecompile" => self.request("utils/script/decompile".into(), "node".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "nodePostUtilsscriptestimate" => self.request("utils/script/estimate".into(), "node".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "nodePostUtilssignprivatekey" => self.request("utils/sign/{privateKey}".into(), "node".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "nodePostUtilstransactionsserialize" => self.request("utils/transactionsSerialize".into(), "node".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "nodeDeleteAddressesaddress" => self.request("addresses/{address}".into(), "node".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "nodeDeleteDebugrollbacktosignature" => self.request("debug/rollback-to/{signature}".into(), "node".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetAssets" => self.request("assets".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetPairs" => self.request("pairs".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetCandlesbaseidquoteid" => self.request("candles/{baseId}/{quoteId}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetTransactionsexchange" => self.request("transactions/exchange".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetDepositaddressescurrency" => self.request("deposit/addresses/{currency}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetDepositaddressescurrencyplatform" => self.request("deposit/addresses/{currency}/{platform}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetPlatforms" => self.request("platforms".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetDepositcurrencies" => self.request("deposit/currencies".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetWithdrawcurrencies" => self.request("withdraw/currencies".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetWithdrawaddressescurrencyaddress" => self.request("withdraw/addresses/{currency}/{address}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostOauth2token" => self.request("oauth2/token".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "forwardGetMatcherordersaddress" => self.request("matcher/orders/{address}".into(), "forward".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "forwardGetMatcherordersaddressorderid" => self.request("matcher/orders/{address}/{orderId}".into(), "forward".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "forwardPostMatcherorderswavesaddresscancel" => self.request("matcher/orders/{wavesAddress}/cancel".into(), "forward".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "marketGetTickers" => self.request("tickers".into(), "market".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     _ => unimplemented!(),
                 }
             },
@@ -2592,7 +2616,7 @@ impl ValueTrait for WavesexchangeImpl {
     fn join(&self, glue: Value) -> Value { self.0.join(glue) }
     fn to_string(&self) -> Value { self.0.to_string() }
     fn typeof_(&self) -> Value { self.0.typeof_() }
-    fn slice(&self, start: Value) -> Value { self.0.slice(start) }
+    fn slice(&self, start: Value, end: Value) -> Value { self.0.slice(start, end) }
 }
 
 impl WavesexchangeImpl {

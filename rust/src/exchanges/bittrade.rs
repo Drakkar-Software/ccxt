@@ -13,14 +13,38 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, BoolExt, JSON, Array, Object, Math, Promise, parse_int, shift_2, extend_2, normalize};
 // Crypto hash identifiers
-fn sha256() -> Value { Value::from("sha256") }
-fn sha384() -> Value { Value::from("sha384") }
-fn sha512() -> Value { Value::from("sha512") }
-fn md5() -> Value { Value::from("md5") }
-fn ed25519() -> Value { Value::from("ed25519") }
+fn sha256() -> Value { Value::from("sha256()") }
+fn sha384() -> Value { Value::from("sha384()") }
+fn sha512() -> Value { Value::from("sha512()") }
+fn md5() -> Value { Value::from("md5()") }
+fn ed25519() -> Value { Value::from("ed25519()") }
 fn rsa(msg: Value, secret: Value, _hash: Value) -> Value { msg }
 fn eddsa(msg: Value, secret: Value, _curve: Value) -> Value { msg }
-fn secp256k1() -> Value { Value::from("secp256k1") }
+fn secp256k1() -> Value { Value::from("secp256k1()") }
+fn keccak() -> Value { Value::from("keccak()") }
+fn ecdsa(msg: Value, secret: Value, algo: Value, hash_fn: Value) -> Value { msg }
+fn totp(secret: Value) -> Value { Value::Undefined }
+fn jwt(data: Value, secret: Value, hash: Value, is_rsa: Value) -> Value { Value::Undefined }
+fn parse_float(value: Value) -> Value { value }
+fn decimals(value: Value) -> Value { Value::from(0) }
+fn shift_1(value: Value) -> Value { value }
+fn shift_3(value: Value) -> (Value, Value, Value) { (value.clone(), Value::Undefined, Value::Undefined) }
+fn shift_4(value: Value) -> (Value, Value, Value, Value) { (value.clone(), Value::Undefined, Value::Undefined, Value::Undefined) }
+// Error type constructors
+fn BadRequest(msg: Value) -> Value { msg }
+fn InvalidOrder(msg: Value) -> Value { msg }
+fn ExchangeError(msg: Value) -> Value { msg }
+fn InsufficientFunds(msg: Value) -> Value { msg }
+fn OrderNotFound(msg: Value) -> Value { msg }
+fn AuthenticationError(msg: Value) -> Value { msg }
+fn PermissionDenied(msg: Value) -> Value { msg }
+fn ExchangeNotAvailable(msg: Value) -> Value { msg }
+fn ArgumentsRequired(msg: Value) -> Value { msg }
+fn RateLimitExceeded(msg: Value) -> Value { msg }
+fn OrderNotFillable(msg: Value) -> Value { msg }
+fn OrderImmediatelyFillable(msg: Value) -> Value { msg }
+fn NotSupported(msg: Value) -> Value { msg }
+fn DuplicateOrderId(msg: Value) -> Value { msg }
 
 use crate::exchange::{PRECISE_BASE, TRUNCATE, ROUND, ROUND_UP, ROUND_DOWN};
 use crate::exchange::{DECIMAL_PLACES, SIGNIFICANT_DIGITS, TICK_SIZE, NO_PADDING, PAD_WITH_ZERO};
@@ -405,7 +429,7 @@ pub trait Bittrade : Exchange {
     async fn fetch_time(&mut self, mut params: Value) -> Value {
         let candidates = vec![("public", "GET", "time"), ("public", "GET", "server/time"), ("public", "GET", "timestamp")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Bittrade>::request(self,path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -594,14 +618,14 @@ pub trait Bittrade : Exchange {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = <Self as Bittrade>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() { return rv; }
                 }
             }
         }
         let candidates = vec![("public", "GET", "depth"), ("public", "GET", "orderbook"), ("public", "GET", "order_book")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Bittrade>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -625,14 +649,14 @@ pub trait Bittrade : Exchange {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = <Self as Bittrade>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() { return rv; }
                 }
             }
         }
         let candidates = vec![("public", "GET", "ticker/24hr"), ("public", "GET", "ticker"), ("public", "GET", "ticker/price")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Bittrade>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -654,14 +678,14 @@ pub trait Bittrade : Exchange {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = <Self as Bittrade>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() { return rv; }
                 }
             }
         }
         let candidates = vec![("public", "GET", "ticker/24hr"), ("public", "GET", "tickers"), ("public", "GET", "ticker")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Bittrade>::request(self,path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -790,7 +814,7 @@ pub trait Bittrade : Exchange {
         if limit.is_nonnullish() { request.set("limit".into(), limit.clone()); }
         let candidates = vec![("public", "GET", "trades"), ("public", "GET", "recent_trades"), ("public", "GET", "aggTrades")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Bittrade>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -834,14 +858,14 @@ pub trait Bittrade : Exchange {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = <Self as Bittrade>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() { return rv; }
                 }
             }
         }
         let candidates = vec![("public", "GET", "klines"), ("public", "GET", "candles"), ("public", "GET", "ohlcv")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Bittrade>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -1694,116 +1718,116 @@ pub trait Bittrade : Exchange {
         match method {
             Value::Json(serde_json::Value::String(ref m)) => {
                 match m.as_ref() {
-                    "v2publicGetReferencecurrencies" => Bittrade::request(self, "reference/currencies".into(), "v2Public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2publicGetMarketstatus" => Bittrade::request(self, "market-status".into(), "v2Public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2privateGetAccountledger" => Bittrade::request(self, "account/ledger".into(), "v2Private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2privateGetAccountwithdrawquota" => Bittrade::request(self, "account/withdraw/quota".into(), "v2Private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2privateGetAccountwithdrawaddress" => Bittrade::request(self, "account/withdraw/address".into(), "v2Private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2privateGetAccountdepositaddress" => Bittrade::request(self, "account/deposit/address".into(), "v2Private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2privateGetAccountrepayment" => Bittrade::request(self, "account/repayment".into(), "v2Private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2privateGetReferencetransactfeerate" => Bittrade::request(self, "reference/transact-fee-rate".into(), "v2Private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2privateGetAccountassetvaluation" => Bittrade::request(self, "account/asset-valuation".into(), "v2Private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2privateGetPointaccount" => Bittrade::request(self, "point/account".into(), "v2Private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2privateGetSubuseruserlist" => Bittrade::request(self, "sub-user/user-list".into(), "v2Private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2privateGetSubuseruserstate" => Bittrade::request(self, "sub-user/user-state".into(), "v2Private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2privateGetSubuseraccountlist" => Bittrade::request(self, "sub-user/account-list".into(), "v2Private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2privateGetSubuserdepositaddress" => Bittrade::request(self, "sub-user/deposit-address".into(), "v2Private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2privateGetSubuserquerydeposit" => Bittrade::request(self, "sub-user/query-deposit".into(), "v2Private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2privateGetUserapikey" => Bittrade::request(self, "user/api-key".into(), "v2Private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2privateGetUseruid" => Bittrade::request(self, "user/uid".into(), "v2Private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2privateGetAlgoordersopening" => Bittrade::request(self, "algo-orders/opening".into(), "v2Private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2privateGetAlgoordershistory" => Bittrade::request(self, "algo-orders/history".into(), "v2Private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2privateGetAlgoordersspecific" => Bittrade::request(self, "algo-orders/specific".into(), "v2Private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2privateGetC2coffers" => Bittrade::request(self, "c2c/offers".into(), "v2Private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2privateGetC2coffer" => Bittrade::request(self, "c2c/offer".into(), "v2Private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2privateGetC2ctransactions" => Bittrade::request(self, "c2c/transactions".into(), "v2Private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2privateGetC2crepayment" => Bittrade::request(self, "c2c/repayment".into(), "v2Private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2privateGetC2caccount" => Bittrade::request(self, "c2c/account".into(), "v2Private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2privateGetEtpreference" => Bittrade::request(self, "etp/reference".into(), "v2Private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2privateGetEtptransactions" => Bittrade::request(self, "etp/transactions".into(), "v2Private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2privateGetEtptransaction" => Bittrade::request(self, "etp/transaction".into(), "v2Private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2privateGetEtprebalance" => Bittrade::request(self, "etp/rebalance".into(), "v2Private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2privateGetEtplimit" => Bittrade::request(self, "etp/limit".into(), "v2Private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2privatePostAccounttransfer" => Bittrade::request(self, "account/transfer".into(), "v2Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2privatePostAccountrepayment" => Bittrade::request(self, "account/repayment".into(), "v2Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2privatePostPointtransfer" => Bittrade::request(self, "point/transfer".into(), "v2Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2privatePostSubusermanagement" => Bittrade::request(self, "sub-user/management".into(), "v2Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2privatePostSubusercreation" => Bittrade::request(self, "sub-user/creation".into(), "v2Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2privatePostSubusertradablemarket" => Bittrade::request(self, "sub-user/tradable-market".into(), "v2Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2privatePostSubusertransferability" => Bittrade::request(self, "sub-user/transferability".into(), "v2Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2privatePostSubuserapikeygeneration" => Bittrade::request(self, "sub-user/api-key-generation".into(), "v2Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2privatePostSubuserapikeymodification" => Bittrade::request(self, "sub-user/api-key-modification".into(), "v2Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2privatePostSubuserapikeydeletion" => Bittrade::request(self, "sub-user/api-key-deletion".into(), "v2Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2privatePostSubuserdeductmode" => Bittrade::request(self, "sub-user/deduct-mode".into(), "v2Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2privatePostAlgoorders" => Bittrade::request(self, "algo-orders".into(), "v2Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2privatePostAlgoorderscancelallafter" => Bittrade::request(self, "algo-orders/cancel-all-after".into(), "v2Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2privatePostAlgoorderscancellation" => Bittrade::request(self, "algo-orders/cancellation".into(), "v2Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2privatePostC2coffer" => Bittrade::request(self, "c2c/offer".into(), "v2Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2privatePostC2ccancellation" => Bittrade::request(self, "c2c/cancellation".into(), "v2Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2privatePostC2ccancelall" => Bittrade::request(self, "c2c/cancel-all".into(), "v2Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2privatePostC2crepayment" => Bittrade::request(self, "c2c/repayment".into(), "v2Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2privatePostC2ctransfer" => Bittrade::request(self, "c2c/transfer".into(), "v2Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2privatePostEtpcreation" => Bittrade::request(self, "etp/creation".into(), "v2Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2privatePostEtpredemption" => Bittrade::request(self, "etp/redemption".into(), "v2Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2privatePostEtptransactidcancel" => Bittrade::request(self, "etp/{transactId}/cancel".into(), "v2Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2privatePostEtpbatchcancel" => Bittrade::request(self, "etp/batch-cancel".into(), "v2Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "marketGetHistorykline" => Bittrade::request(self, "history/kline".into(), "market".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "marketGetDetailmerged" => Bittrade::request(self, "detail/merged".into(), "market".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "marketGetDepth" => Bittrade::request(self, "depth".into(), "market".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "marketGetTrade" => Bittrade::request(self, "trade".into(), "market".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "marketGetHistorytrade" => Bittrade::request(self, "history/trade".into(), "market".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "marketGetDetail" => Bittrade::request(self, "detail".into(), "market".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "marketGetTickers" => Bittrade::request(self, "tickers".into(), "market".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "marketGetEtp" => Bittrade::request(self, "etp".into(), "market".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetCommonsymbols" => Bittrade::request(self, "common/symbols".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetCommoncurrencys" => Bittrade::request(self, "common/currencys".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetCommontimestamp" => Bittrade::request(self, "common/timestamp".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetCommonexchange" => Bittrade::request(self, "common/exchange".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetSettingscurrencys" => Bittrade::request(self, "settings/currencys".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetAccountaccounts" => Bittrade::request(self, "account/accounts".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetAccountaccountsidbalance" => Bittrade::request(self, "account/accounts/{id}/balance".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetAccountaccountssubuid" => Bittrade::request(self, "account/accounts/{sub-uid}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetAccounthistory" => Bittrade::request(self, "account/history".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetCrossmarginloaninfo" => Bittrade::request(self, "cross-margin/loan-info".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetMarginloaninfo" => Bittrade::request(self, "margin/loan-info".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetFeefeerateget" => Bittrade::request(self, "fee/fee-rate/get".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetOrderopenorders" => Bittrade::request(self, "order/openOrders".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetOrderorders" => Bittrade::request(self, "order/orders".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetOrderordersid" => Bittrade::request(self, "order/orders/{id}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetOrderordersidmatchresults" => Bittrade::request(self, "order/orders/{id}/matchresults".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetOrderordersgetclientorder" => Bittrade::request(self, "order/orders/getClientOrder".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetOrderhistory" => Bittrade::request(self, "order/history".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetOrdermatchresults" => Bittrade::request(self, "order/matchresults".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetQuerydepositwithdraw" => Bittrade::request(self, "query/deposit-withdraw".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetMarginloanorders" => Bittrade::request(self, "margin/loan-orders".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetMarginaccountsbalance" => Bittrade::request(self, "margin/accounts/balance".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetCrossmarginloanorders" => Bittrade::request(self, "cross-margin/loan-orders".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetCrossmarginaccountsbalance" => Bittrade::request(self, "cross-margin/accounts/balance".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetPointsactions" => Bittrade::request(self, "points/actions".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetPointsorders" => Bittrade::request(self, "points/orders".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetSubuseraggregatebalance" => Bittrade::request(self, "subuser/aggregate-balance".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetStablecoinexchangerate" => Bittrade::request(self, "stable-coin/exchange_rate".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privateGetStablecoinquote" => Bittrade::request(self, "stable-coin/quote".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostAccounttransfer" => Bittrade::request(self, "account/transfer".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostFuturestransfer" => Bittrade::request(self, "futures/transfer".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostOrderbatchorders" => Bittrade::request(self, "order/batch-orders".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostOrderordersplace" => Bittrade::request(self, "order/orders/place".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostOrderorderssubmitcancelclientorder" => Bittrade::request(self, "order/orders/submitCancelClientOrder".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostOrderordersbatchcancelopenorders" => Bittrade::request(self, "order/orders/batchCancelOpenOrders".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostOrderordersidsubmitcancel" => Bittrade::request(self, "order/orders/{id}/submitcancel".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostOrderordersbatchcancel" => Bittrade::request(self, "order/orders/batchcancel".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostDwwithdrawapicreate" => Bittrade::request(self, "dw/withdraw/api/create".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostDwwithdrawvirtualidcancel" => Bittrade::request(self, "dw/withdraw-virtual/{id}/cancel".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostDwtransferinmargin" => Bittrade::request(self, "dw/transfer-in/margin".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostDwtransferoutmargin" => Bittrade::request(self, "dw/transfer-out/margin".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostMarginorders" => Bittrade::request(self, "margin/orders".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostMarginordersidrepay" => Bittrade::request(self, "margin/orders/{id}/repay".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostCrossmargintransferin" => Bittrade::request(self, "cross-margin/transfer-in".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostCrossmargintransferout" => Bittrade::request(self, "cross-margin/transfer-out".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostCrossmarginorders" => Bittrade::request(self, "cross-margin/orders".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostCrossmarginordersidrepay" => Bittrade::request(self, "cross-margin/orders/{id}/repay".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostStablecoinexchange" => Bittrade::request(self, "stable-coin/exchange".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostSubusertransfer" => Bittrade::request(self, "subuser/transfer".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2publicGetReferencecurrencies" => self.request("reference/currencies".into(), "v2Public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2publicGetMarketstatus" => self.request("market-status".into(), "v2Public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2privateGetAccountledger" => self.request("account/ledger".into(), "v2Private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2privateGetAccountwithdrawquota" => self.request("account/withdraw/quota".into(), "v2Private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2privateGetAccountwithdrawaddress" => self.request("account/withdraw/address".into(), "v2Private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2privateGetAccountdepositaddress" => self.request("account/deposit/address".into(), "v2Private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2privateGetAccountrepayment" => self.request("account/repayment".into(), "v2Private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2privateGetReferencetransactfeerate" => self.request("reference/transact-fee-rate".into(), "v2Private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2privateGetAccountassetvaluation" => self.request("account/asset-valuation".into(), "v2Private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2privateGetPointaccount" => self.request("point/account".into(), "v2Private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2privateGetSubuseruserlist" => self.request("sub-user/user-list".into(), "v2Private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2privateGetSubuseruserstate" => self.request("sub-user/user-state".into(), "v2Private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2privateGetSubuseraccountlist" => self.request("sub-user/account-list".into(), "v2Private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2privateGetSubuserdepositaddress" => self.request("sub-user/deposit-address".into(), "v2Private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2privateGetSubuserquerydeposit" => self.request("sub-user/query-deposit".into(), "v2Private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2privateGetUserapikey" => self.request("user/api-key".into(), "v2Private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2privateGetUseruid" => self.request("user/uid".into(), "v2Private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2privateGetAlgoordersopening" => self.request("algo-orders/opening".into(), "v2Private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2privateGetAlgoordershistory" => self.request("algo-orders/history".into(), "v2Private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2privateGetAlgoordersspecific" => self.request("algo-orders/specific".into(), "v2Private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2privateGetC2coffers" => self.request("c2c/offers".into(), "v2Private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2privateGetC2coffer" => self.request("c2c/offer".into(), "v2Private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2privateGetC2ctransactions" => self.request("c2c/transactions".into(), "v2Private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2privateGetC2crepayment" => self.request("c2c/repayment".into(), "v2Private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2privateGetC2caccount" => self.request("c2c/account".into(), "v2Private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2privateGetEtpreference" => self.request("etp/reference".into(), "v2Private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2privateGetEtptransactions" => self.request("etp/transactions".into(), "v2Private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2privateGetEtptransaction" => self.request("etp/transaction".into(), "v2Private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2privateGetEtprebalance" => self.request("etp/rebalance".into(), "v2Private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2privateGetEtplimit" => self.request("etp/limit".into(), "v2Private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2privatePostAccounttransfer" => self.request("account/transfer".into(), "v2Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2privatePostAccountrepayment" => self.request("account/repayment".into(), "v2Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2privatePostPointtransfer" => self.request("point/transfer".into(), "v2Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2privatePostSubusermanagement" => self.request("sub-user/management".into(), "v2Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2privatePostSubusercreation" => self.request("sub-user/creation".into(), "v2Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2privatePostSubusertradablemarket" => self.request("sub-user/tradable-market".into(), "v2Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2privatePostSubusertransferability" => self.request("sub-user/transferability".into(), "v2Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2privatePostSubuserapikeygeneration" => self.request("sub-user/api-key-generation".into(), "v2Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2privatePostSubuserapikeymodification" => self.request("sub-user/api-key-modification".into(), "v2Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2privatePostSubuserapikeydeletion" => self.request("sub-user/api-key-deletion".into(), "v2Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2privatePostSubuserdeductmode" => self.request("sub-user/deduct-mode".into(), "v2Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2privatePostAlgoorders" => self.request("algo-orders".into(), "v2Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2privatePostAlgoorderscancelallafter" => self.request("algo-orders/cancel-all-after".into(), "v2Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2privatePostAlgoorderscancellation" => self.request("algo-orders/cancellation".into(), "v2Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2privatePostC2coffer" => self.request("c2c/offer".into(), "v2Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2privatePostC2ccancellation" => self.request("c2c/cancellation".into(), "v2Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2privatePostC2ccancelall" => self.request("c2c/cancel-all".into(), "v2Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2privatePostC2crepayment" => self.request("c2c/repayment".into(), "v2Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2privatePostC2ctransfer" => self.request("c2c/transfer".into(), "v2Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2privatePostEtpcreation" => self.request("etp/creation".into(), "v2Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2privatePostEtpredemption" => self.request("etp/redemption".into(), "v2Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2privatePostEtptransactidcancel" => self.request("etp/{transactId}/cancel".into(), "v2Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2privatePostEtpbatchcancel" => self.request("etp/batch-cancel".into(), "v2Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "marketGetHistorykline" => self.request("history/kline".into(), "market".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "marketGetDetailmerged" => self.request("detail/merged".into(), "market".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "marketGetDepth" => self.request("depth".into(), "market".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "marketGetTrade" => self.request("trade".into(), "market".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "marketGetHistorytrade" => self.request("history/trade".into(), "market".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "marketGetDetail" => self.request("detail".into(), "market".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "marketGetTickers" => self.request("tickers".into(), "market".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "marketGetEtp" => self.request("etp".into(), "market".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetCommonsymbols" => self.request("common/symbols".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetCommoncurrencys" => self.request("common/currencys".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetCommontimestamp" => self.request("common/timestamp".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetCommonexchange" => self.request("common/exchange".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetSettingscurrencys" => self.request("settings/currencys".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetAccountaccounts" => self.request("account/accounts".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetAccountaccountsidbalance" => self.request("account/accounts/{id}/balance".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetAccountaccountssubuid" => self.request("account/accounts/{sub-uid}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetAccounthistory" => self.request("account/history".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetCrossmarginloaninfo" => self.request("cross-margin/loan-info".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetMarginloaninfo" => self.request("margin/loan-info".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetFeefeerateget" => self.request("fee/fee-rate/get".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetOrderopenorders" => self.request("order/openOrders".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetOrderorders" => self.request("order/orders".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetOrderordersid" => self.request("order/orders/{id}".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetOrderordersidmatchresults" => self.request("order/orders/{id}/matchresults".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetOrderordersgetclientorder" => self.request("order/orders/getClientOrder".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetOrderhistory" => self.request("order/history".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetOrdermatchresults" => self.request("order/matchresults".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetQuerydepositwithdraw" => self.request("query/deposit-withdraw".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetMarginloanorders" => self.request("margin/loan-orders".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetMarginaccountsbalance" => self.request("margin/accounts/balance".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetCrossmarginloanorders" => self.request("cross-margin/loan-orders".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetCrossmarginaccountsbalance" => self.request("cross-margin/accounts/balance".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetPointsactions" => self.request("points/actions".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetPointsorders" => self.request("points/orders".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetSubuseraggregatebalance" => self.request("subuser/aggregate-balance".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetStablecoinexchangerate" => self.request("stable-coin/exchange_rate".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privateGetStablecoinquote" => self.request("stable-coin/quote".into(), "private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostAccounttransfer" => self.request("account/transfer".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostFuturestransfer" => self.request("futures/transfer".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostOrderbatchorders" => self.request("order/batch-orders".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostOrderordersplace" => self.request("order/orders/place".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostOrderorderssubmitcancelclientorder" => self.request("order/orders/submitCancelClientOrder".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostOrderordersbatchcancelopenorders" => self.request("order/orders/batchCancelOpenOrders".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostOrderordersidsubmitcancel" => self.request("order/orders/{id}/submitcancel".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostOrderordersbatchcancel" => self.request("order/orders/batchcancel".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostDwwithdrawapicreate" => self.request("dw/withdraw/api/create".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostDwwithdrawvirtualidcancel" => self.request("dw/withdraw-virtual/{id}/cancel".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostDwtransferinmargin" => self.request("dw/transfer-in/margin".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostDwtransferoutmargin" => self.request("dw/transfer-out/margin".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostMarginorders" => self.request("margin/orders".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostMarginordersidrepay" => self.request("margin/orders/{id}/repay".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostCrossmargintransferin" => self.request("cross-margin/transfer-in".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostCrossmargintransferout" => self.request("cross-margin/transfer-out".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostCrossmarginorders" => self.request("cross-margin/orders".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostCrossmarginordersidrepay" => self.request("cross-margin/orders/{id}/repay".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostStablecoinexchange" => self.request("stable-coin/exchange".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostSubusertransfer" => self.request("subuser/transfer".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     _ => unimplemented!(),
                 }
             },
@@ -1847,7 +1871,7 @@ impl ValueTrait for BittradeImpl {
     fn join(&self, glue: Value) -> Value { self.0.join(glue) }
     fn to_string(&self) -> Value { self.0.to_string() }
     fn typeof_(&self) -> Value { self.0.typeof_() }
-    fn slice(&self, start: Value) -> Value { self.0.slice(start) }
+    fn slice(&self, start: Value, end: Value) -> Value { self.0.slice(start, end) }
 }
 
 impl BittradeImpl {

@@ -13,14 +13,38 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, BoolExt, JSON, Array, Object, Math, Promise, parse_int, shift_2, extend_2, normalize};
 // Crypto hash identifiers
-fn sha256() -> Value { Value::from("sha256") }
-fn sha384() -> Value { Value::from("sha384") }
-fn sha512() -> Value { Value::from("sha512") }
-fn md5() -> Value { Value::from("md5") }
-fn ed25519() -> Value { Value::from("ed25519") }
+fn sha256() -> Value { Value::from("sha256()") }
+fn sha384() -> Value { Value::from("sha384()") }
+fn sha512() -> Value { Value::from("sha512()") }
+fn md5() -> Value { Value::from("md5()") }
+fn ed25519() -> Value { Value::from("ed25519()") }
 fn rsa(msg: Value, secret: Value, _hash: Value) -> Value { msg }
 fn eddsa(msg: Value, secret: Value, _curve: Value) -> Value { msg }
-fn secp256k1() -> Value { Value::from("secp256k1") }
+fn secp256k1() -> Value { Value::from("secp256k1()") }
+fn keccak() -> Value { Value::from("keccak()") }
+fn ecdsa(msg: Value, secret: Value, algo: Value, hash_fn: Value) -> Value { msg }
+fn totp(secret: Value) -> Value { Value::Undefined }
+fn jwt(data: Value, secret: Value, hash: Value, is_rsa: Value) -> Value { Value::Undefined }
+fn parse_float(value: Value) -> Value { value }
+fn decimals(value: Value) -> Value { Value::from(0) }
+fn shift_1(value: Value) -> Value { value }
+fn shift_3(value: Value) -> (Value, Value, Value) { (value.clone(), Value::Undefined, Value::Undefined) }
+fn shift_4(value: Value) -> (Value, Value, Value, Value) { (value.clone(), Value::Undefined, Value::Undefined, Value::Undefined) }
+// Error type constructors
+fn BadRequest(msg: Value) -> Value { msg }
+fn InvalidOrder(msg: Value) -> Value { msg }
+fn ExchangeError(msg: Value) -> Value { msg }
+fn InsufficientFunds(msg: Value) -> Value { msg }
+fn OrderNotFound(msg: Value) -> Value { msg }
+fn AuthenticationError(msg: Value) -> Value { msg }
+fn PermissionDenied(msg: Value) -> Value { msg }
+fn ExchangeNotAvailable(msg: Value) -> Value { msg }
+fn ArgumentsRequired(msg: Value) -> Value { msg }
+fn RateLimitExceeded(msg: Value) -> Value { msg }
+fn OrderNotFillable(msg: Value) -> Value { msg }
+fn OrderImmediatelyFillable(msg: Value) -> Value { msg }
+fn NotSupported(msg: Value) -> Value { msg }
+fn DuplicateOrderId(msg: Value) -> Value { msg }
 
 use crate::exchange::{PRECISE_BASE, TRUNCATE, ROUND, ROUND_UP, ROUND_DOWN};
 use crate::exchange::{DECIMAL_PLACES, SIGNIFICANT_DIGITS, TICK_SIZE, NO_PADDING, PAD_WITH_ZERO};
@@ -1055,14 +1079,14 @@ pub trait Coinex : Exchange {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = <Self as Coinex>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() { return rv; }
                 }
             }
         }
         let candidates = vec![("public", "GET", "ticker/24hr"), ("public", "GET", "ticker"), ("public", "GET", "ticker/price")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Coinex>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -1084,14 +1108,14 @@ pub trait Coinex : Exchange {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = <Self as Coinex>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() { return rv; }
                 }
             }
         }
         let candidates = vec![("public", "GET", "ticker/24hr"), ("public", "GET", "tickers"), ("public", "GET", "ticker")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Coinex>::request(self,path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -1101,7 +1125,7 @@ pub trait Coinex : Exchange {
     async fn fetch_time(&mut self, mut params: Value) -> Value {
         let candidates = vec![("public", "GET", "time"), ("public", "GET", "server/time"), ("public", "GET", "timestamp")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Coinex>::request(self,path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -1126,14 +1150,14 @@ pub trait Coinex : Exchange {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = <Self as Coinex>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() { return rv; }
                 }
             }
         }
         let candidates = vec![("public", "GET", "depth"), ("public", "GET", "orderbook"), ("public", "GET", "order_book")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Coinex>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -1221,7 +1245,7 @@ pub trait Coinex : Exchange {
         if limit.is_nonnullish() { request.set("limit".into(), limit.clone()); }
         let candidates = vec![("public", "GET", "trades"), ("public", "GET", "recent_trades"), ("public", "GET", "aggTrades")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Coinex>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -1403,14 +1427,14 @@ pub trait Coinex : Exchange {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = <Self as Coinex>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() { return rv; }
                 }
             }
         }
         let candidates = vec![("public", "GET", "klines"), ("public", "GET", "candles"), ("public", "GET", "ohlcv")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Coinex>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -5399,257 +5423,257 @@ pub trait Coinex : Exchange {
         match method {
             Value::Json(serde_json::Value::String(ref m)) => {
                 match m.as_ref() {
-                    "v1PublicGetAmmmarket" => Coinex::request(self, "amm/market".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetCommoncurrencyrate" => Coinex::request(self, "common/currency/rate".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetCommonassetconfig" => Coinex::request(self, "common/asset/config".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetCommonmaintaininfo" => Coinex::request(self, "common/maintain/info".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetCommontempmaintaininfo" => Coinex::request(self, "common/temp-maintain/info".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetMarginmarket" => Coinex::request(self, "margin/market".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetMarketinfo" => Coinex::request(self, "market/info".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetMarketlist" => Coinex::request(self, "market/list".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetMarketticker" => Coinex::request(self, "market/ticker".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetMarkettickerall" => Coinex::request(self, "market/ticker/all".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetMarketdepth" => Coinex::request(self, "market/depth".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetMarketdeals" => Coinex::request(self, "market/deals".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetMarketkline" => Coinex::request(self, "market/kline".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetMarketdetail" => Coinex::request(self, "market/detail".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetAccountammbalance" => Coinex::request(self, "account/amm/balance".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetAccountinvestmentbalance" => Coinex::request(self, "account/investment/balance".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetAccountbalancehistory" => Coinex::request(self, "account/balance/history".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetAccountmarketfee" => Coinex::request(self, "account/market/fee".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetBalancecoindeposit" => Coinex::request(self, "balance/coin/deposit".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetBalancecoinwithdraw" => Coinex::request(self, "balance/coin/withdraw".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetBalanceinfo" => Coinex::request(self, "balance/info".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetBalancedepositaddresscointype" => Coinex::request(self, "balance/deposit/address/{coin_type}".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetContracttransferhistory" => Coinex::request(self, "contract/transfer/history".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetCreditinfo" => Coinex::request(self, "credit/info".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetCreditbalance" => Coinex::request(self, "credit/balance".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetInvestmenttransferhistory" => Coinex::request(self, "investment/transfer/history".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetMarginaccount" => Coinex::request(self, "margin/account".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetMarginconfig" => Coinex::request(self, "margin/config".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetMarginloanhistory" => Coinex::request(self, "margin/loan/history".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetMargintransferhistory" => Coinex::request(self, "margin/transfer/history".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetOrderdeals" => Coinex::request(self, "order/deals".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetOrderfinished" => Coinex::request(self, "order/finished".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetOrderpending" => Coinex::request(self, "order/pending".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetOrderstatus" => Coinex::request(self, "order/status".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetOrderstatusbatch" => Coinex::request(self, "order/status/batch".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetOrderuserdeals" => Coinex::request(self, "order/user/deals".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetOrderstopfinished" => Coinex::request(self, "order/stop/finished".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetOrderstoppending" => Coinex::request(self, "order/stop/pending".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetOrderusertradefee" => Coinex::request(self, "order/user/trade/fee".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetOrdermarkettradeinfo" => Coinex::request(self, "order/market/trade/info".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetSubaccountbalance" => Coinex::request(self, "sub_account/balance".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetSubaccounttransferhistory" => Coinex::request(self, "sub_account/transfer/history".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetSubaccountauthapi" => Coinex::request(self, "sub_account/auth/api".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetSubaccountauthapiuserauthid" => Coinex::request(self, "sub_account/auth/api/{user_auth_id}".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostBalancecoinwithdraw" => Coinex::request(self, "balance/coin/withdraw".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostContractbalancetransfer" => Coinex::request(self, "contract/balance/transfer".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostMarginflat" => Coinex::request(self, "margin/flat".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostMarginloan" => Coinex::request(self, "margin/loan".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostMargintransfer" => Coinex::request(self, "margin/transfer".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostOrderlimitbatch" => Coinex::request(self, "order/limit/batch".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostOrderioc" => Coinex::request(self, "order/ioc".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostOrderlimit" => Coinex::request(self, "order/limit".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostOrdermarket" => Coinex::request(self, "order/market".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostOrdermodify" => Coinex::request(self, "order/modify".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostOrderstoplimit" => Coinex::request(self, "order/stop/limit".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostOrderstopmarket" => Coinex::request(self, "order/stop/market".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostOrderstopmodify" => Coinex::request(self, "order/stop/modify".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostSubaccounttransfer" => Coinex::request(self, "sub_account/transfer".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostSubaccountregister" => Coinex::request(self, "sub_account/register".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostSubaccountunfrozen" => Coinex::request(self, "sub_account/unfrozen".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostSubaccountfrozen" => Coinex::request(self, "sub_account/frozen".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostSubaccountauthapi" => Coinex::request(self, "sub_account/auth/api".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePutBalancedepositaddresscointype" => Coinex::request(self, "balance/deposit/address/{coin_type}".into(), "v1".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePutSubaccountunfrozen" => Coinex::request(self, "sub_account/unfrozen".into(), "v1".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePutSubaccountfrozen" => Coinex::request(self, "sub_account/frozen".into(), "v1".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePutSubaccountauthapiuserauthid" => Coinex::request(self, "sub_account/auth/api/{user_auth_id}".into(), "v1".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePutV1accountsettings" => Coinex::request(self, "v1/account/settings".into(), "v1".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateDeleteBalancecoinwithdraw" => Coinex::request(self, "balance/coin/withdraw".into(), "v1".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateDeleteOrderpendingbatch" => Coinex::request(self, "order/pending/batch".into(), "v1".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateDeleteOrderpending" => Coinex::request(self, "order/pending".into(), "v1".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateDeleteOrderstoppending" => Coinex::request(self, "order/stop/pending".into(), "v1".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateDeleteOrderstoppendingid" => Coinex::request(self, "order/stop/pending/{id}".into(), "v1".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateDeleteOrderpendingbyclientid" => Coinex::request(self, "order/pending/by_client_id".into(), "v1".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateDeleteOrderstoppendingbyclientid" => Coinex::request(self, "order/stop/pending/by_client_id".into(), "v1".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateDeleteSubaccountauthapiuserauthid" => Coinex::request(self, "sub_account/auth/api/{user_auth_id}".into(), "v1".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateDeleteSubaccountauthorizeid" => Coinex::request(self, "sub_account/authorize/{id}".into(), "v1".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PerpetualpublicGetPing" => Coinex::request(self, "ping".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PerpetualpublicGetTime" => Coinex::request(self, "time".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PerpetualpublicGetMarketlist" => Coinex::request(self, "market/list".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PerpetualpublicGetMarketlimitconfig" => Coinex::request(self, "market/limit_config".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PerpetualpublicGetMarketticker" => Coinex::request(self, "market/ticker".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PerpetualpublicGetMarkettickerall" => Coinex::request(self, "market/ticker/all".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PerpetualpublicGetMarketdepth" => Coinex::request(self, "market/depth".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PerpetualpublicGetMarketdeals" => Coinex::request(self, "market/deals".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PerpetualpublicGetMarketfundinghistory" => Coinex::request(self, "market/funding_history".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PerpetualpublicGetMarketkline" => Coinex::request(self, "market/kline".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PerpetualprivateGetMarketuserdeals" => Coinex::request(self, "market/user_deals".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PerpetualprivateGetAssetquery" => Coinex::request(self, "asset/query".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PerpetualprivateGetOrderpending" => Coinex::request(self, "order/pending".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PerpetualprivateGetOrderfinished" => Coinex::request(self, "order/finished".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PerpetualprivateGetOrderstopfinished" => Coinex::request(self, "order/stop_finished".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PerpetualprivateGetOrderstoppending" => Coinex::request(self, "order/stop_pending".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PerpetualprivateGetOrderstatus" => Coinex::request(self, "order/status".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PerpetualprivateGetOrderstopstatus" => Coinex::request(self, "order/stop_status".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PerpetualprivateGetPositionfinished" => Coinex::request(self, "position/finished".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PerpetualprivateGetPositionpending" => Coinex::request(self, "position/pending".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PerpetualprivateGetPositionfunding" => Coinex::request(self, "position/funding".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PerpetualprivateGetPositionadlhistory" => Coinex::request(self, "position/adl_history".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PerpetualprivateGetMarketpreference" => Coinex::request(self, "market/preference".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PerpetualprivateGetPositionmarginhistory" => Coinex::request(self, "position/margin_history".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PerpetualprivateGetPositionsettlehistory" => Coinex::request(self, "position/settle_history".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PerpetualprivatePostMarketadjustleverage" => Coinex::request(self, "market/adjust_leverage".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PerpetualprivatePostMarketpositionexpect" => Coinex::request(self, "market/position_expect".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PerpetualprivatePostOrderputlimit" => Coinex::request(self, "order/put_limit".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PerpetualprivatePostOrderputmarket" => Coinex::request(self, "order/put_market".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PerpetualprivatePostOrderputstoplimit" => Coinex::request(self, "order/put_stop_limit".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PerpetualprivatePostOrderputstopmarket" => Coinex::request(self, "order/put_stop_market".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PerpetualprivatePostOrdermodify" => Coinex::request(self, "order/modify".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PerpetualprivatePostOrdermodifystop" => Coinex::request(self, "order/modify_stop".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PerpetualprivatePostOrdercancel" => Coinex::request(self, "order/cancel".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PerpetualprivatePostOrdercancelall" => Coinex::request(self, "order/cancel_all".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PerpetualprivatePostOrdercancelbatch" => Coinex::request(self, "order/cancel_batch".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PerpetualprivatePostOrdercancelstop" => Coinex::request(self, "order/cancel_stop".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PerpetualprivatePostOrdercancelstopall" => Coinex::request(self, "order/cancel_stop_all".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PerpetualprivatePostOrdercloselimit" => Coinex::request(self, "order/close_limit".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PerpetualprivatePostOrderclosemarket" => Coinex::request(self, "order/close_market".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PerpetualprivatePostPositionadjustmargin" => Coinex::request(self, "position/adjust_margin".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PerpetualprivatePostPositionstoploss" => Coinex::request(self, "position/stop_loss".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PerpetualprivatePostPositiontakeprofit" => Coinex::request(self, "position/take_profit".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PerpetualprivatePostPositionmarketclose" => Coinex::request(self, "position/market_close".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PerpetualprivatePostOrdercancelbyclientid" => Coinex::request(self, "order/cancel/by_client_id".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PerpetualprivatePostOrdercancelstopbyclientid" => Coinex::request(self, "order/cancel_stop/by_client_id".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PerpetualprivatePostMarketpreference" => Coinex::request(self, "market/preference".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PublicGetMaintaininfo" => Coinex::request(self, "maintain/info".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PublicGetPing" => Coinex::request(self, "ping".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PublicGetTime" => Coinex::request(self, "time".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PublicGetSpotmarket" => Coinex::request(self, "spot/market".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PublicGetSpotticker" => Coinex::request(self, "spot/ticker".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PublicGetSpotdepth" => Coinex::request(self, "spot/depth".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PublicGetSpotdeals" => Coinex::request(self, "spot/deals".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PublicGetSpotkline" => Coinex::request(self, "spot/kline".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PublicGetSpotindex" => Coinex::request(self, "spot/index".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PublicGetFuturesmarket" => Coinex::request(self, "futures/market".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PublicGetFuturesticker" => Coinex::request(self, "futures/ticker".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PublicGetFuturesdepth" => Coinex::request(self, "futures/depth".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PublicGetFuturesdeals" => Coinex::request(self, "futures/deals".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PublicGetFutureskline" => Coinex::request(self, "futures/kline".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PublicGetFuturesindex" => Coinex::request(self, "futures/index".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PublicGetFuturesfundingrate" => Coinex::request(self, "futures/funding-rate".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PublicGetFuturesfundingratehistory" => Coinex::request(self, "futures/funding-rate-history".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PublicGetFuturespremiumindexhistory" => Coinex::request(self, "futures/premium-index-history".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PublicGetFuturespositionlevel" => Coinex::request(self, "futures/position-level".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PublicGetFuturesliquidationhistory" => Coinex::request(self, "futures/liquidation-history".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PublicGetFuturesbasishistory" => Coinex::request(self, "futures/basis-history".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PublicGetAssetsdepositwithdrawconfig" => Coinex::request(self, "assets/deposit-withdraw-config".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PublicGetAssetsalldepositwithdrawconfig" => Coinex::request(self, "assets/all-deposit-withdraw-config".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivateGetAccountsubs" => Coinex::request(self, "account/subs".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivateGetAccountsubsapidetail" => Coinex::request(self, "account/subs/api-detail".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivateGetAccountsubsinfo" => Coinex::request(self, "account/subs/info".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivateGetAccountsubsapi" => Coinex::request(self, "account/subs/api".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivateGetAccountsubstransferhistory" => Coinex::request(self, "account/subs/transfer-history".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivateGetAccountsubsbalance" => Coinex::request(self, "account/subs/balance".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivateGetAccountsubsspotbalance" => Coinex::request(self, "account/subs/spot-balance".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivateGetAccounttradefeerate" => Coinex::request(self, "account/trade-fee-rate".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivateGetAccountfuturesmarketsettings" => Coinex::request(self, "account/futures-market-settings".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivateGetAccountinfo" => Coinex::request(self, "account/info".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivateGetAssetsspotbalance" => Coinex::request(self, "assets/spot/balance".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivateGetAssetsfuturesbalance" => Coinex::request(self, "assets/futures/balance".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivateGetAssetsmarginbalance" => Coinex::request(self, "assets/margin/balance".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivateGetAssetsfinancialbalance" => Coinex::request(self, "assets/financial/balance".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivateGetAssetsammliquidity" => Coinex::request(self, "assets/amm/liquidity".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivateGetAssetscreditinfo" => Coinex::request(self, "assets/credit/info".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivateGetAssetsspottranscationhistory" => Coinex::request(self, "assets/spot/transcation-history".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivateGetAssetsmarginborrowhistory" => Coinex::request(self, "assets/margin/borrow-history".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivateGetAssetsmargininterestlimit" => Coinex::request(self, "assets/margin/interest-limit".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivateGetAssetsdepositaddress" => Coinex::request(self, "assets/deposit-address".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivateGetAssetsdeposithistory" => Coinex::request(self, "assets/deposit-history".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivateGetAssetswithdraw" => Coinex::request(self, "assets/withdraw".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivateGetAssetstransferhistory" => Coinex::request(self, "assets/transfer-history".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivateGetAssetsammliquiditypool" => Coinex::request(self, "assets/amm/liquidity-pool".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivateGetAssetsammincomehistory" => Coinex::request(self, "assets/amm/income-history".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivateGetSpotorderstatus" => Coinex::request(self, "spot/order-status".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivateGetSpotbatchorderstatus" => Coinex::request(self, "spot/batch-order-status".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivateGetSpotpendingorder" => Coinex::request(self, "spot/pending-order".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivateGetSpotfinishedorder" => Coinex::request(self, "spot/finished-order".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivateGetSpotpendingstoporder" => Coinex::request(self, "spot/pending-stop-order".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivateGetSpotfinishedstoporder" => Coinex::request(self, "spot/finished-stop-order".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivateGetSpotuserdeals" => Coinex::request(self, "spot/user-deals".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivateGetSpotorderdeals" => Coinex::request(self, "spot/order-deals".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivateGetFuturesorderstatus" => Coinex::request(self, "futures/order-status".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivateGetFuturesbatchorderstatus" => Coinex::request(self, "futures/batch-order-status".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivateGetFuturespendingorder" => Coinex::request(self, "futures/pending-order".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivateGetFuturesfinishedorder" => Coinex::request(self, "futures/finished-order".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivateGetFuturespendingstoporder" => Coinex::request(self, "futures/pending-stop-order".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivateGetFuturesfinishedstoporder" => Coinex::request(self, "futures/finished-stop-order".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivateGetFuturesuserdeals" => Coinex::request(self, "futures/user-deals".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivateGetFuturesorderdeals" => Coinex::request(self, "futures/order-deals".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivateGetFuturespendingposition" => Coinex::request(self, "futures/pending-position".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivateGetFuturesfinishedposition" => Coinex::request(self, "futures/finished-position".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivateGetFuturespositionmarginhistory" => Coinex::request(self, "futures/position-margin-history".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivateGetFuturespositionfundinghistory" => Coinex::request(self, "futures/position-funding-history".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivateGetFuturespositionadlhistory" => Coinex::request(self, "futures/position-adl-history".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivateGetFuturespositionsettlehistory" => Coinex::request(self, "futures/position-settle-history".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivateGetReferreferee" => Coinex::request(self, "refer/referee".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivateGetReferrefereerebaterecord" => Coinex::request(self, "refer/referee-rebate/record".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivateGetReferrefereerebatedetail" => Coinex::request(self, "refer/referee-rebate/detail".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivateGetReferagentreferee" => Coinex::request(self, "refer/agent-referee".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivateGetReferagentrebaterecord" => Coinex::request(self, "refer/agent-rebate/record".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivateGetReferagentrebatedetail" => Coinex::request(self, "refer/agent-rebate/detail".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivatePostAccountsubs" => Coinex::request(self, "account/subs".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivatePostAccountsubsfrozen" => Coinex::request(self, "account/subs/frozen".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivatePostAccountsubsunfrozen" => Coinex::request(self, "account/subs/unfrozen".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivatePostAccountsubsapi" => Coinex::request(self, "account/subs/api".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivatePostAccountsubseditapi" => Coinex::request(self, "account/subs/edit-api".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivatePostAccountsubsdeleteapi" => Coinex::request(self, "account/subs/delete-api".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivatePostAccountsubstransfer" => Coinex::request(self, "account/subs/transfer".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivatePostAccountsettings" => Coinex::request(self, "account/settings".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivatePostAccountfuturesmarketsettings" => Coinex::request(self, "account/futures-market-settings".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivatePostAssetsmarginborrow" => Coinex::request(self, "assets/margin/borrow".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivatePostAssetsmarginrepay" => Coinex::request(self, "assets/margin/repay".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivatePostAssetsrenewaldepositaddress" => Coinex::request(self, "assets/renewal-deposit-address".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivatePostAssetswithdraw" => Coinex::request(self, "assets/withdraw".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivatePostAssetscancelwithdraw" => Coinex::request(self, "assets/cancel-withdraw".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivatePostAssetstransfer" => Coinex::request(self, "assets/transfer".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivatePostAssetsammaddliquidity" => Coinex::request(self, "assets/amm/add-liquidity".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivatePostAssetsammremoveliquidity" => Coinex::request(self, "assets/amm/remove-liquidity".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivatePostSpotorder" => Coinex::request(self, "spot/order".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivatePostSpotstoporder" => Coinex::request(self, "spot/stop-order".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivatePostSpotbatchorder" => Coinex::request(self, "spot/batch-order".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivatePostSpotbatchstoporder" => Coinex::request(self, "spot/batch-stop-order".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivatePostSpotmodifyorder" => Coinex::request(self, "spot/modify-order".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivatePostSpotmodifystoporder" => Coinex::request(self, "spot/modify-stop-order".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivatePostSpotbatchmodifyorder" => Coinex::request(self, "spot/batch-modify-order".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivatePostSpotcancelallorder" => Coinex::request(self, "spot/cancel-all-order".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivatePostSpotcancelorder" => Coinex::request(self, "spot/cancel-order".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivatePostSpotcancelstoporder" => Coinex::request(self, "spot/cancel-stop-order".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivatePostSpotcancelbatchorder" => Coinex::request(self, "spot/cancel-batch-order".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivatePostSpotcancelbatchstoporder" => Coinex::request(self, "spot/cancel-batch-stop-order".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivatePostSpotcancelorderbyclientid" => Coinex::request(self, "spot/cancel-order-by-client-id".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivatePostSpotcancelstoporderbyclientid" => Coinex::request(self, "spot/cancel-stop-order-by-client-id".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivatePostFuturesorder" => Coinex::request(self, "futures/order".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivatePostFuturesstoporder" => Coinex::request(self, "futures/stop-order".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivatePostFuturesbatchorder" => Coinex::request(self, "futures/batch-order".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivatePostFuturesbatchstoporder" => Coinex::request(self, "futures/batch-stop-order".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivatePostFuturescancelpositionstoploss" => Coinex::request(self, "futures/cancel-position-stop-loss".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivatePostFuturescancelpositiontakeprofit" => Coinex::request(self, "futures/cancel-position-take-profit".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivatePostFuturesmodifyorder" => Coinex::request(self, "futures/modify-order".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivatePostFuturesmodifystoporder" => Coinex::request(self, "futures/modify-stop-order".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivatePostFuturesbatchmodifyorder" => Coinex::request(self, "futures/batch-modify-order".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivatePostFuturescancelallorder" => Coinex::request(self, "futures/cancel-all-order".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivatePostFuturescancelorder" => Coinex::request(self, "futures/cancel-order".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivatePostFuturescancelstoporder" => Coinex::request(self, "futures/cancel-stop-order".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivatePostFuturescancelbatchorder" => Coinex::request(self, "futures/cancel-batch-order".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivatePostFuturescancelbatchstoporder" => Coinex::request(self, "futures/cancel-batch-stop-order".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivatePostFuturescancelorderbyclientid" => Coinex::request(self, "futures/cancel-order-by-client-id".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivatePostFuturescancelstoporderbyclientid" => Coinex::request(self, "futures/cancel-stop-order-by-client-id".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivatePostFuturescloseposition" => Coinex::request(self, "futures/close-position".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivatePostFuturesadjustpositionmargin" => Coinex::request(self, "futures/adjust-position-margin".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivatePostFuturesadjustpositionleverage" => Coinex::request(self, "futures/adjust-position-leverage".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivatePostFuturessetpositionstoploss" => Coinex::request(self, "futures/set-position-stop-loss".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivatePostFuturessetpositiontakeprofit" => Coinex::request(self, "futures/set-position-take-profit".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetAmmmarket" => self.request("amm/market".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetCommoncurrencyrate" => self.request("common/currency/rate".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetCommonassetconfig" => self.request("common/asset/config".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetCommonmaintaininfo" => self.request("common/maintain/info".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetCommontempmaintaininfo" => self.request("common/temp-maintain/info".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetMarginmarket" => self.request("margin/market".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetMarketinfo" => self.request("market/info".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetMarketlist" => self.request("market/list".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetMarketticker" => self.request("market/ticker".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetMarkettickerall" => self.request("market/ticker/all".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetMarketdepth" => self.request("market/depth".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetMarketdeals" => self.request("market/deals".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetMarketkline" => self.request("market/kline".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetMarketdetail" => self.request("market/detail".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetAccountammbalance" => self.request("account/amm/balance".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetAccountinvestmentbalance" => self.request("account/investment/balance".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetAccountbalancehistory" => self.request("account/balance/history".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetAccountmarketfee" => self.request("account/market/fee".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetBalancecoindeposit" => self.request("balance/coin/deposit".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetBalancecoinwithdraw" => self.request("balance/coin/withdraw".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetBalanceinfo" => self.request("balance/info".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetBalancedepositaddresscointype" => self.request("balance/deposit/address/{coin_type}".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetContracttransferhistory" => self.request("contract/transfer/history".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetCreditinfo" => self.request("credit/info".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetCreditbalance" => self.request("credit/balance".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetInvestmenttransferhistory" => self.request("investment/transfer/history".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetMarginaccount" => self.request("margin/account".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetMarginconfig" => self.request("margin/config".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetMarginloanhistory" => self.request("margin/loan/history".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetMargintransferhistory" => self.request("margin/transfer/history".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetOrderdeals" => self.request("order/deals".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetOrderfinished" => self.request("order/finished".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetOrderpending" => self.request("order/pending".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetOrderstatus" => self.request("order/status".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetOrderstatusbatch" => self.request("order/status/batch".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetOrderuserdeals" => self.request("order/user/deals".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetOrderstopfinished" => self.request("order/stop/finished".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetOrderstoppending" => self.request("order/stop/pending".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetOrderusertradefee" => self.request("order/user/trade/fee".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetOrdermarkettradeinfo" => self.request("order/market/trade/info".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetSubaccountbalance" => self.request("sub_account/balance".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetSubaccounttransferhistory" => self.request("sub_account/transfer/history".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetSubaccountauthapi" => self.request("sub_account/auth/api".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetSubaccountauthapiuserauthid" => self.request("sub_account/auth/api/{user_auth_id}".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostBalancecoinwithdraw" => self.request("balance/coin/withdraw".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostContractbalancetransfer" => self.request("contract/balance/transfer".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostMarginflat" => self.request("margin/flat".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostMarginloan" => self.request("margin/loan".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostMargintransfer" => self.request("margin/transfer".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostOrderlimitbatch" => self.request("order/limit/batch".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostOrderioc" => self.request("order/ioc".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostOrderlimit" => self.request("order/limit".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostOrdermarket" => self.request("order/market".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostOrdermodify" => self.request("order/modify".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostOrderstoplimit" => self.request("order/stop/limit".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostOrderstopmarket" => self.request("order/stop/market".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostOrderstopmodify" => self.request("order/stop/modify".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostSubaccounttransfer" => self.request("sub_account/transfer".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostSubaccountregister" => self.request("sub_account/register".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostSubaccountunfrozen" => self.request("sub_account/unfrozen".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostSubaccountfrozen" => self.request("sub_account/frozen".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostSubaccountauthapi" => self.request("sub_account/auth/api".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePutBalancedepositaddresscointype" => self.request("balance/deposit/address/{coin_type}".into(), "v1".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePutSubaccountunfrozen" => self.request("sub_account/unfrozen".into(), "v1".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePutSubaccountfrozen" => self.request("sub_account/frozen".into(), "v1".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePutSubaccountauthapiuserauthid" => self.request("sub_account/auth/api/{user_auth_id}".into(), "v1".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePutV1accountsettings" => self.request("v1/account/settings".into(), "v1".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateDeleteBalancecoinwithdraw" => self.request("balance/coin/withdraw".into(), "v1".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateDeleteOrderpendingbatch" => self.request("order/pending/batch".into(), "v1".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateDeleteOrderpending" => self.request("order/pending".into(), "v1".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateDeleteOrderstoppending" => self.request("order/stop/pending".into(), "v1".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateDeleteOrderstoppendingid" => self.request("order/stop/pending/{id}".into(), "v1".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateDeleteOrderpendingbyclientid" => self.request("order/pending/by_client_id".into(), "v1".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateDeleteOrderstoppendingbyclientid" => self.request("order/stop/pending/by_client_id".into(), "v1".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateDeleteSubaccountauthapiuserauthid" => self.request("sub_account/auth/api/{user_auth_id}".into(), "v1".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateDeleteSubaccountauthorizeid" => self.request("sub_account/authorize/{id}".into(), "v1".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PerpetualpublicGetPing" => self.request("ping".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PerpetualpublicGetTime" => self.request("time".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PerpetualpublicGetMarketlist" => self.request("market/list".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PerpetualpublicGetMarketlimitconfig" => self.request("market/limit_config".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PerpetualpublicGetMarketticker" => self.request("market/ticker".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PerpetualpublicGetMarkettickerall" => self.request("market/ticker/all".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PerpetualpublicGetMarketdepth" => self.request("market/depth".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PerpetualpublicGetMarketdeals" => self.request("market/deals".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PerpetualpublicGetMarketfundinghistory" => self.request("market/funding_history".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PerpetualpublicGetMarketkline" => self.request("market/kline".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PerpetualprivateGetMarketuserdeals" => self.request("market/user_deals".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PerpetualprivateGetAssetquery" => self.request("asset/query".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PerpetualprivateGetOrderpending" => self.request("order/pending".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PerpetualprivateGetOrderfinished" => self.request("order/finished".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PerpetualprivateGetOrderstopfinished" => self.request("order/stop_finished".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PerpetualprivateGetOrderstoppending" => self.request("order/stop_pending".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PerpetualprivateGetOrderstatus" => self.request("order/status".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PerpetualprivateGetOrderstopstatus" => self.request("order/stop_status".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PerpetualprivateGetPositionfinished" => self.request("position/finished".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PerpetualprivateGetPositionpending" => self.request("position/pending".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PerpetualprivateGetPositionfunding" => self.request("position/funding".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PerpetualprivateGetPositionadlhistory" => self.request("position/adl_history".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PerpetualprivateGetMarketpreference" => self.request("market/preference".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PerpetualprivateGetPositionmarginhistory" => self.request("position/margin_history".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PerpetualprivateGetPositionsettlehistory" => self.request("position/settle_history".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PerpetualprivatePostMarketadjustleverage" => self.request("market/adjust_leverage".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PerpetualprivatePostMarketpositionexpect" => self.request("market/position_expect".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PerpetualprivatePostOrderputlimit" => self.request("order/put_limit".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PerpetualprivatePostOrderputmarket" => self.request("order/put_market".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PerpetualprivatePostOrderputstoplimit" => self.request("order/put_stop_limit".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PerpetualprivatePostOrderputstopmarket" => self.request("order/put_stop_market".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PerpetualprivatePostOrdermodify" => self.request("order/modify".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PerpetualprivatePostOrdermodifystop" => self.request("order/modify_stop".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PerpetualprivatePostOrdercancel" => self.request("order/cancel".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PerpetualprivatePostOrdercancelall" => self.request("order/cancel_all".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PerpetualprivatePostOrdercancelbatch" => self.request("order/cancel_batch".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PerpetualprivatePostOrdercancelstop" => self.request("order/cancel_stop".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PerpetualprivatePostOrdercancelstopall" => self.request("order/cancel_stop_all".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PerpetualprivatePostOrdercloselimit" => self.request("order/close_limit".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PerpetualprivatePostOrderclosemarket" => self.request("order/close_market".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PerpetualprivatePostPositionadjustmargin" => self.request("position/adjust_margin".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PerpetualprivatePostPositionstoploss" => self.request("position/stop_loss".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PerpetualprivatePostPositiontakeprofit" => self.request("position/take_profit".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PerpetualprivatePostPositionmarketclose" => self.request("position/market_close".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PerpetualprivatePostOrdercancelbyclientid" => self.request("order/cancel/by_client_id".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PerpetualprivatePostOrdercancelstopbyclientid" => self.request("order/cancel_stop/by_client_id".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PerpetualprivatePostMarketpreference" => self.request("market/preference".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PublicGetMaintaininfo" => self.request("maintain/info".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PublicGetPing" => self.request("ping".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PublicGetTime" => self.request("time".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PublicGetSpotmarket" => self.request("spot/market".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PublicGetSpotticker" => self.request("spot/ticker".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PublicGetSpotdepth" => self.request("spot/depth".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PublicGetSpotdeals" => self.request("spot/deals".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PublicGetSpotkline" => self.request("spot/kline".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PublicGetSpotindex" => self.request("spot/index".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PublicGetFuturesmarket" => self.request("futures/market".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PublicGetFuturesticker" => self.request("futures/ticker".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PublicGetFuturesdepth" => self.request("futures/depth".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PublicGetFuturesdeals" => self.request("futures/deals".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PublicGetFutureskline" => self.request("futures/kline".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PublicGetFuturesindex" => self.request("futures/index".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PublicGetFuturesfundingrate" => self.request("futures/funding-rate".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PublicGetFuturesfundingratehistory" => self.request("futures/funding-rate-history".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PublicGetFuturespremiumindexhistory" => self.request("futures/premium-index-history".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PublicGetFuturespositionlevel" => self.request("futures/position-level".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PublicGetFuturesliquidationhistory" => self.request("futures/liquidation-history".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PublicGetFuturesbasishistory" => self.request("futures/basis-history".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PublicGetAssetsdepositwithdrawconfig" => self.request("assets/deposit-withdraw-config".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PublicGetAssetsalldepositwithdrawconfig" => self.request("assets/all-deposit-withdraw-config".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivateGetAccountsubs" => self.request("account/subs".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivateGetAccountsubsapidetail" => self.request("account/subs/api-detail".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivateGetAccountsubsinfo" => self.request("account/subs/info".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivateGetAccountsubsapi" => self.request("account/subs/api".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivateGetAccountsubstransferhistory" => self.request("account/subs/transfer-history".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivateGetAccountsubsbalance" => self.request("account/subs/balance".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivateGetAccountsubsspotbalance" => self.request("account/subs/spot-balance".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivateGetAccounttradefeerate" => self.request("account/trade-fee-rate".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivateGetAccountfuturesmarketsettings" => self.request("account/futures-market-settings".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivateGetAccountinfo" => self.request("account/info".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivateGetAssetsspotbalance" => self.request("assets/spot/balance".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivateGetAssetsfuturesbalance" => self.request("assets/futures/balance".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivateGetAssetsmarginbalance" => self.request("assets/margin/balance".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivateGetAssetsfinancialbalance" => self.request("assets/financial/balance".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivateGetAssetsammliquidity" => self.request("assets/amm/liquidity".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivateGetAssetscreditinfo" => self.request("assets/credit/info".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivateGetAssetsspottranscationhistory" => self.request("assets/spot/transcation-history".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivateGetAssetsmarginborrowhistory" => self.request("assets/margin/borrow-history".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivateGetAssetsmargininterestlimit" => self.request("assets/margin/interest-limit".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivateGetAssetsdepositaddress" => self.request("assets/deposit-address".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivateGetAssetsdeposithistory" => self.request("assets/deposit-history".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivateGetAssetswithdraw" => self.request("assets/withdraw".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivateGetAssetstransferhistory" => self.request("assets/transfer-history".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivateGetAssetsammliquiditypool" => self.request("assets/amm/liquidity-pool".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivateGetAssetsammincomehistory" => self.request("assets/amm/income-history".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivateGetSpotorderstatus" => self.request("spot/order-status".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivateGetSpotbatchorderstatus" => self.request("spot/batch-order-status".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivateGetSpotpendingorder" => self.request("spot/pending-order".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivateGetSpotfinishedorder" => self.request("spot/finished-order".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivateGetSpotpendingstoporder" => self.request("spot/pending-stop-order".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivateGetSpotfinishedstoporder" => self.request("spot/finished-stop-order".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivateGetSpotuserdeals" => self.request("spot/user-deals".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivateGetSpotorderdeals" => self.request("spot/order-deals".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivateGetFuturesorderstatus" => self.request("futures/order-status".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivateGetFuturesbatchorderstatus" => self.request("futures/batch-order-status".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivateGetFuturespendingorder" => self.request("futures/pending-order".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivateGetFuturesfinishedorder" => self.request("futures/finished-order".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivateGetFuturespendingstoporder" => self.request("futures/pending-stop-order".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivateGetFuturesfinishedstoporder" => self.request("futures/finished-stop-order".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivateGetFuturesuserdeals" => self.request("futures/user-deals".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivateGetFuturesorderdeals" => self.request("futures/order-deals".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivateGetFuturespendingposition" => self.request("futures/pending-position".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivateGetFuturesfinishedposition" => self.request("futures/finished-position".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivateGetFuturespositionmarginhistory" => self.request("futures/position-margin-history".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivateGetFuturespositionfundinghistory" => self.request("futures/position-funding-history".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivateGetFuturespositionadlhistory" => self.request("futures/position-adl-history".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivateGetFuturespositionsettlehistory" => self.request("futures/position-settle-history".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivateGetReferreferee" => self.request("refer/referee".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivateGetReferrefereerebaterecord" => self.request("refer/referee-rebate/record".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivateGetReferrefereerebatedetail" => self.request("refer/referee-rebate/detail".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivateGetReferagentreferee" => self.request("refer/agent-referee".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivateGetReferagentrebaterecord" => self.request("refer/agent-rebate/record".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivateGetReferagentrebatedetail" => self.request("refer/agent-rebate/detail".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivatePostAccountsubs" => self.request("account/subs".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivatePostAccountsubsfrozen" => self.request("account/subs/frozen".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivatePostAccountsubsunfrozen" => self.request("account/subs/unfrozen".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivatePostAccountsubsapi" => self.request("account/subs/api".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivatePostAccountsubseditapi" => self.request("account/subs/edit-api".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivatePostAccountsubsdeleteapi" => self.request("account/subs/delete-api".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivatePostAccountsubstransfer" => self.request("account/subs/transfer".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivatePostAccountsettings" => self.request("account/settings".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivatePostAccountfuturesmarketsettings" => self.request("account/futures-market-settings".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivatePostAssetsmarginborrow" => self.request("assets/margin/borrow".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivatePostAssetsmarginrepay" => self.request("assets/margin/repay".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivatePostAssetsrenewaldepositaddress" => self.request("assets/renewal-deposit-address".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivatePostAssetswithdraw" => self.request("assets/withdraw".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivatePostAssetscancelwithdraw" => self.request("assets/cancel-withdraw".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivatePostAssetstransfer" => self.request("assets/transfer".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivatePostAssetsammaddliquidity" => self.request("assets/amm/add-liquidity".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivatePostAssetsammremoveliquidity" => self.request("assets/amm/remove-liquidity".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivatePostSpotorder" => self.request("spot/order".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivatePostSpotstoporder" => self.request("spot/stop-order".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivatePostSpotbatchorder" => self.request("spot/batch-order".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivatePostSpotbatchstoporder" => self.request("spot/batch-stop-order".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivatePostSpotmodifyorder" => self.request("spot/modify-order".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivatePostSpotmodifystoporder" => self.request("spot/modify-stop-order".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivatePostSpotbatchmodifyorder" => self.request("spot/batch-modify-order".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivatePostSpotcancelallorder" => self.request("spot/cancel-all-order".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivatePostSpotcancelorder" => self.request("spot/cancel-order".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivatePostSpotcancelstoporder" => self.request("spot/cancel-stop-order".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivatePostSpotcancelbatchorder" => self.request("spot/cancel-batch-order".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivatePostSpotcancelbatchstoporder" => self.request("spot/cancel-batch-stop-order".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivatePostSpotcancelorderbyclientid" => self.request("spot/cancel-order-by-client-id".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivatePostSpotcancelstoporderbyclientid" => self.request("spot/cancel-stop-order-by-client-id".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivatePostFuturesorder" => self.request("futures/order".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivatePostFuturesstoporder" => self.request("futures/stop-order".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivatePostFuturesbatchorder" => self.request("futures/batch-order".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivatePostFuturesbatchstoporder" => self.request("futures/batch-stop-order".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivatePostFuturescancelpositionstoploss" => self.request("futures/cancel-position-stop-loss".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivatePostFuturescancelpositiontakeprofit" => self.request("futures/cancel-position-take-profit".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivatePostFuturesmodifyorder" => self.request("futures/modify-order".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivatePostFuturesmodifystoporder" => self.request("futures/modify-stop-order".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivatePostFuturesbatchmodifyorder" => self.request("futures/batch-modify-order".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivatePostFuturescancelallorder" => self.request("futures/cancel-all-order".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivatePostFuturescancelorder" => self.request("futures/cancel-order".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivatePostFuturescancelstoporder" => self.request("futures/cancel-stop-order".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivatePostFuturescancelbatchorder" => self.request("futures/cancel-batch-order".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivatePostFuturescancelbatchstoporder" => self.request("futures/cancel-batch-stop-order".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivatePostFuturescancelorderbyclientid" => self.request("futures/cancel-order-by-client-id".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivatePostFuturescancelstoporderbyclientid" => self.request("futures/cancel-stop-order-by-client-id".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivatePostFuturescloseposition" => self.request("futures/close-position".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivatePostFuturesadjustpositionmargin" => self.request("futures/adjust-position-margin".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivatePostFuturesadjustpositionleverage" => self.request("futures/adjust-position-leverage".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivatePostFuturessetpositionstoploss" => self.request("futures/set-position-stop-loss".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivatePostFuturessetpositiontakeprofit" => self.request("futures/set-position-take-profit".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     _ => unimplemented!(),
                 }
             },
@@ -5693,7 +5717,7 @@ impl ValueTrait for CoinexImpl {
     fn join(&self, glue: Value) -> Value { self.0.join(glue) }
     fn to_string(&self) -> Value { self.0.to_string() }
     fn typeof_(&self) -> Value { self.0.typeof_() }
-    fn slice(&self, start: Value) -> Value { self.0.slice(start) }
+    fn slice(&self, start: Value, end: Value) -> Value { self.0.slice(start, end) }
 }
 
 impl CoinexImpl {

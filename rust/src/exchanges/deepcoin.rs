@@ -13,14 +13,38 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, BoolExt, JSON, Array, Object, Math, Promise, parse_int, shift_2, extend_2, normalize};
 // Crypto hash identifiers
-fn sha256() -> Value { Value::from("sha256") }
-fn sha384() -> Value { Value::from("sha384") }
-fn sha512() -> Value { Value::from("sha512") }
-fn md5() -> Value { Value::from("md5") }
-fn ed25519() -> Value { Value::from("ed25519") }
+fn sha256() -> Value { Value::from("sha256()") }
+fn sha384() -> Value { Value::from("sha384()") }
+fn sha512() -> Value { Value::from("sha512()") }
+fn md5() -> Value { Value::from("md5()") }
+fn ed25519() -> Value { Value::from("ed25519()") }
 fn rsa(msg: Value, secret: Value, _hash: Value) -> Value { msg }
 fn eddsa(msg: Value, secret: Value, _curve: Value) -> Value { msg }
-fn secp256k1() -> Value { Value::from("secp256k1") }
+fn secp256k1() -> Value { Value::from("secp256k1()") }
+fn keccak() -> Value { Value::from("keccak()") }
+fn ecdsa(msg: Value, secret: Value, algo: Value, hash_fn: Value) -> Value { msg }
+fn totp(secret: Value) -> Value { Value::Undefined }
+fn jwt(data: Value, secret: Value, hash: Value, is_rsa: Value) -> Value { Value::Undefined }
+fn parse_float(value: Value) -> Value { value }
+fn decimals(value: Value) -> Value { Value::from(0) }
+fn shift_1(value: Value) -> Value { value }
+fn shift_3(value: Value) -> (Value, Value, Value) { (value.clone(), Value::Undefined, Value::Undefined) }
+fn shift_4(value: Value) -> (Value, Value, Value, Value) { (value.clone(), Value::Undefined, Value::Undefined, Value::Undefined) }
+// Error type constructors
+fn BadRequest(msg: Value) -> Value { msg }
+fn InvalidOrder(msg: Value) -> Value { msg }
+fn ExchangeError(msg: Value) -> Value { msg }
+fn InsufficientFunds(msg: Value) -> Value { msg }
+fn OrderNotFound(msg: Value) -> Value { msg }
+fn AuthenticationError(msg: Value) -> Value { msg }
+fn PermissionDenied(msg: Value) -> Value { msg }
+fn ExchangeNotAvailable(msg: Value) -> Value { msg }
+fn ArgumentsRequired(msg: Value) -> Value { msg }
+fn RateLimitExceeded(msg: Value) -> Value { msg }
+fn OrderNotFillable(msg: Value) -> Value { msg }
+fn OrderImmediatelyFillable(msg: Value) -> Value { msg }
+fn NotSupported(msg: Value) -> Value { msg }
+fn DuplicateOrderId(msg: Value) -> Value { msg }
 
 use crate::exchange::{PRECISE_BASE, TRUNCATE, ROUND, ROUND_UP, ROUND_DOWN};
 use crate::exchange::{DECIMAL_PLACES, SIGNIFICANT_DIGITS, TICK_SIZE, NO_PADDING, PAD_WITH_ZERO};
@@ -357,24 +381,24 @@ pub trait Deepcoin : Exchange {
             "commonCurrencies": Value::new_object(),
             "exceptions": Value::Json(normalize(&Value::Json(json!({
                 "exact": Value::Json(normalize(&Value::Json(json!({
-                    "24": OrderNotFound,
-                    "31": InsufficientFunds,
-                    "36": InsufficientFunds,
-                    "44": BadRequest,
-                    "49": InvalidOrder,
-                    "194": InvalidOrder,
-                    "195": InvalidOrder,
-                    "199": BadRequest,
-                    "100010": InsufficientFunds,
-                    "unsupportedAction": BadRequest,
-                    "localIDNotExist": BadRequest
+                    "24": "OrderNotFound",
+                    "31": "InsufficientFunds",
+                    "36": "InsufficientFunds",
+                    "44": "BadRequest",
+                    "49": "InvalidOrder",
+                    "194": "InvalidOrder",
+                    "195": "InvalidOrder",
+                    "199": "BadRequest",
+                    "100010": "InsufficientFunds",
+                    "unsupportedAction": "BadRequest",
+                    "localIDNotExist": "BadRequest"
                 }))).unwrap()),
                 "broad": Value::Json(normalize(&Value::Json(json!({
-                    "no available": NotSupported,
-                    "field is required": ArgumentsRequired,
-                    "not in acceptable range": BadRequest,
-                    "subscription cluster does not "exist"": BadRequest,
-                    "must be equal or lesser than": BadRequest
+                    "no available": "NotSupported",
+                    "field is required": "ArgumentsRequired",
+                    "not in acceptable range": "BadRequest",
+                    "subscription cluster does not "exist"": "BadRequest",
+                    "must be equal or lesser than": "BadRequest"
                 }))).unwrap())
             }))).unwrap())
         }))).unwrap()));
@@ -405,7 +429,7 @@ pub trait Deepcoin : Exchange {
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
             "instType": <Self as Deepcoin>::convert_to_instrument_type(self, r#type.clone())
         }))).unwrap());
-        let mut response: Value = self.public_get_deepcoin_market_instruments(extend_2(request.clone(), params.clone())).await;
+        let mut response: Value = self.dispatch("publicGetDeepcoinMarketInstruments".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         //
         // spot
         //
@@ -596,14 +620,14 @@ pub trait Deepcoin : Exchange {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = <Self as Deepcoin>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() { return rv; }
                 }
             }
         }
         let candidates = vec![("public", "GET", "depth"), ("public", "GET", "orderbook"), ("public", "GET", "order_book")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Deepcoin>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -631,14 +655,14 @@ pub trait Deepcoin : Exchange {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = <Self as Deepcoin>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() { return rv; }
                 }
             }
         }
         let candidates = vec![("public", "GET", "klines"), ("public", "GET", "candles"), ("public", "GET", "ohlcv")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Deepcoin>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -660,14 +684,14 @@ pub trait Deepcoin : Exchange {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = <Self as Deepcoin>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() { return rv; }
                 }
             }
         }
         let candidates = vec![("public", "GET", "ticker/24hr"), ("public", "GET", "tickers"), ("public", "GET", "ticker")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Deepcoin>::request(self,path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -743,7 +767,7 @@ pub trait Deepcoin : Exchange {
         if limit.is_nonnullish() { request.set("limit".into(), limit.clone()); }
         let candidates = vec![("public", "GET", "trades"), ("public", "GET", "recent_trades"), ("public", "GET", "aggTrades")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Deepcoin>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -842,7 +866,7 @@ pub trait Deepcoin : Exchange {
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
             "instType": <Self as Deepcoin>::convert_to_instrument_type(self, market_type.clone())
         }))).unwrap());
-        let mut response: Value = self.private_get_deepcoin_account_balances(extend_2(request.clone(), params.clone())).await;
+        let mut response: Value = self.dispatch("privateGetDeepcoinAccountBalances".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         return <Self as Deepcoin>::parse_balance(self, response.clone());
     }
 
@@ -907,7 +931,7 @@ pub trait Deepcoin : Exchange {
             request.set("endTime".into(), until.clone());
             params = self.omit(params.clone(), Value::from("until"));
         };
-        let mut response: Value = self.private_get_deepcoin_asset_deposit_list(extend_2(request.clone(), params.clone())).await;
+        let mut response: Value = self.dispatch("privateGetDeepcoinAssetDepositList".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         let mut data: Value = self.safe_dict(response.clone(), Value::from("data"), Value::new_object());
         let mut items: Value = self.safe_list(data.clone(), Value::from("data"), Value::new_array());
         let mut transaction_params: Value = Value::Json(normalize(&Value::Json(json!({
@@ -941,7 +965,7 @@ pub trait Deepcoin : Exchange {
             request.set("endTime".into(), until.clone());
             params = self.omit(params.clone(), Value::from("until"));
         };
-        let mut response: Value = self.private_get_deepcoin_asset_withdraw_list(extend_2(request.clone(), params.clone())).await;
+        let mut response: Value = self.dispatch("privateGetDeepcoinAssetWithdrawList".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         let mut data: Value = self.safe_dict(response.clone(), Value::from("data"), Value::new_object());
         let mut items: Value = self.safe_list(data.clone(), Value::from("data"), Value::new_array());
         let mut transaction_params: Value = Value::Json(normalize(&Value::Json(json!({
@@ -1021,7 +1045,7 @@ pub trait Deepcoin : Exchange {
             "currency_id": currency.get(Value::from("id")),
             "lang": "en"
         }))).unwrap());
-        let mut response: Value = self.private_get_deepcoin_asset_recharge_chain_list(extend_2(request.clone(), params.clone())).await;
+        let mut response: Value = self.dispatch("privateGetDeepcoinAssetRechargeChainList".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         //
         //     {
         //         "code": "0",
@@ -1137,7 +1161,7 @@ pub trait Deepcoin : Exchange {
             request.set("before".into(), until.clone());
             params = self.omit(params.clone(), Value::from("until"));
         };
-        let mut response: Value = self.private_get_deepcoin_account_bills(extend_2(request.clone(), params.clone())).await;
+        let mut response: Value = self.dispatch("privateGetDeepcoinAccountBills".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         //
         //     {
         //         "code": "0",
@@ -1237,7 +1261,7 @@ pub trait Deepcoin : Exchange {
             "to_id": to_id,
             "uid": user_id
         }))).unwrap());
-        let mut response: Value = self.private_post_deepcoin_asset_transfer(extend_2(request.clone(), params.clone())).await;
+        let mut response: Value = self.dispatch("privatePostDeepcoinAssetTransfer".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         //
         //     {
         //         "code": "0",
@@ -1300,7 +1324,7 @@ pub trait Deepcoin : Exchange {
         let mut response: Value = Value::Undefined;
         if trigger_price.clone().is_nonnullish() {
             // trigger orders
-            response = self.private_post_deepcoin_trade_trigger_order(request.clone()).await;
+            response = self.dispatch("privatePostDeepcoinTradeTriggerOrder".into(), request.clone(), Value::Undefined).await;
         } else {
             // regular orders
             //
@@ -1316,7 +1340,7 @@ pub trait Deepcoin : Exchange {
             //         }
             //     }
             //
-            response = self.private_post_deepcoin_trade_order(request.clone()).await;
+            response = self.dispatch("privatePostDeepcoinTradeOrder".into(), request.clone(), Value::Undefined).await;
         };
         let mut data: Value = self.safe_dict(response.clone(), Value::from("data"), Value::new_object());
         return <Self as Deepcoin>::parse_order(self, data.clone(), market.clone());
@@ -1582,7 +1606,7 @@ pub trait Deepcoin : Exchange {
             "instId": market.get(Value::from("id")),
             "ordId": id
         }))).unwrap());
-        let mut response: Value = self.private_get_deepcoin_trade_finish_order_by_id(extend_2(request.clone(), params.clone())).await;
+        let mut response: Value = self.dispatch("privateGetDeepcoinTradeFinishOrderByID".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         //
         //     {
         //         "code": "0",
@@ -1645,7 +1669,7 @@ pub trait Deepcoin : Exchange {
             "instId": market.get(Value::from("id")),
             "ordId": id
         }))).unwrap());
-        let mut response: Value = self.private_get_deepcoin_trade_order_by_id(extend_2(request.clone(), params.clone())).await;
+        let mut response: Value = self.dispatch("privateGetDeepcoinTradeOrderByID".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         let mut data: Value = self.safe_list(response.clone(), Value::from("data"), Value::new_array());
         let mut length: usize = data.len();
         if length == 0 {
@@ -1715,7 +1739,7 @@ pub trait Deepcoin : Exchange {
             //         ]
             //     }
             //
-            response = self.private_get_deepcoin_trade_trigger_orders_history(extend_2(request.clone(), params.clone())).await;
+            response = self.dispatch("privateGetDeepcoinTradeTriggerOrdersHistory".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         } else {
             //
             //     {
@@ -1763,7 +1787,7 @@ pub trait Deepcoin : Exchange {
             //         ]
             //     }
             //
-            response = self.private_get_deepcoin_trade_orders_history(extend_2(request.clone(), params.clone())).await;
+            response = self.dispatch("privateGetDeepcoinTradeOrdersHistory".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         };
         // todo handle with since, until and pagination
         let mut data: Value = self.safe_list(response.clone(), Value::from("data"), Value::new_array());
@@ -1845,7 +1869,7 @@ pub trait Deepcoin : Exchange {
             //         ]
             //     }
             //
-            response = self.private_get_deepcoin_trade_trigger_orders_pending(extend_2(request.clone(), params.clone())).await;
+            response = self.dispatch("privateGetDeepcoinTradeTriggerOrdersPending".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         } else {
             request.set("index".into(), index.clone());
             //
@@ -1894,7 +1918,7 @@ pub trait Deepcoin : Exchange {
             //         ]
             //     }
             //
-            response = self.private_get_deepcoin_trade_v2_orders_pending(extend_2(request.clone(), params.clone())).await;
+            response = self.dispatch("privateGetDeepcoinTradeV2OrdersPending".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         };
         let mut data: Value = self.safe_list(response.clone(), Value::from("data"), Value::new_array());
         return self.parse_orders(data.clone(), market.clone(), since.clone(), limit.clone(), Value::Json(normalize(&Value::Json(json!({
@@ -1917,9 +1941,9 @@ pub trait Deepcoin : Exchange {
         let mut trigger: Value = self.safe_bool(params.clone(), Value::from("trigger"), false.into());
         if trigger.is_truthy() {
             params = self.omit(params.clone(), Value::from("trigger"));
-            response = self.private_post_deepcoin_trade_cancel_trigger_order(extend_2(request.clone(), params.clone())).await;
+            response = self.dispatch("privatePostDeepcoinTradeCancelTriggerOrder".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         } else {
-            response = self.private_post_deepcoin_trade_cancel_order(extend_2(request.clone(), params.clone())).await;
+            response = self.dispatch("privatePostDeepcoinTradeCancelOrder".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         };
         let mut data: Value = self.safe_dict(response.clone(), Value::from("data"), Value::new_object());
         return <Self as Deepcoin>::parse_order(self, data.clone(), market.clone());
@@ -1952,7 +1976,7 @@ pub trait Deepcoin : Exchange {
             "IsCrossMargin": encoded_margin_mode,
             "IsMergeMode": if merged.is_truthy() { Value::from(1) } else { Value::from(0) }
         }))).unwrap());
-        let mut response: Value = self.private_post_deepcoin_trade_swap_cancel_all(extend_2(request.clone(), params.clone())).await;
+        let mut response: Value = self.dispatch("privatePostDeepcoinTradeSwapCancelAll".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         let mut data: Value = self.safe_list(response.clone(), Value::from("data"), Value::new_array());
         return self.parse_orders(data.clone(), market.clone(), Value::Undefined, Value::Undefined, Value::Undefined);
     }
@@ -1986,7 +2010,7 @@ pub trait Deepcoin : Exchange {
                 request.set("tpTriggerPx".into(), if symbol.is_truthy() { self.price_to_precision(symbol.clone(), take_profit_price.clone()) } else { self.number_to_string(take_profit_price.clone()) });
             };
             params = self.omit(params.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("stopLossPrice").into(), Value::from("takeProfitPrice").into()])));
-            response = self.private_post_deepcoin_trade_replace_order_sltp(extend_2(request.clone(), params.clone())).await;
+            response = self.dispatch("privatePostDeepcoinTradeReplaceOrderSltp".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         } else {
             if price.clone().is_nonnullish() {
                 if symbol.clone().is_nonnullish() {
@@ -2002,7 +2026,7 @@ pub trait Deepcoin : Exchange {
                     request.set("volume".into(), self.number_to_string(amount.clone()));
                 };
             };
-            response = self.private_post_deepcoin_trade_replace_order(extend_2(request.clone(), params.clone())).await;
+            response = self.dispatch("privatePostDeepcoinTradeReplaceOrder".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         };
         let mut data: Value = self.safe_dict(response.clone(), Value::from("data"), Value::new_object());
         return <Self as Deepcoin>::parse_order(self, data.clone(), Value::Undefined);
@@ -2021,7 +2045,7 @@ pub trait Deepcoin : Exchange {
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
             "OrderSysIDs": ids
         }))).unwrap());
-        let mut response: Value = self.private_post_deepcoin_trade_batch_cancel_order(extend_2(request.clone(), params.clone())).await;
+        let mut response: Value = self.dispatch("privatePostDeepcoinTradeBatchCancelOrder".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         let mut data: Value = self.safe_list(response.clone(), Value::from("data"), Value::new_array());
         return self.parse_orders(data.clone(), market.clone(), Value::Undefined, Value::Undefined, Value::Undefined);
     }
@@ -2184,7 +2208,7 @@ pub trait Deepcoin : Exchange {
             "instType": instrument_type,
             "instId": market.get(Value::from("id"))
         }))).unwrap());
-        let mut response: Value = self.private_get_deepcoin_account_positions(extend_2(request.clone(), params.clone())).await;
+        let mut response: Value = self.dispatch("privateGetDeepcoinAccountPositions".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         let mut data: Value = self.safe_list(response.clone(), Value::from("data"), Value::new_array());
         return self.parse_positions(data.clone(), Value::Json(serde_json::Value::Array(vec![market.get(Value::from("symbol")).into()])), Value::Undefined);
     }
@@ -2204,7 +2228,7 @@ pub trait Deepcoin : Exchange {
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
             "instType": instrument_type
         }))).unwrap());
-        let mut response: Value = self.private_get_deepcoin_account_positions(extend_2(request.clone(), params.clone())).await;
+        let mut response: Value = self.dispatch("privateGetDeepcoinAccountPositions".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         //
         //     {
         //         "code": "0",
@@ -2315,7 +2339,7 @@ pub trait Deepcoin : Exchange {
             "instId": market.get(Value::from("id")),
             "mrgPosition": mrg_position
         }))).unwrap());
-        let mut response: Value = self.private_post_deepcoin_account_set_leverage(extend_2(request.clone(), params.clone())).await;
+        let mut response: Value = self.dispatch("privatePostDeepcoinAccountSetLeverage".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         //
         //     {
         //         code: '0',
@@ -2353,7 +2377,7 @@ pub trait Deepcoin : Exchange {
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
             "instType": inst_type
         }))).unwrap());
-        let mut response: Value = self.public_get_deepcoin_trade_fund_rate_current_funding_rate(extend_2(request.clone(), params.clone())).await;
+        let mut response: Value = self.dispatch("publicGetDeepcoinTradeFundRateCurrentFundingRate".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         //
         //     {
         //         "code": "0",
@@ -2388,7 +2412,7 @@ pub trait Deepcoin : Exchange {
             "instId": market.get(Value::from("id")),
             "instType": <Self as Deepcoin>::get_product_group_from_market(self, market.clone())
         }))).unwrap());
-        let mut response: Value = self.public_get_deepcoin_trade_fund_rate_current_funding_rate(extend_2(request.clone(), params.clone())).await;
+        let mut response: Value = self.dispatch("publicGetDeepcoinTradeFundRateCurrentFundingRate".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         //
         //     {
         //         "code": "0",
@@ -2454,7 +2478,7 @@ pub trait Deepcoin : Exchange {
             request.set("size".into(), limit.clone());
         };
         // default 20, max 100
-        let mut response: Value = self.public_get_deepcoin_trade_fund_rate_history(extend_2(request.clone(), params.clone())).await;
+        let mut response: Value = self.dispatch("publicGetDeepcoinTradeFundRateHistory".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         //
         //     {
         //         "code": "0",
@@ -2535,7 +2559,7 @@ pub trait Deepcoin : Exchange {
             params = self.omit(params.clone(), Value::from("until"));
             request.set("end".into(), until.clone());
         };
-        let mut response: Value = self.private_get_deepcoin_trade_fills(extend_2(request.clone(), params.clone())).await;
+        let mut response: Value = self.dispatch("privateGetDeepcoinTradeFills".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         //
         //     {
         //         "code": "0",
@@ -2591,13 +2615,13 @@ pub trait Deepcoin : Exchange {
         }))).unwrap());
         let mut response: Value = Value::Undefined;
         if position_id.clone().is_nullish() && position_ids.clone().is_nullish() {
-            response = self.private_post_deepcoin_trade_batch_close_position(extend_2(request.clone(), params.clone())).await;
+            response = self.dispatch("privatePostDeepcoinTradeBatchClosePosition".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         } else {
             if position_id.clone().is_nonnullish() {
                 params = self.omit(params.clone(), Value::from("positionId"));
                 request.set("positionIds".into(), Value::Json(serde_json::Value::Array(vec![position_id.clone().into()])));
             };
-            response = self.private_post_deepcoin_trade_close_position_by_ids(extend_2(request.clone(), params.clone())).await;
+            response = self.dispatch("privatePostDeepcoinTradeClosePositionByIds".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         };
         let mut data: Value = self.safe_list(response.clone(), Value::from("data"), Value::new_array());
         return <Self as Deepcoin>::parse_order(self, data.clone(), market.clone());
@@ -2607,6 +2631,17 @@ pub trait Deepcoin : Exchange {
 
     
 
+    
+    async fn dispatch(&mut self, method: Value, params: Value, context: Value) -> Value {
+        match method {
+            Value::Json(serde_json::Value::String(ref m)) => {
+                match m.as_ref() {
+                    _ => unimplemented!(),
+                }
+            },
+            _ => unimplemented!()
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -2644,7 +2679,7 @@ impl ValueTrait for DeepcoinImpl {
     fn join(&self, glue: Value) -> Value { self.0.join(glue) }
     fn to_string(&self) -> Value { self.0.to_string() }
     fn typeof_(&self) -> Value { self.0.typeof_() }
-    fn slice(&self, start: Value) -> Value { self.0.slice(start) }
+    fn slice(&self, start: Value, end: Value) -> Value { self.0.slice(start, end) }
 }
 
 impl DeepcoinImpl {

@@ -13,14 +13,38 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, BoolExt, JSON, Array, Object, Math, Promise, parse_int, shift_2, extend_2, normalize};
 // Crypto hash identifiers
-fn sha256() -> Value { Value::from("sha256") }
-fn sha384() -> Value { Value::from("sha384") }
-fn sha512() -> Value { Value::from("sha512") }
-fn md5() -> Value { Value::from("md5") }
-fn ed25519() -> Value { Value::from("ed25519") }
+fn sha256() -> Value { Value::from("sha256()") }
+fn sha384() -> Value { Value::from("sha384()") }
+fn sha512() -> Value { Value::from("sha512()") }
+fn md5() -> Value { Value::from("md5()") }
+fn ed25519() -> Value { Value::from("ed25519()") }
 fn rsa(msg: Value, secret: Value, _hash: Value) -> Value { msg }
 fn eddsa(msg: Value, secret: Value, _curve: Value) -> Value { msg }
-fn secp256k1() -> Value { Value::from("secp256k1") }
+fn secp256k1() -> Value { Value::from("secp256k1()") }
+fn keccak() -> Value { Value::from("keccak()") }
+fn ecdsa(msg: Value, secret: Value, algo: Value, hash_fn: Value) -> Value { msg }
+fn totp(secret: Value) -> Value { Value::Undefined }
+fn jwt(data: Value, secret: Value, hash: Value, is_rsa: Value) -> Value { Value::Undefined }
+fn parse_float(value: Value) -> Value { value }
+fn decimals(value: Value) -> Value { Value::from(0) }
+fn shift_1(value: Value) -> Value { value }
+fn shift_3(value: Value) -> (Value, Value, Value) { (value.clone(), Value::Undefined, Value::Undefined) }
+fn shift_4(value: Value) -> (Value, Value, Value, Value) { (value.clone(), Value::Undefined, Value::Undefined, Value::Undefined) }
+// Error type constructors
+fn BadRequest(msg: Value) -> Value { msg }
+fn InvalidOrder(msg: Value) -> Value { msg }
+fn ExchangeError(msg: Value) -> Value { msg }
+fn InsufficientFunds(msg: Value) -> Value { msg }
+fn OrderNotFound(msg: Value) -> Value { msg }
+fn AuthenticationError(msg: Value) -> Value { msg }
+fn PermissionDenied(msg: Value) -> Value { msg }
+fn ExchangeNotAvailable(msg: Value) -> Value { msg }
+fn ArgumentsRequired(msg: Value) -> Value { msg }
+fn RateLimitExceeded(msg: Value) -> Value { msg }
+fn OrderNotFillable(msg: Value) -> Value { msg }
+fn OrderImmediatelyFillable(msg: Value) -> Value { msg }
+fn NotSupported(msg: Value) -> Value { msg }
+fn DuplicateOrderId(msg: Value) -> Value { msg }
 
 use crate::exchange::{PRECISE_BASE, TRUNCATE, ROUND, ROUND_UP, ROUND_DOWN};
 use crate::exchange::{DECIMAL_PLACES, SIGNIFICANT_DIGITS, TICK_SIZE, NO_PADDING, PAD_WITH_ZERO};
@@ -583,7 +607,7 @@ pub trait Coinbase : Exchange {
     async fn fetch_time(&mut self, mut params: Value) -> Value {
         let candidates = vec![("public", "GET", "time"), ("public", "GET", "server/time"), ("public", "GET", "timestamp")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Coinbase>::request(self,path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -2000,14 +2024,14 @@ pub trait Coinbase : Exchange {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = <Self as Coinbase>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() { return rv; }
                 }
             }
         }
         let candidates = vec![("public", "GET", "ticker/24hr"), ("public", "GET", "tickers"), ("public", "GET", "ticker")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Coinbase>::request(self,path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -2140,14 +2164,14 @@ pub trait Coinbase : Exchange {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = <Self as Coinbase>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() { return rv; }
                 }
             }
         }
         let candidates = vec![("public", "GET", "ticker/24hr"), ("public", "GET", "ticker"), ("public", "GET", "ticker/price")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Coinbase>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -3667,14 +3691,14 @@ pub trait Coinbase : Exchange {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = <Self as Coinbase>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() { return rv; }
                 }
             }
         }
         let candidates = vec![("public", "GET", "klines"), ("public", "GET", "candles"), ("public", "GET", "ohlcv")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Coinbase>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -3704,7 +3728,7 @@ pub trait Coinbase : Exchange {
         if limit.is_nonnullish() { request.set("limit".into(), limit.clone()); }
         let candidates = vec![("public", "GET", "trades"), ("public", "GET", "recent_trades"), ("public", "GET", "aggTrades")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Coinbase>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -3790,14 +3814,14 @@ pub trait Coinbase : Exchange {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = <Self as Coinbase>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() { return rv; }
                 }
             }
         }
         let candidates = vec![("public", "GET", "depth"), ("public", "GET", "orderbook"), ("public", "GET", "order_book")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Coinbase>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -3809,7 +3833,7 @@ pub trait Coinbase : Exchange {
         if symbols.is_nonnullish() { request.set("symbols".into(), symbols.clone()); }
         let candidates = vec![("public", "GET", "ticker/bookTicker"), ("public", "GET", "bookticker"), ("public", "GET", "bidsasks"), ("public", "GET", "tickers")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Coinbase>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -4665,10 +4689,10 @@ pub trait Coinbase : Exchange {
         if use_eddsa.is_truthy() {
             let mut byte_array: Value = self.base64_to_binary(self.get("secret".into()));
             let mut seed: Value = self.array_slice(byte_array.clone(), Value::from(0), Value::from(32));
-            return jwt(request.clone(), seed.clone(), sha256.clone(), false.into());
+            return jwt(request.clone(), seed.clone(), sha256().clone(), false.into());
         } else {
             // ecdsa with p256
-            return jwt(request.clone(), self.encode(self.get("secret".into())), sha256.clone(), false.into());
+            return jwt(request.clone(), self.encode(self.get("secret".into())), sha256().clone(), false.into());
         };
         Value::Undefined
     }
@@ -4695,97 +4719,97 @@ pub trait Coinbase : Exchange {
         match method {
             Value::Json(serde_json::Value::String(ref m)) => {
                 match m.as_ref() {
-                    "v2PublicGetCurrencies" => Coinbase::request(self, "currencies".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PublicGetCurrenciescrypto" => Coinbase::request(self, "currencies/crypto".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PublicGetTime" => Coinbase::request(self, "time".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PublicGetExchangerates" => Coinbase::request(self, "exchange-rates".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PublicGetUsersuserid" => Coinbase::request(self, "users/{user_id}".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PublicGetPricessymbolbuy" => Coinbase::request(self, "prices/{symbol}/buy".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PublicGetPricessymbolsell" => Coinbase::request(self, "prices/{symbol}/sell".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PublicGetPricessymbolspot" => Coinbase::request(self, "prices/{symbol}/spot".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivateGetAccounts" => Coinbase::request(self, "accounts".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivateGetAccountsaccountid" => Coinbase::request(self, "accounts/{account_id}".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivateGetAccountsaccountidaddresses" => Coinbase::request(self, "accounts/{account_id}/addresses".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivateGetAccountsaccountidaddressesaddressid" => Coinbase::request(self, "accounts/{account_id}/addresses/{address_id}".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivateGetAccountsaccountidaddressesaddressidtransactions" => Coinbase::request(self, "accounts/{account_id}/addresses/{address_id}/transactions".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivateGetAccountsaccountidtransactions" => Coinbase::request(self, "accounts/{account_id}/transactions".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivateGetAccountsaccountidtransactionstransactionid" => Coinbase::request(self, "accounts/{account_id}/transactions/{transaction_id}".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivateGetAccountsaccountidbuys" => Coinbase::request(self, "accounts/{account_id}/buys".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivateGetAccountsaccountidbuysbuyid" => Coinbase::request(self, "accounts/{account_id}/buys/{buy_id}".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivateGetAccountsaccountidsells" => Coinbase::request(self, "accounts/{account_id}/sells".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivateGetAccountsaccountidsellssellid" => Coinbase::request(self, "accounts/{account_id}/sells/{sell_id}".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivateGetAccountsaccountiddeposits" => Coinbase::request(self, "accounts/{account_id}/deposits".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivateGetAccountsaccountiddepositsdepositid" => Coinbase::request(self, "accounts/{account_id}/deposits/{deposit_id}".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivateGetAccountsaccountidwithdrawals" => Coinbase::request(self, "accounts/{account_id}/withdrawals".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivateGetAccountsaccountidwithdrawalswithdrawalid" => Coinbase::request(self, "accounts/{account_id}/withdrawals/{withdrawal_id}".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivateGetPaymentmethods" => Coinbase::request(self, "payment-methods".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivateGetPaymentmethodspaymentmethodid" => Coinbase::request(self, "payment-methods/{payment_method_id}".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivateGetUser" => Coinbase::request(self, "user".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivateGetUserauth" => Coinbase::request(self, "user/auth".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivatePostAccounts" => Coinbase::request(self, "accounts".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivatePostAccountsaccountidprimary" => Coinbase::request(self, "accounts/{account_id}/primary".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivatePostAccountsaccountidaddresses" => Coinbase::request(self, "accounts/{account_id}/addresses".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivatePostAccountsaccountidtransactions" => Coinbase::request(self, "accounts/{account_id}/transactions".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivatePostAccountsaccountidtransactionstransactionidcomplete" => Coinbase::request(self, "accounts/{account_id}/transactions/{transaction_id}/complete".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivatePostAccountsaccountidtransactionstransactionidresend" => Coinbase::request(self, "accounts/{account_id}/transactions/{transaction_id}/resend".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivatePostAccountsaccountidbuys" => Coinbase::request(self, "accounts/{account_id}/buys".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivatePostAccountsaccountidbuysbuyidcommit" => Coinbase::request(self, "accounts/{account_id}/buys/{buy_id}/commit".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivatePostAccountsaccountidsells" => Coinbase::request(self, "accounts/{account_id}/sells".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivatePostAccountsaccountidsellssellidcommit" => Coinbase::request(self, "accounts/{account_id}/sells/{sell_id}/commit".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivatePostAccountsaccountiddeposits" => Coinbase::request(self, "accounts/{account_id}/deposits".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivatePostAccountsaccountiddepositsdepositidcommit" => Coinbase::request(self, "accounts/{account_id}/deposits/{deposit_id}/commit".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivatePostAccountsaccountidwithdrawals" => Coinbase::request(self, "accounts/{account_id}/withdrawals".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivatePostAccountsaccountidwithdrawalswithdrawalidcommit" => Coinbase::request(self, "accounts/{account_id}/withdrawals/{withdrawal_id}/commit".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivatePutAccountsaccountid" => Coinbase::request(self, "accounts/{account_id}".into(), "v2".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivatePutUser" => Coinbase::request(self, "user".into(), "v2".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivateDeleteAccountsid" => Coinbase::request(self, "accounts/{id}".into(), "v2".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PrivateDeleteAccountsaccountidtransactionstransactionid" => Coinbase::request(self, "accounts/{account_id}/transactions/{transaction_id}".into(), "v2".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v3PublicGetBrokeragetime" => Coinbase::request(self, "brokerage/time".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v3PublicGetBrokeragemarketproductbook" => Coinbase::request(self, "brokerage/market/product_book".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v3PublicGetBrokeragemarketproducts" => Coinbase::request(self, "brokerage/market/products".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v3PublicGetBrokeragemarketproductsproductid" => Coinbase::request(self, "brokerage/market/products/{product_id}".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v3PublicGetBrokeragemarketproductsproductidcandles" => Coinbase::request(self, "brokerage/market/products/{product_id}/candles".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v3PublicGetBrokeragemarketproductsproductidticker" => Coinbase::request(self, "brokerage/market/products/{product_id}/ticker".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v3PrivateGetBrokerageaccounts" => Coinbase::request(self, "brokerage/accounts".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v3PrivateGetBrokerageaccountsaccountuuid" => Coinbase::request(self, "brokerage/accounts/{account_uuid}".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v3PrivateGetBrokerageordershistoricalbatch" => Coinbase::request(self, "brokerage/orders/historical/batch".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v3PrivateGetBrokerageordershistoricalfills" => Coinbase::request(self, "brokerage/orders/historical/fills".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v3PrivateGetBrokerageordershistoricalorderid" => Coinbase::request(self, "brokerage/orders/historical/{order_id}".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v3PrivateGetBrokerageproducts" => Coinbase::request(self, "brokerage/products".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v3PrivateGetBrokerageproductsproductid" => Coinbase::request(self, "brokerage/products/{product_id}".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v3PrivateGetBrokerageproductsproductidcandles" => Coinbase::request(self, "brokerage/products/{product_id}/candles".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v3PrivateGetBrokerageproductsproductidticker" => Coinbase::request(self, "brokerage/products/{product_id}/ticker".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v3PrivateGetBrokeragebestbidask" => Coinbase::request(self, "brokerage/best_bid_ask".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v3PrivateGetBrokerageproductbook" => Coinbase::request(self, "brokerage/product_book".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v3PrivateGetBrokeragetransactionsummary" => Coinbase::request(self, "brokerage/transaction_summary".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v3PrivateGetBrokerageportfolios" => Coinbase::request(self, "brokerage/portfolios".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v3PrivateGetBrokerageportfoliosportfoliouuid" => Coinbase::request(self, "brokerage/portfolios/{portfolio_uuid}".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v3PrivateGetBrokerageconverttradetradeid" => Coinbase::request(self, "brokerage/convert/trade/{trade_id}".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v3PrivateGetBrokeragecfmbalancesummary" => Coinbase::request(self, "brokerage/cfm/balance_summary".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v3PrivateGetBrokeragecfmpositions" => Coinbase::request(self, "brokerage/cfm/positions".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v3PrivateGetBrokeragecfmpositionsproductid" => Coinbase::request(self, "brokerage/cfm/positions/{product_id}".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v3PrivateGetBrokeragecfmsweeps" => Coinbase::request(self, "brokerage/cfm/sweeps".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v3PrivateGetBrokerageintxportfolioportfoliouuid" => Coinbase::request(self, "brokerage/intx/portfolio/{portfolio_uuid}".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v3PrivateGetBrokerageintxpositionsportfoliouuid" => Coinbase::request(self, "brokerage/intx/positions/{portfolio_uuid}".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v3PrivateGetBrokerageintxpositionsportfoliouuidsymbol" => Coinbase::request(self, "brokerage/intx/positions/{portfolio_uuid}/{symbol}".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v3PrivateGetBrokeragepaymentmethods" => Coinbase::request(self, "brokerage/payment_methods".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v3PrivateGetBrokeragepaymentmethodspaymentmethodid" => Coinbase::request(self, "brokerage/payment_methods/{payment_method_id}".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v3PrivateGetBrokeragekeypermissions" => Coinbase::request(self, "brokerage/key_permissions".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v3PrivatePostBrokerageorders" => Coinbase::request(self, "brokerage/orders".into(), "v3".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v3PrivatePostBrokerageordersbatchcancel" => Coinbase::request(self, "brokerage/orders/batch_cancel".into(), "v3".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v3PrivatePostBrokerageordersedit" => Coinbase::request(self, "brokerage/orders/edit".into(), "v3".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v3PrivatePostBrokerageorderseditpreview" => Coinbase::request(self, "brokerage/orders/edit_preview".into(), "v3".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v3PrivatePostBrokerageorderspreview" => Coinbase::request(self, "brokerage/orders/preview".into(), "v3".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v3PrivatePostBrokerageportfolios" => Coinbase::request(self, "brokerage/portfolios".into(), "v3".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v3PrivatePostBrokerageportfoliosmovefunds" => Coinbase::request(self, "brokerage/portfolios/move_funds".into(), "v3".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v3PrivatePostBrokerageconvertquote" => Coinbase::request(self, "brokerage/convert/quote".into(), "v3".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v3PrivatePostBrokerageconverttradetradeid" => Coinbase::request(self, "brokerage/convert/trade/{trade_id}".into(), "v3".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v3PrivatePostBrokeragecfmsweepsschedule" => Coinbase::request(self, "brokerage/cfm/sweeps/schedule".into(), "v3".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v3PrivatePostBrokerageintxallocate" => Coinbase::request(self, "brokerage/intx/allocate".into(), "v3".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v3PrivatePostBrokerageorderscloseposition" => Coinbase::request(self, "brokerage/orders/close_position".into(), "v3".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v3PrivatePutBrokerageportfoliosportfoliouuid" => Coinbase::request(self, "brokerage/portfolios/{portfolio_uuid}".into(), "v3".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v3PrivateDeleteBrokerageportfoliosportfoliouuid" => Coinbase::request(self, "brokerage/portfolios/{portfolio_uuid}".into(), "v3".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v3PrivateDeleteBrokeragecfmsweeps" => Coinbase::request(self, "brokerage/cfm/sweeps".into(), "v3".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PublicGetCurrencies" => self.request("currencies".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PublicGetCurrenciescrypto" => self.request("currencies/crypto".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PublicGetTime" => self.request("time".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PublicGetExchangerates" => self.request("exchange-rates".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PublicGetUsersuserid" => self.request("users/{user_id}".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PublicGetPricessymbolbuy" => self.request("prices/{symbol}/buy".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PublicGetPricessymbolsell" => self.request("prices/{symbol}/sell".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PublicGetPricessymbolspot" => self.request("prices/{symbol}/spot".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivateGetAccounts" => self.request("accounts".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivateGetAccountsaccountid" => self.request("accounts/{account_id}".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivateGetAccountsaccountidaddresses" => self.request("accounts/{account_id}/addresses".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivateGetAccountsaccountidaddressesaddressid" => self.request("accounts/{account_id}/addresses/{address_id}".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivateGetAccountsaccountidaddressesaddressidtransactions" => self.request("accounts/{account_id}/addresses/{address_id}/transactions".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivateGetAccountsaccountidtransactions" => self.request("accounts/{account_id}/transactions".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivateGetAccountsaccountidtransactionstransactionid" => self.request("accounts/{account_id}/transactions/{transaction_id}".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivateGetAccountsaccountidbuys" => self.request("accounts/{account_id}/buys".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivateGetAccountsaccountidbuysbuyid" => self.request("accounts/{account_id}/buys/{buy_id}".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivateGetAccountsaccountidsells" => self.request("accounts/{account_id}/sells".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivateGetAccountsaccountidsellssellid" => self.request("accounts/{account_id}/sells/{sell_id}".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivateGetAccountsaccountiddeposits" => self.request("accounts/{account_id}/deposits".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivateGetAccountsaccountiddepositsdepositid" => self.request("accounts/{account_id}/deposits/{deposit_id}".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivateGetAccountsaccountidwithdrawals" => self.request("accounts/{account_id}/withdrawals".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivateGetAccountsaccountidwithdrawalswithdrawalid" => self.request("accounts/{account_id}/withdrawals/{withdrawal_id}".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivateGetPaymentmethods" => self.request("payment-methods".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivateGetPaymentmethodspaymentmethodid" => self.request("payment-methods/{payment_method_id}".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivateGetUser" => self.request("user".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivateGetUserauth" => self.request("user/auth".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivatePostAccounts" => self.request("accounts".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivatePostAccountsaccountidprimary" => self.request("accounts/{account_id}/primary".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivatePostAccountsaccountidaddresses" => self.request("accounts/{account_id}/addresses".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivatePostAccountsaccountidtransactions" => self.request("accounts/{account_id}/transactions".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivatePostAccountsaccountidtransactionstransactionidcomplete" => self.request("accounts/{account_id}/transactions/{transaction_id}/complete".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivatePostAccountsaccountidtransactionstransactionidresend" => self.request("accounts/{account_id}/transactions/{transaction_id}/resend".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivatePostAccountsaccountidbuys" => self.request("accounts/{account_id}/buys".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivatePostAccountsaccountidbuysbuyidcommit" => self.request("accounts/{account_id}/buys/{buy_id}/commit".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivatePostAccountsaccountidsells" => self.request("accounts/{account_id}/sells".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivatePostAccountsaccountidsellssellidcommit" => self.request("accounts/{account_id}/sells/{sell_id}/commit".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivatePostAccountsaccountiddeposits" => self.request("accounts/{account_id}/deposits".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivatePostAccountsaccountiddepositsdepositidcommit" => self.request("accounts/{account_id}/deposits/{deposit_id}/commit".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivatePostAccountsaccountidwithdrawals" => self.request("accounts/{account_id}/withdrawals".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivatePostAccountsaccountidwithdrawalswithdrawalidcommit" => self.request("accounts/{account_id}/withdrawals/{withdrawal_id}/commit".into(), "v2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivatePutAccountsaccountid" => self.request("accounts/{account_id}".into(), "v2".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivatePutUser" => self.request("user".into(), "v2".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivateDeleteAccountsid" => self.request("accounts/{id}".into(), "v2".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PrivateDeleteAccountsaccountidtransactionstransactionid" => self.request("accounts/{account_id}/transactions/{transaction_id}".into(), "v2".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PublicGetBrokeragetime" => self.request("brokerage/time".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PublicGetBrokeragemarketproductbook" => self.request("brokerage/market/product_book".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PublicGetBrokeragemarketproducts" => self.request("brokerage/market/products".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PublicGetBrokeragemarketproductsproductid" => self.request("brokerage/market/products/{product_id}".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PublicGetBrokeragemarketproductsproductidcandles" => self.request("brokerage/market/products/{product_id}/candles".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PublicGetBrokeragemarketproductsproductidticker" => self.request("brokerage/market/products/{product_id}/ticker".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivateGetBrokerageaccounts" => self.request("brokerage/accounts".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivateGetBrokerageaccountsaccountuuid" => self.request("brokerage/accounts/{account_uuid}".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivateGetBrokerageordershistoricalbatch" => self.request("brokerage/orders/historical/batch".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivateGetBrokerageordershistoricalfills" => self.request("brokerage/orders/historical/fills".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivateGetBrokerageordershistoricalorderid" => self.request("brokerage/orders/historical/{order_id}".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivateGetBrokerageproducts" => self.request("brokerage/products".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivateGetBrokerageproductsproductid" => self.request("brokerage/products/{product_id}".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivateGetBrokerageproductsproductidcandles" => self.request("brokerage/products/{product_id}/candles".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivateGetBrokerageproductsproductidticker" => self.request("brokerage/products/{product_id}/ticker".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivateGetBrokeragebestbidask" => self.request("brokerage/best_bid_ask".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivateGetBrokerageproductbook" => self.request("brokerage/product_book".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivateGetBrokeragetransactionsummary" => self.request("brokerage/transaction_summary".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivateGetBrokerageportfolios" => self.request("brokerage/portfolios".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivateGetBrokerageportfoliosportfoliouuid" => self.request("brokerage/portfolios/{portfolio_uuid}".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivateGetBrokerageconverttradetradeid" => self.request("brokerage/convert/trade/{trade_id}".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivateGetBrokeragecfmbalancesummary" => self.request("brokerage/cfm/balance_summary".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivateGetBrokeragecfmpositions" => self.request("brokerage/cfm/positions".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivateGetBrokeragecfmpositionsproductid" => self.request("brokerage/cfm/positions/{product_id}".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivateGetBrokeragecfmsweeps" => self.request("brokerage/cfm/sweeps".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivateGetBrokerageintxportfolioportfoliouuid" => self.request("brokerage/intx/portfolio/{portfolio_uuid}".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivateGetBrokerageintxpositionsportfoliouuid" => self.request("brokerage/intx/positions/{portfolio_uuid}".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivateGetBrokerageintxpositionsportfoliouuidsymbol" => self.request("brokerage/intx/positions/{portfolio_uuid}/{symbol}".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivateGetBrokeragepaymentmethods" => self.request("brokerage/payment_methods".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivateGetBrokeragepaymentmethodspaymentmethodid" => self.request("brokerage/payment_methods/{payment_method_id}".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivateGetBrokeragekeypermissions" => self.request("brokerage/key_permissions".into(), "v3".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivatePostBrokerageorders" => self.request("brokerage/orders".into(), "v3".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivatePostBrokerageordersbatchcancel" => self.request("brokerage/orders/batch_cancel".into(), "v3".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivatePostBrokerageordersedit" => self.request("brokerage/orders/edit".into(), "v3".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivatePostBrokerageorderseditpreview" => self.request("brokerage/orders/edit_preview".into(), "v3".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivatePostBrokerageorderspreview" => self.request("brokerage/orders/preview".into(), "v3".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivatePostBrokerageportfolios" => self.request("brokerage/portfolios".into(), "v3".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivatePostBrokerageportfoliosmovefunds" => self.request("brokerage/portfolios/move_funds".into(), "v3".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivatePostBrokerageconvertquote" => self.request("brokerage/convert/quote".into(), "v3".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivatePostBrokerageconverttradetradeid" => self.request("brokerage/convert/trade/{trade_id}".into(), "v3".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivatePostBrokeragecfmsweepsschedule" => self.request("brokerage/cfm/sweeps/schedule".into(), "v3".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivatePostBrokerageintxallocate" => self.request("brokerage/intx/allocate".into(), "v3".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivatePostBrokerageorderscloseposition" => self.request("brokerage/orders/close_position".into(), "v3".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivatePutBrokerageportfoliosportfoliouuid" => self.request("brokerage/portfolios/{portfolio_uuid}".into(), "v3".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivateDeleteBrokerageportfoliosportfoliouuid" => self.request("brokerage/portfolios/{portfolio_uuid}".into(), "v3".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v3PrivateDeleteBrokeragecfmsweeps" => self.request("brokerage/cfm/sweeps".into(), "v3".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     _ => unimplemented!(),
                 }
             },
@@ -4829,7 +4853,7 @@ impl ValueTrait for CoinbaseImpl {
     fn join(&self, glue: Value) -> Value { self.0.join(glue) }
     fn to_string(&self) -> Value { self.0.to_string() }
     fn typeof_(&self) -> Value { self.0.typeof_() }
-    fn slice(&self, start: Value) -> Value { self.0.slice(start) }
+    fn slice(&self, start: Value, end: Value) -> Value { self.0.slice(start, end) }
 }
 
 impl CoinbaseImpl {

@@ -13,14 +13,38 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, BoolExt, JSON, Array, Object, Math, Promise, parse_int, shift_2, extend_2, normalize};
 // Crypto hash identifiers
-fn sha256() -> Value { Value::from("sha256") }
-fn sha384() -> Value { Value::from("sha384") }
-fn sha512() -> Value { Value::from("sha512") }
-fn md5() -> Value { Value::from("md5") }
-fn ed25519() -> Value { Value::from("ed25519") }
+fn sha256() -> Value { Value::from("sha256()") }
+fn sha384() -> Value { Value::from("sha384()") }
+fn sha512() -> Value { Value::from("sha512()") }
+fn md5() -> Value { Value::from("md5()") }
+fn ed25519() -> Value { Value::from("ed25519()") }
 fn rsa(msg: Value, secret: Value, _hash: Value) -> Value { msg }
 fn eddsa(msg: Value, secret: Value, _curve: Value) -> Value { msg }
-fn secp256k1() -> Value { Value::from("secp256k1") }
+fn secp256k1() -> Value { Value::from("secp256k1()") }
+fn keccak() -> Value { Value::from("keccak()") }
+fn ecdsa(msg: Value, secret: Value, algo: Value, hash_fn: Value) -> Value { msg }
+fn totp(secret: Value) -> Value { Value::Undefined }
+fn jwt(data: Value, secret: Value, hash: Value, is_rsa: Value) -> Value { Value::Undefined }
+fn parse_float(value: Value) -> Value { value }
+fn decimals(value: Value) -> Value { Value::from(0) }
+fn shift_1(value: Value) -> Value { value }
+fn shift_3(value: Value) -> (Value, Value, Value) { (value.clone(), Value::Undefined, Value::Undefined) }
+fn shift_4(value: Value) -> (Value, Value, Value, Value) { (value.clone(), Value::Undefined, Value::Undefined, Value::Undefined) }
+// Error type constructors
+fn BadRequest(msg: Value) -> Value { msg }
+fn InvalidOrder(msg: Value) -> Value { msg }
+fn ExchangeError(msg: Value) -> Value { msg }
+fn InsufficientFunds(msg: Value) -> Value { msg }
+fn OrderNotFound(msg: Value) -> Value { msg }
+fn AuthenticationError(msg: Value) -> Value { msg }
+fn PermissionDenied(msg: Value) -> Value { msg }
+fn ExchangeNotAvailable(msg: Value) -> Value { msg }
+fn ArgumentsRequired(msg: Value) -> Value { msg }
+fn RateLimitExceeded(msg: Value) -> Value { msg }
+fn OrderNotFillable(msg: Value) -> Value { msg }
+fn OrderImmediatelyFillable(msg: Value) -> Value { msg }
+fn NotSupported(msg: Value) -> Value { msg }
+fn DuplicateOrderId(msg: Value) -> Value { msg }
 
 use crate::exchange::{PRECISE_BASE, TRUNCATE, ROUND, ROUND_UP, ROUND_DOWN};
 use crate::exchange::{DECIMAL_PLACES, SIGNIFICANT_DIGITS, TICK_SIZE, NO_PADDING, PAD_WITH_ZERO};
@@ -472,7 +496,7 @@ pub trait Coinbaseinternational : Exchange {
         };
         let mut timestamp: Value = self.nonce().to_string();
         let mut auth: Value = timestamp.clone() + self.get("apiKey".into()) + Value::from("CBINTLMD") + self.get("password".into());
-        let mut signature: Value = self.hmac(self.encode(auth.clone()), self.base64_to_binary(self.get("secret".into())), sha256.clone(), Value::from("base64"));
+        let mut signature: Value = self.hmac(self.encode(auth.clone()), self.base64_to_binary(self.get("secret".into())), sha256().clone(), Value::from("base64"));
         let mut subscribe: Value = Value::Json(normalize(&Value::Json(json!({
             "type": "SUBSCRIBE",
             "channels": Value::Json(serde_json::Value::Array(vec![name.clone().into()])),
@@ -516,7 +540,7 @@ pub trait Coinbaseinternational : Exchange {
         };
         let mut timestamp: Value = self.number_to_string(self.seconds());
         let mut auth: Value = timestamp.clone() + self.get("apiKey".into()) + Value::from("CBINTLMD") + self.get("password".into());
-        let mut signature: Value = self.hmac(self.encode(auth.clone()), self.base64_to_binary(self.get("secret".into())), sha256.clone(), Value::from("base64"));
+        let mut signature: Value = self.hmac(self.encode(auth.clone()), self.base64_to_binary(self.get("secret".into())), sha256().clone(), Value::from("base64"));
         let mut subscribe: Value = Value::Json(normalize(&Value::Json(json!({
             "type": "SUBSCRIBE",
             "time": timestamp,
@@ -965,7 +989,7 @@ pub trait Coinbaseinternational : Exchange {
         };
         let mut orderbook: Value = self.get("orderbooks".into()).get(symbol.clone());
         if r#type.clone() == Value::from("SNAPSHOT") {
-            let mut parsed_snapshot: Value = self.parse_order_book(message.clone(), symbol.clone(), Value::Undefined, Value::from("bids"), Value::from("asks"));
+            let mut parsed_snapshot: Value = self.parse_order_book(message.clone(), symbol.clone(), Value::Undefined, Value::from("bids"), Value::from("asks"), Value::Undefined, Value::Undefined, Value::Undefined);
             orderbook.reset(parsed_snapshot.clone());
             orderbook.set("symbol".into(), symbol.clone());
         } else {
@@ -1115,41 +1139,41 @@ pub trait Coinbaseinternational : Exchange {
         match method {
             Value::Json(serde_json::Value::String(ref m)) => {
                 match m.as_ref() {
-                    "v1PublicGetAssets" => Coinbaseinternational::request(self, "assets".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetAssetsassets" => Coinbaseinternational::request(self, "assets/{assets}".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetAssetsassetnetworks" => Coinbaseinternational::request(self, "assets/{asset}/networks".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetInstruments" => Coinbaseinternational::request(self, "instruments".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetInstrumentsinstrument" => Coinbaseinternational::request(self, "instruments/{instrument}".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetInstrumentsinstrumentquote" => Coinbaseinternational::request(self, "instruments/{instrument}/quote".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetInstrumentsinstrumentfunding" => Coinbaseinternational::request(self, "instruments/{instrument}/funding".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetInstrumentsinstrumentcandles" => Coinbaseinternational::request(self, "instruments/{instrument}/candles".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetOrders" => Coinbaseinternational::request(self, "orders".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetOrdersid" => Coinbaseinternational::request(self, "orders/{id}".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetPortfolios" => Coinbaseinternational::request(self, "portfolios".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetPortfoliosportfolio" => Coinbaseinternational::request(self, "portfolios/{portfolio}".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetPortfoliosportfoliodetail" => Coinbaseinternational::request(self, "portfolios/{portfolio}/detail".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetPortfoliosportfoliosummary" => Coinbaseinternational::request(self, "portfolios/{portfolio}/summary".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetPortfoliosportfoliobalances" => Coinbaseinternational::request(self, "portfolios/{portfolio}/balances".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetPortfoliosportfoliobalancesasset" => Coinbaseinternational::request(self, "portfolios/{portfolio}/balances/{asset}".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetPortfoliosportfoliopositions" => Coinbaseinternational::request(self, "portfolios/{portfolio}/positions".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetPortfoliosportfoliopositionsinstrument" => Coinbaseinternational::request(self, "portfolios/{portfolio}/positions/{instrument}".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetPortfoliosfills" => Coinbaseinternational::request(self, "portfolios/fills".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetPortfoliosportfoliofills" => Coinbaseinternational::request(self, "portfolios/{portfolio}/fills".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetTransfers" => Coinbaseinternational::request(self, "transfers".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateGetTransferstransferuuid" => Coinbaseinternational::request(self, "transfers/{transfer_uuid}".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostOrders" => Coinbaseinternational::request(self, "orders".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostPortfolios" => Coinbaseinternational::request(self, "portfolios".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostPortfoliosmargin" => Coinbaseinternational::request(self, "portfolios/margin".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostPortfoliostransfer" => Coinbaseinternational::request(self, "portfolios/transfer".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostTransferswithdraw" => Coinbaseinternational::request(self, "transfers/withdraw".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostTransfersaddress" => Coinbaseinternational::request(self, "transfers/address".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostTransferscreatecounterpartyid" => Coinbaseinternational::request(self, "transfers/create-counterparty-id".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostTransfersvalidatecounterpartyid" => Coinbaseinternational::request(self, "transfers/validate-counterparty-id".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostTransferswithdrawcounterparty" => Coinbaseinternational::request(self, "transfers/withdraw/counterparty".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePutOrdersid" => Coinbaseinternational::request(self, "orders/{id}".into(), "v1".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePutPortfoliosportfolio" => Coinbaseinternational::request(self, "portfolios/{portfolio}".into(), "v1".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateDeleteOrders" => Coinbaseinternational::request(self, "orders".into(), "v1".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivateDeleteOrdersid" => Coinbaseinternational::request(self, "orders/{id}".into(), "v1".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetAssets" => self.request("assets".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetAssetsassets" => self.request("assets/{assets}".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetAssetsassetnetworks" => self.request("assets/{asset}/networks".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetInstruments" => self.request("instruments".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetInstrumentsinstrument" => self.request("instruments/{instrument}".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetInstrumentsinstrumentquote" => self.request("instruments/{instrument}/quote".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetInstrumentsinstrumentfunding" => self.request("instruments/{instrument}/funding".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetInstrumentsinstrumentcandles" => self.request("instruments/{instrument}/candles".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetOrders" => self.request("orders".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetOrdersid" => self.request("orders/{id}".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetPortfolios" => self.request("portfolios".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetPortfoliosportfolio" => self.request("portfolios/{portfolio}".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetPortfoliosportfoliodetail" => self.request("portfolios/{portfolio}/detail".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetPortfoliosportfoliosummary" => self.request("portfolios/{portfolio}/summary".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetPortfoliosportfoliobalances" => self.request("portfolios/{portfolio}/balances".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetPortfoliosportfoliobalancesasset" => self.request("portfolios/{portfolio}/balances/{asset}".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetPortfoliosportfoliopositions" => self.request("portfolios/{portfolio}/positions".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetPortfoliosportfoliopositionsinstrument" => self.request("portfolios/{portfolio}/positions/{instrument}".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetPortfoliosfills" => self.request("portfolios/fills".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetPortfoliosportfoliofills" => self.request("portfolios/{portfolio}/fills".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetTransfers" => self.request("transfers".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateGetTransferstransferuuid" => self.request("transfers/{transfer_uuid}".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostOrders" => self.request("orders".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostPortfolios" => self.request("portfolios".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostPortfoliosmargin" => self.request("portfolios/margin".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostPortfoliostransfer" => self.request("portfolios/transfer".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostTransferswithdraw" => self.request("transfers/withdraw".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostTransfersaddress" => self.request("transfers/address".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostTransferscreatecounterpartyid" => self.request("transfers/create-counterparty-id".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostTransfersvalidatecounterpartyid" => self.request("transfers/validate-counterparty-id".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostTransferswithdrawcounterparty" => self.request("transfers/withdraw/counterparty".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePutOrdersid" => self.request("orders/{id}".into(), "v1".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePutPortfoliosportfolio" => self.request("portfolios/{portfolio}".into(), "v1".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateDeleteOrders" => self.request("orders".into(), "v1".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivateDeleteOrdersid" => self.request("orders/{id}".into(), "v1".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     _ => unimplemented!(),
                 }
             },
@@ -1193,7 +1217,7 @@ impl ValueTrait for CoinbaseinternationalImpl {
     fn join(&self, glue: Value) -> Value { self.0.join(glue) }
     fn to_string(&self) -> Value { self.0.to_string() }
     fn typeof_(&self) -> Value { self.0.typeof_() }
-    fn slice(&self, start: Value) -> Value { self.0.slice(start) }
+    fn slice(&self, start: Value, end: Value) -> Value { self.0.slice(start, end) }
 }
 
 impl CoinbaseinternationalImpl {

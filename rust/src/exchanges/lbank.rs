@@ -13,14 +13,38 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, BoolExt, JSON, Array, Object, Math, Promise, parse_int, shift_2, extend_2, normalize};
 // Crypto hash identifiers
-fn sha256() -> Value { Value::from("sha256") }
-fn sha384() -> Value { Value::from("sha384") }
-fn sha512() -> Value { Value::from("sha512") }
-fn md5() -> Value { Value::from("md5") }
-fn ed25519() -> Value { Value::from("ed25519") }
+fn sha256() -> Value { Value::from("sha256()") }
+fn sha384() -> Value { Value::from("sha384()") }
+fn sha512() -> Value { Value::from("sha512()") }
+fn md5() -> Value { Value::from("md5()") }
+fn ed25519() -> Value { Value::from("ed25519()") }
 fn rsa(msg: Value, secret: Value, _hash: Value) -> Value { msg }
 fn eddsa(msg: Value, secret: Value, _curve: Value) -> Value { msg }
-fn secp256k1() -> Value { Value::from("secp256k1") }
+fn secp256k1() -> Value { Value::from("secp256k1()") }
+fn keccak() -> Value { Value::from("keccak()") }
+fn ecdsa(msg: Value, secret: Value, algo: Value, hash_fn: Value) -> Value { msg }
+fn totp(secret: Value) -> Value { Value::Undefined }
+fn jwt(data: Value, secret: Value, hash: Value, is_rsa: Value) -> Value { Value::Undefined }
+fn parse_float(value: Value) -> Value { value }
+fn decimals(value: Value) -> Value { Value::from(0) }
+fn shift_1(value: Value) -> Value { value }
+fn shift_3(value: Value) -> (Value, Value, Value) { (value.clone(), Value::Undefined, Value::Undefined) }
+fn shift_4(value: Value) -> (Value, Value, Value, Value) { (value.clone(), Value::Undefined, Value::Undefined, Value::Undefined) }
+// Error type constructors
+fn BadRequest(msg: Value) -> Value { msg }
+fn InvalidOrder(msg: Value) -> Value { msg }
+fn ExchangeError(msg: Value) -> Value { msg }
+fn InsufficientFunds(msg: Value) -> Value { msg }
+fn OrderNotFound(msg: Value) -> Value { msg }
+fn AuthenticationError(msg: Value) -> Value { msg }
+fn PermissionDenied(msg: Value) -> Value { msg }
+fn ExchangeNotAvailable(msg: Value) -> Value { msg }
+fn ArgumentsRequired(msg: Value) -> Value { msg }
+fn RateLimitExceeded(msg: Value) -> Value { msg }
+fn OrderNotFillable(msg: Value) -> Value { msg }
+fn OrderImmediatelyFillable(msg: Value) -> Value { msg }
+fn NotSupported(msg: Value) -> Value { msg }
+fn DuplicateOrderId(msg: Value) -> Value { msg }
 
 use crate::exchange::{PRECISE_BASE, TRUNCATE, ROUND, ROUND_UP, ROUND_DOWN};
 use crate::exchange::{DECIMAL_PLACES, SIGNIFICANT_DIGITS, TICK_SIZE, NO_PADDING, PAD_WITH_ZERO};
@@ -389,7 +413,7 @@ pub trait Lbank : Exchange {
     async fn fetch_time(&mut self, mut params: Value) -> Value {
         let candidates = vec![("public", "GET", "time"), ("public", "GET", "server/time"), ("public", "GET", "timestamp")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Lbank>::request(self,path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -767,14 +791,14 @@ pub trait Lbank : Exchange {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = <Self as Lbank>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() { return rv; }
                 }
             }
         }
         let candidates = vec![("public", "GET", "ticker/24hr"), ("public", "GET", "ticker"), ("public", "GET", "ticker/price")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Lbank>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -796,14 +820,14 @@ pub trait Lbank : Exchange {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = <Self as Lbank>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() { return rv; }
                 }
             }
         }
         let candidates = vec![("public", "GET", "ticker/24hr"), ("public", "GET", "tickers"), ("public", "GET", "ticker")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Lbank>::request(self,path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -828,14 +852,14 @@ pub trait Lbank : Exchange {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = <Self as Lbank>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() { return rv; }
                 }
             }
         }
         let candidates = vec![("public", "GET", "depth"), ("public", "GET", "orderbook"), ("public", "GET", "order_book")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Lbank>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -952,7 +976,7 @@ pub trait Lbank : Exchange {
         if limit.is_nonnullish() { request.set("limit".into(), limit.clone()); }
         let candidates = vec![("public", "GET", "trades"), ("public", "GET", "recent_trades"), ("public", "GET", "aggTrades")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Lbank>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -994,14 +1018,14 @@ pub trait Lbank : Exchange {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = <Self as Lbank>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() { return rv; }
                 }
             }
         }
         let candidates = vec![("public", "GET", "klines"), ("public", "GET", "candles"), ("public", "GET", "ohlcv")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Lbank>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -1171,7 +1195,7 @@ pub trait Lbank : Exchange {
         let mut position_fee_time: Value = self.safe_integer(ticker.clone(), Value::from("positionFeeTime"), Value::Undefined);
         let mut interval_string: Value = Value::Undefined;
         if position_fee_time.clone().is_nonnullish() {
-            let mut interval: Value = self.parse_to_int(position_fee_time.clone() / Value::from(60) / Value::from(60), Value::Undefined);
+            let mut interval: Value = self.parse_to_int(position_fee_time.clone() / Value::from(60) / Value::from(60));
             interval_string = interval.to_string() + Value::from("h");
         };
         return Value::Json(normalize(&Value::Json(json!({
@@ -2622,7 +2646,7 @@ pub trait Lbank : Exchange {
     fn convert_secret_to_pem(&self, mut secret: Value) -> Value {
         let mut line_length: usize = 64;
         let mut secret_length: Value = secret.len().into() - Value::from(0);
-        let mut num_lines: Value = self.parse_to_int(secret_length.clone() / line_length.clone(), Value::Undefined);
+        let mut num_lines: Value = self.parse_to_int(secret_length.clone() / line_length.clone());
         num_lines = self.sum(num_lines.clone(), Value::from(1));
         let mut pem: Value = Value::from("-----BEGIN PRIVATE KEY-----
 ");
@@ -2646,64 +2670,64 @@ pub trait Lbank : Exchange {
         match method {
             Value::Json(serde_json::Value::String(ref m)) => {
                 match m.as_ref() {
-                    "spotPublicGetCurrencypairs" => Lbank::request(self, "currencyPairs".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPublicGetAccuracy" => Lbank::request(self, "accuracy".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPublicGetUsdtocny" => Lbank::request(self, "usdToCny".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPublicGetAssetconfigs" => Lbank::request(self, "assetConfigs".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPublicGetWithdrawconfigs" => Lbank::request(self, "withdrawConfigs".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPublicGetTimestamp" => Lbank::request(self, "timestamp".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPublicGetTicker24hr" => Lbank::request(self, "ticker/24hr".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPublicGetTicker" => Lbank::request(self, "ticker".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPublicGetDepth" => Lbank::request(self, "depth".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPublicGetIncrdepth" => Lbank::request(self, "incrDepth".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPublicGetTrades" => Lbank::request(self, "trades".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPublicGetKline" => Lbank::request(self, "kline".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPublicGetSupplementsystemping" => Lbank::request(self, "supplement/system_ping".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPublicGetSupplementincrdepth" => Lbank::request(self, "supplement/incrDepth".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPublicGetSupplementtrades" => Lbank::request(self, "supplement/trades".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPublicGetSupplementtickerprice" => Lbank::request(self, "supplement/ticker/price".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPublicGetSupplementtickerbookticker" => Lbank::request(self, "supplement/ticker/bookTicker".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPublicPostSupplementsystemstatus" => Lbank::request(self, "supplement/system_status".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPrivatePostUserinfo" => Lbank::request(self, "user_info".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPrivatePostSubscribegetkey" => Lbank::request(self, "subscribe/get_key".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPrivatePostSubscriberefreshkey" => Lbank::request(self, "subscribe/refresh_key".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPrivatePostSubscribedestroykey" => Lbank::request(self, "subscribe/destroy_key".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPrivatePostGetdepositaddress" => Lbank::request(self, "get_deposit_address".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPrivatePostDeposithistory" => Lbank::request(self, "deposit_history".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPrivatePostCreateorder" => Lbank::request(self, "create_order".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPrivatePostBatchcreateorder" => Lbank::request(self, "batch_create_order".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPrivatePostCancelorder" => Lbank::request(self, "cancel_order".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPrivatePostCancelclientorders" => Lbank::request(self, "cancel_clientOrders".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPrivatePostOrdersinfo" => Lbank::request(self, "orders_info".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPrivatePostOrdersinfohistory" => Lbank::request(self, "orders_info_history".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPrivatePostOrdertransactiondetail" => Lbank::request(self, "order_transaction_detail".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPrivatePostTransactionhistory" => Lbank::request(self, "transaction_history".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPrivatePostOrdersinfonodeal" => Lbank::request(self, "orders_info_no_deal".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPrivatePostWithdraw" => Lbank::request(self, "withdraw".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPrivatePostWithdrawcancel" => Lbank::request(self, "withdrawCancel".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPrivatePostWithdraws" => Lbank::request(self, "withdraws".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPrivatePostSupplementuserinfo" => Lbank::request(self, "supplement/user_info".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPrivatePostSupplementwithdraw" => Lbank::request(self, "supplement/withdraw".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPrivatePostSupplementdeposithistory" => Lbank::request(self, "supplement/deposit_history".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPrivatePostSupplementwithdraws" => Lbank::request(self, "supplement/withdraws".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPrivatePostSupplementgetdepositaddress" => Lbank::request(self, "supplement/get_deposit_address".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPrivatePostSupplementassetdetail" => Lbank::request(self, "supplement/asset_detail".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPrivatePostSupplementcustomertradefee" => Lbank::request(self, "supplement/customer_trade_fee".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPrivatePostSupplementapirestrictions" => Lbank::request(self, "supplement/api_Restrictions".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPrivatePostSupplementsystemping" => Lbank::request(self, "supplement/system_ping".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPrivatePostSupplementcreateordertest" => Lbank::request(self, "supplement/create_order_test".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPrivatePostSupplementcreateorder" => Lbank::request(self, "supplement/create_order".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPrivatePostSupplementcancelorder" => Lbank::request(self, "supplement/cancel_order".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPrivatePostSupplementcancelorderbysymbol" => Lbank::request(self, "supplement/cancel_order_by_symbol".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPrivatePostSupplementordersinfo" => Lbank::request(self, "supplement/orders_info".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPrivatePostSupplementordersinfonodeal" => Lbank::request(self, "supplement/orders_info_no_deal".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPrivatePostSupplementordersinfohistory" => Lbank::request(self, "supplement/orders_info_history".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPrivatePostSupplementuserinfoaccount" => Lbank::request(self, "supplement/user_info_account".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPrivatePostSupplementtransactionhistory" => Lbank::request(self, "supplement/transaction_history".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "contractPublicGetCfdopenapiv1pubgettime" => Lbank::request(self, "cfd/openApi/v1/pub/getTime".into(), "contract".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "contractPublicGetCfdopenapiv1pubinstrument" => Lbank::request(self, "cfd/openApi/v1/pub/instrument".into(), "contract".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "contractPublicGetCfdopenapiv1pubmarketdata" => Lbank::request(self, "cfd/openApi/v1/pub/marketData".into(), "contract".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "contractPublicGetCfdopenapiv1pubmarketorder" => Lbank::request(self, "cfd/openApi/v1/pub/marketOrder".into(), "contract".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPublicGetCurrencypairs" => self.request("currencyPairs".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPublicGetAccuracy" => self.request("accuracy".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPublicGetUsdtocny" => self.request("usdToCny".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPublicGetAssetconfigs" => self.request("assetConfigs".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPublicGetWithdrawconfigs" => self.request("withdrawConfigs".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPublicGetTimestamp" => self.request("timestamp".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPublicGetTicker24hr" => self.request("ticker/24hr".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPublicGetTicker" => self.request("ticker".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPublicGetDepth" => self.request("depth".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPublicGetIncrdepth" => self.request("incrDepth".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPublicGetTrades" => self.request("trades".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPublicGetKline" => self.request("kline".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPublicGetSupplementsystemping" => self.request("supplement/system_ping".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPublicGetSupplementincrdepth" => self.request("supplement/incrDepth".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPublicGetSupplementtrades" => self.request("supplement/trades".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPublicGetSupplementtickerprice" => self.request("supplement/ticker/price".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPublicGetSupplementtickerbookticker" => self.request("supplement/ticker/bookTicker".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPublicPostSupplementsystemstatus" => self.request("supplement/system_status".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPrivatePostUserinfo" => self.request("user_info".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPrivatePostSubscribegetkey" => self.request("subscribe/get_key".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPrivatePostSubscriberefreshkey" => self.request("subscribe/refresh_key".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPrivatePostSubscribedestroykey" => self.request("subscribe/destroy_key".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPrivatePostGetdepositaddress" => self.request("get_deposit_address".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPrivatePostDeposithistory" => self.request("deposit_history".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPrivatePostCreateorder" => self.request("create_order".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPrivatePostBatchcreateorder" => self.request("batch_create_order".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPrivatePostCancelorder" => self.request("cancel_order".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPrivatePostCancelclientorders" => self.request("cancel_clientOrders".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPrivatePostOrdersinfo" => self.request("orders_info".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPrivatePostOrdersinfohistory" => self.request("orders_info_history".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPrivatePostOrdertransactiondetail" => self.request("order_transaction_detail".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPrivatePostTransactionhistory" => self.request("transaction_history".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPrivatePostOrdersinfonodeal" => self.request("orders_info_no_deal".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPrivatePostWithdraw" => self.request("withdraw".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPrivatePostWithdrawcancel" => self.request("withdrawCancel".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPrivatePostWithdraws" => self.request("withdraws".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPrivatePostSupplementuserinfo" => self.request("supplement/user_info".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPrivatePostSupplementwithdraw" => self.request("supplement/withdraw".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPrivatePostSupplementdeposithistory" => self.request("supplement/deposit_history".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPrivatePostSupplementwithdraws" => self.request("supplement/withdraws".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPrivatePostSupplementgetdepositaddress" => self.request("supplement/get_deposit_address".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPrivatePostSupplementassetdetail" => self.request("supplement/asset_detail".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPrivatePostSupplementcustomertradefee" => self.request("supplement/customer_trade_fee".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPrivatePostSupplementapirestrictions" => self.request("supplement/api_Restrictions".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPrivatePostSupplementsystemping" => self.request("supplement/system_ping".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPrivatePostSupplementcreateordertest" => self.request("supplement/create_order_test".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPrivatePostSupplementcreateorder" => self.request("supplement/create_order".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPrivatePostSupplementcancelorder" => self.request("supplement/cancel_order".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPrivatePostSupplementcancelorderbysymbol" => self.request("supplement/cancel_order_by_symbol".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPrivatePostSupplementordersinfo" => self.request("supplement/orders_info".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPrivatePostSupplementordersinfonodeal" => self.request("supplement/orders_info_no_deal".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPrivatePostSupplementordersinfohistory" => self.request("supplement/orders_info_history".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPrivatePostSupplementuserinfoaccount" => self.request("supplement/user_info_account".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPrivatePostSupplementtransactionhistory" => self.request("supplement/transaction_history".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "contractPublicGetCfdopenapiv1pubgettime" => self.request("cfd/openApi/v1/pub/getTime".into(), "contract".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "contractPublicGetCfdopenapiv1pubinstrument" => self.request("cfd/openApi/v1/pub/instrument".into(), "contract".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "contractPublicGetCfdopenapiv1pubmarketdata" => self.request("cfd/openApi/v1/pub/marketData".into(), "contract".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "contractPublicGetCfdopenapiv1pubmarketorder" => self.request("cfd/openApi/v1/pub/marketOrder".into(), "contract".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     _ => unimplemented!(),
                 }
             },
@@ -2747,7 +2771,7 @@ impl ValueTrait for LbankImpl {
     fn join(&self, glue: Value) -> Value { self.0.join(glue) }
     fn to_string(&self) -> Value { self.0.to_string() }
     fn typeof_(&self) -> Value { self.0.typeof_() }
-    fn slice(&self, start: Value) -> Value { self.0.slice(start) }
+    fn slice(&self, start: Value, end: Value) -> Value { self.0.slice(start, end) }
 }
 
 impl LbankImpl {

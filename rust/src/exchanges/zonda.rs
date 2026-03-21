@@ -13,14 +13,38 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, BoolExt, JSON, Array, Object, Math, Promise, parse_int, shift_2, extend_2, normalize};
 // Crypto hash identifiers
-fn sha256() -> Value { Value::from("sha256") }
-fn sha384() -> Value { Value::from("sha384") }
-fn sha512() -> Value { Value::from("sha512") }
-fn md5() -> Value { Value::from("md5") }
-fn ed25519() -> Value { Value::from("ed25519") }
+fn sha256() -> Value { Value::from("sha256()") }
+fn sha384() -> Value { Value::from("sha384()") }
+fn sha512() -> Value { Value::from("sha512()") }
+fn md5() -> Value { Value::from("md5()") }
+fn ed25519() -> Value { Value::from("ed25519()") }
 fn rsa(msg: Value, secret: Value, _hash: Value) -> Value { msg }
 fn eddsa(msg: Value, secret: Value, _curve: Value) -> Value { msg }
-fn secp256k1() -> Value { Value::from("secp256k1") }
+fn secp256k1() -> Value { Value::from("secp256k1()") }
+fn keccak() -> Value { Value::from("keccak()") }
+fn ecdsa(msg: Value, secret: Value, algo: Value, hash_fn: Value) -> Value { msg }
+fn totp(secret: Value) -> Value { Value::Undefined }
+fn jwt(data: Value, secret: Value, hash: Value, is_rsa: Value) -> Value { Value::Undefined }
+fn parse_float(value: Value) -> Value { value }
+fn decimals(value: Value) -> Value { Value::from(0) }
+fn shift_1(value: Value) -> Value { value }
+fn shift_3(value: Value) -> (Value, Value, Value) { (value.clone(), Value::Undefined, Value::Undefined) }
+fn shift_4(value: Value) -> (Value, Value, Value, Value) { (value.clone(), Value::Undefined, Value::Undefined, Value::Undefined) }
+// Error type constructors
+fn BadRequest(msg: Value) -> Value { msg }
+fn InvalidOrder(msg: Value) -> Value { msg }
+fn ExchangeError(msg: Value) -> Value { msg }
+fn InsufficientFunds(msg: Value) -> Value { msg }
+fn OrderNotFound(msg: Value) -> Value { msg }
+fn AuthenticationError(msg: Value) -> Value { msg }
+fn PermissionDenied(msg: Value) -> Value { msg }
+fn ExchangeNotAvailable(msg: Value) -> Value { msg }
+fn ArgumentsRequired(msg: Value) -> Value { msg }
+fn RateLimitExceeded(msg: Value) -> Value { msg }
+fn OrderNotFillable(msg: Value) -> Value { msg }
+fn OrderImmediatelyFillable(msg: Value) -> Value { msg }
+fn NotSupported(msg: Value) -> Value { msg }
+fn DuplicateOrderId(msg: Value) -> Value { msg }
 
 use crate::exchange::{PRECISE_BASE, TRUNCATE, ROUND, ROUND_UP, ROUND_DOWN};
 use crate::exchange::{DECIMAL_PLACES, SIGNIFICANT_DIGITS, TICK_SIZE, NO_PADDING, PAD_WITH_ZERO};
@@ -603,7 +627,7 @@ pub trait Zonda : Exchange {
         self.load_markets(Value::Undefined, Value::Undefined).await;
         let mut request: Value = Value::new_object();
         // todo pair
-        let mut response: Value = self.v1_01_private_get_trading_offer(extend_2(request.clone(), params.clone())).await;
+        let mut response: Value = self.dispatch("v1_01PrivateGetTradingOffer".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         let mut items: Value = self.safe_list(response.clone(), Value::from("items"), Value::new_array());
         return self.parse_orders(items.clone(), Value::Undefined, since.clone(), limit.clone(), Value::Json(normalize(&Value::Json(json!({
             "status": "open"
@@ -679,7 +703,7 @@ pub trait Zonda : Exchange {
         let mut query: Value = Value::Json(normalize(&Value::Json(json!({
             "query": self.json(extend_2(request.clone(), params.clone()))
         }))).unwrap());
-        let mut response: Value = self.v1_01_private_get_trading_history_transactions(query.clone()).await;
+        let mut response: Value = self.dispatch("v1_01PrivateGetTradingHistoryTransactions".into(), query.clone(), Value::Undefined).await;
         //
         //     {
         //         "status": "Ok",
@@ -733,7 +757,7 @@ pub trait Zonda : Exchange {
     async fn fetch_balance(&mut self, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        let mut response: Value = self.v1_01_private_get_balances_bitbay_balance(params.clone()).await;
+        let mut response: Value = self.dispatch("v1_01PrivateGetBalancesBITBAYBalance".into(), params.clone(), Value::Undefined).await;
         return <Self as Zonda>::parse_balance(self, response.clone());
     }
 
@@ -755,14 +779,14 @@ pub trait Zonda : Exchange {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = <Self as Zonda>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() { return rv; }
                 }
             }
         }
         let candidates = vec![("public", "GET", "depth"), ("public", "GET", "orderbook"), ("public", "GET", "order_book")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Zonda>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -853,14 +877,14 @@ pub trait Zonda : Exchange {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = <Self as Zonda>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() { return rv; }
                 }
             }
         }
         let candidates = vec![("public", "GET", "ticker/24hr"), ("public", "GET", "ticker"), ("public", "GET", "ticker/price")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Zonda>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -882,14 +906,14 @@ pub trait Zonda : Exchange {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = <Self as Zonda>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() { return rv; }
                 }
             }
         }
         let candidates = vec![("public", "GET", "ticker/24hr"), ("public", "GET", "tickers"), ("public", "GET", "ticker")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Zonda>::request(self,path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -913,9 +937,9 @@ pub trait Zonda : Exchange {
             request.set("limit".into(), limit.clone());
         };
         request = extend_2(request.clone(), params.clone());
-        let mut response: Value = self.v1_01_private_get_balances_bitbay_history(Value::Json(normalize(&Value::Json(json!({
+        let mut response: Value = self.dispatch("v1_01PrivateGetBalancesBITBAYHistory".into(), Value::Json(normalize(&Value::Json(json!({
             "query": self.json(request.clone())
-        }))).unwrap())).await;
+        }))).unwrap()), Value::Undefined).await;
         let mut items: Value = response.get(Value::from("items"));
         return self.parse_ledger(items.clone(), Value::Undefined, since.clone(), limit.clone(), Value::Undefined);
     }
@@ -1281,14 +1305,14 @@ pub trait Zonda : Exchange {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = <Self as Zonda>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() { return rv; }
                 }
             }
         }
         let candidates = vec![("public", "GET", "klines"), ("public", "GET", "candles"), ("public", "GET", "ohlcv")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Zonda>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -1380,7 +1404,7 @@ pub trait Zonda : Exchange {
         if limit.is_nonnullish() { request.set("limit".into(), limit.clone()); }
         let candidates = vec![("public", "GET", "trades"), ("public", "GET", "recent_trades"), ("public", "GET", "aggTrades")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Zonda>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -1420,9 +1444,9 @@ pub trait Zonda : Exchange {
                 panic!(r###"ExchangeError::new(self.get("id".into()) + Value::from(" createOrder() zonda requires `triggerPrice` parameter for stop-limit or stop-market orders"))"###);
             };
             request.set("stopRate".into(), self.price_to_precision(symbol.clone(), stop_loss_price.clone()));
-            response = self.v1_01_private_post_trading_stop_offer_symbol(extend_2(request.clone(), params.clone())).await;
+            response = self.dispatch("v1_01PrivatePostTradingStopOfferSymbol".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         } else {
-            response = self.v1_01_private_post_trading_offer_symbol(extend_2(request.clone(), params.clone())).await;
+            response = self.dispatch("v1_01PrivatePostTradingOfferSymbol".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         };
         //
         // unfilled (open order)
@@ -1523,7 +1547,7 @@ pub trait Zonda : Exchange {
             "side": side,
             "price": price
         }))).unwrap());
-        let mut response: Value = self.v1_01_private_delete_trading_offer_symbol_id_side_price(extend_2(request.clone(), params.clone())).await;
+        let mut response: Value = self.dispatch("v1_01PrivateDeleteTradingOfferSymbolIdSidePrice".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         // { status: "Fail", errors: [ "NOT_RECOGNIZED_OFFER_TYPE" ] }  -- if required params are missing
         // { status: "Ok", errors: [] }
         return <Self as Zonda>::parse_order(self, response.clone(), Value::Undefined);
@@ -1567,7 +1591,7 @@ pub trait Zonda : Exchange {
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
             "currency": currency.get(Value::from("id"))
         }))).unwrap());
-        let mut response: Value = self.v1_01_private_get_api_payments_deposits_crypto_addresses(extend_2(request.clone(), params.clone())).await;
+        let mut response: Value = self.dispatch("v1_01PrivateGetApiPaymentsDepositsCryptoAddresses".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         //
         //     {
         //         "status": "Ok",
@@ -1589,7 +1613,7 @@ pub trait Zonda : Exchange {
     async fn fetch_deposit_addresses(&mut self, mut codes: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        let mut response: Value = self.v1_01_private_get_api_payments_deposits_crypto_addresses(params.clone()).await;
+        let mut response: Value = self.dispatch("v1_01PrivateGetApiPaymentsDepositsCryptoAddresses".into(), params.clone(), Value::Undefined).await;
         //
         //     {
         //         "status": "Ok",
@@ -1617,7 +1641,7 @@ pub trait Zonda : Exchange {
             "currency": code,
             "funds": self.currency_to_precision(code.clone(), amount.clone(), Value::Undefined)
         }))).unwrap());
-        let mut response: Value = self.v1_01_private_post_balances_bitbay_balance_transfer_source_destination(extend_2(request.clone(), params.clone())).await;
+        let mut response: Value = self.dispatch("v1_01PrivatePostBalancesBITBAYBalanceTransferSourceDestination".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         //
         //     {
         //         "status": "Ok",
@@ -1726,12 +1750,12 @@ pub trait Zonda : Exchange {
         // request['balanceId'] = params['balanceId']; // Wallet id used for withdrawal. If not provided, any BITBAY wallet with sufficient funds is used. If BITBAYPAY wallet should be used parameter must be explicitly specified.
         if <Self as Zonda>::is_fiat(self, code.clone()).is_truthy() {
             // request['swift'] = params['swift']; // Bank identifier, if required.
-            response = self.v1_01_private_post_api_payments_withdrawals_fiat(extend_2(request.clone(), params.clone())).await;
+            response = self.dispatch("v1_01PrivatePostApiPaymentsWithdrawalsFiat".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         } else {
             if tag.clone().is_nonnullish() {
                 request.set("tag".into(), tag.clone());
             };
-            response = self.v1_01_private_post_api_payments_withdrawals_crypto(extend_2(request.clone(), params.clone())).await;
+            response = self.dispatch("v1_01PrivatePostApiPaymentsWithdrawalsCrypto".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         };
         //
         //     {
@@ -1787,55 +1811,55 @@ pub trait Zonda : Exchange {
         match method {
             Value::Json(serde_json::Value::String(ref m)) => {
                 match m.as_ref() {
-                    "publicGetIdall" => Zonda::request(self, "{id}/all".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetIdmarket" => Zonda::request(self, "{id}/market".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetIdorderbook" => Zonda::request(self, "{id}/orderbook".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetIdticker" => Zonda::request(self, "{id}/ticker".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "publicGetIdtrades" => Zonda::request(self, "{id}/trades".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostInfo" => Zonda::request(self, "info".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostTrade" => Zonda::request(self, "trade".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostCancel" => Zonda::request(self, "cancel".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostOrderbook" => Zonda::request(self, "orderbook".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostOrders" => Zonda::request(self, "orders".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostTransfer" => Zonda::request(self, "transfer".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostWithdraw" => Zonda::request(self, "withdraw".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostHistory" => Zonda::request(self, "history".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "privatePostTransactions" => Zonda::request(self, "transactions".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v101publicGetTradingticker" => Zonda::request(self, "trading/ticker".into(), "v1_01Public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v101publicGetTradingtickersymbol" => Zonda::request(self, "trading/ticker/{symbol}".into(), "v1_01Public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v101publicGetTradingstats" => Zonda::request(self, "trading/stats".into(), "v1_01Public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v101publicGetTradingstatssymbol" => Zonda::request(self, "trading/stats/{symbol}".into(), "v1_01Public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v101publicGetTradingorderbooksymbol" => Zonda::request(self, "trading/orderbook/{symbol}".into(), "v1_01Public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v101publicGetTradingtransactionssymbol" => Zonda::request(self, "trading/transactions/{symbol}".into(), "v1_01Public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v101publicGetTradingcandlehistorysymbolresolution" => Zonda::request(self, "trading/candle/history/{symbol}/{resolution}".into(), "v1_01Public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v101privateGetApipaymentsdepositscryptoaddresses" => Zonda::request(self, "api_payments/deposits/crypto/addresses".into(), "v1_01Private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v101privateGetPaymentswithdrawaldetailid" => Zonda::request(self, "payments/withdrawal/{detailId}".into(), "v1_01Private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v101privateGetPaymentsdepositdetailid" => Zonda::request(self, "payments/deposit/{detailId}".into(), "v1_01Private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v101privateGetTradingoffer" => Zonda::request(self, "trading/offer".into(), "v1_01Private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v101privateGetTradingstopoffer" => Zonda::request(self, "trading/stop/offer".into(), "v1_01Private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v101privateGetTradingconfigsymbol" => Zonda::request(self, "trading/config/{symbol}".into(), "v1_01Private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v101privateGetTradinghistorytransactions" => Zonda::request(self, "trading/history/transactions".into(), "v1_01Private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v101privateGetBalancesbitbayhistory" => Zonda::request(self, "balances/BITBAY/history".into(), "v1_01Private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v101privateGetBalancesbitbaybalance" => Zonda::request(self, "balances/BITBAY/balance".into(), "v1_01Private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v101privateGetFiatcantorratebaseidquoteid" => Zonda::request(self, "fiat_cantor/rate/{baseId}/{quoteId}".into(), "v1_01Private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v101privateGetFiatcantorhistory" => Zonda::request(self, "fiat_cantor/history".into(), "v1_01Private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v101privateGetClientpaymentsv2customercryptocurrencychannelsdeposit" => Zonda::request(self, "client_payments/v2/customer/crypto/{currency}/channels/deposit".into(), "v1_01Private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v101privateGetClientpaymentsv2customercryptocurrencychannelswithdrawal" => Zonda::request(self, "client_payments/v2/customer/crypto/{currency}/channels/withdrawal".into(), "v1_01Private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v101privateGetClientpaymentsv2customercryptodepositfee" => Zonda::request(self, "client_payments/v2/customer/crypto/deposit/fee".into(), "v1_01Private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v101privateGetClientpaymentsv2customercryptowithdrawalfee" => Zonda::request(self, "client_payments/v2/customer/crypto/withdrawal/fee".into(), "v1_01Private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v101privatePostTradingoffersymbol" => Zonda::request(self, "trading/offer/{symbol}".into(), "v1_01Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v101privatePostTradingstopoffersymbol" => Zonda::request(self, "trading/stop/offer/{symbol}".into(), "v1_01Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v101privatePostTradingconfigsymbol" => Zonda::request(self, "trading/config/{symbol}".into(), "v1_01Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v101privatePostBalancesbitbaybalance" => Zonda::request(self, "balances/BITBAY/balance".into(), "v1_01Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v101privatePostBalancesbitbaybalancetransfersourcedestination" => Zonda::request(self, "balances/BITBAY/balance/transfer/{source}/{destination}".into(), "v1_01Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v101privatePostFiatcantorexchange" => Zonda::request(self, "fiat_cantor/exchange".into(), "v1_01Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v101privatePostApipaymentswithdrawalscrypto" => Zonda::request(self, "api_payments/withdrawals/crypto".into(), "v1_01Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v101privatePostApipaymentswithdrawalsfiat" => Zonda::request(self, "api_payments/withdrawals/fiat".into(), "v1_01Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v101privatePostClientpaymentsv2customercryptodeposit" => Zonda::request(self, "client_payments/v2/customer/crypto/deposit".into(), "v1_01Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v101privatePostClientpaymentsv2customercryptowithdrawal" => Zonda::request(self, "client_payments/v2/customer/crypto/withdrawal".into(), "v1_01Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v101privateDeleteTradingoffersymbolidsideprice" => Zonda::request(self, "trading/offer/{symbol}/{id}/{side}/{price}".into(), "v1_01Private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v101privateDeleteTradingstopoffersymbolidsideprice" => Zonda::request(self, "trading/stop/offer/{symbol}/{id}/{side}/{price}".into(), "v1_01Private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v101privatePutBalancesbitbaybalanceid" => Zonda::request(self, "balances/BITBAY/balance/{id}".into(), "v1_01Private".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetIdall" => self.request("{id}/all".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetIdmarket" => self.request("{id}/market".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetIdorderbook" => self.request("{id}/orderbook".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetIdticker" => self.request("{id}/ticker".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "publicGetIdtrades" => self.request("{id}/trades".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostInfo" => self.request("info".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostTrade" => self.request("trade".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostCancel" => self.request("cancel".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostOrderbook" => self.request("orderbook".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostOrders" => self.request("orders".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostTransfer" => self.request("transfer".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostWithdraw" => self.request("withdraw".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostHistory" => self.request("history".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "privatePostTransactions" => self.request("transactions".into(), "private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v101publicGetTradingticker" => self.request("trading/ticker".into(), "v1_01Public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v101publicGetTradingtickersymbol" => self.request("trading/ticker/{symbol}".into(), "v1_01Public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v101publicGetTradingstats" => self.request("trading/stats".into(), "v1_01Public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v101publicGetTradingstatssymbol" => self.request("trading/stats/{symbol}".into(), "v1_01Public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v101publicGetTradingorderbooksymbol" => self.request("trading/orderbook/{symbol}".into(), "v1_01Public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v101publicGetTradingtransactionssymbol" => self.request("trading/transactions/{symbol}".into(), "v1_01Public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v101publicGetTradingcandlehistorysymbolresolution" => self.request("trading/candle/history/{symbol}/{resolution}".into(), "v1_01Public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v101privateGetApipaymentsdepositscryptoaddresses" => self.request("api_payments/deposits/crypto/addresses".into(), "v1_01Private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v101privateGetPaymentswithdrawaldetailid" => self.request("payments/withdrawal/{detailId}".into(), "v1_01Private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v101privateGetPaymentsdepositdetailid" => self.request("payments/deposit/{detailId}".into(), "v1_01Private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v101privateGetTradingoffer" => self.request("trading/offer".into(), "v1_01Private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v101privateGetTradingstopoffer" => self.request("trading/stop/offer".into(), "v1_01Private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v101privateGetTradingconfigsymbol" => self.request("trading/config/{symbol}".into(), "v1_01Private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v101privateGetTradinghistorytransactions" => self.request("trading/history/transactions".into(), "v1_01Private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v101privateGetBalancesbitbayhistory" => self.request("balances/BITBAY/history".into(), "v1_01Private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v101privateGetBalancesbitbaybalance" => self.request("balances/BITBAY/balance".into(), "v1_01Private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v101privateGetFiatcantorratebaseidquoteid" => self.request("fiat_cantor/rate/{baseId}/{quoteId}".into(), "v1_01Private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v101privateGetFiatcantorhistory" => self.request("fiat_cantor/history".into(), "v1_01Private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v101privateGetClientpaymentsv2customercryptocurrencychannelsdeposit" => self.request("client_payments/v2/customer/crypto/{currency}/channels/deposit".into(), "v1_01Private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v101privateGetClientpaymentsv2customercryptocurrencychannelswithdrawal" => self.request("client_payments/v2/customer/crypto/{currency}/channels/withdrawal".into(), "v1_01Private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v101privateGetClientpaymentsv2customercryptodepositfee" => self.request("client_payments/v2/customer/crypto/deposit/fee".into(), "v1_01Private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v101privateGetClientpaymentsv2customercryptowithdrawalfee" => self.request("client_payments/v2/customer/crypto/withdrawal/fee".into(), "v1_01Private".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v101privatePostTradingoffersymbol" => self.request("trading/offer/{symbol}".into(), "v1_01Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v101privatePostTradingstopoffersymbol" => self.request("trading/stop/offer/{symbol}".into(), "v1_01Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v101privatePostTradingconfigsymbol" => self.request("trading/config/{symbol}".into(), "v1_01Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v101privatePostBalancesbitbaybalance" => self.request("balances/BITBAY/balance".into(), "v1_01Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v101privatePostBalancesbitbaybalancetransfersourcedestination" => self.request("balances/BITBAY/balance/transfer/{source}/{destination}".into(), "v1_01Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v101privatePostFiatcantorexchange" => self.request("fiat_cantor/exchange".into(), "v1_01Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v101privatePostApipaymentswithdrawalscrypto" => self.request("api_payments/withdrawals/crypto".into(), "v1_01Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v101privatePostApipaymentswithdrawalsfiat" => self.request("api_payments/withdrawals/fiat".into(), "v1_01Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v101privatePostClientpaymentsv2customercryptodeposit" => self.request("client_payments/v2/customer/crypto/deposit".into(), "v1_01Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v101privatePostClientpaymentsv2customercryptowithdrawal" => self.request("client_payments/v2/customer/crypto/withdrawal".into(), "v1_01Private".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v101privateDeleteTradingoffersymbolidsideprice" => self.request("trading/offer/{symbol}/{id}/{side}/{price}".into(), "v1_01Private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v101privateDeleteTradingstopoffersymbolidsideprice" => self.request("trading/stop/offer/{symbol}/{id}/{side}/{price}".into(), "v1_01Private".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v101privatePutBalancesbitbaybalanceid" => self.request("balances/BITBAY/balance/{id}".into(), "v1_01Private".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     _ => unimplemented!(),
                 }
             },
@@ -1879,7 +1903,7 @@ impl ValueTrait for ZondaImpl {
     fn join(&self, glue: Value) -> Value { self.0.join(glue) }
     fn to_string(&self) -> Value { self.0.to_string() }
     fn typeof_(&self) -> Value { self.0.typeof_() }
-    fn slice(&self, start: Value) -> Value { self.0.slice(start) }
+    fn slice(&self, start: Value, end: Value) -> Value { self.0.slice(start, end) }
 }
 
 impl ZondaImpl {

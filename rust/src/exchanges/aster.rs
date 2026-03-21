@@ -13,14 +13,38 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, BoolExt, JSON, Array, Object, Math, Promise, parse_int, shift_2, extend_2, normalize};
 // Crypto hash identifiers
-fn sha256() -> Value { Value::from("sha256") }
-fn sha384() -> Value { Value::from("sha384") }
-fn sha512() -> Value { Value::from("sha512") }
-fn md5() -> Value { Value::from("md5") }
-fn ed25519() -> Value { Value::from("ed25519") }
+fn sha256() -> Value { Value::from("sha256()") }
+fn sha384() -> Value { Value::from("sha384()") }
+fn sha512() -> Value { Value::from("sha512()") }
+fn md5() -> Value { Value::from("md5()") }
+fn ed25519() -> Value { Value::from("ed25519()") }
 fn rsa(msg: Value, secret: Value, _hash: Value) -> Value { msg }
 fn eddsa(msg: Value, secret: Value, _curve: Value) -> Value { msg }
-fn secp256k1() -> Value { Value::from("secp256k1") }
+fn secp256k1() -> Value { Value::from("secp256k1()") }
+fn keccak() -> Value { Value::from("keccak()") }
+fn ecdsa(msg: Value, secret: Value, algo: Value, hash_fn: Value) -> Value { msg }
+fn totp(secret: Value) -> Value { Value::Undefined }
+fn jwt(data: Value, secret: Value, hash: Value, is_rsa: Value) -> Value { Value::Undefined }
+fn parse_float(value: Value) -> Value { value }
+fn decimals(value: Value) -> Value { Value::from(0) }
+fn shift_1(value: Value) -> Value { value }
+fn shift_3(value: Value) -> (Value, Value, Value) { (value.clone(), Value::Undefined, Value::Undefined) }
+fn shift_4(value: Value) -> (Value, Value, Value, Value) { (value.clone(), Value::Undefined, Value::Undefined, Value::Undefined) }
+// Error type constructors
+fn BadRequest(msg: Value) -> Value { msg }
+fn InvalidOrder(msg: Value) -> Value { msg }
+fn ExchangeError(msg: Value) -> Value { msg }
+fn InsufficientFunds(msg: Value) -> Value { msg }
+fn OrderNotFound(msg: Value) -> Value { msg }
+fn AuthenticationError(msg: Value) -> Value { msg }
+fn PermissionDenied(msg: Value) -> Value { msg }
+fn ExchangeNotAvailable(msg: Value) -> Value { msg }
+fn ArgumentsRequired(msg: Value) -> Value { msg }
+fn RateLimitExceeded(msg: Value) -> Value { msg }
+fn OrderNotFillable(msg: Value) -> Value { msg }
+fn OrderImmediatelyFillable(msg: Value) -> Value { msg }
+fn NotSupported(msg: Value) -> Value { msg }
+fn DuplicateOrderId(msg: Value) -> Value { msg }
 
 use crate::exchange::{PRECISE_BASE, TRUNCATE, ROUND, ROUND_UP, ROUND_DOWN};
 use crate::exchange::{DECIMAL_PLACES, SIGNIFICANT_DIGITS, TICK_SIZE, NO_PADDING, PAD_WITH_ZERO};
@@ -489,7 +513,7 @@ pub trait Aster : Exchange {
     async fn fetch_time(&mut self, mut params: Value) -> Value {
         let candidates = vec![("public", "GET", "time"), ("public", "GET", "server/time"), ("public", "GET", "timestamp")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Aster>::request(self,path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -537,14 +561,14 @@ pub trait Aster : Exchange {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = <Self as Aster>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() { return rv; }
                 }
             }
         }
         let candidates = vec![("public", "GET", "klines"), ("public", "GET", "candles"), ("public", "GET", "ohlcv")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Aster>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -637,7 +661,7 @@ pub trait Aster : Exchange {
         if limit.is_nonnullish() { request.set("limit".into(), limit.clone()); }
         let candidates = vec![("public", "GET", "trades"), ("public", "GET", "recent_trades"), ("public", "GET", "aggTrades")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Aster>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -712,14 +736,14 @@ pub trait Aster : Exchange {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = <Self as Aster>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() { return rv; }
                 }
             }
         }
         let candidates = vec![("public", "GET", "depth"), ("public", "GET", "orderbook"), ("public", "GET", "order_book")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Aster>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -881,14 +905,14 @@ pub trait Aster : Exchange {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = <Self as Aster>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() { return rv; }
                 }
             }
         }
         let candidates = vec![("public", "GET", "ticker/24hr"), ("public", "GET", "ticker"), ("public", "GET", "ticker/price")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Aster>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -910,14 +934,14 @@ pub trait Aster : Exchange {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = <Self as Aster>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() { return rv; }
                 }
             }
         }
         let candidates = vec![("public", "GET", "ticker/24hr"), ("public", "GET", "tickers"), ("public", "GET", "ticker")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Aster>::request(self,path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -2325,11 +2349,11 @@ pub trait Aster : Exchange {
     }
 
     fn keccak_message(&mut self, mut message: Value) -> Value {
-        return Value::from("0x") + self.hash(message.clone(), keccak.clone(), Value::from("hex"));
+        return Value::from("0x") + self.hash(message.clone(), keccak().clone(), Value::from("hex"));
     }
 
     fn sign_message(&mut self, mut message: Value, mut private_key: Value) -> Value {
-        return <Self as Aster>::sign_hash(self, <Self as Aster>::keccak_message(self, message.clone()), private_key.slice(Value::from(64).neg()));
+        return <Self as Aster>::sign_hash(self, <Self as Aster>::keccak_message(self, message.clone()), private_key.slice(Value::from(64).neg(), Value::Undefined));
     }
 
     fn sign_withdraw_payload(&mut self, mut withdraw_payload: Value, mut network: Value) -> Value {
@@ -2510,12 +2534,12 @@ pub trait Aster : Exchange {
         let mut x19: Value = self.base16_to_binary(Value::from("19"));
         let mut newline: Value = self.base16_to_binary(Value::from("0a"));
         let mut prefix: Value = self.binary_concat(x19.clone(), self.encode(Value::from("Ethereum Signed Message:")), newline.clone(), self.encode(self.number_to_string(binary_message_length.clone())));
-        return Value::from("0x") + self.hash(self.binary_concat(prefix.clone(), binary_message.clone()), keccak.clone(), Value::from("hex"));
+        return Value::from("0x") + self.hash(self.binary_concat(prefix.clone(), binary_message.clone(), Value::Undefined, Value::Undefined), keccak().clone(), Value::from("hex"));
     }
 
     fn sign_hash(&mut self, mut hash: Value, mut private_key: Value) -> Value {
         self.check_required_credentials(Value::Undefined);
-        let mut signature: Value = ecdsa(hash.slice(Value::from(64).neg()), private_key.slice(Value::from(64).neg()), secp256k1.clone(), Value::Undefined);
+        let mut signature: Value = ecdsa(hash.slice(Value::from(64).neg(), Value::Undefined), private_key.slice(Value::from(64).neg(), Value::Undefined), secp256k1().clone(), Value::Undefined);
         let mut r: Value = signature.get(Value::from("r"));
         let mut s: Value = signature.get(Value::from("s"));
         let mut v: Value = self.int_to_base16(self.sum(Value::from(27), signature.get(Value::from("v"))));
@@ -2531,85 +2555,85 @@ pub trait Aster : Exchange {
         match method {
             Value::Json(serde_json::Value::String(ref m)) => {
                 match m.as_ref() {
-                    "fapipublicGetV1ping" => Aster::request(self, "v1/ping".into(), "fapiPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "fapipublicGetV1time" => Aster::request(self, "v1/time".into(), "fapiPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "fapipublicGetV1exchangeinfo" => Aster::request(self, "v1/exchangeInfo".into(), "fapiPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "fapipublicGetV1depth" => Aster::request(self, "v1/depth".into(), "fapiPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "fapipublicGetV1trades" => Aster::request(self, "v1/trades".into(), "fapiPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "fapipublicGetV1historicaltrades" => Aster::request(self, "v1/historicalTrades".into(), "fapiPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "fapipublicGetV1aggtrades" => Aster::request(self, "v1/aggTrades".into(), "fapiPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "fapipublicGetV1klines" => Aster::request(self, "v1/klines".into(), "fapiPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "fapipublicGetV1indexpriceklines" => Aster::request(self, "v1/indexPriceKlines".into(), "fapiPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "fapipublicGetV1markpriceklines" => Aster::request(self, "v1/markPriceKlines".into(), "fapiPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "fapipublicGetV1premiumindex" => Aster::request(self, "v1/premiumIndex".into(), "fapiPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "fapipublicGetV1fundingrate" => Aster::request(self, "v1/fundingRate".into(), "fapiPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "fapipublicGetV1fundinginfo" => Aster::request(self, "v1/fundingInfo".into(), "fapiPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "fapipublicGetV1ticker24hr" => Aster::request(self, "v1/ticker/24hr".into(), "fapiPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "fapipublicGetV1tickerprice" => Aster::request(self, "v1/ticker/price".into(), "fapiPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "fapipublicGetV1tickerbookticker" => Aster::request(self, "v1/ticker/bookTicker".into(), "fapiPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "fapipublicGetV1adlquantile" => Aster::request(self, "v1/adlQuantile".into(), "fapiPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "fapipublicGetV1forceorders" => Aster::request(self, "v1/forceOrders".into(), "fapiPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "fapiprivateGetV1positionsidedual" => Aster::request(self, "v1/positionSide/dual".into(), "fapiPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "fapiprivateGetV1multiassetsmargin" => Aster::request(self, "v1/multiAssetsMargin".into(), "fapiPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "fapiprivateGetV1order" => Aster::request(self, "v1/order".into(), "fapiPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "fapiprivateGetV1openorder" => Aster::request(self, "v1/openOrder".into(), "fapiPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "fapiprivateGetV1openorders" => Aster::request(self, "v1/openOrders".into(), "fapiPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "fapiprivateGetV1allorders" => Aster::request(self, "v1/allOrders".into(), "fapiPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "fapiprivateGetV2balance" => Aster::request(self, "v2/balance".into(), "fapiPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "fapiprivateGetV3balance" => Aster::request(self, "v3/balance".into(), "fapiPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "fapiprivateGetV3account" => Aster::request(self, "v3/account".into(), "fapiPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "fapiprivateGetV4account" => Aster::request(self, "v4/account".into(), "fapiPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "fapiprivateGetV1positionmarginhistory" => Aster::request(self, "v1/positionMargin/history".into(), "fapiPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "fapiprivateGetV2positionrisk" => Aster::request(self, "v2/positionRisk".into(), "fapiPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "fapiprivateGetV3positionrisk" => Aster::request(self, "v3/positionRisk".into(), "fapiPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "fapiprivateGetV1usertrades" => Aster::request(self, "v1/userTrades".into(), "fapiPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "fapiprivateGetV1income" => Aster::request(self, "v1/income".into(), "fapiPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "fapiprivateGetV1leveragebracket" => Aster::request(self, "v1/leverageBracket".into(), "fapiPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "fapiprivateGetV1commissionrate" => Aster::request(self, "v1/commissionRate".into(), "fapiPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "fapiprivatePostV1positionsidedual" => Aster::request(self, "v1/positionSide/dual".into(), "fapiPrivate".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "fapiprivatePostV1multiassetsmargin" => Aster::request(self, "v1/multiAssetsMargin".into(), "fapiPrivate".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "fapiprivatePostV1order" => Aster::request(self, "v1/order".into(), "fapiPrivate".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "fapiprivatePostV1ordertest" => Aster::request(self, "v1/order/test".into(), "fapiPrivate".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "fapiprivatePostV1batchorders" => Aster::request(self, "v1/batchOrders".into(), "fapiPrivate".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "fapiprivatePostV1assetwallettransfer" => Aster::request(self, "v1/asset/wallet/transfer".into(), "fapiPrivate".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "fapiprivatePostV1countdowncancelall" => Aster::request(self, "v1/countdownCancelAll".into(), "fapiPrivate".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "fapiprivatePostV1leverage" => Aster::request(self, "v1/leverage".into(), "fapiPrivate".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "fapiprivatePostV1margintype" => Aster::request(self, "v1/marginType".into(), "fapiPrivate".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "fapiprivatePostV1positionmargin" => Aster::request(self, "v1/positionMargin".into(), "fapiPrivate".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "fapiprivatePostV1listenkey" => Aster::request(self, "v1/listenKey".into(), "fapiPrivate".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "fapiprivatePutV1listenkey" => Aster::request(self, "v1/listenKey".into(), "fapiPrivate".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "fapiprivateDeleteV1order" => Aster::request(self, "v1/order".into(), "fapiPrivate".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "fapiprivateDeleteV1allopenorders" => Aster::request(self, "v1/allOpenOrders".into(), "fapiPrivate".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "fapiprivateDeleteV1batchorders" => Aster::request(self, "v1/batchOrders".into(), "fapiPrivate".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "fapiprivateDeleteV1listenkey" => Aster::request(self, "v1/listenKey".into(), "fapiPrivate".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "sapipublicGetV1ping" => Aster::request(self, "v1/ping".into(), "sapiPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "sapipublicGetV1time" => Aster::request(self, "v1/time".into(), "sapiPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "sapipublicGetV1exchangeinfo" => Aster::request(self, "v1/exchangeInfo".into(), "sapiPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "sapipublicGetV1depth" => Aster::request(self, "v1/depth".into(), "sapiPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "sapipublicGetV1trades" => Aster::request(self, "v1/trades".into(), "sapiPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "sapipublicGetV1historicaltrades" => Aster::request(self, "v1/historicalTrades".into(), "sapiPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "sapipublicGetV1aggtrades" => Aster::request(self, "v1/aggTrades".into(), "sapiPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "sapipublicGetV1klines" => Aster::request(self, "v1/klines".into(), "sapiPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "sapipublicGetV1ticker24hr" => Aster::request(self, "v1/ticker/24hr".into(), "sapiPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "sapipublicGetV1tickerprice" => Aster::request(self, "v1/ticker/price".into(), "sapiPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "sapipublicGetV1tickerbookticker" => Aster::request(self, "v1/ticker/bookTicker".into(), "sapiPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "sapipublicGetV1asterwithdrawestimatefee" => Aster::request(self, "v1/aster/withdraw/estimateFee".into(), "sapiPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "sapiprivateGetV1commissionrate" => Aster::request(self, "v1/commissionRate".into(), "sapiPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "sapiprivateGetV1order" => Aster::request(self, "v1/order".into(), "sapiPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "sapiprivateGetV1openorders" => Aster::request(self, "v1/openOrders".into(), "sapiPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "sapiprivateGetV1allorders" => Aster::request(self, "v1/allOrders".into(), "sapiPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "sapiprivateGetV1transactionhistory" => Aster::request(self, "v1/transactionHistory".into(), "sapiPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "sapiprivateGetV1account" => Aster::request(self, "v1/account".into(), "sapiPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "sapiprivateGetV1usertrades" => Aster::request(self, "v1/userTrades".into(), "sapiPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "sapiprivatePostV1order" => Aster::request(self, "v1/order".into(), "sapiPrivate".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "sapiprivatePostV1assetwallettransfer" => Aster::request(self, "v1/asset/wallet/transfer".into(), "sapiPrivate".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "sapiprivatePostV1assetsendtoaddress" => Aster::request(self, "v1/asset/sendToAddress".into(), "sapiPrivate".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "sapiprivatePostV1asteruserwithdraw" => Aster::request(self, "v1/aster/user-withdraw".into(), "sapiPrivate".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "sapiprivatePostV1listenkey" => Aster::request(self, "v1/listenKey".into(), "sapiPrivate".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "sapiprivatePutV1listenkey" => Aster::request(self, "v1/listenKey".into(), "sapiPrivate".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "sapiprivateDeleteV1order" => Aster::request(self, "v1/order".into(), "sapiPrivate".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "sapiprivateDeleteV1allopenorders" => Aster::request(self, "v1/allOpenOrders".into(), "sapiPrivate".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "sapiprivateDeleteV1listenkey" => Aster::request(self, "v1/listenKey".into(), "sapiPrivate".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "fapipublicGetV1ping" => self.request("v1/ping".into(), "fapiPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "fapipublicGetV1time" => self.request("v1/time".into(), "fapiPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "fapipublicGetV1exchangeinfo" => self.request("v1/exchangeInfo".into(), "fapiPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "fapipublicGetV1depth" => self.request("v1/depth".into(), "fapiPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "fapipublicGetV1trades" => self.request("v1/trades".into(), "fapiPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "fapipublicGetV1historicaltrades" => self.request("v1/historicalTrades".into(), "fapiPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "fapipublicGetV1aggtrades" => self.request("v1/aggTrades".into(), "fapiPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "fapipublicGetV1klines" => self.request("v1/klines".into(), "fapiPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "fapipublicGetV1indexpriceklines" => self.request("v1/indexPriceKlines".into(), "fapiPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "fapipublicGetV1markpriceklines" => self.request("v1/markPriceKlines".into(), "fapiPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "fapipublicGetV1premiumindex" => self.request("v1/premiumIndex".into(), "fapiPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "fapipublicGetV1fundingrate" => self.request("v1/fundingRate".into(), "fapiPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "fapipublicGetV1fundinginfo" => self.request("v1/fundingInfo".into(), "fapiPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "fapipublicGetV1ticker24hr" => self.request("v1/ticker/24hr".into(), "fapiPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "fapipublicGetV1tickerprice" => self.request("v1/ticker/price".into(), "fapiPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "fapipublicGetV1tickerbookticker" => self.request("v1/ticker/bookTicker".into(), "fapiPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "fapipublicGetV1adlquantile" => self.request("v1/adlQuantile".into(), "fapiPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "fapipublicGetV1forceorders" => self.request("v1/forceOrders".into(), "fapiPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "fapiprivateGetV1positionsidedual" => self.request("v1/positionSide/dual".into(), "fapiPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "fapiprivateGetV1multiassetsmargin" => self.request("v1/multiAssetsMargin".into(), "fapiPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "fapiprivateGetV1order" => self.request("v1/order".into(), "fapiPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "fapiprivateGetV1openorder" => self.request("v1/openOrder".into(), "fapiPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "fapiprivateGetV1openorders" => self.request("v1/openOrders".into(), "fapiPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "fapiprivateGetV1allorders" => self.request("v1/allOrders".into(), "fapiPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "fapiprivateGetV2balance" => self.request("v2/balance".into(), "fapiPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "fapiprivateGetV3balance" => self.request("v3/balance".into(), "fapiPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "fapiprivateGetV3account" => self.request("v3/account".into(), "fapiPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "fapiprivateGetV4account" => self.request("v4/account".into(), "fapiPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "fapiprivateGetV1positionmarginhistory" => self.request("v1/positionMargin/history".into(), "fapiPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "fapiprivateGetV2positionrisk" => self.request("v2/positionRisk".into(), "fapiPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "fapiprivateGetV3positionrisk" => self.request("v3/positionRisk".into(), "fapiPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "fapiprivateGetV1usertrades" => self.request("v1/userTrades".into(), "fapiPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "fapiprivateGetV1income" => self.request("v1/income".into(), "fapiPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "fapiprivateGetV1leveragebracket" => self.request("v1/leverageBracket".into(), "fapiPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "fapiprivateGetV1commissionrate" => self.request("v1/commissionRate".into(), "fapiPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "fapiprivatePostV1positionsidedual" => self.request("v1/positionSide/dual".into(), "fapiPrivate".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "fapiprivatePostV1multiassetsmargin" => self.request("v1/multiAssetsMargin".into(), "fapiPrivate".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "fapiprivatePostV1order" => self.request("v1/order".into(), "fapiPrivate".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "fapiprivatePostV1ordertest" => self.request("v1/order/test".into(), "fapiPrivate".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "fapiprivatePostV1batchorders" => self.request("v1/batchOrders".into(), "fapiPrivate".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "fapiprivatePostV1assetwallettransfer" => self.request("v1/asset/wallet/transfer".into(), "fapiPrivate".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "fapiprivatePostV1countdowncancelall" => self.request("v1/countdownCancelAll".into(), "fapiPrivate".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "fapiprivatePostV1leverage" => self.request("v1/leverage".into(), "fapiPrivate".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "fapiprivatePostV1margintype" => self.request("v1/marginType".into(), "fapiPrivate".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "fapiprivatePostV1positionmargin" => self.request("v1/positionMargin".into(), "fapiPrivate".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "fapiprivatePostV1listenkey" => self.request("v1/listenKey".into(), "fapiPrivate".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "fapiprivatePutV1listenkey" => self.request("v1/listenKey".into(), "fapiPrivate".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "fapiprivateDeleteV1order" => self.request("v1/order".into(), "fapiPrivate".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "fapiprivateDeleteV1allopenorders" => self.request("v1/allOpenOrders".into(), "fapiPrivate".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "fapiprivateDeleteV1batchorders" => self.request("v1/batchOrders".into(), "fapiPrivate".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "fapiprivateDeleteV1listenkey" => self.request("v1/listenKey".into(), "fapiPrivate".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "sapipublicGetV1ping" => self.request("v1/ping".into(), "sapiPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "sapipublicGetV1time" => self.request("v1/time".into(), "sapiPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "sapipublicGetV1exchangeinfo" => self.request("v1/exchangeInfo".into(), "sapiPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "sapipublicGetV1depth" => self.request("v1/depth".into(), "sapiPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "sapipublicGetV1trades" => self.request("v1/trades".into(), "sapiPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "sapipublicGetV1historicaltrades" => self.request("v1/historicalTrades".into(), "sapiPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "sapipublicGetV1aggtrades" => self.request("v1/aggTrades".into(), "sapiPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "sapipublicGetV1klines" => self.request("v1/klines".into(), "sapiPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "sapipublicGetV1ticker24hr" => self.request("v1/ticker/24hr".into(), "sapiPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "sapipublicGetV1tickerprice" => self.request("v1/ticker/price".into(), "sapiPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "sapipublicGetV1tickerbookticker" => self.request("v1/ticker/bookTicker".into(), "sapiPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "sapipublicGetV1asterwithdrawestimatefee" => self.request("v1/aster/withdraw/estimateFee".into(), "sapiPublic".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "sapiprivateGetV1commissionrate" => self.request("v1/commissionRate".into(), "sapiPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "sapiprivateGetV1order" => self.request("v1/order".into(), "sapiPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "sapiprivateGetV1openorders" => self.request("v1/openOrders".into(), "sapiPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "sapiprivateGetV1allorders" => self.request("v1/allOrders".into(), "sapiPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "sapiprivateGetV1transactionhistory" => self.request("v1/transactionHistory".into(), "sapiPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "sapiprivateGetV1account" => self.request("v1/account".into(), "sapiPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "sapiprivateGetV1usertrades" => self.request("v1/userTrades".into(), "sapiPrivate".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "sapiprivatePostV1order" => self.request("v1/order".into(), "sapiPrivate".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "sapiprivatePostV1assetwallettransfer" => self.request("v1/asset/wallet/transfer".into(), "sapiPrivate".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "sapiprivatePostV1assetsendtoaddress" => self.request("v1/asset/sendToAddress".into(), "sapiPrivate".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "sapiprivatePostV1asteruserwithdraw" => self.request("v1/aster/user-withdraw".into(), "sapiPrivate".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "sapiprivatePostV1listenkey" => self.request("v1/listenKey".into(), "sapiPrivate".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "sapiprivatePutV1listenkey" => self.request("v1/listenKey".into(), "sapiPrivate".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "sapiprivateDeleteV1order" => self.request("v1/order".into(), "sapiPrivate".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "sapiprivateDeleteV1allopenorders" => self.request("v1/allOpenOrders".into(), "sapiPrivate".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "sapiprivateDeleteV1listenkey" => self.request("v1/listenKey".into(), "sapiPrivate".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     _ => unimplemented!(),
                 }
             },
@@ -2653,7 +2677,7 @@ impl ValueTrait for AsterImpl {
     fn join(&self, glue: Value) -> Value { self.0.join(glue) }
     fn to_string(&self) -> Value { self.0.to_string() }
     fn typeof_(&self) -> Value { self.0.typeof_() }
-    fn slice(&self, start: Value) -> Value { self.0.slice(start) }
+    fn slice(&self, start: Value, end: Value) -> Value { self.0.slice(start, end) }
 }
 
 impl AsterImpl {

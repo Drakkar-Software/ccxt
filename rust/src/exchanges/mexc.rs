@@ -13,14 +13,38 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, BoolExt, JSON, Array, Object, Math, Promise, parse_int, shift_2, extend_2, normalize};
 // Crypto hash identifiers
-fn sha256() -> Value { Value::from("sha256") }
-fn sha384() -> Value { Value::from("sha384") }
-fn sha512() -> Value { Value::from("sha512") }
-fn md5() -> Value { Value::from("md5") }
-fn ed25519() -> Value { Value::from("ed25519") }
+fn sha256() -> Value { Value::from("sha256()") }
+fn sha384() -> Value { Value::from("sha384()") }
+fn sha512() -> Value { Value::from("sha512()") }
+fn md5() -> Value { Value::from("md5()") }
+fn ed25519() -> Value { Value::from("ed25519()") }
 fn rsa(msg: Value, secret: Value, _hash: Value) -> Value { msg }
 fn eddsa(msg: Value, secret: Value, _curve: Value) -> Value { msg }
-fn secp256k1() -> Value { Value::from("secp256k1") }
+fn secp256k1() -> Value { Value::from("secp256k1()") }
+fn keccak() -> Value { Value::from("keccak()") }
+fn ecdsa(msg: Value, secret: Value, algo: Value, hash_fn: Value) -> Value { msg }
+fn totp(secret: Value) -> Value { Value::Undefined }
+fn jwt(data: Value, secret: Value, hash: Value, is_rsa: Value) -> Value { Value::Undefined }
+fn parse_float(value: Value) -> Value { value }
+fn decimals(value: Value) -> Value { Value::from(0) }
+fn shift_1(value: Value) -> Value { value }
+fn shift_3(value: Value) -> (Value, Value, Value) { (value.clone(), Value::Undefined, Value::Undefined) }
+fn shift_4(value: Value) -> (Value, Value, Value, Value) { (value.clone(), Value::Undefined, Value::Undefined, Value::Undefined) }
+// Error type constructors
+fn BadRequest(msg: Value) -> Value { msg }
+fn InvalidOrder(msg: Value) -> Value { msg }
+fn ExchangeError(msg: Value) -> Value { msg }
+fn InsufficientFunds(msg: Value) -> Value { msg }
+fn OrderNotFound(msg: Value) -> Value { msg }
+fn AuthenticationError(msg: Value) -> Value { msg }
+fn PermissionDenied(msg: Value) -> Value { msg }
+fn ExchangeNotAvailable(msg: Value) -> Value { msg }
+fn ArgumentsRequired(msg: Value) -> Value { msg }
+fn RateLimitExceeded(msg: Value) -> Value { msg }
+fn OrderNotFillable(msg: Value) -> Value { msg }
+fn OrderImmediatelyFillable(msg: Value) -> Value { msg }
+fn NotSupported(msg: Value) -> Value { msg }
+fn DuplicateOrderId(msg: Value) -> Value { msg }
 
 use crate::exchange::{PRECISE_BASE, TRUNCATE, ROUND, ROUND_UP, ROUND_DOWN};
 use crate::exchange::{DECIMAL_PLACES, SIGNIFICANT_DIGITS, TICK_SIZE, NO_PADDING, PAD_WITH_ZERO};
@@ -738,14 +762,14 @@ pub trait Mexc : Exchange {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = <Self as Mexc>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() { return rv; }
                 }
             }
         }
         let candidates = vec![("public", "GET", "status"), ("public", "GET", "ping"), ("public", "GET", "time"), ("sapi", "GET", "system/status")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Mexc>::request(self,path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -755,7 +779,7 @@ pub trait Mexc : Exchange {
     async fn fetch_time(&mut self, mut params: Value) -> Value {
         let candidates = vec![("public", "GET", "time"), ("public", "GET", "server/time"), ("public", "GET", "timestamp")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Mexc>::request(self,path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -1128,14 +1152,14 @@ pub trait Mexc : Exchange {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = <Self as Mexc>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() { return rv; }
                 }
             }
         }
         let candidates = vec![("public", "GET", "depth"), ("public", "GET", "orderbook"), ("public", "GET", "order_book")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Mexc>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -1151,7 +1175,7 @@ pub trait Mexc : Exchange {
         if limit.is_nonnullish() { request.set("limit".into(), limit.clone()); }
         let candidates = vec![("public", "GET", "trades"), ("public", "GET", "recent_trades"), ("public", "GET", "aggTrades")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Mexc>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -1325,14 +1349,14 @@ pub trait Mexc : Exchange {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = <Self as Mexc>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() { return rv; }
                 }
             }
         }
         let candidates = vec![("public", "GET", "klines"), ("public", "GET", "candles"), ("public", "GET", "ohlcv")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Mexc>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -1358,14 +1382,14 @@ pub trait Mexc : Exchange {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = <Self as Mexc>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() { return rv; }
                 }
             }
         }
         let candidates = vec![("public", "GET", "ticker/24hr"), ("public", "GET", "tickers"), ("public", "GET", "ticker")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Mexc>::request(self,path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), params.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -1389,14 +1413,14 @@ pub trait Mexc : Exchange {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
-                    let rv = <Self as Mexc>::request(self,path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
                     if !rv.is_undefined() { return rv; }
                 }
             }
         }
         let candidates = vec![("public", "GET", "ticker/24hr"), ("public", "GET", "ticker"), ("public", "GET", "ticker/price")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Mexc>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -1525,7 +1549,7 @@ pub trait Mexc : Exchange {
         if symbols.is_nonnullish() { request.set("symbols".into(), symbols.clone()); }
         let candidates = vec![("public", "GET", "ticker/bookTicker"), ("public", "GET", "bookticker"), ("public", "GET", "bidsasks"), ("public", "GET", "tickers")];
         for (api_name, method_name, path_name) in candidates {
-            let rv = <Self as Mexc>::request(self,path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
         }
         Value::Undefined
@@ -4956,190 +4980,190 @@ pub trait Mexc : Exchange {
         match method {
             Value::Json(serde_json::Value::String(ref m)) => {
                 match m.as_ref() {
-                    "spotPublicGetPing" => Mexc::request(self, "ping".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPublicGetTime" => Mexc::request(self, "time".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPublicGetDefaultsymbols" => Mexc::request(self, "defaultSymbols".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPublicGetExchangeinfo" => Mexc::request(self, "exchangeInfo".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPublicGetDepth" => Mexc::request(self, "depth".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPublicGetTrades" => Mexc::request(self, "trades".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPublicGetHistoricaltrades" => Mexc::request(self, "historicalTrades".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPublicGetAggtrades" => Mexc::request(self, "aggTrades".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPublicGetKlines" => Mexc::request(self, "klines".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPublicGetAvgprice" => Mexc::request(self, "avgPrice".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPublicGetTicker24hr" => Mexc::request(self, "ticker/24hr".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPublicGetTickerprice" => Mexc::request(self, "ticker/price".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPublicGetTickerbookticker" => Mexc::request(self, "ticker/bookTicker".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPublicGetEtfinfo" => Mexc::request(self, "etf/info".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPrivateGetKycstatus" => Mexc::request(self, "kyc/status".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPrivateGetUid" => Mexc::request(self, "uid".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPrivateGetOrder" => Mexc::request(self, "order".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPrivateGetOpenorders" => Mexc::request(self, "openOrders".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPrivateGetAllorders" => Mexc::request(self, "allOrders".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPrivateGetAccount" => Mexc::request(self, "account".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPrivateGetMytrades" => Mexc::request(self, "myTrades".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPrivateGetStrategygroup" => Mexc::request(self, "strategy/group".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPrivateGetStrategygroupuid" => Mexc::request(self, "strategy/group/uid".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPrivateGetTradefee" => Mexc::request(self, "tradeFee".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPrivateGetSubaccountlist" => Mexc::request(self, "sub-account/list".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPrivateGetSubaccountapikey" => Mexc::request(self, "sub-account/apiKey".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPrivateGetSubaccountasset" => Mexc::request(self, "sub-account/asset".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPrivateGetCapitalconfiggetall" => Mexc::request(self, "capital/config/getall".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPrivateGetCapitaldeposithisrec" => Mexc::request(self, "capital/deposit/hisrec".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPrivateGetCapitalwithdrawhistory" => Mexc::request(self, "capital/withdraw/history".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPrivateGetCapitalwithdrawaddress" => Mexc::request(self, "capital/withdraw/address".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPrivateGetCapitaldepositaddress" => Mexc::request(self, "capital/deposit/address".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPrivateGetCapitaltransfer" => Mexc::request(self, "capital/transfer".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPrivateGetCapitaltransfertranid" => Mexc::request(self, "capital/transfer/tranId".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPrivateGetCapitaltransferinternal" => Mexc::request(self, "capital/transfer/internal".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPrivateGetCapitalsubaccountuniversaltransfer" => Mexc::request(self, "capital/sub-account/universalTransfer".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPrivateGetCapitalconvert" => Mexc::request(self, "capital/convert".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPrivateGetCapitalconvertlist" => Mexc::request(self, "capital/convert/list".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPrivateGetMarginloan" => Mexc::request(self, "margin/loan".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPrivateGetMarginallorders" => Mexc::request(self, "margin/allOrders".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPrivateGetMarginmytrades" => Mexc::request(self, "margin/myTrades".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPrivateGetMarginopenorders" => Mexc::request(self, "margin/openOrders".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPrivateGetMarginmaxtransferable" => Mexc::request(self, "margin/maxTransferable".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPrivateGetMarginpriceindex" => Mexc::request(self, "margin/priceIndex".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPrivateGetMarginorder" => Mexc::request(self, "margin/order".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPrivateGetMarginisolatedaccount" => Mexc::request(self, "margin/isolated/account".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPrivateGetMarginmaxborrowable" => Mexc::request(self, "margin/maxBorrowable".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPrivateGetMarginrepay" => Mexc::request(self, "margin/repay".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPrivateGetMarginisolatedpair" => Mexc::request(self, "margin/isolated/pair".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPrivateGetMarginforceliquidationrec" => Mexc::request(self, "margin/forceLiquidationRec".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPrivateGetMarginisolatedmargindata" => Mexc::request(self, "margin/isolatedMarginData".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPrivateGetMarginisolatedmargintier" => Mexc::request(self, "margin/isolatedMarginTier".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPrivateGetRebatetaxquery" => Mexc::request(self, "rebate/taxQuery".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPrivateGetRebatedetail" => Mexc::request(self, "rebate/detail".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPrivateGetRebatedetailkickback" => Mexc::request(self, "rebate/detail/kickback".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPrivateGetRebaterefercode" => Mexc::request(self, "rebate/referCode".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPrivateGetRebateaffiliatecommission" => Mexc::request(self, "rebate/affiliate/commission".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPrivateGetRebateaffiliatewithdraw" => Mexc::request(self, "rebate/affiliate/withdraw".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPrivateGetRebateaffiliatecommissiondetail" => Mexc::request(self, "rebate/affiliate/commission/detail".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPrivateGetMxdeductenable" => Mexc::request(self, "mxDeduct/enable".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPrivateGetUserdatastream" => Mexc::request(self, "userDataStream".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPrivateGetSelfsymbols" => Mexc::request(self, "selfSymbols".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPrivateGetAssetinternaltransferrecord" => Mexc::request(self, "asset/internal/transfer/record".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPrivatePostOrder" => Mexc::request(self, "order".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPrivatePostOrdertest" => Mexc::request(self, "order/test".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPrivatePostSubaccountvirtualsubaccount" => Mexc::request(self, "sub-account/virtualSubAccount".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPrivatePostSubaccountapikey" => Mexc::request(self, "sub-account/apiKey".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPrivatePostSubaccountfutures" => Mexc::request(self, "sub-account/futures".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPrivatePostSubaccountmargin" => Mexc::request(self, "sub-account/margin".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPrivatePostBatchorders" => Mexc::request(self, "batchOrders".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPrivatePostStrategygroup" => Mexc::request(self, "strategy/group".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPrivatePostCapitalwithdrawapply" => Mexc::request(self, "capital/withdraw/apply".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPrivatePostCapitalwithdraw" => Mexc::request(self, "capital/withdraw".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPrivatePostCapitaltransfer" => Mexc::request(self, "capital/transfer".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPrivatePostCapitaltransferinternal" => Mexc::request(self, "capital/transfer/internal".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPrivatePostCapitaldepositaddress" => Mexc::request(self, "capital/deposit/address".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPrivatePostCapitalsubaccountuniversaltransfer" => Mexc::request(self, "capital/sub-account/universalTransfer".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPrivatePostCapitalconvert" => Mexc::request(self, "capital/convert".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPrivatePostMxdeductenable" => Mexc::request(self, "mxDeduct/enable".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPrivatePostUserdatastream" => Mexc::request(self, "userDataStream".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPrivatePutUserdatastream" => Mexc::request(self, "userDataStream".into(), "spot".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPrivateDeleteOrder" => Mexc::request(self, "order".into(), "spot".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPrivateDeleteOpenorders" => Mexc::request(self, "openOrders".into(), "spot".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPrivateDeleteSubaccountapikey" => Mexc::request(self, "sub-account/apiKey".into(), "spot".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPrivateDeleteMarginorder" => Mexc::request(self, "margin/order".into(), "spot".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPrivateDeleteMarginopenorders" => Mexc::request(self, "margin/openOrders".into(), "spot".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPrivateDeleteUserdatastream" => Mexc::request(self, "userDataStream".into(), "spot".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spotPrivateDeleteCapitalwithdraw" => Mexc::request(self, "capital/withdraw".into(), "spot".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "contractPublicGetPing" => Mexc::request(self, "ping".into(), "contract".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "contractPublicGetDetail" => Mexc::request(self, "detail".into(), "contract".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "contractPublicGetSupportcurrencies" => Mexc::request(self, "support_currencies".into(), "contract".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "contractPublicGetDepthsymbol" => Mexc::request(self, "depth/{symbol}".into(), "contract".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "contractPublicGetDepthcommitssymbollimit" => Mexc::request(self, "depth_commits/{symbol}/{limit}".into(), "contract".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "contractPublicGetIndexpricesymbol" => Mexc::request(self, "index_price/{symbol}".into(), "contract".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "contractPublicGetFairpricesymbol" => Mexc::request(self, "fair_price/{symbol}".into(), "contract".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "contractPublicGetFundingratesymbol" => Mexc::request(self, "funding_rate/{symbol}".into(), "contract".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "contractPublicGetKlinesymbol" => Mexc::request(self, "kline/{symbol}".into(), "contract".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "contractPublicGetKlineindexpricesymbol" => Mexc::request(self, "kline/index_price/{symbol}".into(), "contract".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "contractPublicGetKlinefairpricesymbol" => Mexc::request(self, "kline/fair_price/{symbol}".into(), "contract".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "contractPublicGetDealssymbol" => Mexc::request(self, "deals/{symbol}".into(), "contract".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "contractPublicGetTicker" => Mexc::request(self, "ticker".into(), "contract".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "contractPublicGetRiskreverse" => Mexc::request(self, "risk_reverse".into(), "contract".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "contractPublicGetRiskreversehistory" => Mexc::request(self, "risk_reverse/history".into(), "contract".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "contractPublicGetFundingratehistory" => Mexc::request(self, "funding_rate/history".into(), "contract".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "contractPrivateGetAccountassets" => Mexc::request(self, "account/assets".into(), "contract".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "contractPrivateGetAccountassetcurrency" => Mexc::request(self, "account/asset/{currency}".into(), "contract".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "contractPrivateGetAccounttransferrecord" => Mexc::request(self, "account/transfer_record".into(), "contract".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "contractPrivateGetPositionlisthistorypositions" => Mexc::request(self, "position/list/history_positions".into(), "contract".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "contractPrivateGetPositionopenpositions" => Mexc::request(self, "position/open_positions".into(), "contract".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "contractPrivateGetPositionfundingrecords" => Mexc::request(self, "position/funding_records".into(), "contract".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "contractPrivateGetPositionpositionmode" => Mexc::request(self, "position/position_mode".into(), "contract".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "contractPrivateGetOrderlistopenorderssymbol" => Mexc::request(self, "order/list/open_orders/{symbol}".into(), "contract".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "contractPrivateGetOrderlisthistoryorders" => Mexc::request(self, "order/list/history_orders".into(), "contract".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "contractPrivateGetOrderexternalsymbolexternaloid" => Mexc::request(self, "order/external/{symbol}/{external_oid}".into(), "contract".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "contractPrivateGetOrdergetorderid" => Mexc::request(self, "order/get/{order_id}".into(), "contract".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "contractPrivateGetOrderbatchquery" => Mexc::request(self, "order/batch_query".into(), "contract".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "contractPrivateGetOrderdealdetailsorderid" => Mexc::request(self, "order/deal_details/{order_id}".into(), "contract".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "contractPrivateGetOrderlistorderdeals" => Mexc::request(self, "order/list/order_deals".into(), "contract".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "contractPrivateGetPlanorderlistorders" => Mexc::request(self, "planorder/list/orders".into(), "contract".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "contractPrivateGetStoporderlistorders" => Mexc::request(self, "stoporder/list/orders".into(), "contract".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "contractPrivateGetStoporderorderdetailsstoporderid" => Mexc::request(self, "stoporder/order_details/{stop_order_id}".into(), "contract".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "contractPrivateGetAccountrisklimit" => Mexc::request(self, "account/risk_limit".into(), "contract".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "contractPrivateGetAccounttieredfeerate" => Mexc::request(self, "account/tiered_fee_rate".into(), "contract".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "contractPrivateGetPositionleverage" => Mexc::request(self, "position/leverage".into(), "contract".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "contractPrivatePostPositionchangemargin" => Mexc::request(self, "position/change_margin".into(), "contract".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "contractPrivatePostPositionchangeleverage" => Mexc::request(self, "position/change_leverage".into(), "contract".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "contractPrivatePostPositionchangepositionmode" => Mexc::request(self, "position/change_position_mode".into(), "contract".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "contractPrivatePostOrdersubmit" => Mexc::request(self, "order/submit".into(), "contract".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "contractPrivatePostOrdersubmitbatch" => Mexc::request(self, "order/submit_batch".into(), "contract".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "contractPrivatePostOrdercancel" => Mexc::request(self, "order/cancel".into(), "contract".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "contractPrivatePostOrdercancelwithexternal" => Mexc::request(self, "order/cancel_with_external".into(), "contract".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "contractPrivatePostOrdercancelall" => Mexc::request(self, "order/cancel_all".into(), "contract".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "contractPrivatePostAccountchangerisklevel" => Mexc::request(self, "account/change_risk_level".into(), "contract".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "contractPrivatePostPlanorderplace" => Mexc::request(self, "planorder/place".into(), "contract".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "contractPrivatePostPlanordercancel" => Mexc::request(self, "planorder/cancel".into(), "contract".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "contractPrivatePostPlanordercancelall" => Mexc::request(self, "planorder/cancel_all".into(), "contract".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "contractPrivatePostStopordercancel" => Mexc::request(self, "stoporder/cancel".into(), "contract".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "contractPrivatePostStopordercancelall" => Mexc::request(self, "stoporder/cancel_all".into(), "contract".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "contractPrivatePostStoporderchangeprice" => Mexc::request(self, "stoporder/change_price".into(), "contract".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "contractPrivatePostStoporderchangeplanprice" => Mexc::request(self, "stoporder/change_plan_price".into(), "contract".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spot2PublicGetMarketsymbols" => Mexc::request(self, "market/symbols".into(), "spot2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spot2PublicGetMarketcoinlist" => Mexc::request(self, "market/coin/list".into(), "spot2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spot2PublicGetCommontimestamp" => Mexc::request(self, "common/timestamp".into(), "spot2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spot2PublicGetCommonping" => Mexc::request(self, "common/ping".into(), "spot2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spot2PublicGetMarketticker" => Mexc::request(self, "market/ticker".into(), "spot2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spot2PublicGetMarketdepth" => Mexc::request(self, "market/depth".into(), "spot2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spot2PublicGetMarketdeals" => Mexc::request(self, "market/deals".into(), "spot2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spot2PublicGetMarketkline" => Mexc::request(self, "market/kline".into(), "spot2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spot2PublicGetMarketapidefaultsymbols" => Mexc::request(self, "market/api_default_symbols".into(), "spot2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spot2PrivateGetAccountinfo" => Mexc::request(self, "account/info".into(), "spot2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spot2PrivateGetOrderopenorders" => Mexc::request(self, "order/open_orders".into(), "spot2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spot2PrivateGetOrderlist" => Mexc::request(self, "order/list".into(), "spot2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spot2PrivateGetOrderquery" => Mexc::request(self, "order/query".into(), "spot2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spot2PrivateGetOrderdeals" => Mexc::request(self, "order/deals".into(), "spot2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spot2PrivateGetOrderdealdetail" => Mexc::request(self, "order/deal_detail".into(), "spot2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spot2PrivateGetAssetdepositaddresslist" => Mexc::request(self, "asset/deposit/address/list".into(), "spot2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spot2PrivateGetAssetdepositlist" => Mexc::request(self, "asset/deposit/list".into(), "spot2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spot2PrivateGetAssetaddresslist" => Mexc::request(self, "asset/address/list".into(), "spot2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spot2PrivateGetAssetwithdrawlist" => Mexc::request(self, "asset/withdraw/list".into(), "spot2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spot2PrivateGetAssetinternaltransferrecord" => Mexc::request(self, "asset/internal/transfer/record".into(), "spot2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spot2PrivateGetAccountbalance" => Mexc::request(self, "account/balance".into(), "spot2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spot2PrivateGetAssetinternaltransferinfo" => Mexc::request(self, "asset/internal/transfer/info".into(), "spot2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spot2PrivateGetMarketapisymbols" => Mexc::request(self, "market/api_symbols".into(), "spot2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spot2PrivatePostOrderplace" => Mexc::request(self, "order/place".into(), "spot2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spot2PrivatePostOrderplacebatch" => Mexc::request(self, "order/place_batch".into(), "spot2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spot2PrivatePostOrderadvancedplacebatch" => Mexc::request(self, "order/advanced/place_batch".into(), "spot2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spot2PrivatePostAssetwithdraw" => Mexc::request(self, "asset/withdraw".into(), "spot2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spot2PrivatePostAssetinternaltransfer" => Mexc::request(self, "asset/internal/transfer".into(), "spot2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spot2PrivateDeleteOrdercancel" => Mexc::request(self, "order/cancel".into(), "spot2".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spot2PrivateDeleteOrdercancelbysymbol" => Mexc::request(self, "order/cancel_by_symbol".into(), "spot2".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "spot2PrivateDeleteAssetwithdraw" => Mexc::request(self, "asset/withdraw".into(), "spot2".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "brokerPrivateGetSubaccountuniversaltransfer" => Mexc::request(self, "sub-account/universalTransfer".into(), "broker".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "brokerPrivateGetSubaccountlist" => Mexc::request(self, "sub-account/list".into(), "broker".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "brokerPrivateGetSubaccountapikey" => Mexc::request(self, "sub-account/apiKey".into(), "broker".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "brokerPrivateGetCapitaldepositsubaddress" => Mexc::request(self, "capital/deposit/subAddress".into(), "broker".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "brokerPrivateGetCapitaldepositsubhisrec" => Mexc::request(self, "capital/deposit/subHisrec".into(), "broker".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "brokerPrivateGetCapitaldepositsubhisrecgetall" => Mexc::request(self, "capital/deposit/subHisrec/getall".into(), "broker".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "brokerPrivatePostSubaccountvirtualsubaccount" => Mexc::request(self, "sub-account/virtualSubAccount".into(), "broker".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "brokerPrivatePostSubaccountapikey" => Mexc::request(self, "sub-account/apiKey".into(), "broker".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "brokerPrivatePostCapitaldepositsubaddress" => Mexc::request(self, "capital/deposit/subAddress".into(), "broker".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "brokerPrivatePostCapitalwithdrawapply" => Mexc::request(self, "capital/withdraw/apply".into(), "broker".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "brokerPrivatePostSubaccountuniversaltransfer" => Mexc::request(self, "sub-account/universalTransfer".into(), "broker".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "brokerPrivatePostSubaccountfutures" => Mexc::request(self, "sub-account/futures".into(), "broker".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "brokerPrivateDeleteSubaccountapikey" => Mexc::request(self, "sub-account/apiKey".into(), "broker".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPublicGetPing" => self.request("ping".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPublicGetTime" => self.request("time".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPublicGetDefaultsymbols" => self.request("defaultSymbols".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPublicGetExchangeinfo" => self.request("exchangeInfo".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPublicGetDepth" => self.request("depth".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPublicGetTrades" => self.request("trades".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPublicGetHistoricaltrades" => self.request("historicalTrades".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPublicGetAggtrades" => self.request("aggTrades".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPublicGetKlines" => self.request("klines".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPublicGetAvgprice" => self.request("avgPrice".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPublicGetTicker24hr" => self.request("ticker/24hr".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPublicGetTickerprice" => self.request("ticker/price".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPublicGetTickerbookticker" => self.request("ticker/bookTicker".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPublicGetEtfinfo" => self.request("etf/info".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPrivateGetKycstatus" => self.request("kyc/status".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPrivateGetUid" => self.request("uid".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPrivateGetOrder" => self.request("order".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPrivateGetOpenorders" => self.request("openOrders".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPrivateGetAllorders" => self.request("allOrders".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPrivateGetAccount" => self.request("account".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPrivateGetMytrades" => self.request("myTrades".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPrivateGetStrategygroup" => self.request("strategy/group".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPrivateGetStrategygroupuid" => self.request("strategy/group/uid".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPrivateGetTradefee" => self.request("tradeFee".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPrivateGetSubaccountlist" => self.request("sub-account/list".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPrivateGetSubaccountapikey" => self.request("sub-account/apiKey".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPrivateGetSubaccountasset" => self.request("sub-account/asset".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPrivateGetCapitalconfiggetall" => self.request("capital/config/getall".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPrivateGetCapitaldeposithisrec" => self.request("capital/deposit/hisrec".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPrivateGetCapitalwithdrawhistory" => self.request("capital/withdraw/history".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPrivateGetCapitalwithdrawaddress" => self.request("capital/withdraw/address".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPrivateGetCapitaldepositaddress" => self.request("capital/deposit/address".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPrivateGetCapitaltransfer" => self.request("capital/transfer".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPrivateGetCapitaltransfertranid" => self.request("capital/transfer/tranId".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPrivateGetCapitaltransferinternal" => self.request("capital/transfer/internal".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPrivateGetCapitalsubaccountuniversaltransfer" => self.request("capital/sub-account/universalTransfer".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPrivateGetCapitalconvert" => self.request("capital/convert".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPrivateGetCapitalconvertlist" => self.request("capital/convert/list".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPrivateGetMarginloan" => self.request("margin/loan".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPrivateGetMarginallorders" => self.request("margin/allOrders".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPrivateGetMarginmytrades" => self.request("margin/myTrades".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPrivateGetMarginopenorders" => self.request("margin/openOrders".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPrivateGetMarginmaxtransferable" => self.request("margin/maxTransferable".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPrivateGetMarginpriceindex" => self.request("margin/priceIndex".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPrivateGetMarginorder" => self.request("margin/order".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPrivateGetMarginisolatedaccount" => self.request("margin/isolated/account".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPrivateGetMarginmaxborrowable" => self.request("margin/maxBorrowable".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPrivateGetMarginrepay" => self.request("margin/repay".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPrivateGetMarginisolatedpair" => self.request("margin/isolated/pair".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPrivateGetMarginforceliquidationrec" => self.request("margin/forceLiquidationRec".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPrivateGetMarginisolatedmargindata" => self.request("margin/isolatedMarginData".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPrivateGetMarginisolatedmargintier" => self.request("margin/isolatedMarginTier".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPrivateGetRebatetaxquery" => self.request("rebate/taxQuery".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPrivateGetRebatedetail" => self.request("rebate/detail".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPrivateGetRebatedetailkickback" => self.request("rebate/detail/kickback".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPrivateGetRebaterefercode" => self.request("rebate/referCode".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPrivateGetRebateaffiliatecommission" => self.request("rebate/affiliate/commission".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPrivateGetRebateaffiliatewithdraw" => self.request("rebate/affiliate/withdraw".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPrivateGetRebateaffiliatecommissiondetail" => self.request("rebate/affiliate/commission/detail".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPrivateGetMxdeductenable" => self.request("mxDeduct/enable".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPrivateGetUserdatastream" => self.request("userDataStream".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPrivateGetSelfsymbols" => self.request("selfSymbols".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPrivateGetAssetinternaltransferrecord" => self.request("asset/internal/transfer/record".into(), "spot".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPrivatePostOrder" => self.request("order".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPrivatePostOrdertest" => self.request("order/test".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPrivatePostSubaccountvirtualsubaccount" => self.request("sub-account/virtualSubAccount".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPrivatePostSubaccountapikey" => self.request("sub-account/apiKey".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPrivatePostSubaccountfutures" => self.request("sub-account/futures".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPrivatePostSubaccountmargin" => self.request("sub-account/margin".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPrivatePostBatchorders" => self.request("batchOrders".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPrivatePostStrategygroup" => self.request("strategy/group".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPrivatePostCapitalwithdrawapply" => self.request("capital/withdraw/apply".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPrivatePostCapitalwithdraw" => self.request("capital/withdraw".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPrivatePostCapitaltransfer" => self.request("capital/transfer".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPrivatePostCapitaltransferinternal" => self.request("capital/transfer/internal".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPrivatePostCapitaldepositaddress" => self.request("capital/deposit/address".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPrivatePostCapitalsubaccountuniversaltransfer" => self.request("capital/sub-account/universalTransfer".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPrivatePostCapitalconvert" => self.request("capital/convert".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPrivatePostMxdeductenable" => self.request("mxDeduct/enable".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPrivatePostUserdatastream" => self.request("userDataStream".into(), "spot".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPrivatePutUserdatastream" => self.request("userDataStream".into(), "spot".into(), "PUT".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPrivateDeleteOrder" => self.request("order".into(), "spot".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPrivateDeleteOpenorders" => self.request("openOrders".into(), "spot".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPrivateDeleteSubaccountapikey" => self.request("sub-account/apiKey".into(), "spot".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPrivateDeleteMarginorder" => self.request("margin/order".into(), "spot".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPrivateDeleteMarginopenorders" => self.request("margin/openOrders".into(), "spot".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPrivateDeleteUserdatastream" => self.request("userDataStream".into(), "spot".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spotPrivateDeleteCapitalwithdraw" => self.request("capital/withdraw".into(), "spot".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "contractPublicGetPing" => self.request("ping".into(), "contract".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "contractPublicGetDetail" => self.request("detail".into(), "contract".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "contractPublicGetSupportcurrencies" => self.request("support_currencies".into(), "contract".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "contractPublicGetDepthsymbol" => self.request("depth/{symbol}".into(), "contract".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "contractPublicGetDepthcommitssymbollimit" => self.request("depth_commits/{symbol}/{limit}".into(), "contract".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "contractPublicGetIndexpricesymbol" => self.request("index_price/{symbol}".into(), "contract".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "contractPublicGetFairpricesymbol" => self.request("fair_price/{symbol}".into(), "contract".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "contractPublicGetFundingratesymbol" => self.request("funding_rate/{symbol}".into(), "contract".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "contractPublicGetKlinesymbol" => self.request("kline/{symbol}".into(), "contract".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "contractPublicGetKlineindexpricesymbol" => self.request("kline/index_price/{symbol}".into(), "contract".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "contractPublicGetKlinefairpricesymbol" => self.request("kline/fair_price/{symbol}".into(), "contract".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "contractPublicGetDealssymbol" => self.request("deals/{symbol}".into(), "contract".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "contractPublicGetTicker" => self.request("ticker".into(), "contract".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "contractPublicGetRiskreverse" => self.request("risk_reverse".into(), "contract".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "contractPublicGetRiskreversehistory" => self.request("risk_reverse/history".into(), "contract".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "contractPublicGetFundingratehistory" => self.request("funding_rate/history".into(), "contract".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "contractPrivateGetAccountassets" => self.request("account/assets".into(), "contract".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "contractPrivateGetAccountassetcurrency" => self.request("account/asset/{currency}".into(), "contract".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "contractPrivateGetAccounttransferrecord" => self.request("account/transfer_record".into(), "contract".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "contractPrivateGetPositionlisthistorypositions" => self.request("position/list/history_positions".into(), "contract".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "contractPrivateGetPositionopenpositions" => self.request("position/open_positions".into(), "contract".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "contractPrivateGetPositionfundingrecords" => self.request("position/funding_records".into(), "contract".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "contractPrivateGetPositionpositionmode" => self.request("position/position_mode".into(), "contract".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "contractPrivateGetOrderlistopenorderssymbol" => self.request("order/list/open_orders/{symbol}".into(), "contract".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "contractPrivateGetOrderlisthistoryorders" => self.request("order/list/history_orders".into(), "contract".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "contractPrivateGetOrderexternalsymbolexternaloid" => self.request("order/external/{symbol}/{external_oid}".into(), "contract".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "contractPrivateGetOrdergetorderid" => self.request("order/get/{order_id}".into(), "contract".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "contractPrivateGetOrderbatchquery" => self.request("order/batch_query".into(), "contract".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "contractPrivateGetOrderdealdetailsorderid" => self.request("order/deal_details/{order_id}".into(), "contract".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "contractPrivateGetOrderlistorderdeals" => self.request("order/list/order_deals".into(), "contract".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "contractPrivateGetPlanorderlistorders" => self.request("planorder/list/orders".into(), "contract".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "contractPrivateGetStoporderlistorders" => self.request("stoporder/list/orders".into(), "contract".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "contractPrivateGetStoporderorderdetailsstoporderid" => self.request("stoporder/order_details/{stop_order_id}".into(), "contract".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "contractPrivateGetAccountrisklimit" => self.request("account/risk_limit".into(), "contract".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "contractPrivateGetAccounttieredfeerate" => self.request("account/tiered_fee_rate".into(), "contract".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "contractPrivateGetPositionleverage" => self.request("position/leverage".into(), "contract".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "contractPrivatePostPositionchangemargin" => self.request("position/change_margin".into(), "contract".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "contractPrivatePostPositionchangeleverage" => self.request("position/change_leverage".into(), "contract".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "contractPrivatePostPositionchangepositionmode" => self.request("position/change_position_mode".into(), "contract".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "contractPrivatePostOrdersubmit" => self.request("order/submit".into(), "contract".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "contractPrivatePostOrdersubmitbatch" => self.request("order/submit_batch".into(), "contract".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "contractPrivatePostOrdercancel" => self.request("order/cancel".into(), "contract".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "contractPrivatePostOrdercancelwithexternal" => self.request("order/cancel_with_external".into(), "contract".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "contractPrivatePostOrdercancelall" => self.request("order/cancel_all".into(), "contract".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "contractPrivatePostAccountchangerisklevel" => self.request("account/change_risk_level".into(), "contract".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "contractPrivatePostPlanorderplace" => self.request("planorder/place".into(), "contract".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "contractPrivatePostPlanordercancel" => self.request("planorder/cancel".into(), "contract".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "contractPrivatePostPlanordercancelall" => self.request("planorder/cancel_all".into(), "contract".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "contractPrivatePostStopordercancel" => self.request("stoporder/cancel".into(), "contract".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "contractPrivatePostStopordercancelall" => self.request("stoporder/cancel_all".into(), "contract".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "contractPrivatePostStoporderchangeprice" => self.request("stoporder/change_price".into(), "contract".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "contractPrivatePostStoporderchangeplanprice" => self.request("stoporder/change_plan_price".into(), "contract".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spot2PublicGetMarketsymbols" => self.request("market/symbols".into(), "spot2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spot2PublicGetMarketcoinlist" => self.request("market/coin/list".into(), "spot2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spot2PublicGetCommontimestamp" => self.request("common/timestamp".into(), "spot2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spot2PublicGetCommonping" => self.request("common/ping".into(), "spot2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spot2PublicGetMarketticker" => self.request("market/ticker".into(), "spot2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spot2PublicGetMarketdepth" => self.request("market/depth".into(), "spot2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spot2PublicGetMarketdeals" => self.request("market/deals".into(), "spot2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spot2PublicGetMarketkline" => self.request("market/kline".into(), "spot2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spot2PublicGetMarketapidefaultsymbols" => self.request("market/api_default_symbols".into(), "spot2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spot2PrivateGetAccountinfo" => self.request("account/info".into(), "spot2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spot2PrivateGetOrderopenorders" => self.request("order/open_orders".into(), "spot2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spot2PrivateGetOrderlist" => self.request("order/list".into(), "spot2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spot2PrivateGetOrderquery" => self.request("order/query".into(), "spot2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spot2PrivateGetOrderdeals" => self.request("order/deals".into(), "spot2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spot2PrivateGetOrderdealdetail" => self.request("order/deal_detail".into(), "spot2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spot2PrivateGetAssetdepositaddresslist" => self.request("asset/deposit/address/list".into(), "spot2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spot2PrivateGetAssetdepositlist" => self.request("asset/deposit/list".into(), "spot2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spot2PrivateGetAssetaddresslist" => self.request("asset/address/list".into(), "spot2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spot2PrivateGetAssetwithdrawlist" => self.request("asset/withdraw/list".into(), "spot2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spot2PrivateGetAssetinternaltransferrecord" => self.request("asset/internal/transfer/record".into(), "spot2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spot2PrivateGetAccountbalance" => self.request("account/balance".into(), "spot2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spot2PrivateGetAssetinternaltransferinfo" => self.request("asset/internal/transfer/info".into(), "spot2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spot2PrivateGetMarketapisymbols" => self.request("market/api_symbols".into(), "spot2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spot2PrivatePostOrderplace" => self.request("order/place".into(), "spot2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spot2PrivatePostOrderplacebatch" => self.request("order/place_batch".into(), "spot2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spot2PrivatePostOrderadvancedplacebatch" => self.request("order/advanced/place_batch".into(), "spot2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spot2PrivatePostAssetwithdraw" => self.request("asset/withdraw".into(), "spot2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spot2PrivatePostAssetinternaltransfer" => self.request("asset/internal/transfer".into(), "spot2".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spot2PrivateDeleteOrdercancel" => self.request("order/cancel".into(), "spot2".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spot2PrivateDeleteOrdercancelbysymbol" => self.request("order/cancel_by_symbol".into(), "spot2".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "spot2PrivateDeleteAssetwithdraw" => self.request("asset/withdraw".into(), "spot2".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "brokerPrivateGetSubaccountuniversaltransfer" => self.request("sub-account/universalTransfer".into(), "broker".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "brokerPrivateGetSubaccountlist" => self.request("sub-account/list".into(), "broker".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "brokerPrivateGetSubaccountapikey" => self.request("sub-account/apiKey".into(), "broker".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "brokerPrivateGetCapitaldepositsubaddress" => self.request("capital/deposit/subAddress".into(), "broker".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "brokerPrivateGetCapitaldepositsubhisrec" => self.request("capital/deposit/subHisrec".into(), "broker".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "brokerPrivateGetCapitaldepositsubhisrecgetall" => self.request("capital/deposit/subHisrec/getall".into(), "broker".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "brokerPrivatePostSubaccountvirtualsubaccount" => self.request("sub-account/virtualSubAccount".into(), "broker".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "brokerPrivatePostSubaccountapikey" => self.request("sub-account/apiKey".into(), "broker".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "brokerPrivatePostCapitaldepositsubaddress" => self.request("capital/deposit/subAddress".into(), "broker".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "brokerPrivatePostCapitalwithdrawapply" => self.request("capital/withdraw/apply".into(), "broker".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "brokerPrivatePostSubaccountuniversaltransfer" => self.request("sub-account/universalTransfer".into(), "broker".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "brokerPrivatePostSubaccountfutures" => self.request("sub-account/futures".into(), "broker".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "brokerPrivateDeleteSubaccountapikey" => self.request("sub-account/apiKey".into(), "broker".into(), "DELETE".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     _ => unimplemented!(),
                 }
             },
@@ -5183,7 +5207,7 @@ impl ValueTrait for MexcImpl {
     fn join(&self, glue: Value) -> Value { self.0.join(glue) }
     fn to_string(&self) -> Value { self.0.to_string() }
     fn typeof_(&self) -> Value { self.0.typeof_() }
-    fn slice(&self, start: Value) -> Value { self.0.slice(start) }
+    fn slice(&self, start: Value, end: Value) -> Value { self.0.slice(start, end) }
 }
 
 impl MexcImpl {

@@ -13,14 +13,38 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, BoolExt, JSON, Array, Object, Math, Promise, parse_int, shift_2, extend_2, normalize};
 // Crypto hash identifiers
-fn sha256() -> Value { Value::from("sha256") }
-fn sha384() -> Value { Value::from("sha384") }
-fn sha512() -> Value { Value::from("sha512") }
-fn md5() -> Value { Value::from("md5") }
-fn ed25519() -> Value { Value::from("ed25519") }
+fn sha256() -> Value { Value::from("sha256()") }
+fn sha384() -> Value { Value::from("sha384()") }
+fn sha512() -> Value { Value::from("sha512()") }
+fn md5() -> Value { Value::from("md5()") }
+fn ed25519() -> Value { Value::from("ed25519()") }
 fn rsa(msg: Value, secret: Value, _hash: Value) -> Value { msg }
 fn eddsa(msg: Value, secret: Value, _curve: Value) -> Value { msg }
-fn secp256k1() -> Value { Value::from("secp256k1") }
+fn secp256k1() -> Value { Value::from("secp256k1()") }
+fn keccak() -> Value { Value::from("keccak()") }
+fn ecdsa(msg: Value, secret: Value, algo: Value, hash_fn: Value) -> Value { msg }
+fn totp(secret: Value) -> Value { Value::Undefined }
+fn jwt(data: Value, secret: Value, hash: Value, is_rsa: Value) -> Value { Value::Undefined }
+fn parse_float(value: Value) -> Value { value }
+fn decimals(value: Value) -> Value { Value::from(0) }
+fn shift_1(value: Value) -> Value { value }
+fn shift_3(value: Value) -> (Value, Value, Value) { (value.clone(), Value::Undefined, Value::Undefined) }
+fn shift_4(value: Value) -> (Value, Value, Value, Value) { (value.clone(), Value::Undefined, Value::Undefined, Value::Undefined) }
+// Error type constructors
+fn BadRequest(msg: Value) -> Value { msg }
+fn InvalidOrder(msg: Value) -> Value { msg }
+fn ExchangeError(msg: Value) -> Value { msg }
+fn InsufficientFunds(msg: Value) -> Value { msg }
+fn OrderNotFound(msg: Value) -> Value { msg }
+fn AuthenticationError(msg: Value) -> Value { msg }
+fn PermissionDenied(msg: Value) -> Value { msg }
+fn ExchangeNotAvailable(msg: Value) -> Value { msg }
+fn ArgumentsRequired(msg: Value) -> Value { msg }
+fn RateLimitExceeded(msg: Value) -> Value { msg }
+fn OrderNotFillable(msg: Value) -> Value { msg }
+fn OrderImmediatelyFillable(msg: Value) -> Value { msg }
+fn NotSupported(msg: Value) -> Value { msg }
+fn DuplicateOrderId(msg: Value) -> Value { msg }
 
 use crate::exchange::{PRECISE_BASE, TRUNCATE, ROUND, ROUND_UP, ROUND_DOWN};
 use crate::exchange::{DECIMAL_PLACES, SIGNIFICANT_DIGITS, TICK_SIZE, NO_PADDING, PAD_WITH_ZERO};
@@ -639,7 +663,7 @@ pub trait Whitebit : Exchange {
         orderbook.set("timestamp".into(), timestamp.clone());
         orderbook.set("datetime".into(), self.iso8601(timestamp.clone()));
         if is_snapshot.is_truthy() {
-            let mut snapshot: Value = self.parse_order_book(data.clone(), symbol.clone(), Value::Undefined, Value::Undefined, Value::Undefined);
+            let mut snapshot: Value = self.parse_order_book(data.clone(), symbol.clone(), Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined);
             orderbook.reset(snapshot.clone());
         } else {
             let mut asks: Value = self.safe_value(data.clone(), Value::from("asks"), Value::new_array());
@@ -1369,116 +1393,116 @@ pub trait Whitebit : Exchange {
         match method {
             Value::Json(serde_json::Value::String(ref m)) => {
                 match m.as_ref() {
-                    "webGetV1healthcheck" => Whitebit::request(self, "v1/healthcheck".into(), "web".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetMarkets" => Whitebit::request(self, "markets".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetTickers" => Whitebit::request(self, "tickers".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetTicker" => Whitebit::request(self, "ticker".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetSymbols" => Whitebit::request(self, "symbols".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetDepthresult" => Whitebit::request(self, "depth/result".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetHistory" => Whitebit::request(self, "history".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PublicGetKline" => Whitebit::request(self, "kline".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostAccountbalance" => Whitebit::request(self, "account/balance".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostOrdernew" => Whitebit::request(self, "order/new".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostOrdercancel" => Whitebit::request(self, "order/cancel".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostOrders" => Whitebit::request(self, "orders".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostAccountorderhistory" => Whitebit::request(self, "account/order_history".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostAccountexecutedhistory" => Whitebit::request(self, "account/executed_history".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostAccountexecutedhistoryall" => Whitebit::request(self, "account/executed_history/all".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v1PrivatePostAccountorder" => Whitebit::request(self, "account/order".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PublicGetMarkets" => Whitebit::request(self, "markets".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PublicGetTicker" => Whitebit::request(self, "ticker".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PublicGetAssets" => Whitebit::request(self, "assets".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PublicGetFee" => Whitebit::request(self, "fee".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PublicGetDepthmarket" => Whitebit::request(self, "depth/{market}".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v2PublicGetTradesmarket" => Whitebit::request(self, "trades/{market}".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v4PublicGetAssets" => Whitebit::request(self, "assets".into(), "v4".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v4PublicGetCollateralmarkets" => Whitebit::request(self, "collateral/markets".into(), "v4".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v4PublicGetFee" => Whitebit::request(self, "fee".into(), "v4".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v4PublicGetOrderbookdepthmarket" => Whitebit::request(self, "orderbook/depth/{market}".into(), "v4".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v4PublicGetOrderbookmarket" => Whitebit::request(self, "orderbook/{market}".into(), "v4".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v4PublicGetTicker" => Whitebit::request(self, "ticker".into(), "v4".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v4PublicGetTradesmarket" => Whitebit::request(self, "trades/{market}".into(), "v4".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v4PublicGetTime" => Whitebit::request(self, "time".into(), "v4".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v4PublicGetPing" => Whitebit::request(self, "ping".into(), "v4".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v4PublicGetMarkets" => Whitebit::request(self, "markets".into(), "v4".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v4PublicGetFutures" => Whitebit::request(self, "futures".into(), "v4".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v4PublicGetPlatformstatus" => Whitebit::request(self, "platform/status".into(), "v4".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v4PublicGetMiningpool" => Whitebit::request(self, "mining-pool".into(), "v4".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v4PrivatePostCollateralaccountbalance" => Whitebit::request(self, "collateral-account/balance".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v4PrivatePostCollateralaccountbalancesummary" => Whitebit::request(self, "collateral-account/balance-summary".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v4PrivatePostCollateralaccountpositionshistory" => Whitebit::request(self, "collateral-account/positions/history".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v4PrivatePostCollateralaccountleverage" => Whitebit::request(self, "collateral-account/leverage".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v4PrivatePostCollateralaccountpositionsopen" => Whitebit::request(self, "collateral-account/positions/open".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v4PrivatePostCollateralaccountsummary" => Whitebit::request(self, "collateral-account/summary".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v4PrivatePostCollateralaccountfundinghistory" => Whitebit::request(self, "collateral-account/funding-history".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v4PrivatePostMainaccountaddress" => Whitebit::request(self, "main-account/address".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v4PrivatePostMainaccountbalance" => Whitebit::request(self, "main-account/balance".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v4PrivatePostMainaccountcreatenewaddress" => Whitebit::request(self, "main-account/create-new-address".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v4PrivatePostMainaccountcodes" => Whitebit::request(self, "main-account/codes".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v4PrivatePostMainaccountcodesapply" => Whitebit::request(self, "main-account/codes/apply".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v4PrivatePostMainaccountcodesmy" => Whitebit::request(self, "main-account/codes/my".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v4PrivatePostMainaccountcodeshistory" => Whitebit::request(self, "main-account/codes/history".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v4PrivatePostMainaccountfiatdepositurl" => Whitebit::request(self, "main-account/fiat-deposit-url".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v4PrivatePostMainaccounthistory" => Whitebit::request(self, "main-account/history".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v4PrivatePostMainaccountwithdraw" => Whitebit::request(self, "main-account/withdraw".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v4PrivatePostMainaccountwithdrawpay" => Whitebit::request(self, "main-account/withdraw-pay".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v4PrivatePostMainaccounttransfer" => Whitebit::request(self, "main-account/transfer".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v4PrivatePostMainaccountsmartplans" => Whitebit::request(self, "main-account/smart/plans".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v4PrivatePostMainaccountsmartinvestment" => Whitebit::request(self, "main-account/smart/investment".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v4PrivatePostMainaccountsmartinvestmentclose" => Whitebit::request(self, "main-account/smart/investment/close".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v4PrivatePostMainaccountsmartinvestments" => Whitebit::request(self, "main-account/smart/investments".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v4PrivatePostMainaccountfee" => Whitebit::request(self, "main-account/fee".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v4PrivatePostMainaccountsmartinterestpaymenthistory" => Whitebit::request(self, "main-account/smart/interest-payment-history".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v4PrivatePostTradeaccountbalance" => Whitebit::request(self, "trade-account/balance".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v4PrivatePostTradeaccountexecutedhistory" => Whitebit::request(self, "trade-account/executed-history".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v4PrivatePostTradeaccountorderhistory" => Whitebit::request(self, "trade-account/order/history".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v4PrivatePostTradeaccountorder" => Whitebit::request(self, "trade-account/order".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v4PrivatePostOrdercollaterallimit" => Whitebit::request(self, "order/collateral/limit".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v4PrivatePostOrdercollateralmarket" => Whitebit::request(self, "order/collateral/market".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v4PrivatePostOrdercollateralstoplimit" => Whitebit::request(self, "order/collateral/stop-limit".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v4PrivatePostOrdercollateraltriggermarket" => Whitebit::request(self, "order/collateral/trigger-market".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v4PrivatePostOrdercollateralbulk" => Whitebit::request(self, "order/collateral/bulk".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v4PrivatePostOrdernew" => Whitebit::request(self, "order/new".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v4PrivatePostOrdermarket" => Whitebit::request(self, "order/market".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v4PrivatePostOrderstockmarket" => Whitebit::request(self, "order/stock_market".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v4PrivatePostOrderstoplimit" => Whitebit::request(self, "order/stop_limit".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v4PrivatePostOrderstopmarket" => Whitebit::request(self, "order/stop_market".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v4PrivatePostOrdercancel" => Whitebit::request(self, "order/cancel".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v4PrivatePostOrdercancelall" => Whitebit::request(self, "order/cancel/all".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v4PrivatePostOrderkillswitch" => Whitebit::request(self, "order/kill-switch".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v4PrivatePostOrderkillswitchstatus" => Whitebit::request(self, "order/kill-switch/status".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v4PrivatePostOrderbulk" => Whitebit::request(self, "order/bulk".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v4PrivatePostOrdermodify" => Whitebit::request(self, "order/modify".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v4PrivatePostOrderconditionalcancel" => Whitebit::request(self, "order/conditional-cancel".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v4PrivatePostOrders" => Whitebit::request(self, "orders".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v4PrivatePostOcoorders" => Whitebit::request(self, "oco-orders".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v4PrivatePostOrdercollateraloco" => Whitebit::request(self, "order/collateral/oco".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v4PrivatePostOrderococancel" => Whitebit::request(self, "order/oco-cancel".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v4PrivatePostOrderotocancel" => Whitebit::request(self, "order/oto-cancel".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v4PrivatePostProfilewebsockettoken" => Whitebit::request(self, "profile/websocket_token".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v4PrivatePostConvertestimate" => Whitebit::request(self, "convert/estimate".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v4PrivatePostConvertconfirm" => Whitebit::request(self, "convert/confirm".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v4PrivatePostConverthistory" => Whitebit::request(self, "convert/history".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v4PrivatePostSubaccountcreate" => Whitebit::request(self, "sub-account/create".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v4PrivatePostSubaccountdelete" => Whitebit::request(self, "sub-account/delete".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v4PrivatePostSubaccountedit" => Whitebit::request(self, "sub-account/edit".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v4PrivatePostSubaccountlist" => Whitebit::request(self, "sub-account/list".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v4PrivatePostSubaccounttransfer" => Whitebit::request(self, "sub-account/transfer".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v4PrivatePostSubaccountblock" => Whitebit::request(self, "sub-account/block".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v4PrivatePostSubaccountunblock" => Whitebit::request(self, "sub-account/unblock".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v4PrivatePostSubaccountbalances" => Whitebit::request(self, "sub-account/balances".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v4PrivatePostSubaccounttransferhistory" => Whitebit::request(self, "sub-account/transfer/history".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v4PrivatePostSubaccountapikeycreate" => Whitebit::request(self, "sub-account/api-key/create".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v4PrivatePostSubaccountapikeyedit" => Whitebit::request(self, "sub-account/api-key/edit".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v4PrivatePostSubaccountapikeydelete" => Whitebit::request(self, "sub-account/api-key/delete".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v4PrivatePostSubaccountapikeylist" => Whitebit::request(self, "sub-account/api-key/list".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v4PrivatePostSubaccountapikeyreset" => Whitebit::request(self, "sub-account/api-key/reset".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v4PrivatePostSubaccountapikeyipaddresslist" => Whitebit::request(self, "sub-account/api-key/ip-address/list".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v4PrivatePostSubaccountapikeyipaddresscreate" => Whitebit::request(self, "sub-account/api-key/ip-address/create".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v4PrivatePostSubaccountapikeyipaddressdelete" => Whitebit::request(self, "sub-account/api-key/ip-address/delete".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v4PrivatePostMiningrewards" => Whitebit::request(self, "mining/rewards".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v4PrivatePostMarketfee" => Whitebit::request(self, "market/fee".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
-                    "v4PrivatePostConditionalorders" => Whitebit::request(self, "conditional-orders".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "webGetV1healthcheck" => self.request("v1/healthcheck".into(), "web".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetMarkets" => self.request("markets".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetTickers" => self.request("tickers".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetTicker" => self.request("ticker".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetSymbols" => self.request("symbols".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetDepthresult" => self.request("depth/result".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetHistory" => self.request("history".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PublicGetKline" => self.request("kline".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostAccountbalance" => self.request("account/balance".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostOrdernew" => self.request("order/new".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostOrdercancel" => self.request("order/cancel".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostOrders" => self.request("orders".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostAccountorderhistory" => self.request("account/order_history".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostAccountexecutedhistory" => self.request("account/executed_history".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostAccountexecutedhistoryall" => self.request("account/executed_history/all".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v1PrivatePostAccountorder" => self.request("account/order".into(), "v1".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PublicGetMarkets" => self.request("markets".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PublicGetTicker" => self.request("ticker".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PublicGetAssets" => self.request("assets".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PublicGetFee" => self.request("fee".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PublicGetDepthmarket" => self.request("depth/{market}".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v2PublicGetTradesmarket" => self.request("trades/{market}".into(), "v2".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v4PublicGetAssets" => self.request("assets".into(), "v4".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v4PublicGetCollateralmarkets" => self.request("collateral/markets".into(), "v4".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v4PublicGetFee" => self.request("fee".into(), "v4".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v4PublicGetOrderbookdepthmarket" => self.request("orderbook/depth/{market}".into(), "v4".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v4PublicGetOrderbookmarket" => self.request("orderbook/{market}".into(), "v4".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v4PublicGetTicker" => self.request("ticker".into(), "v4".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v4PublicGetTradesmarket" => self.request("trades/{market}".into(), "v4".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v4PublicGetTime" => self.request("time".into(), "v4".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v4PublicGetPing" => self.request("ping".into(), "v4".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v4PublicGetMarkets" => self.request("markets".into(), "v4".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v4PublicGetFutures" => self.request("futures".into(), "v4".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v4PublicGetPlatformstatus" => self.request("platform/status".into(), "v4".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v4PublicGetMiningpool" => self.request("mining-pool".into(), "v4".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v4PrivatePostCollateralaccountbalance" => self.request("collateral-account/balance".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v4PrivatePostCollateralaccountbalancesummary" => self.request("collateral-account/balance-summary".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v4PrivatePostCollateralaccountpositionshistory" => self.request("collateral-account/positions/history".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v4PrivatePostCollateralaccountleverage" => self.request("collateral-account/leverage".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v4PrivatePostCollateralaccountpositionsopen" => self.request("collateral-account/positions/open".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v4PrivatePostCollateralaccountsummary" => self.request("collateral-account/summary".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v4PrivatePostCollateralaccountfundinghistory" => self.request("collateral-account/funding-history".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v4PrivatePostMainaccountaddress" => self.request("main-account/address".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v4PrivatePostMainaccountbalance" => self.request("main-account/balance".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v4PrivatePostMainaccountcreatenewaddress" => self.request("main-account/create-new-address".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v4PrivatePostMainaccountcodes" => self.request("main-account/codes".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v4PrivatePostMainaccountcodesapply" => self.request("main-account/codes/apply".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v4PrivatePostMainaccountcodesmy" => self.request("main-account/codes/my".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v4PrivatePostMainaccountcodeshistory" => self.request("main-account/codes/history".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v4PrivatePostMainaccountfiatdepositurl" => self.request("main-account/fiat-deposit-url".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v4PrivatePostMainaccounthistory" => self.request("main-account/history".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v4PrivatePostMainaccountwithdraw" => self.request("main-account/withdraw".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v4PrivatePostMainaccountwithdrawpay" => self.request("main-account/withdraw-pay".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v4PrivatePostMainaccounttransfer" => self.request("main-account/transfer".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v4PrivatePostMainaccountsmartplans" => self.request("main-account/smart/plans".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v4PrivatePostMainaccountsmartinvestment" => self.request("main-account/smart/investment".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v4PrivatePostMainaccountsmartinvestmentclose" => self.request("main-account/smart/investment/close".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v4PrivatePostMainaccountsmartinvestments" => self.request("main-account/smart/investments".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v4PrivatePostMainaccountfee" => self.request("main-account/fee".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v4PrivatePostMainaccountsmartinterestpaymenthistory" => self.request("main-account/smart/interest-payment-history".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v4PrivatePostTradeaccountbalance" => self.request("trade-account/balance".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v4PrivatePostTradeaccountexecutedhistory" => self.request("trade-account/executed-history".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v4PrivatePostTradeaccountorderhistory" => self.request("trade-account/order/history".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v4PrivatePostTradeaccountorder" => self.request("trade-account/order".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v4PrivatePostOrdercollaterallimit" => self.request("order/collateral/limit".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v4PrivatePostOrdercollateralmarket" => self.request("order/collateral/market".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v4PrivatePostOrdercollateralstoplimit" => self.request("order/collateral/stop-limit".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v4PrivatePostOrdercollateraltriggermarket" => self.request("order/collateral/trigger-market".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v4PrivatePostOrdercollateralbulk" => self.request("order/collateral/bulk".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v4PrivatePostOrdernew" => self.request("order/new".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v4PrivatePostOrdermarket" => self.request("order/market".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v4PrivatePostOrderstockmarket" => self.request("order/stock_market".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v4PrivatePostOrderstoplimit" => self.request("order/stop_limit".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v4PrivatePostOrderstopmarket" => self.request("order/stop_market".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v4PrivatePostOrdercancel" => self.request("order/cancel".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v4PrivatePostOrdercancelall" => self.request("order/cancel/all".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v4PrivatePostOrderkillswitch" => self.request("order/kill-switch".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v4PrivatePostOrderkillswitchstatus" => self.request("order/kill-switch/status".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v4PrivatePostOrderbulk" => self.request("order/bulk".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v4PrivatePostOrdermodify" => self.request("order/modify".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v4PrivatePostOrderconditionalcancel" => self.request("order/conditional-cancel".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v4PrivatePostOrders" => self.request("orders".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v4PrivatePostOcoorders" => self.request("oco-orders".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v4PrivatePostOrdercollateraloco" => self.request("order/collateral/oco".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v4PrivatePostOrderococancel" => self.request("order/oco-cancel".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v4PrivatePostOrderotocancel" => self.request("order/oto-cancel".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v4PrivatePostProfilewebsockettoken" => self.request("profile/websocket_token".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v4PrivatePostConvertestimate" => self.request("convert/estimate".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v4PrivatePostConvertconfirm" => self.request("convert/confirm".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v4PrivatePostConverthistory" => self.request("convert/history".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v4PrivatePostSubaccountcreate" => self.request("sub-account/create".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v4PrivatePostSubaccountdelete" => self.request("sub-account/delete".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v4PrivatePostSubaccountedit" => self.request("sub-account/edit".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v4PrivatePostSubaccountlist" => self.request("sub-account/list".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v4PrivatePostSubaccounttransfer" => self.request("sub-account/transfer".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v4PrivatePostSubaccountblock" => self.request("sub-account/block".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v4PrivatePostSubaccountunblock" => self.request("sub-account/unblock".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v4PrivatePostSubaccountbalances" => self.request("sub-account/balances".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v4PrivatePostSubaccounttransferhistory" => self.request("sub-account/transfer/history".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v4PrivatePostSubaccountapikeycreate" => self.request("sub-account/api-key/create".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v4PrivatePostSubaccountapikeyedit" => self.request("sub-account/api-key/edit".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v4PrivatePostSubaccountapikeydelete" => self.request("sub-account/api-key/delete".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v4PrivatePostSubaccountapikeylist" => self.request("sub-account/api-key/list".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v4PrivatePostSubaccountapikeyreset" => self.request("sub-account/api-key/reset".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v4PrivatePostSubaccountapikeyipaddresslist" => self.request("sub-account/api-key/ip-address/list".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v4PrivatePostSubaccountapikeyipaddresscreate" => self.request("sub-account/api-key/ip-address/create".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v4PrivatePostSubaccountapikeyipaddressdelete" => self.request("sub-account/api-key/ip-address/delete".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v4PrivatePostMiningrewards" => self.request("mining/rewards".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v4PrivatePostMarketfee" => self.request("market/fee".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
+                    "v4PrivatePostConditionalorders" => self.request("conditional-orders".into(), "v4".into(), "POST".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     _ => unimplemented!(),
                 }
             },
@@ -1522,7 +1546,7 @@ impl ValueTrait for WhitebitImpl {
     fn join(&self, glue: Value) -> Value { self.0.join(glue) }
     fn to_string(&self) -> Value { self.0.to_string() }
     fn typeof_(&self) -> Value { self.0.typeof_() }
-    fn slice(&self, start: Value) -> Value { self.0.slice(start) }
+    fn slice(&self, start: Value, end: Value) -> Value { self.0.slice(start, end) }
 }
 
 impl WhitebitImpl {
