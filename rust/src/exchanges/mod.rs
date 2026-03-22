@@ -152,7 +152,6 @@ pub mod indodax;
 pub mod kraken;
 #[cfg(feature = "full-exchanges")]
 pub mod krakenfutures;
-#[cfg(feature = "full-exchanges")]
 pub mod kucoin;
 #[cfg(feature = "full-exchanges")]
 pub mod kucoinfutures;
