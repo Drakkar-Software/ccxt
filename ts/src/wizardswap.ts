@@ -148,6 +148,9 @@ export default class wizardswap extends Exchange {
                 },
             },
             'options': {
+                // Route via Tor hidden service; requires a SOCKS proxy at the transport layer.
+                'useOnion': false,
+                'onionUrl': 'http://wizardswgtu2ovor7r2esg3cxdpt7tv4nrugi32lldv53zmtonbz6sid.onion/api',
                 // Hardcoded fallback when both /currency and /currencies
                 // endpoints are unreachable (e.g. DDoS-Guard blocks all GET).
                 'defaultCurrencyIds': [
@@ -193,24 +196,9 @@ export default class wizardswap extends Exchange {
         // GET /api/currencies returns simple array (may be blocked by DDoS-Guard):
         //  ["btc","xmr","eth",...]
         //
-        let richResponse = undefined;
-        try {
-            richResponse = await this.publicGetCurrency (params);
-        } catch (e) {
-            richResponse = undefined;
-        }
+        const richResponse = await this.publicGetCurrency (params);
         if (Array.isArray (richResponse) && richResponse.length > 0) {
             return this.parseRichCurrencies (richResponse);
-        }
-        // Fallback: try the simple /currencies endpoint
-        let simpleResponse = undefined;
-        try {
-            simpleResponse = await this.publicGetCurrencies (params);
-        } catch (e) {
-            simpleResponse = undefined;
-        }
-        if (Array.isArray (simpleResponse) && simpleResponse.length > 0) {
-            return this.parseSimpleCurrencies (simpleResponse);
         }
         // Last resort: use hardcoded list
         const defaultIds = this.safeList (this.options, 'defaultCurrencyIds', []);
@@ -233,7 +221,7 @@ export default class wizardswap extends Exchange {
             const decimals = this.safeInteger (entry, 'decimals');
             let precision = undefined;
             if (decimals !== undefined) {
-                precision = this.parseNumber (this.decimalToPrecision (1, 0, decimals, 4));
+                precision = this.parseNumber (this.parsePrecision (this.safeString (entry, 'decimals')));
             }
             const minAmt = this.safeNumber (entry, 'minamt');
             result[code] = this.safeCurrencyStructure ({
@@ -288,7 +276,10 @@ export default class wizardswap extends Exchange {
      * @returns {Market[]} an array of objects representing market data
      */
     async fetchMarkets (params = {}): Promise<Market[]> {
-        const currencies = await this.fetchCurrencies (params);
+        let currencies = this.options['cachedCurrencies'];
+        if (!currencies) {
+            currencies = await this.fetchCurrencies (params);
+        }
         //
         // GET /api/pairs returns:
         // {
@@ -297,12 +288,7 @@ export default class wizardswap extends Exchange {
         //     ...
         // }
         //
-        let pairsData = undefined;
-        try {
-            pairsData = await this.publicGetPairs (params);
-        } catch (e) {
-            pairsData = undefined;
-        }
+        const pairsData = await this.publicGetPairs (params);
         const result = [];
         if (pairsData !== undefined && typeof pairsData === 'object') {
             const baseIds = Object.keys (pairsData);
@@ -630,7 +616,12 @@ export default class wizardswap extends Exchange {
     }
 
     sign (path, api = 'public', method = 'GET', params = {}, headers = undefined, body = undefined) {
-        let url = this.urls['api']['rest'] + '/' + this.implodeParams (path, params);
+        const useOnion = this.safeBool (this.options, 'useOnion', false);
+        let baseUrl = this.urls['api']['rest'];
+        if (useOnion) {
+            baseUrl = this.safeString (this.options, 'onionUrl', baseUrl);
+        }
+        let url = baseUrl + '/' + this.implodeParams (path, params);
         const query = this.omit (params, this.extractParams (path));
         if (method === 'GET') {
             if (Object.keys (query).length) {
