@@ -2,7 +2,7 @@
 //  ---------------------------------------------------------------------------
 
 import Exchange from './abstract/wizardswap.js';
-import { ExchangeError, BadRequest, ArgumentsRequired, OrderNotFound } from './base/errors.js';
+import { ExchangeError, BadRequest, ArgumentsRequired, InvalidOrder, OrderNotFound } from './base/errors.js';
 import { TICK_SIZE } from './base/functions/number.js';
 import type { Market, Str, Dict, Ticker, Num, Currencies, Currency, int, Order, OrderType, OrderSide } from './base/types.js';
 
@@ -470,6 +470,9 @@ export default class wizardswap extends Exchange {
         }
         params = this.omit (params, [ 'address_to', 'refund_address' ]);
         const response = await this.publicPostExchange (this.extend (request, params));
+        if (response === false || response === 'False') {
+            throw new InvalidOrder (this.id + ' createOrder() failed: exchange returned False (order rejected)');
+        }
         //
         //  {
         //      "id": "08A75WA1",
