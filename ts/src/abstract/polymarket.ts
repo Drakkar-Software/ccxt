@@ -10,10 +10,12 @@ import { Exchange as _Exchange } from '../base/Exchange.js';
 
 interface Exchange {
     gammaPublicGetMarkets (params?: {}): Promise<implicitReturnType>;
+    gammaPublicGetMarketsKeyset (params?: {}): Promise<implicitReturnType>;
     gammaPublicGetMarketsId (params?: {}): Promise<implicitReturnType>;
     gammaPublicGetMarketsIdTags (params?: {}): Promise<implicitReturnType>;
     gammaPublicGetMarketsSlugSlug (params?: {}): Promise<implicitReturnType>;
     gammaPublicGetEvents (params?: {}): Promise<implicitReturnType>;
+    gammaPublicGetEventsKeyset (params?: {}): Promise<implicitReturnType>;
     gammaPublicGetEventsId (params?: {}): Promise<implicitReturnType>;
     gammaPublicGetSeries (params?: {}): Promise<implicitReturnType>;
     gammaPublicGetSeriesId (params?: {}): Promise<implicitReturnType>;

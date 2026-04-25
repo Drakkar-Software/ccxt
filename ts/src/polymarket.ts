@@ -150,13 +150,15 @@ export default class polymarket extends Exchange {
                     'public': {
                         'get': {
                             // Market endpoints
-                            'markets': 1.6,                     // GET /markets - used by fetchMarkets (125 req/10s = 750 req/min)
-                            'markets/{id}': 0.267,              // GET /markets/{id} - used by gammaPublicGetMarketsId (general limit)
-                            'markets/{id}/tags': 2.0,            // GET /markets/{id}/tags - used by gammaPublicGetMarketsIdTags (100 req/10s = 600 req/min)
-                            'markets/slug/{slug}': 0.267,        // GET /markets/slug/{slug} - used by gammaPublicGetMarketsSlugSlug (general limit)
+                            'markets': 1.6,                     // GET /markets - legacy offset pagination (deprecated, use keyset)
+                            'markets/keyset': 1.6,              // GET /markets/keyset - cursor-based pagination (Apr 10 2026)
+                            'markets/{id}': 0.267,              // GET /markets/{id}
+                            'markets/{id}/tags': 2.0,            // GET /markets/{id}/tags
+                            'markets/slug/{slug}': 0.267,        // GET /markets/slug/{slug}
                             // Event endpoints
-                            'events': 2.0,                      // GET /events - used by gammaPublicGetEvents (100 req/10s = 600 req/min)
-                            'events/{id}': 0.267,                // GET /events/{id} - used by gammaPublicGetEventsId (general limit)
+                            'events': 2.0,                      // GET /events - legacy offset pagination (deprecated, use keyset)
+                            'events/keyset': 2.0,               // GET /events/keyset - cursor-based pagination (Apr 10 2026)
+                            'events/{id}': 0.267,                // GET /events/{id}
                             // Series endpoints
                             'series': 0.267,                     // GET /series - used by gammaPublicGetSeries (general limit)
                             'series/{id}': 0.267,               // GET /series/{id} - used by gammaPublicGetSeriesId (general limit)
@@ -388,11 +390,11 @@ export default class polymarket extends Exchange {
                 // EIP-712 domain constants matching clob-order-utils
                 // See https://github.com/Polymarket/clob-order-utils/blob/main/src/exchange.order.const.ts
                 'orderDomainName': 'Polymarket CTF Exchange', // EIP-712 domain name for orders (PROTOCOL_NAME)
-                'orderDomainVersion': '1', // EIP-712 domain version for orders (PROTOCOL_VERSION)
+                'orderDomainVersion': '2', // EIP-712 Exchange domain version (bumped V1→V2 April 28 2026; ClobAuthDomain stays at '1')
                 // Contract addresses for all networks
-                // See https://github.com/Polymarket/clob-client/blob/main/src/config.ts
+                // See https://docs.polymarket.com/resources/contracts
                 'contracts': {
-                    // Polygon Amoy testnet (chainId: 80001)
+                    // Polygon Amoy testnet (chainId: 80001) — V1 addresses; no V2 testnet published
                     '80001': {
                         'exchange': '0xdFE02Eb6733538f8Ea35D585af8DE5958AD99E40',
                         'negRiskAdapter': '0xd91E80cF2E7be2e162c6513ceD06f1dD0dA35296',
@@ -400,12 +402,15 @@ export default class polymarket extends Exchange {
                         'collateral': '0x9c4e1703476e875070ee25b56a58b008cfb8fa78',
                         'conditionalTokens': '0x69308FB512518e39F9b16112fA8d994F4e2Bf8bB',
                     },
-                    // Polygon mainnet (chainId: 137)
+                    // Polygon mainnet (chainId: 137) — V2 contracts
                     '137': {
-                        'exchange': '0x4bFb41d5B3570DeFd03C39a9A4D8dE6Bd8B8982E',
+                        'exchange': '0xE111180000d2663C0091e4f400237545B87B996B',
                         'negRiskAdapter': '0xd91E80cF2E7be2e162c6513ceD06f1dD0dA35296',
-                        'negRiskExchange': '0xC5d563A36AE78145C45a50134d48A1215220f80a',
-                        'collateral': '0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174',
+                        'negRiskExchange': '0xe2222d279d744050d28e00520010520000310F59',
+                        'collateral': '0xC011a7E12a19f7B1f670d46F03B03f3342E82DFB', // pUSD proxy (replaces USDC.e)
+                        'usdce': '0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174', // USDC.e (input for wrapCollateral)
+                        'collateralOnramp': '0x93070a847efEf7F70739046A929D47a521F5B8ee',
+                        'collateralOfframp': '0x2957922Eb93258b93368531d39fAcCA3B4dC5854',
                         'conditionalTokens': '0x4D97DCd97eC945f40cF65F87097ACe5EA0476045',
                     },
                 },
@@ -477,11 +482,13 @@ export default class polymarket extends Exchange {
      * @returns {number|undefined} signature type value
      */
     getSignatureType (params = {}) {
+        const override = this.safeInteger2 (params, 'signatureType', 'signature_type');
+        if (override !== undefined) {
+            return override;
+        }
         const signatureTypes = this.safeDict (this.options, 'signatureTypes', {});
         const eoaSignatureType = this.safeInteger (signatureTypes, 'EOA');
         const polyProxySignatureType = this.safeInteger (signatureTypes, 'POLY_PROXY');
-        const polyGnosisSafeSignatureType = this.safeInteger (signatureTypes, 'POLY_GNOSIS_SAFE');
-        // Note: POLY_GNOSIS_SAFE is not supported for now
         const proxyWalletAddress = this.getProxyWalletAddress ();
         const mainWalletAddress = this.getMainWalletAddress ();
         if (proxyWalletAddress !== mainWalletAddress) {
@@ -533,46 +540,30 @@ export default class polymarket extends Exchange {
     async fetchMarkets (params = {}): Promise<Market[]> {
         const limit = 500;
         const options = this.safeDict (this.options, 'fetchMarkets', {});
-        const request: Dict = this.extend ({
+        const active = this.safeBool (options, 'active', true);
+        const baseRequest: Dict = this.extend ({
             'order': 'id',
             'ascending': false,
             'limit': limit,
-            'offset': 0,
         }, params);
-        const active = this.safeBool (options, 'active', true);
         if (this.safeValue (params, 'closed') === undefined) {
-            request['closed'] = !active;
+            baseRequest['closed'] = !active;
         }
-        // Fetch first page to seed the results
-        const firstResponse = await this.gammaPublicGetMarkets (this.extend ({}, request, { 'offset': 0 }));
-        const firstPage = this.safeList (firstResponse as any, 'data', firstResponse as any) || [];
-        let markets: any[] = firstPage;
-        if (firstPage.length >= limit) {
-            // API returns a plain list with no total count — fetch remaining pages in parallel batches.
-            // BATCH_SIZE=10 pages per round, MAX_ROUNDS=100 covers up to 500,000 markets.
-            const BATCH_SIZE = 10;
-            const MAX_ROUNDS = 100;
-            let currentOffset = limit;
-            let done = false;
-            for (let round = 0; round < MAX_ROUNDS; round++) {
-                const batchPromises = [];
-                for (let i = 0; i < BATCH_SIZE; i++) {
-                    batchPromises.push (this.gammaPublicGetMarkets (this.extend ({}, request, { 'offset': currentOffset + i * limit })));
-                }
-                const batchResponses = await Promise.all (batchPromises);
-                for (let i = 0; i < batchResponses.length; i++) {
-                    const page = this.safeList (batchResponses[i] as any, 'data', batchResponses[i] as any) || [];
-                    markets = this.arrayConcat (markets, page);
-                    if (page.length < limit) {
-                        done = true;
-                        break;
-                    }
-                }
-                currentOffset += BATCH_SIZE * limit;
-                if (done) {
-                    break;
-                }
+        let markets: any[] = [];
+        const endCursor = this.safeString (this.options, 'endCursor', 'LTE=');
+        let cursor = this.safeString (this.options, 'initialCursor', 'MA==');
+        const pageLimit = this.safeInteger (baseRequest, 'limit', limit);
+        while (cursor !== endCursor && cursor !== 'LTE=') {
+            const pageRequest = this.extend (baseRequest, { 'next_cursor': cursor });
+            const response = await this.gammaPublicGetMarketsKeyset (pageRequest);
+            const pageData = this.safeList (response as any, 'data', undefined);
+            const page = pageData !== undefined ? pageData : this.safeList (response as any, 'markets', []);
+            markets = this.arrayConcat (markets, page);
+            const newCursor = this.safeString (response as any, 'next_cursor');
+            if (page.length < pageLimit || newCursor === undefined || newCursor === cursor) {
+                break;
             }
+            cursor = newCursor;
         }
         const filtered = [];
         for (let i = 0; i < markets.length; i++) {
@@ -764,6 +755,8 @@ export default class polymarket extends Exchange {
         const feesEnabled = this.safeBool (market, 'feesEnabled', false);
         const makerBaseFee = this.safeNumber (market, 'makerBaseFee');
         const takerBaseFee = this.safeNumber (market, 'takerBaseFee');
+        // Mar 31 2026: feeSchedule object on market is the authoritative fee source
+        const feeSchedule = this.safeDict (market, 'feeSchedule');
         const base = baseId;
         const quote = quoteId;
         const settle = quote; // Use quote as settle
@@ -797,17 +790,24 @@ export default class polymarket extends Exchange {
         const symbol = base + '/' + quote + ':' + settle + '-' + ymd + '-' + strikePlaceholder + '-' + optionTypeValue;
         const strike = undefined;
         const contractSize = this.parseNumber ('1');
-        // Calculate fees based on feesEnabled flag
         let takerFee = this.parseNumber ('0');
         let makerFee = this.parseNumber ('0');
-        if (feesEnabled) {
-            // Fees are enabled - use makerBaseFee and takerBaseFee from schema
-            // These are typically in basis points (e.g., 200 = 2% = 0.02)
+        if (feeSchedule !== undefined) {
+            // feeSchedule is the authoritative source (Mar 31 2026 API update)
+            const schedTaker = this.safeNumber (feeSchedule, 'takerBaseFee');
+            const schedMaker = this.safeNumber (feeSchedule, 'makerBaseFee');
+            if (schedTaker !== undefined) {
+                takerFee = schedTaker / 10000;
+            }
+            if (schedMaker !== undefined) {
+                makerFee = schedMaker / 10000;
+            }
+        } else if (feesEnabled) {
             if (takerBaseFee !== undefined) {
-                takerFee = takerBaseFee / 10000; // Convert basis points to decimal
+                takerFee = takerBaseFee / 10000;
             }
             if (makerBaseFee !== undefined) {
-                makerFee = makerBaseFee / 10000; // Convert basis points to decimal
+                makerFee = makerBaseFee / 10000;
             }
         }
         let created = this.milliseconds (); // TODO change it
@@ -1982,11 +1982,9 @@ export default class polymarket extends Exchange {
      * @param {string} [price] order price as string (required for limit orders)
      * @param {object} [market] market structure (optional, used to get fees)
      * @param {object} [params] extra parameters
-     * @param {number} [params.expiration] expiration timestamp in seconds (default: 30 days from now)
-     * @param {number} [params.nonce] order nonce (default: 0)
-     * @param {number} [params.feeRateBps] fee rate in basis points (default: from market or 200 bps)
+     * @param {number} [params.expiration] expiration timestamp in seconds for GTD orders (default: 30 days from now)
+     * @param {string} [params.builderCode] builder attribution bytes32 hex string (V2, default: zero)
      * @param {string} [params.maker] maker address (default: getMainWalletAddress())
-     * @param {string} [params.taker] taker address (default: zero address)
      * @param {string} [params.signer] signer address (default: maker address)
      * @param {number} [params.signatureType] signature type (default: from options.signatureType or options.signatureTypes.EOA).
      * @param {string} [params.orderType] order type: 'GTC', 'IOC', 'FOK', 'GTD' (default: 'GTC' for limit orders, 'FOK' for market orders)
@@ -1994,9 +1992,6 @@ export default class polymarket extends Exchange {
      * @returns {object} signed order object ready for submission
      */
     async buildAndSignOrder (tokenId: string, side: string, size: string, price: string = undefined, market: Market = undefined, params = {}): Promise<Dict> {
-        // Get zero address constant (matches py-clob-client ZERO_ADDRESS)
-        // See https://github.com/Polymarket/py-clob-client/blob/main/py_clob_client/constants.py
-        const zeroAddress = this.safeString (this.options, 'zeroAddress', '0x0000000000000000000000000000000000000000');
         // Get signature type
         const signatureType = this.getSignatureType (params);
         // Get maker address (wallet address) - checksummed for signing
@@ -2011,30 +2006,6 @@ export default class polymarket extends Exchange {
             }
         }
         const normalizedMaker = this.normalizeAddress (maker);
-        // Get taker address (default: zero address for open orders)
-        const taker = this.safeString (params, 'taker', zeroAddress);
-        const normalizedTaker = this.normalizeAddress (taker);
-        // Get fee rate in basis points from market or params
-        let feeRateBps = this.safeInteger (params, 'feeRateBps');
-        if (feeRateBps === undefined) {
-            if (market !== undefined) {
-                // Try to get fee from market structure
-                const marketInfo = this.safeDict (market, 'info', {});
-                // First try takerBaseFee from market info (in basis points)
-                feeRateBps = this.safeInteger (marketInfo, 'takerBaseFee');
-                if (feeRateBps === undefined) {
-                    // Try taker fee from parsed market (decimal, convert to basis points)
-                    const takerFee = this.safeNumber (market, 'taker');
-                    if (takerFee !== undefined) {
-                        feeRateBps = Math.round (takerFee * 10000);
-                    }
-                }
-            }
-            // Fallback to default fee rate from options if not found in market
-            if (feeRateBps === undefined) {
-                feeRateBps = this.safeInteger (this.options, 'defaultFeeRateBps', 200);
-            }
-        }
         // Get expiration: GTC/IOC/FOK orders must have expiration = 0 (no expiration).
         // Only GTD orders use a future timestamp. buildOrder enforces this for normal flows,
         // but buildAndSignOrder may also be called directly, so we apply the same rule here.
@@ -2050,13 +2021,16 @@ export default class polymarket extends Exchange {
                 expiration = 0;
             }
         }
-        // Get nonce (default: 0 for regular orders)
-        // The nonce is used for on-chain batch cancellation: all orders sharing a non-zero nonce
-        // can be cancelled together. 0 means "no group" and is required for standard orders.
-        // See https://github.com/Polymarket/clob-order-utils/blob/main/src/order-builder/builder.ts
-        let nonce = this.safeInteger (params, 'nonce');
-        if (nonce === undefined) {
-            nonce = 0;
+        // V2: timestamp (ms) replaces nonce for per-address order uniqueness
+        const orderTimestamp = this.milliseconds ();
+        // bytes32 zero constant for metadata/builder defaults
+        const bytes32Zero = '0x' + '00'.repeat (32);
+        // metadata: reserved bytes32 field (zero by default)
+        const metadata = bytes32Zero;
+        // builder: optional builder attribution code; pass params.builderCode as a bytes32 hex string
+        const builderCode = this.safeString (params, 'builderCode', bytes32Zero);
+        if (builderCode.length !== 66 || !builderCode.startsWith ('0x')) {
+            throw new BadRequest (this.id + ' builderCode must be a 32-byte hex string (0x + 64 hex chars), got: ' + builderCode);
         }
         // Get signer address (default: maker address)
         let signer = this.safeString (params, 'signer');
@@ -2064,8 +2038,8 @@ export default class polymarket extends Exchange {
             signer = this.getMainWalletAddress ();
         }
         const normalizedSigner = this.normalizeAddress (signer);
-        // Generate salt (unique integer based on milliseconds for better uniqueness)
-        const salt = this.milliseconds ();
+        // Use same timestamp for salt to keep the two fields consistent
+        const salt = orderTimestamp;
         // Calculate makerAmount and takerAmount from size and price
         // Key steps: 1) Round down size first, 2) Calculate other amount, 3) Round if needed, 4) Convert to smallest units
         // Get precision from market info or use defaults (USDC: 6 decimals, Tokens: 18 decimals)
@@ -2174,22 +2148,24 @@ export default class polymarket extends Exchange {
         }
         const sideInt = this.getSide (side, params);
         const order: Dict = {
-            'salt': salt.toString (), // uint256
-            'maker': normalizedMaker, // address
-            'signer': normalizedSigner, // address
-            'taker': normalizedTaker, // address
-            'tokenId': tokenId.toString (), // uint256
-            'makerAmount': makerAmount.toString (), // uint256
-            'takerAmount': takerAmount.toString (), // uint256
-            'expiration': expiration.toString (), // uint256
-            'nonce': nonce.toString (), // uint256
-            'feeRateBps': feeRateBps.toString (), // uint256
-            'side': sideInt, // uint8: number (0 or 1)
-            'signatureType': signatureType, // uint8: number (0, 1, or 2)
+            'salt': salt.toString (), // uint256 — signed
+            'maker': normalizedMaker, // address — signed
+            'signer': normalizedSigner, // address — signed
+            'tokenId': tokenId.toString (), // uint256 — signed
+            'makerAmount': makerAmount.toString (), // uint256 — signed
+            'takerAmount': takerAmount.toString (), // uint256 — signed
+            'expiration': expiration.toString (), // uint256 — wire body only, not in V2 signed struct
+            'side': sideInt, // uint8: number (0 or 1) — signed
+            'signatureType': signatureType, // uint8: number (0, 1, or 2) — signed
+            'timestamp': orderTimestamp.toString (), // uint256 ms — signed (V2: replaces nonce)
+            'metadata': metadata, // bytes32 — signed
+            'builder': builderCode, // bytes32 — signed (optional attribution)
         };
         const chainId = this.safeInteger (this.options, 'chainId');
         const orderDomainName = this.safeString (this.options, 'orderDomainName');
-        const orderDomainVersion = this.safeString (this.options, 'orderDomainVersion');
+        // V2 EIP-712 domain (version '2') is only valid on Polygon mainnet (137).
+        // Testnet (80001) still uses V1 contracts — use version '1' there.
+        const orderDomainVersion = chainId === 137 ? this.safeString (this.options, 'orderDomainVersion') : '1';
         const contractConfig = this.getContractConfig (chainId);
         // Select verifyingContract based on neg_risk status:
         // - Standard (binary) markets use CTF Exchange (exchange)
@@ -2221,20 +2197,20 @@ export default class polymarket extends Exchange {
             'chainId': chainId,
             'verifyingContract': verifyingContract,
         };
-        // EIP-712 types for orders from https://github.com/Polymarket/clob-order-utils/blob/main/src/exchange.order.const.ts
+        // EIP-712 types for orders — V2 struct (dropped: taker, expiration, nonce, feeRateBps; added: timestamp, metadata, builder)
+        // See https://docs.polymarket.com/v2-migration#for-api-users
         const ORDER_STRUCTURE = [
             { 'name': 'salt', 'type': 'uint256' },
             { 'name': 'maker', 'type': 'address' },
             { 'name': 'signer', 'type': 'address' },
-            { 'name': 'taker', 'type': 'address' },
             { 'name': 'tokenId', 'type': 'uint256' },
             { 'name': 'makerAmount', 'type': 'uint256' },
             { 'name': 'takerAmount', 'type': 'uint256' },
-            { 'name': 'expiration', 'type': 'uint256' },
-            { 'name': 'nonce', 'type': 'uint256' },
-            { 'name': 'feeRateBps', 'type': 'uint256' },
             { 'name': 'side', 'type': 'uint8' },
             { 'name': 'signatureType', 'type': 'uint8' },
+            { 'name': 'timestamp', 'type': 'uint256' },
+            { 'name': 'metadata', 'type': 'bytes32' },
+            { 'name': 'builder', 'type': 'bytes32' },
         ];
         // primary type is types[0] => 'primaryType': 'Order'
         // EIP712Domain shouldn't be included in messageTypes
@@ -2324,9 +2300,8 @@ export default class polymarket extends Exchange {
                 const nowSeconds = Math.floor (this.milliseconds () / 1000);
                 const defaultExpirationDays = this.safeInteger (this.options, 'defaultExpirationDays', 30);
                 expiration = nowSeconds + (defaultExpirationDays * 24 * 60 * 60);
-            } else {
-                orderParams['expiration'] = expiration.toString ();
             }
+            orderParams['expiration'] = expiration;
         } else {
             // For non-GTD orders, expiration must be 0 (will be converted to "0" string in signing)
             orderParams['expiration'] = 0;
@@ -2381,9 +2356,8 @@ export default class polymarket extends Exchange {
      * @param {string} [params.timeInForce] 'GTC', 'IOC', 'FOK', 'GTD' (default: 'GTC')
      * @param {string} [params.clientOrderId] a unique id for the order
      * @param {boolean} [params.postOnly] if true, the order will only be posted to the order book and not executed immediately
-     * @param {number} [params.expiration] expiration timestamp in seconds (default: 30 days from now)
-     * @param {number} [params.nonce] order nonce for batch cancellation grouping (default: 0)
-     * @param {number} [params.feeRateBps] fee rate in basis points (default: fetched from API)
+     * @param {number} [params.expiration] expiration timestamp in seconds for GTD orders (default: 30 days from now)
+     * @param {string} [params.builderCode] optional builder attribution bytes32 hex string (V2)
      * @returns {object} an [order structure]{@link https://docs.ccxt.com/#/?id=order-structure}
      */
     async createOrder (symbol: string, type: OrderType, side: OrderSide, amount: number, price: Num = undefined, params = {}): Promise<Order> {
@@ -2394,8 +2368,9 @@ export default class polymarket extends Exchange {
         const requestPayload = await this.buildOrder (symbol, type, side, amount, price, params);
         // Extract clientOrderId from request payload for return value
         const clientOrderId = this.safeString (requestPayload, 'clientOrderId');
-        // Submit order via POST /order endpoint
-        const response = await this.clobPrivatePostOrder (this.extend (requestPayload, params));
+        // Submit order via POST /order endpoint; omit keys already consumed by buildOrder
+        const cleanParams = this.omit (params, [ 'timeInForce', 'expiration', 'clientOrderId', 'postOnly', 'negRisk', 'signatureType', 'signature_type', 'maker', 'signer', 'builderCode', 'marketPrice', 'token_id', 'asset_id', 'orderType' ]);
+        const response = await this.clobPrivatePostOrder (this.extend (requestPayload, cleanParams));
         // Response format:
         // {
         //     "success": boolean,
@@ -2480,8 +2455,9 @@ export default class polymarket extends Exchange {
             symbols.push (symbol);
             orderRequests.push (orderRequest);
         }
-        // Submit batch orders via POST /orders endpoint
-        const response = await this.clobPrivatePostOrders (this.extend ({ 'orders': orderRequests }, params));
+        // Submit batch orders via POST /orders endpoint; omit keys consumed by buildOrder
+        const cleanedParams = this.omit (params, [ 'timeInForce', 'expiration', 'clientOrderId', 'postOnly', 'negRisk', 'signatureType', 'signature_type', 'maker', 'signer', 'builderCode', 'marketPrice', 'token_id', 'asset_id', 'orderType' ]);
+        const response = await this.clobPrivatePostOrders (this.extend ({ 'orders': orderRequests }, cleanedParams));
         // Response format: array of order responses, each with:
         // {
         //     "success": boolean,
@@ -2610,30 +2586,17 @@ export default class polymarket extends Exchange {
         const notCanceled = this.safeDict (response, 'not_canceled', {});
         const market = symbol ? this.market (symbol) : undefined;
         const orders: Order[] = [];
-        // Add canceled orders
+        // Add successfully canceled orders
         for (let i = 0; i < canceled.length; i++) {
             const orderId = canceled[i];
-            const orderData = {
-                'id': orderId,
-                'status': 'canceled',
-                'info': response,
-            };
-            orders.push (this.parseOrder (orderData, market));
+            orders.push (this.parseOrder ({ 'id': orderId, 'status': 'canceled', 'info': response }, market));
         }
-        // Verify all requested orders are accounted for in the response
-        for (let i = 0; i < ids.length; i++) {
-            const orderId = ids[i];
-            let isInCanceled = false;
-            for (let j = 0; j < canceled.length; j++) {
-                if (canceled[j] === orderId) {
-                    isInCanceled = true;
-                    break;
-                }
-            }
-            if (!isInCanceled && !(orderId in notCanceled)) {
-                // Order ID not found in response (unexpected)
-                throw new ExchangeError (this.id + ' cancelOrders() unexpected response format for order ' + orderId);
-            }
+        // Add failed-to-cancel orders with their rejection reason surfaced in info
+        const notCanceledIds = Object.keys (notCanceled);
+        for (let i = 0; i < notCanceledIds.length; i++) {
+            const orderId = notCanceledIds[i];
+            const reason = this.safeString (notCanceled, orderId, 'unknown');
+            orders.push (this.parseOrder ({ 'id': orderId, 'status': 'open', 'info': { 'cancelError': reason } }, market));
         }
         return orders;
     }
@@ -2771,19 +2734,19 @@ export default class polymarket extends Exchange {
             request['asset_id'] = assetId;
             request['token_id'] = assetId;
         }
-        const initialCursor = this.safeString (this.options, 'initialCursor');
-        const endCursor = this.safeString (this.options, 'endCursor');
-        let nextCursor = initialCursor;
+        const initialCursor = this.safeString (this.options, 'initialCursor', 'MA==');
+        const endCursor = this.safeString (this.options, 'endCursor', 'LTE=');
+        let nextCursor: string | undefined = initialCursor;
         let ordersResponse: any[] = [];
         while (true) {
-            const response = await this.clobPrivateGetOrders (this.extend (request, { 'next_cursor': nextCursor }, params));
+            const response = await this.clobPrivateGetOrders (this.extend (request, params, { 'next_cursor': nextCursor }));
             const data = this.safeList (response, 'data', []);
             ordersResponse = this.arrayConcat (ordersResponse, data);
             if (limit !== undefined && ordersResponse.length >= limit) {
                 break;
             }
             nextCursor = this.safeString (response, 'next_cursor');
-            if (nextCursor === undefined || nextCursor === endCursor) {
+            if (nextCursor === undefined || nextCursor === endCursor || nextCursor === 'LTE=') {
                 break;
             }
         }
@@ -3629,11 +3592,11 @@ export default class polymarket extends Exchange {
             request['limit'] = limit;
         }
         let results: any[] = [];
-        const initialCursor = this.safeString (this.options, 'initialCursor');
-        const endCursor = this.safeString (this.options, 'endCursor');
-        let next_cursor = initialCursor;
-        while (next_cursor !== endCursor) {
-            const response = await this.clobPrivateGetTrades (this.extend (request, { 'next_cursor': next_cursor }, params));
+        const initialCursor = this.safeString (this.options, 'initialCursor', 'MA==');
+        const endCursor = this.safeString (this.options, 'endCursor', 'LTE=');
+        let next_cursor: string | undefined = initialCursor;
+        while (next_cursor !== endCursor && next_cursor !== 'LTE=') {
+            const response = await this.clobPrivateGetTrades (this.extend (request, params, { 'next_cursor': next_cursor }));
             next_cursor = this.safeString (response, 'next_cursor', endCursor);
             const data = this.safeList (response, 'data', []) || [];
             results = this.arrayConcat (results, data);
@@ -4463,6 +4426,164 @@ export default class polymarket extends Exchange {
             'address': depositAddress,
             'tag': undefined,
             'info': response,
+        };
+    }
+
+    // Minimal RLP helpers for wrapCollateral raw-tx encoding
+    rlpEncodeBytes (data: Uint8Array): Uint8Array {
+        if (data.length === 1 && data[0] < 0x80) {
+            return data;
+        }
+        const lenBytes = this.rlpEncodeLength (data.length, 0x80);
+        const result = new Uint8Array (lenBytes.length + data.length);
+        result.set (lenBytes);
+        result.set (data, lenBytes.length);
+        return result;
+    }
+
+    rlpEncodeLength (len: number, offset: number): Uint8Array {
+        if (len <= 55) {
+            return new Uint8Array ([ offset + len ]);
+        }
+        const lenHex = len.toString (16).padStart (len.toString (16).length % 2 === 0 ? len.toString (16).length : len.toString (16).length + 1, '0');
+        const lenBytes = this.base16ToBinary (lenHex);
+        const result = new Uint8Array (1 + lenBytes.length);
+        result[0] = offset + 55 + lenBytes.length;
+        result.set (lenBytes, 1);
+        return result;
+    }
+
+    rlpEncodeList (items: Uint8Array[]): Uint8Array {
+        let totalLen = 0;
+        for (let i = 0; i < items.length; i++) {
+            totalLen += items[i].length;
+        }
+        const prefix = this.rlpEncodeLength (totalLen, 0xc0);
+        const result = new Uint8Array (prefix.length + totalLen);
+        result.set (prefix);
+        let offset = prefix.length;
+        for (let i = 0; i < items.length; i++) {
+            result.set (items[i], offset);
+            offset += items[i].length;
+        }
+        return result;
+    }
+
+    bigintToMinimalBytes (n: bigint): Uint8Array {
+        if (n === BigInt (0)) {
+            return new Uint8Array (0);
+        }
+        let hex = n.toString (16);
+        if (hex.length % 2 !== 0) {
+            hex = '0' + hex;
+        }
+        return this.base16ToBinary (hex);
+    }
+
+    /**
+     * @method
+     * @name polymarket#wrapCollateral
+     * @description Wrap USDC.e into pUSD via the Collateral Onramp contract on Polygon.
+     *   API-only traders must call this before trading on V2 (go-live April 28 2026).
+     *   Prerequisite: caller must first approve the CollateralOnramp to spend USDC.e.
+     * @see https://docs.polymarket.com/concepts/pusd
+     * @param {float} amount amount of USDC.e to wrap (human-readable, e.g. 100 for 100 USDC.e)
+     * @param {object} [params] extra parameters
+     * @param {string} [params.polygonRpc] Polygon JSON-RPC URL (default: https://polygon-rpc.com)
+     * @param {number} [params.gasLimit] gas limit (default: 150000)
+     * @param {string} [params.recipient] pUSD recipient address (default: wallet address)
+     * @returns {object} { txHash, amount }
+     */
+    async wrapCollateral (amount: number, params = {}): Promise<Dict> {
+        const chainId = this.safeInteger (this.options, 'chainId', 137);
+        const contractConfig = this.getContractConfig (chainId);
+        const onrampAddress = this.safeString (contractConfig, 'collateralOnramp');
+        if (onrampAddress === undefined) {
+            throw new ExchangeError (this.id + ' wrapCollateral() collateralOnramp not configured for chainId ' + chainId);
+        }
+        const usdceAddress = this.safeString (contractConfig, 'usdce');
+        if (usdceAddress === undefined) {
+            throw new ExchangeError (this.id + ' wrapCollateral() usdce address not configured for chainId ' + chainId);
+        }
+        const polygonRpc = this.safeString (params, 'polygonRpc', 'https://polygon-rpc.com');
+        const gasLimit = this.safeInteger (params, 'gasLimit', 150000);
+        const mainWalletAddress = this.normalizeAddress (this.getMainWalletAddress ());
+        const proxyWalletAddress = this.normalizeAddress (this.getProxyWalletAddress ());
+        // Default recipient: proxy wallet if one is configured (pUSD must land where orders are signed)
+        const defaultRecipient = proxyWalletAddress !== mainWalletAddress ? proxyWalletAddress : mainWalletAddress;
+        const walletAddress = mainWalletAddress; // signer is always the EOA
+        const recipient = this.normalizeAddress (this.safeString (params, 'recipient', defaultRecipient));
+        // ABI encode: wrap(address _asset, address _to, uint256 _amount)
+        // selector = keccak256("wrap(address,address,uint256)")[0:4]
+        const selector = this.binaryToBase16 (this.base16ToBinary (this.hash (this.encode ('wrap(address,address,uint256)'), keccak, 'hex')).slice (0, 4));
+        const assetPadded = usdceAddress.slice (2).toLowerCase ().padStart (64, '0');
+        const toPadded = recipient.slice (2).toLowerCase ().padStart (64, '0');
+        const amountWei = BigInt (Precise.stringDiv (Precise.stringMul (this.numberToString (amount), '1000000'), '1', 0)); // USDC.e has 6 decimals; truncate to integer wei
+        const amountHex = amountWei.toString (16).padStart (64, '0');
+        const calldata = this.base16ToBinary (selector + assetPadded + toPadded + amountHex);
+        // Fetch nonce and gas price from Polygon RPC
+        const rpcPost = async (method: string, rpcParams: any[]) => {
+            const body = this.json ({ 'jsonrpc': '2.0', 'id': 1, 'method': method, 'params': rpcParams });
+            const response = await this.fetch (polygonRpc, 'POST', { 'Content-Type': 'application/json' }, body);
+            const rpcError = this.safeDict (response as any, 'error');
+            if (rpcError !== undefined) {
+                const msg = this.safeString (rpcError, 'message', 'unknown RPC error');
+                throw new ExchangeError (this.id + ' wrapCollateral() RPC error: ' + msg);
+            }
+            const result = this.safeString (response as any, 'result');
+            if (result === undefined) {
+                throw new ExchangeError (this.id + ' wrapCollateral() missing result from ' + method);
+            }
+            return result;
+        };
+        // Use 'pending' to include in-flight txs; allow explicit override via params.nonce
+        const nonceOverride = this.safeInteger (params, 'nonce');
+        const nonceHex = nonceOverride !== undefined ? '0x' + nonceOverride.toString (16) : await rpcPost ('eth_getTransactionCount', [ walletAddress, 'pending' ]);
+        const gasPriceHex = await rpcPost ('eth_gasPrice', []);
+        const nonceBigint = BigInt (nonceHex);
+        const gasPriceBigint = BigInt (gasPriceHex);
+        const onrampBytes = this.base16ToBinary (onrampAddress.slice (2));
+        // Build unsigned legacy tx (EIP-155): rlp([nonce, gasPrice, gasLimit, to, value, data, chainId, 0, 0])
+        const fields = [
+            this.bigintToMinimalBytes (nonceBigint),
+            this.bigintToMinimalBytes (gasPriceBigint),
+            this.bigintToMinimalBytes (BigInt (gasLimit)),
+            onrampBytes,
+            new Uint8Array (0), // value = 0
+            calldata,
+            this.bigintToMinimalBytes (BigInt (chainId)),
+            new Uint8Array (0),
+            new Uint8Array (0),
+        ];
+        const encodedFields = fields.map ((f) => this.rlpEncodeBytes (f));
+        const unsignedRlp = this.rlpEncodeList (encodedFields);
+        const txHash = '0x' + this.hash (unsignedRlp, keccak, 'hex');
+        // Sign the tx hash
+        const sigHex = this.signHash (txHash, this.privateKey);
+        const r = this.base16ToBinary (sigHex.slice (2, 66));
+        const s = this.base16ToBinary (sigHex.slice (66, 130));
+        const vRaw = parseInt (sigHex.slice (130, 132), 16);
+        // EIP-155 v: chainId * 2 + 35 + recovery_bit
+        const vEip155 = BigInt (chainId) * BigInt (2) + BigInt (35) + BigInt (vRaw - 27);
+        const signedFields = [
+            this.bigintToMinimalBytes (nonceBigint),
+            this.bigintToMinimalBytes (gasPriceBigint),
+            this.bigintToMinimalBytes (BigInt (gasLimit)),
+            onrampBytes,
+            new Uint8Array (0),
+            calldata,
+            this.bigintToMinimalBytes (vEip155),
+            r,
+            s,
+        ];
+        const signedEncodedFields = signedFields.map ((f) => this.rlpEncodeBytes (f));
+        const signedRlp = this.rlpEncodeList (signedEncodedFields);
+        const rawTx = '0x' + this.binaryToBase16 (signedRlp);
+        const broadcastResult = await rpcPost ('eth_sendRawTransaction', [ rawTx ]);
+        return {
+            'txHash': broadcastResult,
+            'amount': amount,
+            'info': { 'rawTx': rawTx },
         };
     }
 
