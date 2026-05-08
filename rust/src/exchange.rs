@@ -1667,7 +1667,126 @@ pub trait Exchange: ValueTrait {
     // transpiler doesn't see them.  Implemented with real logic.
     // ---------------------------------------------------------------------------
 
-    async fn load_markets(&mut self, _reload: Value, _params: Value) -> Value { Value::Undefined }
+    async fn load_markets(&mut self, reload: Value, params: Value) -> Value {
+        let reload_bool = matches!(&reload, Value::Json(serde_json::Value::Bool(b)) if *b);
+        if !reload_bool {
+            let existing = self.get("markets".into());
+            if let Value::Json(serde_json::Value::Object(ref m)) = existing {
+                if !m.is_empty() {
+                    return existing;
+                }
+            }
+        }
+        let is_future = matches!(params.get("isFuture".into()), Value::Json(serde_json::Value::Bool(true)));
+        let id_val = self.get("id".into());
+        let id = match &id_val {
+            Value::Json(serde_json::Value::String(s)) => s.clone(),
+            _ => return Value::Undefined,
+        };
+        let pairs: Vec<(String, serde_json::Value)> = match id.as_str() {
+            "binance" | "binanceus" => {
+                let raw = self.request("exchangeInfo".into(), "public".into(), "GET".into(), Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined).await;
+                match raw { Value::Json(j) => lm_parse_binance(&j, false), _ => vec![] }
+            }
+            "binanceusdm" => {
+                let raw = self.request("exchangeInfo".into(), "fapiPublic".into(), "GET".into(), Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined).await;
+                match raw { Value::Json(j) => lm_parse_binance(&j, true), _ => vec![] }
+            }
+            "binancecoinm" => {
+                let raw = self.request("exchangeInfo".into(), "dapiPublic".into(), "GET".into(), Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined).await;
+                match raw { Value::Json(j) => lm_parse_binance(&j, true), _ => vec![] }
+            }
+            "mexc" => {
+                let raw = self.request("api/v3/exchangeInfo".into(), "spot".into(), "GET".into(), Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined).await;
+                match raw { Value::Json(j) => lm_parse_binance(&j, false), _ => vec![] }
+            }
+            "okx" | "okxus" => {
+                let inst_type = if is_future { "SWAP" } else { "SPOT" };
+                let raw = self.request("api/v5/public/instruments".into(), "rest".into(), "GET".into(), Value::Json(serde_json::json!({"instType": inst_type})), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                match raw { Value::Json(j) => lm_parse_okx(&j, is_future), _ => vec![] }
+            }
+            "bybit" => {
+                let category = if is_future { "linear" } else { "spot" };
+                let raw = self.request("v5/market/instruments-info".into(), "public".into(), "GET".into(), Value::Json(serde_json::json!({"category": category})), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                match raw { Value::Json(j) => lm_parse_bybit(&j, is_future), _ => vec![] }
+            }
+            "kucoin" => {
+                let raw = self.request("api/v1/symbols".into(), "public".into(), "GET".into(), Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined).await;
+                match raw { Value::Json(j) => lm_parse_kucoin(&j), _ => vec![] }
+            }
+            "kucoinfutures" => {
+                let raw = self.request("api/v1/contracts/active".into(), "public".into(), "GET".into(), Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined).await;
+                match raw { Value::Json(j) => lm_parse_kucoin_futures(&j), _ => vec![] }
+            }
+            "gate" | "gateio" => {
+                if is_future {
+                    let raw = self.request("futures/usdt/contracts".into(), "public".into(), "GET".into(), Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    match raw { Value::Json(j) => lm_parse_gate_futures(&j), _ => vec![] }
+                } else {
+                    let raw = self.request("spot/currency_pairs".into(), "public".into(), "GET".into(), Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    match raw { Value::Json(j) => lm_parse_gate_spot(&j), _ => vec![] }
+                }
+            }
+            "htx" | "huobi" => {
+                let raw = self.request("v1/common/symbols".into(), "public".into(), "GET".into(), Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined).await;
+                match raw { Value::Json(j) => lm_parse_htx(&j), _ => vec![] }
+            }
+            "bitget" => {
+                if is_future {
+                    let raw = self.request("api/v2/mix/market/contracts".into(), "mix".into(), "GET".into(), Value::Json(serde_json::json!({"productType": "USDT-FUTURES"})), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    match raw { Value::Json(j) => lm_parse_bitget_futures(&j), _ => vec![] }
+                } else {
+                    let raw = self.request("api/v2/spot/public/symbols".into(), "spot".into(), "GET".into(), Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    match raw { Value::Json(j) => lm_parse_bitget_spot(&j), _ => vec![] }
+                }
+            }
+            "coinbase" | "coinbaseadvanced" => {
+                let raw = self.request("api/v3/brokerage/products".into(), "rest".into(), "GET".into(), Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined).await;
+                match raw { Value::Json(j) => lm_parse_coinbase(&j), _ => vec![] }
+            }
+            "poloniex" => {
+                let raw = self.request("markets".into(), "spot".into(), "GET".into(), Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined).await;
+                match raw { Value::Json(j) => lm_parse_poloniex(&j), _ => vec![] }
+            }
+            "bingx" => {
+                let raw = self.request("spot/v1/common/symbols".into(), "spot".into(), "GET".into(), Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined).await;
+                match raw { Value::Json(j) => lm_parse_bingx(&j), _ => vec![] }
+            }
+            "bitmart" => {
+                let raw = self.request("spot/v1/symbols/details".into(), "spot".into(), "GET".into(), Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined).await;
+                match raw { Value::Json(j) => lm_parse_bitmart(&j), _ => vec![] }
+            }
+            "coinex" => {
+                let path = if is_future { "v2/futures/market" } else { "v2/spot/market" };
+                let raw = self.request(path.into(), "public".into(), "GET".into(), Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined).await;
+                match raw { Value::Json(j) => lm_parse_coinex(&j, is_future), _ => vec![] }
+            }
+            "cryptocom" => {
+                let raw = self.request("public/get-instruments".into(), "v1".into(), "GET".into(), Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined).await;
+                match raw { Value::Json(j) => lm_parse_cryptocom(&j, is_future), _ => vec![] }
+            }
+            "lbank" => {
+                let raw = self.request("v2/currencyPairs.do".into(), "rest".into(), "GET".into(), Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined).await;
+                match raw { Value::Json(j) => lm_parse_lbank(&j), _ => vec![] }
+            }
+            "phemex" => {
+                let raw = self.request("cfg/v2/products".into(), "public".into(), "GET".into(), Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined).await;
+                match raw { Value::Json(j) => lm_parse_phemex(&j, is_future), _ => vec![] }
+            }
+            "ascendex" => {
+                let raw = self.request("api/pro/v1/products".into(), "rest".into(), "GET".into(), Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined).await;
+                match raw { Value::Json(j) => lm_parse_ascendex(&j), _ => vec![] }
+            }
+            _ => vec![],
+        };
+        let mut map = serde_json::Map::new();
+        for (symbol, market) in pairs {
+            map.insert(symbol, market);
+        }
+        let markets_val = Value::Json(serde_json::Value::Object(map));
+        self.set("markets".into(), markets_val.clone());
+        markets_val
+    }
 
     fn omit(&self, obj: Value, keys: Value) -> Value {
         match (&obj, &keys) {
@@ -5080,4 +5199,401 @@ pub trait Exchange: ValueTrait {
 
 
 // END TRANSPILED METHODS
+}
+
+// ---------------------------------------------------------------------------
+// Market-loading parse helpers — used by Exchange::load_markets default impl.
+// Each function receives an already-fetched response and returns
+// (unified_symbol, ccxt-format market JSON) pairs.
+// ---------------------------------------------------------------------------
+
+fn lm_market(id: &str, symbol: &str, base: &str, quote: &str, active: bool) -> serde_json::Value {
+    serde_json::json!({ "id": id, "symbol": symbol, "base": base, "quote": quote, "active": active })
+}
+
+#[allow(clippy::too_many_arguments)]
+fn lm_market_full(
+    id: &str, symbol: &str, base: &str, quote: &str, active: bool,
+    price_prec: Option<f64>, amount_prec: Option<f64>,
+    amount_min: Option<f64>, cost_min: Option<f64>,
+    taker: Option<f64>, maker: Option<f64>,
+    market_type: Option<&str>, contract_size: Option<f64>,
+) -> serde_json::Value {
+    serde_json::json!({
+        "id": id, "symbol": symbol, "base": base, "quote": quote, "active": active,
+        "type": market_type, "contractSize": contract_size,
+        "precision": { "price": price_prec, "amount": amount_prec },
+        "limits": { "amount": { "min": amount_min }, "cost": { "min": cost_min } },
+        "taker": taker, "maker": maker,
+    })
+}
+
+fn lm_parse_binance(resp: &serde_json::Value, is_futures: bool) -> Vec<(String, serde_json::Value)> {
+    let symbols = match resp["symbols"].as_array() {
+        Some(a) => a,
+        None => return vec![],
+    };
+    symbols.iter().filter_map(|s| {
+        if is_futures && s["contractType"].as_str() != Some("PERPETUAL") {
+            return None;
+        }
+        let id = s["symbol"].as_str()?;
+        let base = s["baseAsset"].as_str()?;
+        let quote = s["quoteAsset"].as_str()?;
+        let active = s["status"].as_str() == Some("TRADING");
+        let unified = if is_futures {
+            let settle = s["marginAsset"].as_str().unwrap_or(quote);
+            format!("{}/{}:{}", base, quote, settle)
+        } else {
+            format!("{}/{}", base, quote)
+        };
+        let filters = s["filters"].as_array();
+        let price_tick = filters.and_then(|fs| {
+            fs.iter().find(|f| f["filterType"].as_str() == Some("PRICE_FILTER"))
+                .and_then(|f| f["tickSize"].as_str())
+                .and_then(|t| t.parse::<f64>().ok())
+        });
+        let lot_filter = filters.and_then(|fs| {
+            fs.iter().find(|f| f["filterType"].as_str() == Some("LOT_SIZE")).cloned()
+        });
+        let amount_step = lot_filter.as_ref()
+            .and_then(|f| f["stepSize"].as_str())
+            .and_then(|s| s.parse::<f64>().ok());
+        let amount_min = lot_filter.as_ref()
+            .and_then(|f| f["minQty"].as_str())
+            .and_then(|s| s.parse::<f64>().ok());
+        let cost_min = filters.and_then(|fs| {
+            fs.iter().find(|f| {
+                let ft = f["filterType"].as_str().unwrap_or("");
+                ft == "NOTIONAL" || ft == "MIN_NOTIONAL"
+            })
+            .and_then(|f| f["minNotional"].as_str().or(f["notional"].as_str()).and_then(|s| s.parse::<f64>().ok()))
+        });
+        let market_type = if is_futures { Some("swap") } else { Some("spot") };
+        Some((unified.clone(), lm_market_full(id, &unified, base, quote, active, price_tick, amount_step, amount_min, cost_min, None, None, market_type, None)))
+    }).collect()
+}
+
+fn lm_parse_okx(resp: &serde_json::Value, is_future: bool) -> Vec<(String, serde_json::Value)> {
+    let data = match resp["data"].as_array() { Some(a) => a, None => return vec![] };
+    data.iter().filter_map(|s| {
+        let id = s["instId"].as_str()?;
+        let base = s["baseCcy"].as_str()?;
+        let quote = s["quoteCcy"].as_str()?;
+        let settle = s["settleCcy"].as_str().unwrap_or(quote);
+        let active = s["state"].as_str() == Some("live");
+        let unified = if is_future { format!("{}/{}:{}", base, quote, settle) } else { format!("{}/{}", base, quote) };
+        let price_prec = s["tickSz"].as_str().and_then(|t| t.parse::<f64>().ok());
+        let amount_prec = s["lotSz"].as_str().and_then(|t| t.parse::<f64>().ok());
+        let amount_min = s["minSz"].as_str().and_then(|t| t.parse::<f64>().ok());
+        let contract_size = s["ctVal"].as_str().and_then(|t| t.parse::<f64>().ok());
+        let market_type = if is_future { Some("swap") } else { Some("spot") };
+        Some((unified.clone(), lm_market_full(id, &unified, base, quote, active, price_prec, amount_prec, amount_min, None, None, None, market_type, contract_size)))
+    }).collect()
+}
+
+fn lm_parse_bybit(resp: &serde_json::Value, is_future: bool) -> Vec<(String, serde_json::Value)> {
+    let list = match resp["result"]["list"].as_array() { Some(a) => a, None => return vec![] };
+    list.iter().filter_map(|s| {
+        let id = s["symbol"].as_str()?;
+        let base = s["baseCoin"].as_str()?;
+        let quote = s["quoteCoin"].as_str()?;
+        let settle = s["settleCoin"].as_str().unwrap_or(quote);
+        let active = s["status"].as_str() == Some("Trading");
+        let unified = if is_future { format!("{}/{}:{}", base, quote, settle) } else { format!("{}/{}", base, quote) };
+        let price_prec = s["priceFilter"]["tickSize"].as_str().and_then(|t| t.parse::<f64>().ok());
+        let amount_prec = s["lotSizeFilter"]["basePrecision"].as_str()
+            .or(s["lotSizeFilter"]["qtyStep"].as_str())
+            .and_then(|t| t.parse::<f64>().ok());
+        let amount_min = s["lotSizeFilter"]["minOrderQty"].as_str().and_then(|t| t.parse::<f64>().ok());
+        let market_type = if is_future { Some("swap") } else { Some("spot") };
+        Some((unified.clone(), lm_market_full(id, &unified, base, quote, active, price_prec, amount_prec, amount_min, None, None, None, market_type, None)))
+    }).collect()
+}
+
+fn lm_parse_kucoin(resp: &serde_json::Value) -> Vec<(String, serde_json::Value)> {
+    let data = match resp["data"].as_array() { Some(a) => a, None => return vec![] };
+    data.iter().filter_map(|s| {
+        let id = s["symbol"].as_str()?;
+        let base = s["baseCurrency"].as_str()?;
+        let quote = s["quoteCurrency"].as_str()?;
+        let active = s["enableTrading"].as_bool().unwrap_or(false);
+        let unified = format!("{}/{}", base, quote);
+        let price_prec = s["priceIncrement"].as_str().and_then(|t| t.parse::<f64>().ok());
+        let amount_prec = s["baseIncrement"].as_str().and_then(|t| t.parse::<f64>().ok());
+        let amount_min = s["baseMinSize"].as_str().and_then(|t| t.parse::<f64>().ok());
+        let cost_min = s["quoteMinSize"].as_str().and_then(|t| t.parse::<f64>().ok());
+        Some((unified.clone(), lm_market_full(id, &unified, base, quote, active, price_prec, amount_prec, amount_min, cost_min, None, None, Some("spot"), None)))
+    }).collect()
+}
+
+fn lm_parse_kucoin_futures(resp: &serde_json::Value) -> Vec<(String, serde_json::Value)> {
+    let data = match resp["data"].as_array() { Some(a) => a, None => return vec![] };
+    data.iter().filter_map(|s| {
+        if s["type"].as_str() != Some("FFWCSX") { return None; }
+        let id = s["symbol"].as_str()?;
+        let base = s["baseCurrency"].as_str()?;
+        let quote = s["quoteCurrency"].as_str()?;
+        let settle = s["settleCurrency"].as_str().unwrap_or(quote);
+        let active = !s["isDecommissioned"].as_bool().unwrap_or(true);
+        let unified = format!("{}/{}:{}", base, quote, settle);
+        let price_prec = s["tickSize"].as_f64();
+        let amount_prec = s["lotSize"].as_f64();
+        let contract_size = s["multiplier"].as_f64();
+        Some((unified.clone(), lm_market_full(id, &unified, base, quote, active, price_prec, amount_prec, None, None, None, None, Some("swap"), contract_size)))
+    }).collect()
+}
+
+fn lm_parse_gate_futures(resp: &serde_json::Value) -> Vec<(String, serde_json::Value)> {
+    let data = match resp.as_array() { Some(a) => a, None => return vec![] };
+    data.iter().filter_map(|s| {
+        let id = s["name"].as_str()?;
+        let parts: Vec<&str> = id.splitn(2, '_').collect();
+        if parts.len() != 2 { return None; }
+        let (base, settle) = (parts[0], parts[1]);
+        let active = !s["in_delisting"].as_bool().unwrap_or(false);
+        let unified = format!("{}/{}:{}", base, settle, settle);
+        let price_prec = s["order_price_round"].as_str().and_then(|t| t.parse::<f64>().ok());
+        Some((unified.clone(), lm_market_full(
+            id, &unified, base, settle, active, price_prec, None, None, None,
+            s["taker_fee_rate"].as_str().and_then(|t| t.parse().ok()),
+            s["maker_fee_rate"].as_str().and_then(|t| t.parse().ok()),
+            Some("swap"), s["quanto_multiplier"].as_str().and_then(|t| t.parse().ok()),
+        )))
+    }).collect()
+}
+
+fn lm_parse_gate_spot(resp: &serde_json::Value) -> Vec<(String, serde_json::Value)> {
+    let data = match resp.as_array() { Some(a) => a, None => return vec![] };
+    data.iter().filter_map(|s| {
+        let id = s["id"].as_str()?;
+        let base = s["base"].as_str()?;
+        let quote = s["quote"].as_str()?;
+        let active = s["trade_status"].as_str() == Some("tradable");
+        let unified = format!("{}/{}", base, quote);
+        let price_prec = s["precision"].as_u64().map(|p| 10f64.powi(-(p as i32)));
+        let amount_prec = s["amount_precision"].as_u64().map(|p| 10f64.powi(-(p as i32)));
+        let amount_min = s["min_base_amount"].as_str().and_then(|t| t.parse::<f64>().ok());
+        Some((unified.clone(), lm_market_full(
+            id, &unified, base, quote, active, price_prec, amount_prec, amount_min, None,
+            s["fee"].as_str().and_then(|t| t.parse().ok()),
+            s["fee"].as_str().and_then(|t| t.parse().ok()),
+            Some("spot"), None,
+        )))
+    }).collect()
+}
+
+fn lm_parse_htx(resp: &serde_json::Value) -> Vec<(String, serde_json::Value)> {
+    let data = match resp["data"].as_array() { Some(a) => a, None => return vec![] };
+    data.iter().filter_map(|s| {
+        let id = s["symbol"].as_str()?;
+        let base_raw = s["base-currency"].as_str()?;
+        let quote_raw = s["quote-currency"].as_str()?;
+        let base = base_raw.to_uppercase();
+        let quote = quote_raw.to_uppercase();
+        let active = s["state"].as_str() == Some("online");
+        let unified = format!("{}/{}", base, quote);
+        let price_prec = s["price-precision"].as_u64().map(|p| 10f64.powi(-(p as i32)));
+        let amount_prec = s["amount-precision"].as_u64().map(|p| 10f64.powi(-(p as i32)));
+        let amount_min = s["min-order-amt"].as_f64();
+        let cost_min = s["min-order-value"].as_f64();
+        Some((unified.clone(), lm_market_full(id, &unified, &base, &quote, active, price_prec, amount_prec, amount_min, cost_min, None, None, Some("spot"), None)))
+    }).collect()
+}
+
+fn lm_parse_bitget_futures(resp: &serde_json::Value) -> Vec<(String, serde_json::Value)> {
+    let data = match resp["data"].as_array() { Some(a) => a, None => return vec![] };
+    data.iter().filter_map(|s| {
+        let id = s["symbol"].as_str()?;
+        let base = s["baseCoin"].as_str()?;
+        let quote = s["quoteCoin"].as_str()?;
+        let settle = s["marginCoin"].as_str().unwrap_or(quote);
+        let active = s["symbolStatus"].as_str() == Some("normal");
+        let unified = format!("{}/{}:{}", base, quote, settle);
+        let price_prec = s["priceEndStep"].as_str().and_then(|t| t.parse::<f64>().ok());
+        let amount_prec = s["sizeMultiplier"].as_str().and_then(|t| t.parse::<f64>().ok());
+        let contract_size = s["sizeMultiplier"].as_str().and_then(|t| t.parse::<f64>().ok());
+        Some((unified.clone(), lm_market_full(
+            id, &unified, base, quote, active, price_prec, amount_prec, None, None,
+            s["takerFeeRate"].as_str().and_then(|t| t.parse().ok()),
+            s["makerFeeRate"].as_str().and_then(|t| t.parse().ok()),
+            Some("swap"), contract_size,
+        )))
+    }).collect()
+}
+
+fn lm_parse_bitget_spot(resp: &serde_json::Value) -> Vec<(String, serde_json::Value)> {
+    let data = match resp["data"].as_array() { Some(a) => a, None => return vec![] };
+    data.iter().filter_map(|s| {
+        let id = s["symbol"].as_str()?;
+        let base = s["baseCoin"].as_str()?;
+        let quote = s["quoteCoin"].as_str()?;
+        let active = s["status"].as_str() == Some("online");
+        let unified = format!("{}/{}", base, quote);
+        let price_prec = s["pricePrecision"].as_str().and_then(|t| t.parse::<f64>().ok())
+            .map(|p| 10f64.powi(-(p as i32)));
+        let amount_prec = s["quantityPrecision"].as_str().and_then(|t| t.parse::<f64>().ok())
+            .map(|p| 10f64.powi(-(p as i32)));
+        let amount_min = s["minTradeAmount"].as_str().and_then(|t| t.parse::<f64>().ok());
+        Some((unified.clone(), lm_market_full(
+            id, &unified, base, quote, active, price_prec, amount_prec, amount_min, None,
+            s["takerFeeRate"].as_str().and_then(|t| t.parse().ok()),
+            s["makerFeeRate"].as_str().and_then(|t| t.parse().ok()),
+            Some("spot"), None,
+        )))
+    }).collect()
+}
+
+fn lm_parse_coinbase(resp: &serde_json::Value) -> Vec<(String, serde_json::Value)> {
+    let products = match resp["products"].as_array() { Some(a) => a, None => return vec![] };
+    products.iter().filter_map(|s| {
+        if s["product_type"].as_str() != Some("SPOT") { return None; }
+        let id = s["product_id"].as_str()?;
+        let base = s["base_currency_id"].as_str()?;
+        let quote = s["quote_currency_id"].as_str()?;
+        let active = s["status"].as_str() == Some("online");
+        let unified = format!("{}/{}", base, quote);
+        let price_prec = s["price_increment"].as_str().and_then(|t| t.parse::<f64>().ok());
+        let amount_prec = s["base_increment"].as_str().and_then(|t| t.parse::<f64>().ok());
+        let amount_min = s["base_min_size"].as_str().and_then(|t| t.parse::<f64>().ok());
+        Some((unified.clone(), lm_market_full(id, &unified, base, quote, active, price_prec, amount_prec, amount_min, None, None, None, Some("spot"), None)))
+    }).collect()
+}
+
+fn lm_parse_poloniex(resp: &serde_json::Value) -> Vec<(String, serde_json::Value)> {
+    let data = match resp.as_array() { Some(a) => a, None => return vec![] };
+    data.iter().filter_map(|s| {
+        let id = s["symbol"].as_str()?;
+        let base = s["baseCurrencyName"].as_str()?;
+        let quote = s["quoteCurrencyName"].as_str()?;
+        let active = s["state"].as_str() == Some("NORMAL");
+        let unified = format!("{}/{}", base, quote);
+        Some((unified.clone(), lm_market(id, &unified, base, quote, active)))
+    }).collect()
+}
+
+fn lm_parse_bingx(resp: &serde_json::Value) -> Vec<(String, serde_json::Value)> {
+    let data = match resp["data"]["symbols"].as_array().or(resp["data"].as_array()) {
+        Some(a) => a,
+        None => return vec![],
+    };
+    data.iter().filter_map(|s| {
+        let id = s["symbol"].as_str()?;
+        let active = s["apiStateSell"].as_bool().unwrap_or(true) && s["apiStateBuy"].as_bool().unwrap_or(true);
+        let parts: Vec<&str> = id.splitn(2, '-').collect();
+        if parts.len() != 2 { return None; }
+        let (base, quote) = (parts[0], parts[1]);
+        let unified = format!("{}/{}", base, quote);
+        let price_prec = s["tickSize"].as_str().and_then(|t| t.parse::<f64>().ok())
+            .or(s["pricePrecision"].as_u64().map(|p| 10f64.powi(-(p as i32))));
+        let amount_prec = s["stepSize"].as_str().and_then(|t| t.parse::<f64>().ok())
+            .or(s["quantityPrecision"].as_u64().map(|p| 10f64.powi(-(p as i32))));
+        Some((unified.clone(), lm_market_full(id, &unified, base, quote, active, price_prec, amount_prec, None, None, None, None, Some("spot"), None)))
+    }).collect()
+}
+
+fn lm_parse_bitmart(resp: &serde_json::Value) -> Vec<(String, serde_json::Value)> {
+    let data = match resp["data"]["symbols"].as_array() { Some(a) => a, None => return vec![] };
+    data.iter().filter_map(|s| {
+        let id = s["symbol"].as_str()?;
+        let base = s["base_currency"].as_str()?;
+        let quote = s["quote_currency"].as_str()?;
+        let active = s["trade_status"].as_str() == Some("trading");
+        let unified = format!("{}/{}", base, quote);
+        let price_prec = s["price_min_precision"].as_u64().map(|p| 10f64.powi(-(p as i32)));
+        let amount_prec = s["quote_increment"].as_str().and_then(|t| t.parse::<f64>().ok());
+        Some((unified.clone(), lm_market_full(id, &unified, base, quote, active, price_prec, amount_prec, None, None, None, None, Some("spot"), None)))
+    }).collect()
+}
+
+fn lm_parse_coinex(resp: &serde_json::Value, is_future: bool) -> Vec<(String, serde_json::Value)> {
+    let data = match resp["data"].as_array() { Some(a) => a, None => return vec![] };
+    data.iter().filter_map(|s| {
+        let id = s["market"].as_str()?;
+        let base = s["base_ccy"].as_str()?;
+        let quote = s["quote_ccy"].as_str()?;
+        let unified = if is_future {
+            let settle = s["settle_ccy"].as_str().unwrap_or(quote);
+            format!("{}/{}:{}", base, quote, settle)
+        } else {
+            format!("{}/{}", base, quote)
+        };
+        let taker = s["taker_fee_rate"].as_str().and_then(|t| t.parse::<f64>().ok());
+        let maker = s["maker_fee_rate"].as_str().and_then(|t| t.parse::<f64>().ok());
+        let market_type = if is_future { Some("swap") } else { Some("spot") };
+        Some((unified.clone(), lm_market_full(id, &unified, base, quote, true, None, None, None, None, taker, maker, market_type, None)))
+    }).collect()
+}
+
+fn lm_parse_cryptocom(resp: &serde_json::Value, is_future: bool) -> Vec<(String, serde_json::Value)> {
+    let data = match resp["result"]["data"].as_array() { Some(a) => a, None => return vec![] };
+    data.iter().filter_map(|s| {
+        let inst_type = s["inst_type"].as_str().unwrap_or("");
+        let is_perp = inst_type == "PERPETUAL_SWAP" || inst_type == "FUTURE";
+        if is_future != is_perp { return None; }
+        if !is_future && inst_type != "CCY_PAIR" { return None; }
+        let id = s["symbol"].as_str().or(s["instrument_name"].as_str())?;
+        let base = s["base_ccy"].as_str()?;
+        let quote = s["quote_ccy"].as_str()?;
+        let active = s["tradable"].as_bool().unwrap_or(true);
+        let unified = if is_future { format!("{}/{}:{}", base, quote, quote) } else { format!("{}/{}", base, quote) };
+        let price_prec = s["price_tick_size"].as_str().and_then(|t| t.parse::<f64>().ok());
+        let amount_prec = s["quantity_tick_size"].as_str().and_then(|t| t.parse::<f64>().ok());
+        let amount_min = s["min_quantity"].as_str().and_then(|t| t.parse::<f64>().ok());
+        let market_type = if is_future { Some("swap") } else { Some("spot") };
+        Some((unified.clone(), lm_market_full(id, &unified, base, quote, active, price_prec, amount_prec, amount_min, None, None, None, market_type, None)))
+    }).collect()
+}
+
+fn lm_parse_lbank(resp: &serde_json::Value) -> Vec<(String, serde_json::Value)> {
+    let data = match resp.as_array().or(resp["data"].as_array()) {
+        Some(a) => a,
+        None => return vec![],
+    };
+    data.iter().filter_map(|s| {
+        let id = s.as_str()?;
+        let parts: Vec<&str> = id.splitn(2, '_').collect();
+        if parts.len() != 2 { return None; }
+        let base = parts[0].to_uppercase();
+        let quote = parts[1].to_uppercase();
+        let unified = format!("{}/{}", base, quote);
+        Some((unified.clone(), lm_market(id, &unified, &base, &quote, true)))
+    }).collect()
+}
+
+fn lm_parse_phemex(resp: &serde_json::Value, is_future: bool) -> Vec<(String, serde_json::Value)> {
+    let products = match resp["data"]["products"].as_array() { Some(a) => a, None => return vec![] };
+    products.iter().filter_map(|s| {
+        let prod_type = s["type"].as_str().unwrap_or("");
+        let is_perp = prod_type == "Perpetual" || prod_type == "PerpetualV2";
+        if is_future != is_perp { return None; }
+        if !is_future && prod_type != "Spot" { return None; }
+        let id = s["symbol"].as_str()?;
+        let base = s["baseCurrency"].as_str()?;
+        let quote = s["quoteCurrency"].as_str()?;
+        let active = s["status"].as_str().map(|st| st != "Closed").unwrap_or(true);
+        let unified = if is_future {
+            let settle = s["settlementCurrency"].as_str().unwrap_or(quote);
+            format!("{}/{}:{}", base, quote, settle)
+        } else {
+            format!("{}/{}", base, quote)
+        };
+        Some((unified.clone(), lm_market(id, &unified, base, quote, active)))
+    }).collect()
+}
+
+fn lm_parse_ascendex(resp: &serde_json::Value) -> Vec<(String, serde_json::Value)> {
+    let data = match resp["data"].as_array() { Some(a) => a, None => return vec![] };
+    data.iter().filter_map(|s| {
+        let symbol = s["symbol"].as_str()?;
+        let base = s["baseAsset"].as_str()?;
+        let quote = s["quoteAsset"].as_str()?;
+        let active = s["status"].as_str().map(|st| st == "Normal").unwrap_or(true);
+        let unified = symbol.to_string();
+        let id = symbol.replace('/', "-");
+        let price_prec = s["tickSize"].as_str().and_then(|t| t.parse::<f64>().ok());
+        let amount_prec = s["lotSize"].as_str().and_then(|t| t.parse::<f64>().ok());
+        let amount_min = s["minQty"].as_str().and_then(|t| t.parse::<f64>().ok());
+        Some((unified.clone(), lm_market_full(&id, &unified, base, quote, active, price_prec, amount_prec, amount_min, None, None, None, Some("spot"), None)))
+    }).collect()
 }
