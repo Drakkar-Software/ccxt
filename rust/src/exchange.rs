@@ -524,6 +524,25 @@ impl Value {
 
     pub fn to_fixed(&self, decimals: Value) -> Value { self.clone() }
 
+    // ---------------------------------------------------------------------------
+    // WsClient stub methods — preserved across regeneration
+    // These are called on Value objects that represent WsClient/Future instances in the pro exchange files.
+    pub fn resolve(&mut self, result: Value, hash: Value) {}
+    pub fn reject(&mut self, error: Value, hash: Value) {}
+    pub fn future(&mut self, hash: Value) -> Value { Value::Undefined }
+    pub fn reusable_future(&mut self, hash: Value) -> Value { Value::Undefined }
+    pub fn connect(&mut self, backoff: Value) -> Value { Value::Undefined }
+    pub fn send(&mut self, msg: Value) -> Value { Value::Undefined }
+    pub fn call(&mut self, _self_ref: Value, _a: Value, _b: Value) -> Value { Value::Undefined }
+    pub fn on_pong(&mut self) {}
+    // ArrayCache stub methods on Value
+    pub fn append(&mut self, item: Value) -> Value { Value::Undefined }
+    pub fn get_limit(&self, _a: Value, _b: Value) -> Value { Value::Undefined }
+    pub fn limit(&self) -> Value { Value::Undefined }
+    pub fn reset(&mut self, items: Value) -> Value { Value::Undefined }
+    pub fn store(&mut self, price: Value, amount: Value) -> Value { Value::Undefined }
+    pub fn store_array(&mut self, items: Value) -> Value { Value::Undefined }
+
 }
 
 impl From<i64> for Value {
@@ -546,6 +565,15 @@ impl From<Value> for serde_json::Value {
         }
     }
 }
+
+// Allow `.await` on Value in WS stub code — immediately resolves to Undefined.
+impl std::future::Future for Value {
+    type Output = Value;
+    fn poll(self: std::pin::Pin<&mut Self>, _cx: &mut std::task::Context<'_>) -> std::task::Poll<Value> {
+        std::task::Poll::Ready(Value::Undefined)
+    }
+}
+impl Unpin for Value {}
 
 impl From<usize> for Value {
     fn from(v: usize) -> Self {
@@ -1002,7 +1030,7 @@ pub fn value_to_f64_opt(v: &Value) -> Option<f64> {
 
 // ---------------------------------------------------------------------------
 
-#[async_trait]
+#[async_trait(?Send)]
 pub trait Exchange: ValueTrait {
 
     // ---------------------------------------------------------------------------
@@ -2602,6 +2630,79 @@ pub trait Exchange: ValueTrait {
     }
 
     // ---------------------------------------------------------------------------
+    // WebSocket infrastructure stubs — preserved across regeneration
+    fn client(&mut self, mut url: Value) -> Value { Value::Undefined }
+    async fn watch_multiple(&mut self, mut url: Value, mut message_hashes: Value, mut message: Value, mut subscribe_hashes: Value, mut subscription: Value) -> Value { Value::Undefined }
+    async fn watch(&mut self, mut url: Value, mut message_hash: Value, mut message: Value, mut subscribe_hash: Value, mut subscription: Value) -> Value { Value::Undefined }
+    fn on_error(&mut self, mut client: Value, mut error: Value) -> Value { Value::Undefined }
+    fn on_close(&mut self, mut client: Value, mut error: Value) -> Value { Value::Undefined }
+    fn on_message(&mut self, mut client: Value, mut message: Value) -> Value { Value::Undefined }
+    fn on_connected(&mut self, mut client: Value, mut message: Value) -> Value { Value::Undefined }
+    fn order_book(&self, mut snapshot: Value, mut limit: Value) -> Value { Value::Undefined }
+    fn spawn(&mut self, mut task: Value, mut symbol: Value) -> Value { Value::Undefined }
+    fn delay(&mut self, mut milliseconds: Value, mut callback: Value, mut params: Value) -> Value { Value::Undefined }
+    fn lock_id(&mut self, mut hash: Value) -> Value { Value::Undefined }
+    fn unlock_id(&mut self, mut hash: Value) -> Value { Value::Undefined }
+    fn is_linear(&self, mut r#type: Value, mut sub_type: Value) -> Value { Value::Undefined }
+    fn is_inverse(&self, mut r#type: Value, mut sub_type: Value) -> Value { Value::Undefined }
+    fn create_order_request(&mut self, mut symbol: Value, mut type_: Value, mut side: Value, mut amount: Value, mut price: Value, mut params: Value) -> Value { Value::Undefined }
+    fn parse_order_status(&self, mut status: Value) -> Value { status }
+    // WS-specific method stubs — exchange-specific helpers called from pro/*.rs
+    fn indexed_order_book(&self, mut snapshot: Value, mut limit: Value) -> Value { Value::Undefined }
+    fn counted_order_book(&self, mut snapshot: Value, mut limit: Value) -> Value { Value::Undefined }
+    fn crc32(&mut self, mut string: Value, mut signed: Value) -> Value { Value::Undefined }
+    fn find_timeframe_by_duration(&mut self, mut duration: Value) -> Value { Value::Undefined }
+    fn ymdhms(&mut self, mut timestamp: Value, mut infix: Value) -> Value { Value::Undefined }
+    fn is_unified_enabled(&mut self) -> Value { Value::Undefined }
+    fn aggregate(&self, mut bids_or_asks: Value) -> Value { Value::Undefined }
+    fn is_binary_message(&mut self, mut message: Value) -> Value { Value::Undefined }
+    fn decode_proto_msg(&mut self, mut message: Value) -> Value { Value::Undefined }
+    fn coin_to_market_id(&self, mut coin: Value) -> Value { Value::Undefined }
+    fn extend_exchange_options(&mut self, mut options: Value) -> Value { Value::Undefined }
+    fn parse_order_type(&self, mut status: Value) -> Value { Value::Undefined }
+    fn parse_status(&self, mut status: Value) -> Value { Value::Undefined }
+    fn parse_side(&self, mut side: Value) -> Value { Value::Undefined }
+    fn parse_time_in_force(&self, mut tif: Value) -> Value { Value::Undefined }
+    fn parse_order_status_by_type(&self, mut market_type: Value, mut status: Value) -> Value { Value::Undefined }
+    fn parse_order_type_time_in_force_and_post_only(&self, mut r#type: Value, mut time_in_force: Value, mut post_only: Value) -> Value { Value::Undefined }
+    fn parse_order_time_in_force(&self, mut tif: Value) -> Value { Value::Undefined }
+    fn parse_order_side_and_reduce_only(&self, mut side: Value) -> Value { Value::Undefined }
+    fn parse_balance_custom(&mut self, mut response: Value) -> Value { Value::Undefined }
+    fn parse_trading_balance(&mut self, mut response: Value) -> Value { Value::Undefined }
+    fn parse_trading_fees(&mut self, mut response: Value) -> Value { Value::Undefined }
+    fn parse_spot_market_id(&mut self, mut market_id: Value) -> Value { Value::Undefined }
+    fn parse_create_edit_order_args(&mut self, mut id: Value, mut symbol: Value, mut r#type: Value, mut side: Value, mut amount: Value, mut price: Value, mut params: Value) -> Value { Value::Undefined }
+    fn edit_order_request(&mut self, mut id: Value, mut symbol: Value, mut r#type: Value, mut side: Value, mut amount: Value, mut price: Value, mut params: Value) -> Value { Value::Undefined }
+    fn edit_spot_order_request(&mut self, mut id: Value, mut symbol: Value, mut r#type: Value, mut side: Value, mut amount: Value, mut price: Value, mut params: Value) -> Value { Value::Undefined }
+    fn edit_contract_order_request(&mut self, mut id: Value, mut symbol: Value, mut r#type: Value, mut side: Value, mut amount: Value, mut price: Value, mut params: Value) -> Value { Value::Undefined }
+    fn edit_orders_request(&mut self, mut orders: Value, mut params: Value) -> Value { Value::Undefined }
+    fn cancel_order_request(&mut self, mut id: Value, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
+    fn cancel_orders_request(&mut self, mut ids: Value, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
+    fn create_orders_request(&mut self, mut orders: Value, mut params: Value) -> Value { Value::Undefined }
+    fn spot_order_prepare_request(&mut self, mut symbol: Value, mut side: Value, mut r#type: Value, mut amount: Value, mut price: Value, mut params: Value) -> Value { Value::Undefined }
+    fn multi_order_spot_prepare_request(&mut self, mut orders: Value, mut params: Value) -> Value { Value::Undefined }
+    fn prepare_orders_by_status_request(&mut self, mut status: Value, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
+    fn prepare_request(&mut self, mut method: Value, mut path: Value, mut params: Value) -> Value { Value::Undefined }
+    fn fetch_orders_request(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
+    fn fetch_order_request(&mut self, mut id: Value, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
+    fn fetch_my_trades_request(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
+    fn fetch_ohlcv_request(&mut self, mut symbol: Value, mut timeframe: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
+    fn fetch_deposits_request(&mut self, mut code: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
+    fn fetch_withdrawals_request(&mut self, mut code: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
+    fn authenticate_rest(&mut self) -> Value { Value::Undefined }
+    fn sign_message(&mut self, mut path: Value, mut params: Value) -> Value { Value::Undefined }
+    fn create_auth_token(&mut self, mut nonce: Value) -> Value { Value::Undefined }
+    fn handle_token(&mut self, mut client: Value, mut message: Value) -> Value { Value::Undefined }
+    fn handle_public_address(&mut self, mut client: Value, mut message: Value) -> Value { Value::Undefined }
+    fn handle_derive_subaccount_id(&mut self, mut client: Value, mut message: Value) -> Value { Value::Undefined }
+    fn handle_product_type_and_params(&mut self, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
+    fn safe_market_custom(&self, mut market_id: Value, mut market: Value, mut settle_id: Value) -> Value { Value::Undefined }
+    fn custom_parse_bid_ask(&mut self, mut bid_ask: Value, mut price_key: Value, mut amount_key: Value, mut market: Value) -> Value { Value::Undefined }
+    fn custom_parse_order_book(&mut self, mut order_book: Value, mut symbol: Value, mut timestamp: Value, mut bids_key: Value, mut asks_key: Value, mut price_key: Value, mut amount_key: Value, mut market: Value) -> Value { Value::Undefined }
+    fn convert_from_raw_quantity(&mut self, mut symbol: Value, mut raw_quantity: Value, mut currency_side: Value) -> Value { Value::Undefined }
+    fn withdraw_request(&mut self, mut code: Value, mut amount: Value, mut address: Value, mut tag: Value, mut params: Value) -> Value { Value::Undefined }
+
+    // ---------------------------------------------------------------------------
     // METHODS BELOW THIS LINE ARE TRANSPILED FROM JAVASCRIPT
     fn describe(&self) -> Value { Value::Undefined }
 
@@ -2875,7 +2976,7 @@ pub trait Exchange: ValueTrait {
     fn parse_deposit_address(&mut self, mut deposit_address: Value, mut currency: Value) -> Value { Value::Undefined }
 
 
-    fn parse_trade(&mut self, mut trade: Value, mut market: Value) -> Value { Value::Undefined }
+    fn parse_trade(&self, mut trade: Value, mut market: Value) -> Value { Value::Undefined }
 
 
     fn parse_transaction(&self, mut transaction: Value, mut currency: Value) -> Value { Value::Undefined }
@@ -2890,7 +2991,7 @@ pub trait Exchange: ValueTrait {
     fn parse_ledger_entry(&self, mut item: Value, mut currency: Value) -> Value { Value::Undefined }
 
 
-    fn parse_order(&mut self, mut order: Value, mut market: Value) -> Value { Value::Undefined }
+    fn parse_order(&self, mut order: Value, mut market: Value) -> Value { Value::Undefined }
 
 
     async fn fetch_cross_borrow_rates(&mut self, mut params: Value) -> Value { Value::Undefined }
@@ -3008,7 +3109,7 @@ pub trait Exchange: ValueTrait {
     async fn fetch_open_interests(&mut self, mut symbols: Value, mut params: Value) -> Value { Value::Undefined }
 
 
-    async fn sign_in(&mut self, mut params: Value) -> Value { Value::Undefined }
+    async fn sign_in(&mut self) -> Value { Value::Undefined }
 
 
     async fn fetch_payment_methods(&mut self, mut params: Value) -> Value { Value::Undefined }
@@ -3094,7 +3195,7 @@ pub trait Exchange: ValueTrait {
     fn safe_balance(&self, mut balance: Value) -> Value { Value::Undefined }
 
 
-    fn safe_order(&mut self, mut order: Value, mut market: Value) -> Value { Value::Undefined }
+    fn safe_order(&self, mut order: Value, mut market: Value) -> Value { Value::Undefined }
 
 
     fn parse_orders(&mut self, mut orders: Value, mut market: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
@@ -3122,7 +3223,7 @@ pub trait Exchange: ValueTrait {
     fn safe_liquidation(&self, mut liquidation: Value, mut market: Value) -> Value { Value::Undefined }
 
 
-    fn safe_trade(&mut self, mut trade: Value, mut market: Value) -> Value { Value::Undefined }
+    fn safe_trade(&self, mut trade: Value, mut market: Value) -> Value { Value::Undefined }
 
 
     fn create_ccxt_trade_id(&mut self, mut timestamp: Value, mut side: Value, mut amount: Value, mut price: Value, mut taker_or_maker: Value) -> Value { Value::Undefined }
@@ -4348,19 +4449,19 @@ pub trait Exchange: ValueTrait {
     async fn create_market_sell_order_ws(&mut self, mut symbol: Value, mut amount: Value, mut params: Value) -> Value { Value::Undefined }
 
 
-    fn cost_to_precision(&mut self, mut symbol: Value, mut cost: Value) -> Value { Value::Undefined }
+    fn cost_to_precision(&self, mut symbol: Value, mut cost: Value) -> Value { Value::Undefined }
 
 
-    fn price_to_precision(&mut self, mut symbol: Value, mut price: Value) -> Value { Value::Undefined }
+    fn price_to_precision(&self, mut symbol: Value, mut price: Value) -> Value { Value::Undefined }
 
 
-    fn amount_to_precision(&mut self, mut symbol: Value, mut amount: Value) -> Value { Value::Undefined }
+    fn amount_to_precision(&self, mut symbol: Value, mut amount: Value) -> Value { Value::Undefined }
 
 
-    fn fee_to_precision(&mut self, mut symbol: Value, mut fee: Value) -> Value { Value::Undefined }
+    fn fee_to_precision(&self, mut symbol: Value, mut fee: Value) -> Value { Value::Undefined }
 
 
-    fn currency_to_precision(&mut self, mut code: Value, mut fee: Value, mut network_code: Value) -> Value { Value::Undefined }
+    fn currency_to_precision(&self, mut code: Value, mut fee: Value, mut network_code: Value) -> Value { Value::Undefined }
 
 
     fn force_string(&mut self, mut value: Value) -> Value { Value::Undefined }

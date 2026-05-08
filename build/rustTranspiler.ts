@@ -156,6 +156,8 @@ function getReturnType(node: any) {
         case 'stringGe':
         case 'stringLt':
         case 'stringLe':
+        case 'startsWith':
+        case 'endsWith':
             return 'bool';
         default:
             return 'value';
@@ -330,7 +332,28 @@ function getArgumentCount(className: string, node: any) {
         numberToString: 1, inArray: 2, decimalToPrecision: 5,
         sortBy: 4, indexBy: 2, filterBy: 3, groupBy: 2,
         filterByLimit: 4, filterBySinceLimit: 5,
-        parseBidAsk: 3, parseBidsAsks: 4, parseOrderBook: 8,
+        parseBidAsk: 4, parseBidsAsks: 4, parseOrderBook: 8,
+        filterByArray: 4, filterByArrayPositions: 4, filterByArrayTickers: 4,
+        // WS methods with optional trailing params
+        watch: 5, watchMultiple: 5,
+        orderBook: 2, loadAccounts: 2, checkRequiredCredentials: 1,
+        spawn: 2,
+        parseOHLCV: 2, parseOHLCVs: 6, parseTrade: 2, parseOrder: 2, parseTicker: 2,
+        parseTrades: 5, parseOrders: 5,
+        resolve: 2,
+        marketSymbols: 5,
+        handleMarketTypeAndParams: 4, handleSubTypeAndParams: 4, handleMarginModeAndParams: 3,
+        handleOptionAndParams: 4,
+        cleanUnsubscription: 4,
+        delay: 3,
+        findTimeframe: 2,
+        fetchPositions: 2,
+        filterBySymbolSinceLimit: 5, filterBySymbolsSinceLimit: 5, filterByCurrencySinceLimit: 5,
+        indexedOrderBook: 2, countedOrderBook: 2,
+        safeTicker: 2, safeOrder: 2, safeLiquidation: 2, safeTrade: 2,
+        isLinear: 2, isInverse: 2,
+        lockId: 1, unlockId: 1,
+        handleToken: 2,
         parseNumber: 2, parseToInt: 1, parseToNumeric: 2, parseInt: 2,
         json: 1, encode: 1, urlencode: 1, rawencode: 1,
         hash: 3, hmac: 4, jwt: 4,
@@ -343,6 +366,23 @@ function getArgumentCount(className: string, node: any) {
         safeMarket: 4, safeCurrency: 2, safeCurrencyCode: 2, safeSymbol: 4,
         ethEncodeStructuredData: 3, getZkContractSignatureObj: 2, getZkTransferSignatureObj: 2,
         encodeDydxTxRaw: 2, randNumber: 1,
+        // Methods where FUNCTION_INFO['Exchange'] isn't available in WS-only transpilation:
+        parsePositionRisk: 2, parseLiquidation: 2, parseTransaction: 2,
+        parseFundingRate: 2, parseFundingRateHistory: 2, parsePosition: 2,
+        convertFromRawQuantity: 3, currencyToPrecision: 3,
+        handleDeltasWithKeys: 5,
+        safeMarketCustom: 3,
+        isBinaryMessage: 1, decodeProtoMsg: 1,
+        authenticateRest: 0, signIn: 0,
+        reject: 2, reset: 1, resolve: 2,
+        createOrderRequest: 6,
+        parseWsOhlcvs: 5, parseWsOHLCVs: 5, parseWsTrades: 5,
+        handleOption: 3,
+        parseOrderTypeTimeInForceAndPostOnly: 3,
+        customParseBidAsk: 4,
+        editOrderRequest: 7, fetchPosition: 2, createAuthToken: 1,
+        coinToMarketId: 1,
+        multiOrderSpotPrepareRequest: 2, spotOrderPrepareRequest: 6,
     };
     const fname = getCalleeFunctionName(node);
     // argCounts overrides take priority (hand-tuned for Rust signatures)
@@ -950,7 +990,7 @@ function transpileMethodToRust(opts: {
                 let isSelfImmutable = false;
                 if (
                     fname.startsWith('safe') ||
-                    fname.startsWith('parse') ||
+                    fname.startsWith('parseWs') ||
                     fname.startsWith('filter') ||
                     fname === 'marketSymbols' ||
                     fname.startsWith('convert') ||
@@ -967,25 +1007,22 @@ function transpileMethodToRust(opts: {
                     fname === 'hash' ||
                     fname === 'hmac' ||
                     fname === 'createExpiredOptionMarket' ||
-                    fname === 'getNetworkCodeByNetworkUrl'
+                    fname === 'getNetworkCodeByNetworkUrl' ||
+                    // Pure formatters / converters that may be called inside safe* args:
+                    fname.endsWith('ToPrecision') ||
+                    fname.startsWith('parseToNumeric') ||
+                    fname.startsWith('parseToInt') ||
+                    fname.startsWith('from') ||
+                    fname.startsWith('getPrivateType') ||
+                    // Parse methods that transform without mutating self:
+                    (fname.startsWith('parse') && (fname.endsWith('Status') || fname.endsWith('Side') || fname.endsWith('Type') || fname.endsWith('Fee') || fname.endsWith('Fees') || fname.endsWith('Id') || fname.endsWith('By'))) ||
+                    // Currency/precision converters and trade helpers called from parseWs* context:
+                    fname.endsWith('FromPrecision') ||
+                    fname.endsWith('OrMaker') ||
+                    fname.endsWith('Url') ||
+                    fname === 'calculateFee'
                 ) {
                     isSelfImmutable = true;
-                }
-
-                // Override: these parse/safe methods need &mut self because they
-                // call mutable methods internally
-                if (
-                    fname === 'safeOrder' ||
-                    fname === 'safeTrade' ||
-                    fname === 'parseTrade' ||
-                    fname === 'parseOrder' ||
-                    fname === 'parseTrades' ||
-                    fname === 'parseOrders' ||
-                    fname === 'parseDepositAddress' ||
-                    fname === 'parseDepositWithdrawFee' ||
-                    fname === 'parseDepositWithdrawFees'
-                ) {
-                    isSelfImmutable = false;
                 }
 
                 if (fname.startsWith('throw')) {
@@ -1062,6 +1099,7 @@ function transpileMethodToRust(opts: {
                             ...state,
                             defaultValues,
                             functionName: fname,
+                            isAsyncFunction: isAsync,
                             indentLevel: state.indentLevel + 1,
                             appendBlock,
                         })
@@ -1134,17 +1172,34 @@ function transpileMethodToRust(opts: {
             },
 
             ThrowStatement(node: any, state: any, c: any) {
-                emit('panic!(r###"');
+                // Use `panic!("{}", ...)` form so the raw string content is not treated as a format template
+                emit('panic!("{}", r###"');
                 c(node.argument, asType(state));
                 emit('"###)');
             },
 
             NewExpression(node: any, state: any, c: any) {
+                // Dynamic constructor (e.g., new broad[key](msg)): not expressible in Rust types
+                // Fall back to passing the first argument directly (error stubs all return msg)
+                if (node.callee.type === 'MemberExpression' && node.callee.computed) {
+                    if (node.arguments.length >= 1) {
+                        c(node.arguments[0], asType(state));
+                    } else {
+                        emit('Value::Undefined');
+                    }
+                    return;
+                }
+                // ArrayCache types: ignore limit arg (WS stubs use 0-arg ::new())
+                const CACHE_TYPES = new Set(['ArrayCache', 'ArrayCacheByTimestamp', 'ArrayCacheBySymbolById', 'ArrayCacheBySymbolBySide']);
+                if (node.callee.type === 'Identifier' && CACHE_TYPES.has(node.callee.name)) {
+                    emit(`${node.callee.name}::new()`);
+                    return;
+                }
                 c(node.callee, asType(state));
                 emit('::new(');
                 for (let i = 0; i < node.arguments.length; i++) {
                     const arg = node.arguments[i];
-                    c(arg, asType(state));
+                    c(arg, asType(state, 'value'));
                     if (i < node.arguments.length - 1) {
                         emit(', ');
                     }
@@ -1202,8 +1257,7 @@ function transpileMethodToRust(opts: {
                             break;
                         case 'Identifier':
                             if (node.left.computed) {
-                                c(node.left.property, asType(state));
-                                emit('.clone()');
+                                c(node.left.property, asType(state, 'value'));
                             } else {
                                 emit('"');
                                 c(node.left.property, asType(state));
@@ -1272,7 +1326,10 @@ function transpileMethodToRust(opts: {
                     c(node.right, asType(state, 'value'));
                     emit(')');
                 } else {
-                    c(node.right, asType(state, 'value'));
+                    // Use usize context when assigning to a known usize variable
+                    const lhsName = node.left.type === 'Identifier' ? node.left.name : undefined;
+                    const rhsType = lhsName && (varTypes[lhsName] === 'usize' || varTypes[transformIdentifier(lhsName)] === 'usize') ? 'usize' : 'value';
+                    c(node.right, asType(state, rhsType));
                 }
             },
 
@@ -1295,6 +1352,7 @@ function transpileMethodToRust(opts: {
                                 emit('0');
                             }
                             varTypes[ident] = 'usize';
+                            varTypes[node.id.name] = 'usize'; // also store JS camelCase for Identifier lookups
                         } else {
                             emit(`let mut ${ident}: Value = `);
                             if (node.init) {
@@ -1303,6 +1361,7 @@ function transpileMethodToRust(opts: {
                                 emit('Value::Undefined');
                             }
                             varTypes[ident] = 'value';
+                            varTypes[node.id.name] = 'value'; // also store JS camelCase
                         }
                         break;
                     }
@@ -1389,14 +1448,14 @@ function transpileMethodToRust(opts: {
                         }
                         break;
                     case 'boolean':
-                        emit(node.value ? 'true' : 'false');
                         switch (state.asType) {
                             case undefined:
                             case 'bool':
+                                emit(node.value ? 'true' : 'false');
                                 break;
                             case 'rvalue':
                             case 'value':
-                                emit('.into()');
+                                emit(node.value ? 'Value::from(true)' : 'Value::from(false)');
                                 break;
                             default:
                                 throw new Error('Unexpected literal type');
@@ -1592,7 +1651,11 @@ function transpileMethodToRust(opts: {
                             else if (node.operator === '!==') emit('!=');
                             else emit(node.operator);
                             emit(' ');
-                            c(node.right, asType(state, desiredExpressionType));
+                            // When left is usize but right is NOT usize, emit right as 'value'
+                            // so the PartialEq<Value>/PartialOrd<Value> for usize impls handle comparison.
+                            const rhsInferred = inferType(node.right);
+                            const rhsType = (desiredExpressionType === 'usize' && rhsInferred !== 'usize') ? 'value' : desiredExpressionType;
+                            c(node.right, asType(state, rhsType));
                         }
                         if (state.asType === 'value') emit(').into()');
                         break;
@@ -1618,6 +1681,30 @@ function transpileMethodToRust(opts: {
             },
 
             CallExpression(node: any, state: any, c: any) {
+                // Handle x.call(this, ...) — dynamic dispatch stub; can't pass &mut self as Value
+                if (
+                    node.callee.type === 'MemberExpression' &&
+                    !node.callee.computed &&
+                    node.callee.property.type === 'Identifier' &&
+                    node.callee.property.name === 'call' &&
+                    node.arguments.length > 0 &&
+                    node.arguments[0].type === 'ThisExpression'
+                ) {
+                    emit('Value::Undefined');
+                    return;
+                }
+                // Handle this.clone(x) — exchange deep-clone helper; translate to x.clone()
+                if (
+                    node.callee.type === 'MemberExpression' &&
+                    !node.callee.computed &&
+                    node.callee.object.type === 'ThisExpression' &&
+                    node.callee.property.type === 'Identifier' &&
+                    node.callee.property.name === 'clone' &&
+                    node.arguments.length >= 1
+                ) {
+                    c(node.arguments[0], asType(state, 'value'));
+                    return;
+                }
                 // Handle static method calls: Object.keys(x) → x.keys(), etc.
                 if (
                     node.callee.type === 'MemberExpression' &&
@@ -1698,7 +1785,12 @@ function transpileMethodToRust(opts: {
                 switch (state.asType) {
                     case undefined:
                     case 'rvalue':
+                        break;
                     case 'value':
+                        if (retType === 'bool') emit('.into()');
+                        break;
+                    case 'usize':
+                        emit('.unwrap_usize()');
                         break;
                     case 'bool':
                         if (retType !== 'bool') emit('.is_truthy()');
@@ -1732,26 +1824,28 @@ function transpileMethodToRust(opts: {
                         case undefined:
                         case 'rvalue':
                         case 'value':
+                        case 'property':
                             break;
                         case 'bool':
                             emit('.is_truthy()');
                             break;
                         case 'usize':
-                            emit('.into()');
+                            emit('.unwrap_usize()');
                             break;
                         default:
                             throw new Error('Unexpected asType');
                     }
                 } else if (node.property.type === 'Identifier' && node.property.name === 'length') {
-                    c(node.object, asType(state));
-                    emit('.');
-                    c(node.property, asType(state, 'member'));
+                    if (state.asType === 'value' || state.asType === 'rvalue') emit('Value::from(');
+                    c(node.object, asType(state, undefined));
+                    emit('.len()');
                     switch (state.asType) {
                         case 'usize':
                         case undefined:
                             break;
+                        case 'rvalue':
                         case 'value':
-                            emit('.into()');
+                            emit(')');
                             break;
                         case 'bool':
                             emit(' > 0');
@@ -1801,8 +1895,15 @@ function transpileMethodToRust(opts: {
                         if (state.parent?.type !== 'CallExpression') {
                             c(node.object, asType(state));
                             emit('.get(');
-                            c(node.property, asType(state));
-                            emit('.clone())');
+                            if (node.computed) {
+                                // computed: obj[expr] — use the expression as a value key
+                                c(node.property, asType(state, node.property.type === 'Identifier' ? 'rvalue' : 'value'));
+                                emit('.clone()');
+                            } else {
+                                // non-computed: obj.prop — use the property name as a string key
+                                c(node.property, asType(state, 'property'));
+                            }
+                            emit(')');
                             switch (state.asType) {
                                 case 'bool':
                                     emit('.is_truthy()');
@@ -1854,7 +1955,7 @@ function transpileMethodToRust(opts: {
                         }
                         break;
                     default:
-                        if (isAllCaps(node.name)) {
+                        if (isAllCaps(node.name) && varTypes[node.name] === undefined) {
                             emit(node.name);
                             switch (state.asType) {
                                 case undefined:
@@ -1882,14 +1983,19 @@ function transpileMethodToRust(opts: {
                             let isValueType = false;
                             if (varTypes[node.name] === 'usize') {
                                 if (state.asType === 'value' || state.asType === 'rvalue') emit('Value::from(');
-                                emit(node.name);
+                                emit(transformIdentifier(node.name));
                                 isValueType = true;
                             } else {
                                 switch (node.name) {
                                     case 'length':
-                                        if (state.asType === 'value' || state.asType === 'rvalue') emit('Value::from(');
-                                        emit('len()');
-                                        isValueType = true;
+                                        if (varTypes['length'] !== undefined) {
+                                            // locally declared variable named 'length'
+                                            emit(transformIdentifier(node.name));
+                                        } else {
+                                            if (state.asType === 'value' || state.asType === 'rvalue') emit('Value::from(');
+                                            emit('len()');
+                                            isValueType = true;
+                                        }
                                         break;
                                     case 'apiKey':
                                         emit(node.name);
@@ -1904,10 +2010,11 @@ function transpileMethodToRust(opts: {
                                     emit('".into()');
                                     break;
                                 case 'usize':
-                                    if (varTypes[node.name] !== 'usize') emit('.clone().into()');
+                                    if (varTypes[node.name] !== 'usize') emit('.unwrap_usize()');
                                     break;
                                 case 'bool':
-                                    emit('.is_truthy()');
+                                    if (varTypes[node.name] === 'usize') emit(' != 0');
+                                    else emit('.is_truthy()');
                                     break;
                                 case 'rvalue':
                                 case 'value':
@@ -1927,7 +2034,13 @@ function transpileMethodToRust(opts: {
             ReturnStatement(node: any, state: any, c: any) {
                 emit('return ');
                 if (node.argument) {
-                    c(node.argument, asType(state, 'value'));
+                    // In async fn, a bare `return this.watchX(...)` returns a future in Rust.
+                    // Auto-await any direct self method call not already wrapped in AwaitExpression.
+                    const isUnawaited = state.isAsyncFunction &&
+                        node.argument.type === 'CallExpression' &&
+                        node.argument.callee?.type === 'MemberExpression' &&
+                        (node.argument.callee.object.type === 'ThisExpression' || node.argument.callee.object.type === 'Super');
+                    c(node.argument, asType({ ...state, awaited: isUnawaited ? true : state.awaited }, 'value'));
                 } else {
                     emit('Value::Undefined');
                 }
@@ -1958,8 +2071,13 @@ function transpileMethodToRust(opts: {
                     if (!element) {
                         emit('Value::Undefined');
                     } else {
-                        c(element, asType(state, 'value'));
-                        emit('.into()');
+                        const isAsyncSelfCall = state.isAsyncFunction &&
+                            element.type === 'CallExpression' &&
+                            element.callee?.type === 'MemberExpression' &&
+                            (element.callee.object.type === 'ThisExpression' || element.callee.object.type === 'Super');
+                        emit('(');
+                        c(element, asType({ ...state, awaited: isAsyncSelfCall ? true : state.awaited }, 'value'));
+                        emit(').into()');
                     }
                     if (i < node.elements.length - 1) emit(', ');
                 }
@@ -2039,7 +2157,12 @@ function transpileMethodToRust(opts: {
 
             Super() {
                 if (!baseClassName) throw new Error('Super not allowed here');
-                emit(baseClassName);
+                // Pro exchanges extend REST classes imported as `xxxRest`; resolve via Exchange base
+                if (baseClassName.endsWith('Rest')) {
+                    emit('Exchange');
+                } else {
+                    emit(baseClassName);
+                }
             },
 
             TryStatement(node: any, state: any, c: any) {
@@ -2215,7 +2338,7 @@ function generateRustDispatchFunction(className: string, apiMethods: Record<stri
 async fn dispatch(&mut self, method: Value, params: Value, context: Value) -> Value {
     match method {
         Value::Json(serde_json::Value::String(ref m)) => {
-            match m.as_ref() {`,
+            match m.as_str() {`,
     ];
     for (const [k, v] of Object.entries(apiMethods)) {
         bodyParts.push(
@@ -2268,6 +2391,7 @@ class RustTranspiler {
             'use serde::{Deserialize, Serialize};',
             'use serde_json::json;',
             'use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, BoolExt, JSON, Array, Object, Math, Promise, parse_int, shift_2, extend_2, normalize};',
+            'use crate::ws::{ArrayCache, ArrayCacheByTimestamp, ArrayCacheBySymbolById, ArrayCacheBySymbolBySide};',
             '// Crypto hash identifiers',
             'fn sha256() -> Value { Value::from("sha256") }',
             'fn sha384() -> Value { Value::from("sha384") }',
@@ -2286,21 +2410,30 @@ class RustTranspiler {
             'fn shift_1(value: Value) -> Value { value }',
             'fn shift_3(value: Value) -> (Value, Value, Value) { (value.clone(), Value::Undefined, Value::Undefined) }',
             'fn shift_4(value: Value) -> (Value, Value, Value, Value) { (value.clone(), Value::Undefined, Value::Undefined, Value::Undefined) }',
-            '// Error type constructors',
-            'fn BadRequest(msg: Value) -> Value { msg }',
-            'fn InvalidOrder(msg: Value) -> Value { msg }',
-            'fn ExchangeError(msg: Value) -> Value { msg }',
-            'fn InsufficientFunds(msg: Value) -> Value { msg }',
-            'fn OrderNotFound(msg: Value) -> Value { msg }',
-            'fn AuthenticationError(msg: Value) -> Value { msg }',
-            'fn PermissionDenied(msg: Value) -> Value { msg }',
-            'fn ExchangeNotAvailable(msg: Value) -> Value { msg }',
-            'fn ArgumentsRequired(msg: Value) -> Value { msg }',
-            'fn RateLimitExceeded(msg: Value) -> Value { msg }',
-            'fn OrderNotFillable(msg: Value) -> Value { msg }',
-            'fn OrderImmediatelyFillable(msg: Value) -> Value { msg }',
-            'fn NotSupported(msg: Value) -> Value { msg }',
-            'fn DuplicateOrderId(msg: Value) -> Value { msg }',
+            '// Error type constructors (stub structs with ::new for transpiled `new ErrorType(msg)` patterns)',
+            'macro_rules! error_stub { ($name:ident) => { pub struct $name; impl $name { pub fn new(msg: Value) -> Value { msg } } }; }',
+            'error_stub!(BadRequest);',
+            'error_stub!(InvalidOrder);',
+            'error_stub!(ExchangeError);',
+            'error_stub!(InsufficientFunds);',
+            'error_stub!(OrderNotFound);',
+            'error_stub!(AuthenticationError);',
+            'error_stub!(PermissionDenied);',
+            'error_stub!(ExchangeNotAvailable);',
+            'error_stub!(ArgumentsRequired);',
+            'error_stub!(RateLimitExceeded);',
+            'error_stub!(OrderNotFillable);',
+            'error_stub!(OrderImmediatelyFillable);',
+            'error_stub!(NotSupported);',
+            'error_stub!(DuplicateOrderId);',
+            'error_stub!(UnsubscribeError);',
+            'error_stub!(ChecksumError);',
+            'error_stub!(InvalidNonce);',
+            'error_stub!(BadSymbol);',
+            '// Array-like type stubs (Bids/Asks order book sides)',
+            'macro_rules! array_side_stub { ($name:ident) => { pub struct $name; impl $name { pub fn new(data: Value, _limit: Value) -> Value { data } } }; }',
+            'array_side_stub!(Bids);',
+            'array_side_stub!(Asks);',
             '',
             'use crate::exchange::{PRECISE_BASE, TRUNCATE, ROUND, ROUND_UP, ROUND_DOWN};',
             'use crate::exchange::{DECIMAL_PLACES, SIGNIFICANT_DIGITS, TICK_SIZE, NO_PADDING, PAD_WITH_ZERO};',
@@ -2308,7 +2441,7 @@ class RustTranspiler {
             '// PLEASE DO NOT EDIT THIS FILE, IT IS GENERATED AND WILL BE OVERWRITTEN:',
             '// https://github.com/ccxt/ccxt/blob/master/CONTRIBUTING.md#how-to-contribute-code',
             '',
-            '#[async_trait]',
+            '#[async_trait(?Send)]',
             `pub trait ${capitalizedClassName} : ${rustBaseTrait} {`,
         ];
 

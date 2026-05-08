@@ -8,8 +8,6 @@ pub mod arkham;
 #[cfg(feature = "full-exchanges")]
 pub mod ascendex;
 #[cfg(feature = "full-exchanges")]
-pub mod aster;
-#[cfg(feature = "full-exchanges")]
 pub mod backpack;
 #[cfg(feature = "full-exchanges")]
 pub mod bequant;
@@ -51,8 +49,6 @@ pub mod blofin;
 pub mod bullish;
 #[cfg(feature = "full-exchanges")]
 pub mod bybit;
-#[cfg(feature = "full-exchanges")]
-pub mod bydfi;
 #[cfg(feature = "full-exchanges")]
 pub mod cex;
 #[cfg(feature = "full-exchanges")]
