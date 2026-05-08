@@ -943,7 +943,7 @@ pub trait Probit : Exchange {
         let mut expires: Value = self.safe_integer(self.get("options".into()), Value::from("expires"), Value::from(0));
         let mut future: Value = self.safe_value(client.get("subscriptions".into()), message_hash.clone(), Value::Undefined);
         if future.clone().is_nullish() || self.milliseconds() > expires.clone() {
-            let mut response: Value = self.sign_in().await;
+            let mut response: Value = self.sign_in(Value::Undefined).await;
             //
             //     {
             //         "access_token": "0ttDv/2hTTn3bLi8GP1gKaneiEQ6+0hOBenPrxNQt2s=",

@@ -1,11 +1,16 @@
 # Rust Transpiler: Remaining Work
 
-## Current Status
+## Current Status (updated 2026-05-08)
 
-- **RUST_STUB_MODE removed** — transpiler now generates real JS→Rust code for exchange-specific methods
-- **binance.rs compiles** — 202 real functions, 0 stub bodies, 13,477 lines
+- **All exchanges compile** — `cargo check --features full-exchanges` → 0 errors (109 REST + binance always-on)
+- **Pro/WS layer compiles** — `cargo check --features full-pro` → 0 errors, 230 warnings (76 WS exchanges)
+- **Single-exchange retranspile** — `npm run transpileRustFor -- <id>` and `npm run transpileRustForWs -- <id>`
 - **Default tests pass** — 112/112 (regression + smoke + live)
-- **Other exchanges don't compile yet** — ~15,983 errors with `--features full-exchanges`
+- **Round-trip verified** — retranspile `okx` and `okx` pro produces compilable output
+
+### Previous status (now resolved)
+- ~~RUST_STUB_MODE removed~~ (done)
+- ~~Other exchanges don't compile yet — ~15,983 errors with `--features full-exchanges`~~ (resolved)
 
 ## What Was Done
 

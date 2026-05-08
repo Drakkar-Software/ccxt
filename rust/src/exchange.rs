@@ -2901,7 +2901,7 @@ pub trait Exchange: ValueTrait {
     fn check_proxy_url_settings(&mut self, mut url: Value, mut method: Value, mut headers: Value, mut body: Value) -> Value { Value::Undefined }
 
 
-    fn url_encoder_for_proxy_url(&mut self, mut target_url: Value) -> Value { Value::Undefined }
+    fn url_encoder_for_proxy_url(&self, mut target_url: Value) -> Value { Value::Undefined }
 
 
     fn check_proxy_settings(&mut self, mut url: Value, mut method: Value, mut headers: Value, mut body: Value) -> Value { Value::Undefined }
@@ -3023,12 +3023,11 @@ pub trait Exchange: ValueTrait {
         request.set("symbol".into(), symbol.clone());
         if limit.is_nonnullish() { request.set("limit".into(), limit.clone()); }
         let mut dynamic_calls: Vec<(String, String, String)> = vec![];
-        if let Value::Json(serde_json::Value::Object(api_map)) = self.get("api".into()) {
+        if let Value::Json(serde_json::Value::Object(api_map)) = <Self as Exchange>::describe(self).get("api".into()) {
             for (api_name, node) in api_map { collect_routes(&node, &api_name, &mut dynamic_calls); }
         }
         for token in ["depth", "orderbook", "order_book"] {
             for (api_name, method_name, path_name) in &dynamic_calls {
-                if api_name.as_str() != "public" { continue; }
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
@@ -3092,7 +3091,7 @@ pub trait Exchange: ValueTrait {
     fn parse_ticker(&self, mut ticker: Value, mut market: Value) -> Value { Value::Undefined }
 
 
-    fn parse_deposit_address(&mut self, mut deposit_address: Value, mut currency: Value) -> Value { Value::Undefined }
+    fn parse_deposit_address(&self, mut deposit_address: Value, mut currency: Value) -> Value { Value::Undefined }
 
 
     fn parse_trade(&self, mut trade: Value, mut market: Value) -> Value { Value::Undefined }
@@ -3101,10 +3100,10 @@ pub trait Exchange: ValueTrait {
     fn parse_transaction(&self, mut transaction: Value, mut currency: Value) -> Value { Value::Undefined }
 
 
-    fn parse_transfer(&self, mut transfer: Value, mut currency: Value) -> Value { Value::Undefined }
+    fn parse_transfer(&mut self, mut transfer: Value, mut currency: Value) -> Value { Value::Undefined }
 
 
-    fn parse_account(&self, mut account: Value) -> Value { Value::Undefined }
+    fn parse_account(&mut self, mut account: Value) -> Value { Value::Undefined }
 
 
     fn parse_ledger_entry(&self, mut item: Value, mut currency: Value) -> Value { Value::Undefined }
@@ -3119,7 +3118,7 @@ pub trait Exchange: ValueTrait {
     async fn fetch_isolated_borrow_rates(&mut self, mut params: Value) -> Value { Value::Undefined }
 
 
-    fn parse_market_leverage_tiers(&self, mut info: Value, mut market: Value) -> Value { Value::Undefined }
+    fn parse_market_leverage_tiers(&mut self, mut info: Value, mut market: Value) -> Value { Value::Undefined }
 
 
     async fn fetch_leverage_tiers(&mut self, mut symbols: Value, mut params: Value) -> Value { Value::Undefined }
@@ -3128,10 +3127,10 @@ pub trait Exchange: ValueTrait {
     fn parse_position(&self, mut position: Value, mut market: Value) -> Value { Value::Undefined }
 
 
-    fn parse_funding_rate_history(&self, mut info: Value, mut market: Value) -> Value { Value::Undefined }
+    fn parse_funding_rate_history(&mut self, mut info: Value, mut market: Value) -> Value { Value::Undefined }
 
 
-    fn parse_borrow_interest(&self, mut info: Value, mut market: Value) -> Value { Value::Undefined }
+    fn parse_borrow_interest(&mut self, mut info: Value, mut market: Value) -> Value { Value::Undefined }
 
 
     fn parse_isolated_borrow_rate(&self, mut info: Value, mut market: Value) -> Value { Value::Undefined }
@@ -3228,7 +3227,7 @@ pub trait Exchange: ValueTrait {
     async fn fetch_open_interests(&mut self, mut symbols: Value, mut params: Value) -> Value { Value::Undefined }
 
 
-    async fn sign_in(&mut self) -> Value { Value::Undefined }
+    async fn sign_in(&mut self, mut params: Value) -> Value { Value::Undefined }
 
 
     async fn fetch_payment_methods(&mut self, mut params: Value) -> Value { Value::Undefined }
@@ -3317,7 +3316,7 @@ pub trait Exchange: ValueTrait {
     fn safe_order(&self, mut order: Value, mut market: Value) -> Value { Value::Undefined }
 
 
-    fn parse_orders(&mut self, mut orders: Value, mut market: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
+    fn parse_orders(&self, mut orders: Value, mut market: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
 
 
     fn calculate_fee_with_rate(&mut self, mut symbol: Value, mut r#type: Value, mut side: Value, mut amount: Value, mut price: Value, mut taker_or_maker: Value, mut fee_rate: Value, mut params: Value) -> Value { Value::Undefined }
@@ -3336,7 +3335,7 @@ pub trait Exchange: ValueTrait {
     /// * `price` {float} - the price for the order to be filled at, in units of the quote currency
     /// * `takerOrMaker` {string} - 'taker' or 'maker'
     /// * `params` {object} - 
-    fn calculate_fee(&mut self, mut symbol: Value, mut r#type: Value, mut side: Value, mut amount: Value, mut price: Value, mut taker_or_maker: Value, mut params: Value) -> Value { Value::Undefined }
+    fn calculate_fee(&self, mut symbol: Value, mut r#type: Value, mut side: Value, mut amount: Value, mut price: Value, mut taker_or_maker: Value, mut params: Value) -> Value { Value::Undefined }
 
 
     fn safe_liquidation(&self, mut liquidation: Value, mut market: Value) -> Value { Value::Undefined }
@@ -3351,7 +3350,7 @@ pub trait Exchange: ValueTrait {
     fn parsed_fee_and_fees(&self, mut container: Value) -> Value { Value::Undefined }
 
 
-    fn parse_fee_numeric(&self, mut fee: Value) -> Value { Value::Undefined }
+    fn parse_fee_numeric(&mut self, mut fee: Value) -> Value { Value::Undefined }
 
 
     fn find_nearest_ceiling(&mut self, mut arr: Value, mut provided_value: Value) -> Value { Value::Undefined }
@@ -3395,19 +3394,16 @@ pub trait Exchange: ValueTrait {
         }
         let mut request = if params.is_object() { params.clone() } else { Value::new_object() };
         request.set("symbol".into(), symbol.clone());
+        request.set("timeframe".into(), timeframe.clone());
         request.set("interval".into(), timeframe.clone());
         if since.is_nonnullish() { request.set("since".into(), since.clone()); request.set("startTime".into(), since.clone()); }
         if limit.is_nonnullish() { request.set("limit".into(), limit.clone()); }
         let mut dynamic_calls: Vec<(String, String, String)> = vec![];
-        if let Value::Json(serde_json::Value::Object(api_map)) = self.get("api".into()) {
+        if let Value::Json(serde_json::Value::Object(api_map)) = <Self as Exchange>::describe(self).get("api".into()) {
             for (api_name, node) in api_map { collect_routes(&node, &api_name, &mut dynamic_calls); }
         }
         for token in ["klines", "candles", "ohlcv"] {
             for (api_name, method_name, path_name) in &dynamic_calls {
-                // Skip non-public APIs (futures, options, etc.) — they require
-                // different params (e.g. 'pair' instead of 'symbol') and are not
-                // appropriate for generic spot OHLCV fetching.
-                if api_name.as_str() != "public" { continue; }
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
@@ -3521,7 +3517,7 @@ pub trait Exchange: ValueTrait {
     fn parse_ohlcvs(&self, mut ohlcvs: Value, mut market: Value, mut timeframe: Value, mut since: Value, mut limit: Value, mut tail: Value) -> Value { Value::Undefined }
 
 
-    fn parse_leverage_tiers(&self, mut response: Value, mut symbols: Value, mut market_id_key: Value) -> Value { Value::Undefined }
+    fn parse_leverage_tiers(&mut self, mut response: Value, mut symbols: Value, mut market_id_key: Value) -> Value { Value::Undefined }
 
 
     async fn load_trading_limits(&mut self, mut symbols: Value, mut reload: Value, mut params: Value) -> Value { Value::Undefined }
@@ -3533,13 +3529,13 @@ pub trait Exchange: ValueTrait {
     fn parse_positions(&self, mut positions: Value, mut symbols: Value, mut params: Value) -> Value { Value::Undefined }
 
 
-    fn parse_accounts(&self, mut accounts: Value, mut params: Value) -> Value { Value::Undefined }
+    fn parse_accounts(&mut self, mut accounts: Value, mut params: Value) -> Value { Value::Undefined }
 
 
-    fn parse_trades_helper(&self, mut is_ws: Value, mut trades: Value, mut market: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
+    fn parse_trades_helper(&mut self, mut is_ws: Value, mut trades: Value, mut market: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
 
 
-    fn parse_trades(&mut self, mut trades: Value, mut market: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
+    fn parse_trades(&self, mut trades: Value, mut market: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
 
 
     fn parse_ws_trades(&self, mut trades: Value, mut market: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
@@ -3548,10 +3544,10 @@ pub trait Exchange: ValueTrait {
     fn parse_transactions(&self, mut transactions: Value, mut currency: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
 
 
-    fn parse_transfers(&self, mut transfers: Value, mut currency: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
+    fn parse_transfers(&mut self, mut transfers: Value, mut currency: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
 
 
-    fn parse_ledger(&self, mut data: Value, mut currency: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
+    fn parse_ledger(&mut self, mut data: Value, mut currency: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
 
 
     fn nonce(&self) -> Value { Value::Undefined }
@@ -3629,7 +3625,7 @@ pub trait Exchange: ValueTrait {
             }
         }
 
-        let urls_api = self.get("urls".into()).get("api".into());
+        let urls_api = <Self as Exchange>::describe(self).get("urls".into()).get("api".into());
         let mut base = urls_api.get(api.clone());
         if !base.is_string() {
             base = urls_api.get("public".into());
@@ -3653,7 +3649,7 @@ pub trait Exchange: ValueTrait {
             return Value::Undefined;
         }
         let mut base_url = base.unwrap_str().to_string();
-        let hostname = self.get("hostname".into());
+        let hostname = <Self as Exchange>::describe(self).get("hostname".into());
         if hostname.is_string() {
             base_url = base_url.replace("{hostname}", hostname.unwrap_str());
         }
@@ -3987,12 +3983,11 @@ pub trait Exchange: ValueTrait {
         let mut request = if params.is_object() { params.clone() } else { Value::new_object() };
         request.set("symbol".into(), symbol.clone());
         let mut dynamic_calls: Vec<(String, String, String)> = vec![];
-        if let Value::Json(serde_json::Value::Object(api_map)) = self.get("api".into()) {
+        if let Value::Json(serde_json::Value::Object(api_map)) = <Self as Exchange>::describe(self).get("api".into()) {
             for (api_name, node) in api_map { collect_routes(&node, &api_name, &mut dynamic_calls); }
         }
         for token in ["ticker/24hr", "ticker", "ticker/price", "bookticker", "tickers"] {
             for (api_name, method_name, path_name) in &dynamic_calls {
-                if api_name.as_str() != "public" { continue; }
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
@@ -4505,7 +4500,7 @@ pub trait Exchange: ValueTrait {
     async fn fetch_l3_order_book(&mut self, mut symbol: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
 
 
-    fn parse_last_price(&self, mut price: Value, mut market: Value) -> Value { Value::Undefined }
+    fn parse_last_price(&mut self, mut price: Value, mut market: Value) -> Value { Value::Undefined }
 
 
     async fn fetch_deposit_address(&mut self, mut code: Value, mut params: Value) -> Value { Value::Undefined }
@@ -4674,28 +4669,28 @@ pub trait Exchange: ValueTrait {
     fn filter_by_symbols_since_limit(&self, mut array: Value, mut symbols: Value, mut since: Value, mut limit: Value, mut tail: Value) -> Value { Value::Undefined }
 
 
-    fn parse_last_prices(&self, mut prices_data: Value, mut symbols: Value, mut params: Value) -> Value { Value::Undefined }
+    fn parse_last_prices(&mut self, mut prices_data: Value, mut symbols: Value, mut params: Value) -> Value { Value::Undefined }
 
 
     fn parse_tickers(&self, mut tickers: Value, mut symbols: Value, mut params: Value) -> Value { Value::Undefined }
 
 
-    fn parse_deposit_addresses(&self, mut addresses: Value, mut codes: Value, mut indexed: Value, mut params: Value) -> Value { Value::Undefined }
+    fn parse_deposit_addresses(&mut self, mut addresses: Value, mut codes: Value, mut indexed: Value, mut params: Value) -> Value { Value::Undefined }
 
 
-    fn parse_borrow_interests(&self, mut response: Value, mut market: Value) -> Value { Value::Undefined }
+    fn parse_borrow_interests(&mut self, mut response: Value, mut market: Value) -> Value { Value::Undefined }
 
 
     fn parse_borrow_rate(&self, mut info: Value, mut currency: Value) -> Value { Value::Undefined }
 
 
-    fn parse_borrow_rate_history(&self, mut response: Value, mut code: Value, mut since: Value, mut limit: Value) -> Value { Value::Undefined }
+    fn parse_borrow_rate_history(&mut self, mut response: Value, mut code: Value, mut since: Value, mut limit: Value) -> Value { Value::Undefined }
 
 
-    fn parse_isolated_borrow_rates(&self, mut info: Value) -> Value { Value::Undefined }
+    fn parse_isolated_borrow_rates(&mut self, mut info: Value) -> Value { Value::Undefined }
 
 
-    fn parse_funding_rate_histories(&self, mut response: Value, mut market: Value, mut since: Value, mut limit: Value) -> Value { Value::Undefined }
+    fn parse_funding_rate_histories(&mut self, mut response: Value, mut market: Value, mut since: Value, mut limit: Value) -> Value { Value::Undefined }
 
 
     fn safe_symbol(&self, mut market_id: Value, mut market: Value, mut delimiter: Value, mut market_type: Value) -> Value { Value::Undefined }
@@ -4707,10 +4702,10 @@ pub trait Exchange: ValueTrait {
     fn parse_funding_rates(&self, mut response: Value, mut symbols: Value) -> Value { Value::Undefined }
 
 
-    fn parse_long_short_ratio(&self, mut info: Value, mut market: Value) -> Value { Value::Undefined }
+    fn parse_long_short_ratio(&mut self, mut info: Value, mut market: Value) -> Value { Value::Undefined }
 
 
-    fn parse_long_short_ratio_history(&self, mut response: Value, mut market: Value, mut since: Value, mut limit: Value) -> Value { Value::Undefined }
+    fn parse_long_short_ratio_history(&mut self, mut response: Value, mut market: Value, mut since: Value, mut limit: Value) -> Value { Value::Undefined }
 
 
     fn handle_trigger_prices_and_params(&mut self, mut symbol: Value, mut params: Value, mut omit_params: Value) -> Value { Value::Undefined }
@@ -4767,13 +4762,13 @@ pub trait Exchange: ValueTrait {
     async fn fetch_convert_currencies(&mut self, mut params: Value) -> Value { Value::Undefined }
 
 
-    fn parse_open_interest(&self, mut interest: Value, mut market: Value) -> Value { Value::Undefined }
+    fn parse_open_interest(&mut self, mut interest: Value, mut market: Value) -> Value { Value::Undefined }
 
 
-    fn parse_open_interests(&self, mut response: Value, mut symbols: Value) -> Value { Value::Undefined }
+    fn parse_open_interests(&mut self, mut response: Value, mut symbols: Value) -> Value { Value::Undefined }
 
 
-    fn parse_open_interests_history(&self, mut response: Value, mut market: Value, mut since: Value, mut limit: Value) -> Value { Value::Undefined }
+    fn parse_open_interests_history(&mut self, mut response: Value, mut market: Value, mut since: Value, mut limit: Value) -> Value { Value::Undefined }
 
 
     async fn fetch_funding_rate(&mut self, mut symbol: Value, mut params: Value) -> Value { Value::Undefined }
@@ -4874,10 +4869,10 @@ pub trait Exchange: ValueTrait {
     /// * `response` {object[]|object} - unparsed response from the exchange
     /// * `codes` {string[]|undefined} - the unified currency codes to fetch transactions fees for, returns all currencies when undefined
     /// * `currencyIdKey` {str} - *should only be undefined when response is a dictionary* the object key that corresponds to the currency id
-    fn parse_deposit_withdraw_fees(&mut self, mut response: Value, mut codes: Value, mut currency_id_key: Value) -> Value { Value::Undefined }
+    fn parse_deposit_withdraw_fees(&self, mut response: Value, mut codes: Value, mut currency_id_key: Value) -> Value { Value::Undefined }
 
 
-    fn parse_deposit_withdraw_fee(&mut self, mut fee: Value, mut currency: Value) -> Value { Value::Undefined }
+    fn parse_deposit_withdraw_fee(&self, mut fee: Value, mut currency: Value) -> Value { Value::Undefined }
 
 
     
@@ -4894,7 +4889,7 @@ pub trait Exchange: ValueTrait {
     fn assign_default_deposit_withdraw_fees(&mut self, mut fee: Value, mut currency: Value) -> Value { Value::Undefined }
 
 
-    fn parse_income(&self, mut info: Value, mut market: Value) -> Value { Value::Undefined }
+    fn parse_income(&mut self, mut info: Value, mut market: Value) -> Value { Value::Undefined }
 
 
     /// Returns an array of [funding history structures](https://docs.ccxt.com/?id=funding-history-structure)
@@ -4908,7 +4903,7 @@ pub trait Exchange: ValueTrait {
     /// * `market` {object} - ccxt market
     /// * `[since]` {int} - when defined, the response items are filtered to only include items after this timestamp
     /// * `[limit]` {int} - limits the number of items in the response
-    fn parse_incomes(&self, mut incomes: Value, mut market: Value, mut since: Value, mut limit: Value) -> Value { Value::Undefined }
+    fn parse_incomes(&mut self, mut incomes: Value, mut market: Value, mut since: Value, mut limit: Value) -> Value { Value::Undefined }
 
 
     fn get_market_from_symbols(&mut self, mut symbols: Value) -> Value { Value::Undefined }
@@ -4980,7 +4975,7 @@ pub trait Exchange: ValueTrait {
     fn safe_open_interest(&self, mut interest: Value, mut market: Value) -> Value { Value::Undefined }
 
 
-    fn parse_liquidation(&self, mut liquidation: Value, mut market: Value) -> Value { Value::Undefined }
+    fn parse_liquidation(&mut self, mut liquidation: Value, mut market: Value) -> Value { Value::Undefined }
 
 
     /// Returns an array of [liquidation structures](https://docs.ccxt.com/?id=liquidation-structure)
@@ -4994,37 +4989,37 @@ pub trait Exchange: ValueTrait {
     /// * `market` {object} - ccxt market
     /// * `[since]` {int} - when defined, the response items are filtered to only include items after this timestamp
     /// * `[limit]` {int} - limits the number of items in the response
-    fn parse_liquidations(&self, mut liquidations: Value, mut market: Value, mut since: Value, mut limit: Value) -> Value { Value::Undefined }
+    fn parse_liquidations(&mut self, mut liquidations: Value, mut market: Value, mut since: Value, mut limit: Value) -> Value { Value::Undefined }
 
 
-    fn parse_greeks(&self, mut greeks: Value, mut market: Value) -> Value { Value::Undefined }
+    fn parse_greeks(&mut self, mut greeks: Value, mut market: Value) -> Value { Value::Undefined }
 
 
-    fn parse_all_greeks(&self, mut greeks: Value, mut symbols: Value, mut params: Value) -> Value { Value::Undefined }
+    fn parse_all_greeks(&mut self, mut greeks: Value, mut symbols: Value, mut params: Value) -> Value { Value::Undefined }
 
 
-    fn parse_option(&self, mut chain: Value, mut currency: Value, mut market: Value) -> Value { Value::Undefined }
+    fn parse_option(&mut self, mut chain: Value, mut currency: Value, mut market: Value) -> Value { Value::Undefined }
 
 
-    fn parse_option_chain(&self, mut response: Value, mut currency_key: Value, mut symbol_key: Value) -> Value { Value::Undefined }
+    fn parse_option_chain(&mut self, mut response: Value, mut currency_key: Value, mut symbol_key: Value) -> Value { Value::Undefined }
 
 
-    fn parse_margin_modes(&self, mut response: Value, mut symbols: Value, mut symbol_key: Value, mut market_type: Value) -> Value { Value::Undefined }
+    fn parse_margin_modes(&mut self, mut response: Value, mut symbols: Value, mut symbol_key: Value, mut market_type: Value) -> Value { Value::Undefined }
 
 
-    fn parse_margin_mode(&self, mut margin_mode: Value, mut market: Value) -> Value { Value::Undefined }
+    fn parse_margin_mode(&mut self, mut margin_mode: Value, mut market: Value) -> Value { Value::Undefined }
 
 
-    fn parse_leverages(&self, mut response: Value, mut symbols: Value, mut symbol_key: Value, mut market_type: Value) -> Value { Value::Undefined }
+    fn parse_leverages(&mut self, mut response: Value, mut symbols: Value, mut symbol_key: Value, mut market_type: Value) -> Value { Value::Undefined }
 
 
-    fn parse_leverage(&self, mut leverage: Value, mut market: Value) -> Value { Value::Undefined }
+    fn parse_leverage(&mut self, mut leverage: Value, mut market: Value) -> Value { Value::Undefined }
 
 
-    fn parse_conversions(&self, mut conversions: Value, mut code: Value, mut from_currency_key: Value, mut to_currency_key: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
+    fn parse_conversions(&mut self, mut conversions: Value, mut code: Value, mut from_currency_key: Value, mut to_currency_key: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
 
 
-    fn parse_conversion(&self, mut conversion: Value, mut from_currency: Value, mut to_currency: Value) -> Value { Value::Undefined }
+    fn parse_conversion(&mut self, mut conversion: Value, mut from_currency: Value, mut to_currency: Value) -> Value { Value::Undefined }
 
 
     fn convert_expire_date(&self, mut date: Value) -> Value { Value::Undefined }
@@ -5065,10 +5060,10 @@ pub trait Exchange: ValueTrait {
     async fn fetch_positions_history(&mut self, mut symbols: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value { Value::Undefined }
 
 
-    fn parse_margin_modification(&self, mut data: Value, mut market: Value) -> Value { Value::Undefined }
+    fn parse_margin_modification(&mut self, mut data: Value, mut market: Value) -> Value { Value::Undefined }
 
 
-    fn parse_margin_modifications(&self, mut response: Value, mut symbols: Value, mut symbol_key: Value, mut market_type: Value) -> Value { Value::Undefined }
+    fn parse_margin_modifications(&mut self, mut response: Value, mut symbols: Value, mut symbol_key: Value, mut market_type: Value) -> Value { Value::Undefined }
 
 
     /// Returns a [transfer structure](https://docs.ccxt.com/?id=transfer-structure)

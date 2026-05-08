@@ -44,6 +44,8 @@
     "transpileGO": "npm run transpileGORest && npm run transpileGOWs",
     "transpileRust": "tsx build/rustTranspiler.ts",
     "transpileRustWs": "tsx build/rustWsTranspiler.ts",
+    "transpileRustFor": "tsx build/rustTranspiler.ts --exchange",
+    "transpileRustForWs": "tsx build/rustTranspiler.ts --ws --exchange",
     "rust": "npm run transpileRust && npm run transpileRustWs",
     "buildCSTests": "dotnet build cs/tests/tests.csproj",
     "buildCSRelease": "dotnet build cs --configuration Release",

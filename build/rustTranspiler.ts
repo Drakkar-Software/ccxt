@@ -373,7 +373,7 @@ function getArgumentCount(className: string, node: any) {
         handleDeltasWithKeys: 5,
         safeMarketCustom: 3,
         isBinaryMessage: 1, decodeProtoMsg: 1,
-        authenticateRest: 0, signIn: 0,
+        authenticateRest: 0, signIn: 1,
         reject: 2, reset: 1, resolve: 2,
         createOrderRequest: 6,
         parseWsOhlcvs: 5, parseWsOHLCVs: 5, parseWsTrades: 5,
@@ -1015,7 +1015,25 @@ function transpileMethodToRust(opts: {
                     fname.startsWith('from') ||
                     fname.startsWith('getPrivateType') ||
                     // Parse methods that transform without mutating self:
-                    (fname.startsWith('parse') && (fname.endsWith('Status') || fname.endsWith('Side') || fname.endsWith('Type') || fname.endsWith('Fee') || fname.endsWith('Fees') || fname.endsWith('Id') || fname.endsWith('By'))) ||
+                    // Exclude parseWS* (uppercase) — those methods update this.balance etc directly
+                    (fname.startsWith('parse') && !fname.startsWith('parseWS') && (
+                        fname.endsWith('Status') || fname.endsWith('Side') || fname.endsWith('Type') ||
+                        fname.endsWith('Fee') || fname.endsWith('Fees') || fname.endsWith('Id') || fname.endsWith('By') ||
+                        fname.endsWith('Precision') ||
+                        fname.endsWith('Market') || fname.endsWith('Markets') ||
+                        fname.endsWith('Currency') || fname.endsWith('Currencies') ||
+                        fname.endsWith('Ticker') || fname.endsWith('Tickers') ||
+                        fname.endsWith('Trade') || fname.endsWith('Trades') ||
+                        fname.endsWith('Ohlcv') || fname.endsWith('Ohlcvs') ||
+                        fname.endsWith('OHLCV') || fname.endsWith('OHLCVs') ||
+                        fname.endsWith('Balance') || fname.endsWith('Balances') ||
+                        fname.endsWith('Order') || fname.endsWith('Orders') ||
+                        fname.endsWith('Position') || fname.endsWith('Positions') ||
+                        fname.endsWith('Transaction') || fname.endsWith('Transactions') ||
+                        fname.endsWith('LedgerEntry') || fname.endsWith('LedgerEntries') ||
+                        fname.endsWith('FundingRate') || fname.endsWith('FundingRates') ||
+                        fname.endsWith('DepositAddress') || fname.endsWith('BorrowRate')
+                    )) ||
                     // Currency/precision converters and trade helpers called from parseWs* context:
                     fname.endsWith('FromPrecision') ||
                     fname.endsWith('OrMaker') ||
@@ -2604,8 +2622,9 @@ class RustTranspiler {
         const rustFile = './rust/src/exchange.rs';
         const rustDelimiter = '// METHODS BELOW THIS LINE ARE TRANSPILED FROM JAVASCRIPT';
         const rustEndDelimiter = '// END TRANSPILED METHODS';
-        const re = new RegExp(`${rustDelimiter}[\\s\\S]*${rustEndDelimiter}`);
-        const replacement = `${rustDelimiter}\n${this.sanitizeRustOutput(rust.join('\n'))}\n${rustEndDelimiter}`;
+        // Use [ \t]* to handle any leading whitespace on the delimiter line
+        const re = new RegExp(`[ \\t]*${rustDelimiter}[\\s\\S]*${rustEndDelimiter}`);
+        const replacement = `    ${rustDelimiter}\n${this.sanitizeRustOutput(rust.join('\n'))}\n${rustEndDelimiter}`;
         replaceInFile(rustFile, re, replacement);
     }
 
@@ -2662,6 +2681,33 @@ class RustTranspiler {
             .map((m) => (always.has(m) ? `pub mod ${m};` : `#[cfg(feature = "full-exchanges")]\npub mod ${m};`))
             .join('\n');
         overwriteFile(file, header + body + '\n');
+    }
+
+    async transpileFor(exchangeId: string, ws = false) {
+        const jsFolder = ws ? './js/src/pro' : './js/src';
+        const rustFolder = ws ? './rust/src/pro' : './rust/src/exchanges';
+        const jsPath = path.join(jsFolder, `${exchangeId}.js`);
+        if (!fs.existsSync(jsPath)) {
+            throw new Error(`Exchange JS not found: ${jsPath}`);
+        }
+        this.transpileBaseMethods();
+        const contents = fs.readFileSync(jsPath, 'utf8');
+        const absPath = path.resolve(jsPath);
+        let exchangeDescribe: any = undefined;
+        try {
+            const module = await import(pathToFileURL(absPath).href);
+            const klass = module?.default;
+            const exchange = klass ? new klass() : undefined;
+            exchangeDescribe = exchange?.describe?.() ?? undefined;
+        } catch (e: any) {
+            log.yellow(`Skipping runtime describe() for ${exchangeId}: ${e?.message || e}`);
+        }
+        const rustPath = path.join(rustFolder, `${exchangeId}.rs`);
+        const { rust } = this.transpileClass(contents, exchangeDescribe, this.baseMethodNames);
+        overwriteFile(rustPath, rust);
+        const jsMtime = fs.statSync(jsPath).mtime.getTime();
+        fs.utimesSync(rustPath, new Date(), new Date(jsMtime));
+        log.bright.green(`Transpiled ${exchangeId} → ${rustPath}`);
     }
 
     async transpileEverything(force = false) {
@@ -2941,11 +2987,26 @@ class RustTranspiler {
 
 if (process.argv[1] && process.argv[1].includes('rustTranspiler')) {
     const force = process.argv.includes('--force');
-    const transpiler = new RustTranspiler();
-    transpiler.transpileEverything(force).catch((err) => {
-        log.red('Rust transpilation failed');
-        throw err;
-    });
+    const ws = process.argv.includes('--ws');
+    const exchangeIdx = process.argv.indexOf('--exchange');
+    if (exchangeIdx >= 0) {
+        const exchangeId = process.argv[exchangeIdx + 1];
+        if (!exchangeId) {
+            log.red('Usage: tsx build/rustTranspiler.ts --exchange <id> [--ws]');
+            process.exit(1);
+        }
+        const transpiler = new RustTranspiler();
+        transpiler.transpileFor(exchangeId, ws).catch((err) => {
+            log.red(`Rust transpilation failed for ${exchangeId}`);
+            throw err;
+        });
+    } else {
+        const transpiler = new RustTranspiler();
+        transpiler.transpileEverything(force).catch((err) => {
+            log.red('Rust transpilation failed');
+            throw err;
+        });
+    }
 }
 
 export default RustTranspiler;
