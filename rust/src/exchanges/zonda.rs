@@ -1871,7 +1871,9 @@ pub trait Zonda : Exchange {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ZondaImpl(Value);
-impl Exchange for ZondaImpl {}
+impl Exchange for ZondaImpl {
+    fn describe(&self) -> Value { Zonda::describe(self) }
+}
 impl Zonda for ZondaImpl {}
 impl ValueTrait for ZondaImpl {
     fn is_undefined(&self) -> bool { self.0.is_undefined() }

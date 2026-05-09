@@ -2671,7 +2671,9 @@ pub trait Woofipro : Exchange {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct WoofiproImpl(Value);
-impl Exchange for WoofiproImpl {}
+impl Exchange for WoofiproImpl {
+    fn describe(&self) -> Value { Woofipro::describe(self) }
+}
 impl Woofipro for WoofiproImpl {}
 impl ValueTrait for WoofiproImpl {
     fn is_undefined(&self) -> bool { self.0.is_undefined() }

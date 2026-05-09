@@ -3251,7 +3251,9 @@ pub trait Hitbtc : Exchange {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct HitbtcImpl(Value);
-impl Exchange for HitbtcImpl {}
+impl Exchange for HitbtcImpl {
+    fn describe(&self) -> Value { Hitbtc::describe(self) }
+}
 impl Hitbtc for HitbtcImpl {}
 impl ValueTrait for HitbtcImpl {
     fn is_undefined(&self) -> bool { self.0.is_undefined() }

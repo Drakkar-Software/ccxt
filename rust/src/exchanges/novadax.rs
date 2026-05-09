@@ -1464,7 +1464,9 @@ pub trait Novadax : Exchange {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct NovadaxImpl(Value);
-impl Exchange for NovadaxImpl {}
+impl Exchange for NovadaxImpl {
+    fn describe(&self) -> Value { Novadax::describe(self) }
+}
 impl Novadax for NovadaxImpl {}
 impl ValueTrait for NovadaxImpl {
     fn is_undefined(&self) -> bool { self.0.is_undefined() }

@@ -3802,7 +3802,9 @@ pub trait Hashkey : Exchange {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct HashkeyImpl(Value);
-impl Exchange for HashkeyImpl {}
+impl Exchange for HashkeyImpl {
+    fn describe(&self) -> Value { Hashkey::describe(self) }
+}
 impl Hashkey for HashkeyImpl {}
 impl ValueTrait for HashkeyImpl {
     fn is_undefined(&self) -> bool { self.0.is_undefined() }

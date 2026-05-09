@@ -1133,7 +1133,9 @@ pub trait Bitbns : Exchange {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BitbnsImpl(Value);
-impl Exchange for BitbnsImpl {}
+impl Exchange for BitbnsImpl {
+    fn describe(&self) -> Value { Bitbns::describe(self) }
+}
 impl Bitbns for BitbnsImpl {}
 impl ValueTrait for BitbnsImpl {
     fn is_undefined(&self) -> bool { self.0.is_undefined() }

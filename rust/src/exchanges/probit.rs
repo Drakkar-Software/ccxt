@@ -1713,7 +1713,9 @@ pub trait Probit : Exchange {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ProbitImpl(Value);
-impl Exchange for ProbitImpl {}
+impl Exchange for ProbitImpl {
+    fn describe(&self) -> Value { Probit::describe(self) }
+}
 impl Probit for ProbitImpl {}
 impl ValueTrait for ProbitImpl {
     fn is_undefined(&self) -> bool { self.0.is_undefined() }

@@ -1853,7 +1853,9 @@ pub trait Tokocrypto : Exchange {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TokocryptoImpl(Value);
-impl Exchange for TokocryptoImpl {}
+impl Exchange for TokocryptoImpl {
+    fn describe(&self) -> Value { Tokocrypto::describe(self) }
+}
 impl Tokocrypto for TokocryptoImpl {}
 impl ValueTrait for TokocryptoImpl {
     fn is_undefined(&self) -> bool { self.0.is_undefined() }

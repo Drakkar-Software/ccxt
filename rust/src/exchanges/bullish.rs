@@ -2583,7 +2583,9 @@ pub trait Bullish : Exchange {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BullishImpl(Value);
-impl Exchange for BullishImpl {}
+impl Exchange for BullishImpl {
+    fn describe(&self) -> Value { Bullish::describe(self) }
+}
 impl Bullish for BullishImpl {}
 impl ValueTrait for BullishImpl {
     fn is_undefined(&self) -> bool { self.0.is_undefined() }

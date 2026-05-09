@@ -1700,7 +1700,9 @@ pub trait Onetrading : Exchange {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct OnetradingImpl(Value);
-impl Exchange for OnetradingImpl {}
+impl Exchange for OnetradingImpl {
+    fn describe(&self) -> Value { Onetrading::describe(self) }
+}
 impl Onetrading for OnetradingImpl {}
 impl ValueTrait for OnetradingImpl {
     fn is_undefined(&self) -> bool { self.0.is_undefined() }

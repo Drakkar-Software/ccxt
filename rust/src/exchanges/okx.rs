@@ -7976,7 +7976,9 @@ pub trait Okx : Exchange {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct OkxImpl(Value);
-impl Exchange for OkxImpl {}
+impl Exchange for OkxImpl {
+    fn describe(&self) -> Value { Okx::describe(self) }
+}
 impl Okx for OkxImpl {}
 impl ValueTrait for OkxImpl {
     fn is_undefined(&self) -> bool { self.0.is_undefined() }

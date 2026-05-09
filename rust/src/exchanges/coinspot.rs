@@ -1020,7 +1020,9 @@ pub trait Coinspot : Exchange {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CoinspotImpl(Value);
-impl Exchange for CoinspotImpl {}
+impl Exchange for CoinspotImpl {
+    fn describe(&self) -> Value { Coinspot::describe(self) }
+}
 impl Coinspot for CoinspotImpl {}
 impl ValueTrait for CoinspotImpl {
     fn is_undefined(&self) -> bool { self.0.is_undefined() }

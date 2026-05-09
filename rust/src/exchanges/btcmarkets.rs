@@ -1328,7 +1328,9 @@ pub trait Btcmarkets : Exchange {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BtcmarketsImpl(Value);
-impl Exchange for BtcmarketsImpl {}
+impl Exchange for BtcmarketsImpl {
+    fn describe(&self) -> Value { Btcmarkets::describe(self) }
+}
 impl Btcmarkets for BtcmarketsImpl {}
 impl ValueTrait for BtcmarketsImpl {
     fn is_undefined(&self) -> bool { self.0.is_undefined() }

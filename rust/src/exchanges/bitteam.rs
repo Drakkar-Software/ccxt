@@ -2011,7 +2011,9 @@ pub trait Bitteam : Exchange {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BitteamImpl(Value);
-impl Exchange for BitteamImpl {}
+impl Exchange for BitteamImpl {
+    fn describe(&self) -> Value { Bitteam::describe(self) }
+}
 impl Bitteam for BitteamImpl {}
 impl ValueTrait for BitteamImpl {
     fn is_undefined(&self) -> bool { self.0.is_undefined() }

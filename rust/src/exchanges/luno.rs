@@ -1353,7 +1353,9 @@ pub trait Luno : Exchange {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct LunoImpl(Value);
-impl Exchange for LunoImpl {}
+impl Exchange for LunoImpl {
+    fn describe(&self) -> Value { Luno::describe(self) }
+}
 impl Luno for LunoImpl {}
 impl ValueTrait for LunoImpl {
     fn is_undefined(&self) -> bool { self.0.is_undefined() }

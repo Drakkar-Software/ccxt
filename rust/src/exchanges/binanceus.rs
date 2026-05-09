@@ -3005,7 +3005,9 @@ pub trait Binanceus : Exchange {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BinanceusImpl(Value);
-impl Exchange for BinanceusImpl {}
+impl Exchange for BinanceusImpl {
+    fn describe(&self) -> Value { Binanceus::describe(self) }
+}
 impl Binanceus for BinanceusImpl {}
 impl ValueTrait for BinanceusImpl {
     fn is_undefined(&self) -> bool { self.0.is_undefined() }

@@ -2337,7 +2337,9 @@ pub trait Paradex : Exchange {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ParadexImpl(Value);
-impl Exchange for ParadexImpl {}
+impl Exchange for ParadexImpl {
+    fn describe(&self) -> Value { Paradex::describe(self) }
+}
 impl Paradex for ParadexImpl {}
 impl ValueTrait for ParadexImpl {
     fn is_undefined(&self) -> bool { self.0.is_undefined() }

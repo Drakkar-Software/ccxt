@@ -2000,7 +2000,9 @@ pub trait Coinsph : Exchange {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CoinsphImpl(Value);
-impl Exchange for CoinsphImpl {}
+impl Exchange for CoinsphImpl {
+    fn describe(&self) -> Value { Coinsph::describe(self) }
+}
 impl Coinsph for CoinsphImpl {}
 impl ValueTrait for CoinsphImpl {
     fn is_undefined(&self) -> bool { self.0.is_undefined() }

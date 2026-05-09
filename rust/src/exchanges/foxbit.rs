@@ -1690,7 +1690,9 @@ pub trait Foxbit : Exchange {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FoxbitImpl(Value);
-impl Exchange for FoxbitImpl {}
+impl Exchange for FoxbitImpl {
+    fn describe(&self) -> Value { Foxbit::describe(self) }
+}
 impl Foxbit for FoxbitImpl {}
 impl ValueTrait for FoxbitImpl {
     fn is_undefined(&self) -> bool { self.0.is_undefined() }

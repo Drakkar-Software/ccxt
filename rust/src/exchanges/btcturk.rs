@@ -983,7 +983,9 @@ pub trait Btcturk : Exchange {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BtcturkImpl(Value);
-impl Exchange for BtcturkImpl {}
+impl Exchange for BtcturkImpl {
+    fn describe(&self) -> Value { Btcturk::describe(self) }
+}
 impl Btcturk for BtcturkImpl {}
 impl ValueTrait for BtcturkImpl {
     fn is_undefined(&self) -> bool { self.0.is_undefined() }

@@ -2166,7 +2166,9 @@ pub trait Backpack : Exchange {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BackpackImpl(Value);
-impl Exchange for BackpackImpl {}
+impl Exchange for BackpackImpl {
+    fn describe(&self) -> Value { Backpack::describe(self) }
+}
 impl Backpack for BackpackImpl {}
 impl ValueTrait for BackpackImpl {
     fn is_undefined(&self) -> bool { self.0.is_undefined() }

@@ -7429,7 +7429,9 @@ pub trait Gate : Exchange {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct GateImpl(Value);
-impl Exchange for GateImpl {}
+impl Exchange for GateImpl {
+    fn describe(&self) -> Value { Gate::describe(self) }
+}
 impl Gate for GateImpl {}
 impl ValueTrait for GateImpl {
     fn is_undefined(&self) -> bool { self.0.is_undefined() }

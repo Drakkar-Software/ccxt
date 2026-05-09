@@ -1623,7 +1623,9 @@ pub trait Cex : Exchange {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CexImpl(Value);
-impl Exchange for CexImpl {}
+impl Exchange for CexImpl {
+    fn describe(&self) -> Value { Cex::describe(self) }
+}
 impl Cex for CexImpl {}
 impl ValueTrait for CexImpl {
     fn is_undefined(&self) -> bool { self.0.is_undefined() }

@@ -5175,7 +5175,9 @@ pub trait Mexc : Exchange {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MexcImpl(Value);
-impl Exchange for MexcImpl {}
+impl Exchange for MexcImpl {
+    fn describe(&self) -> Value { Mexc::describe(self) }
+}
 impl Mexc for MexcImpl {}
 impl ValueTrait for MexcImpl {
     fn is_undefined(&self) -> bool { self.0.is_undefined() }

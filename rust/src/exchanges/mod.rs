@@ -213,10 +213,7 @@ pub mod zaif;
 #[cfg(feature = "full-exchanges")]
 pub mod zonda;
 
-/// Create a boxed ccxt exchange by lowercase name string.
-///
-/// Returns `None` for unknown exchange names. Config is the JSON config value
-/// passed to the exchange constructor (apiKey, secret, password, options, etc.).
+/// Create a boxed exchange by lowercase name. Returns `None` for unknown names.
 pub fn create_exchange(
     name: &str,
     config: crate::exchange::Value,
@@ -227,7 +224,6 @@ pub fn create_exchange(
         };
     }
     match name.to_lowercase().as_str() {
-        "binance" => make!(binance, BinanceImpl),
         #[cfg(feature = "full-exchanges")]
         "alpaca" => make!(alpaca, AlpacaImpl),
         #[cfg(feature = "full-exchanges")]
@@ -242,6 +238,7 @@ pub fn create_exchange(
         "bequant" => make!(bequant, BequantImpl),
         #[cfg(feature = "full-exchanges")]
         "bigone" => make!(bigone, BigoneImpl),
+        "binance" => make!(binance, BinanceImpl),
         #[cfg(feature = "full-exchanges")]
         "binancecoinm" => make!(binancecoinm, BinancecoinmImpl),
         #[cfg(feature = "full-exchanges")]
@@ -323,7 +320,7 @@ pub fn create_exchange(
         #[cfg(feature = "full-exchanges")]
         "coinspot" => make!(coinspot, CoinspotImpl),
         #[cfg(feature = "full-exchanges")]
-        "cryptocom" | "crypto.com" => make!(cryptocom, CryptocomImpl),
+        "cryptocom" => make!(cryptocom, CryptocomImpl),
         #[cfg(feature = "full-exchanges")]
         "cryptomus" => make!(cryptomus, CryptomusImpl),
         #[cfg(feature = "full-exchanges")]

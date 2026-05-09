@@ -4784,7 +4784,9 @@ pub trait Bitmart : Exchange {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BitmartImpl(Value);
-impl Exchange for BitmartImpl {}
+impl Exchange for BitmartImpl {
+    fn describe(&self) -> Value { Bitmart::describe(self) }
+}
 impl Bitmart for BitmartImpl {}
 impl ValueTrait for BitmartImpl {
     fn is_undefined(&self) -> bool { self.0.is_undefined() }

@@ -801,7 +801,9 @@ pub trait Bequant : Exchange {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BequantImpl(Value);
-impl Exchange for BequantImpl {}
+impl Exchange for BequantImpl {
+    fn describe(&self) -> Value { Bequant::describe(self) }
+}
 impl Bequant for BequantImpl {}
 impl ValueTrait for BequantImpl {
     fn is_undefined(&self) -> bool { self.0.is_undefined() }

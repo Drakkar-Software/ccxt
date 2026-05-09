@@ -2303,7 +2303,9 @@ pub trait Wavesexchange : Exchange {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct WavesexchangeImpl(Value);
-impl Exchange for WavesexchangeImpl {}
+impl Exchange for WavesexchangeImpl {
+    fn describe(&self) -> Value { Wavesexchange::describe(self) }
+}
 impl Wavesexchange for WavesexchangeImpl {}
 impl ValueTrait for WavesexchangeImpl {
     fn is_undefined(&self) -> bool { self.0.is_undefined() }

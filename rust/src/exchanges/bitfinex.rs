@@ -3734,7 +3734,9 @@ pub trait Bitfinex : Exchange {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BitfinexImpl(Value);
-impl Exchange for BitfinexImpl {}
+impl Exchange for BitfinexImpl {
+    fn describe(&self) -> Value { Bitfinex::describe(self) }
+}
 impl Bitfinex for BitfinexImpl {}
 impl ValueTrait for BitfinexImpl {
     fn is_undefined(&self) -> bool { self.0.is_undefined() }

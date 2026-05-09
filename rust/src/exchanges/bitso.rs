@@ -1676,7 +1676,9 @@ pub trait Bitso : Exchange {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BitsoImpl(Value);
-impl Exchange for BitsoImpl {}
+impl Exchange for BitsoImpl {
+    fn describe(&self) -> Value { Bitso::describe(self) }
+}
 impl Bitso for BitsoImpl {}
 impl ValueTrait for BitsoImpl {
     fn is_undefined(&self) -> bool { self.0.is_undefined() }

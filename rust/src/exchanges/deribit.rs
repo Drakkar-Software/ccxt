@@ -3221,7 +3221,9 @@ pub trait Deribit : Exchange {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DeribitImpl(Value);
-impl Exchange for DeribitImpl {}
+impl Exchange for DeribitImpl {
+    fn describe(&self) -> Value { Deribit::describe(self) }
+}
 impl Deribit for DeribitImpl {}
 impl ValueTrait for DeribitImpl {
     fn is_undefined(&self) -> bool { self.0.is_undefined() }

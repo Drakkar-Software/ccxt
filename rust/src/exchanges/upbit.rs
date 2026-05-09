@@ -2145,7 +2145,9 @@ pub trait Upbit : Exchange {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct UpbitImpl(Value);
-impl Exchange for UpbitImpl {}
+impl Exchange for UpbitImpl {
+    fn describe(&self) -> Value { Upbit::describe(self) }
+}
 impl Upbit for UpbitImpl {}
 impl ValueTrait for UpbitImpl {
     fn is_undefined(&self) -> bool { self.0.is_undefined() }

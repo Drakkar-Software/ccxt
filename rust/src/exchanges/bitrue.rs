@@ -2538,7 +2538,9 @@ pub trait Bitrue : Exchange {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BitrueImpl(Value);
-impl Exchange for BitrueImpl {}
+impl Exchange for BitrueImpl {
+    fn describe(&self) -> Value { Bitrue::describe(self) }
+}
 impl Bitrue for BitrueImpl {}
 impl ValueTrait for BitrueImpl {
     fn is_undefined(&self) -> bool { self.0.is_undefined() }

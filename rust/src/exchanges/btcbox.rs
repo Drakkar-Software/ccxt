@@ -907,7 +907,9 @@ pub trait Btcbox : Exchange {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BtcboxImpl(Value);
-impl Exchange for BtcboxImpl {}
+impl Exchange for BtcboxImpl {
+    fn describe(&self) -> Value { Btcbox::describe(self) }
+}
 impl Btcbox for BtcboxImpl {}
 impl ValueTrait for BtcboxImpl {
     fn is_undefined(&self) -> bool { self.0.is_undefined() }

@@ -940,7 +940,9 @@ pub trait Mercado : Exchange {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MercadoImpl(Value);
-impl Exchange for MercadoImpl {}
+impl Exchange for MercadoImpl {
+    fn describe(&self) -> Value { Mercado::describe(self) }
+}
 impl Mercado for MercadoImpl {}
 impl ValueTrait for MercadoImpl {
     fn is_undefined(&self) -> bool { self.0.is_undefined() }

@@ -3269,7 +3269,9 @@ pub trait Poloniex : Exchange {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PoloniexImpl(Value);
-impl Exchange for PoloniexImpl {}
+impl Exchange for PoloniexImpl {
+    fn describe(&self) -> Value { Poloniex::describe(self) }
+}
 impl Poloniex for PoloniexImpl {}
 impl ValueTrait for PoloniexImpl {
     fn is_undefined(&self) -> bool { self.0.is_undefined() }

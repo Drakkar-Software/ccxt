@@ -2568,7 +2568,9 @@ pub trait Oxfun : Exchange {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct OxfunImpl(Value);
-impl Exchange for OxfunImpl {}
+impl Exchange for OxfunImpl {
+    fn describe(&self) -> Value { Oxfun::describe(self) }
+}
 impl Oxfun for OxfunImpl {}
 impl ValueTrait for OxfunImpl {
     fn is_undefined(&self) -> bool { self.0.is_undefined() }

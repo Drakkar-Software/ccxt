@@ -2468,7 +2468,9 @@ pub trait Exmo : Exchange {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ExmoImpl(Value);
-impl Exchange for ExmoImpl {}
+impl Exchange for ExmoImpl {
+    fn describe(&self) -> Value { Exmo::describe(self) }
+}
 impl Exmo for ExmoImpl {}
 impl ValueTrait for ExmoImpl {
     fn is_undefined(&self) -> bool { self.0.is_undefined() }

@@ -3701,7 +3701,9 @@ pub trait Woo : Exchange {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct WooImpl(Value);
-impl Exchange for WooImpl {}
+impl Exchange for WooImpl {
+    fn describe(&self) -> Value { Woo::describe(self) }
+}
 impl Woo for WooImpl {}
 impl ValueTrait for WooImpl {
     fn is_undefined(&self) -> bool { self.0.is_undefined() }

@@ -2158,7 +2158,9 @@ pub trait Arkham : Exchange {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ArkhamImpl(Value);
-impl Exchange for ArkhamImpl {}
+impl Exchange for ArkhamImpl {
+    fn describe(&self) -> Value { Arkham::describe(self) }
+}
 impl Arkham for ArkhamImpl {}
 impl ValueTrait for ArkhamImpl {
     fn is_undefined(&self) -> bool { self.0.is_undefined() }

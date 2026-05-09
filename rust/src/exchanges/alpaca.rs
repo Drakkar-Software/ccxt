@@ -1623,7 +1623,9 @@ pub trait Alpaca : Exchange {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AlpacaImpl(Value);
-impl Exchange for AlpacaImpl {}
+impl Exchange for AlpacaImpl {
+    fn describe(&self) -> Value { Alpaca::describe(self) }
+}
 impl Alpaca for AlpacaImpl {}
 impl ValueTrait for AlpacaImpl {
     fn is_undefined(&self) -> bool { self.0.is_undefined() }

@@ -2739,7 +2739,9 @@ pub trait Lbank : Exchange {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct LbankImpl(Value);
-impl Exchange for LbankImpl {}
+impl Exchange for LbankImpl {
+    fn describe(&self) -> Value { Lbank::describe(self) }
+}
 impl Lbank for LbankImpl {}
 impl ValueTrait for LbankImpl {
     fn is_undefined(&self) -> bool { self.0.is_undefined() }

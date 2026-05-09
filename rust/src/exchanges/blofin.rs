@@ -2315,7 +2315,9 @@ pub trait Blofin : Exchange {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BlofinImpl(Value);
-impl Exchange for BlofinImpl {}
+impl Exchange for BlofinImpl {
+    fn describe(&self) -> Value { Blofin::describe(self) }
+}
 impl Blofin for BlofinImpl {}
 impl ValueTrait for BlofinImpl {
     fn is_undefined(&self) -> bool { self.0.is_undefined() }

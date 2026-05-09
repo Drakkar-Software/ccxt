@@ -1050,7 +1050,9 @@ pub trait Bithumb : Exchange {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BithumbImpl(Value);
-impl Exchange for BithumbImpl {}
+impl Exchange for BithumbImpl {
+    fn describe(&self) -> Value { Bithumb::describe(self) }
+}
 impl Bithumb for BithumbImpl {}
 impl ValueTrait for BithumbImpl {
     fn is_undefined(&self) -> bool { self.0.is_undefined() }

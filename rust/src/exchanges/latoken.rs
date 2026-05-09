@@ -1601,7 +1601,9 @@ pub trait Latoken : Exchange {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct LatokenImpl(Value);
-impl Exchange for LatokenImpl {}
+impl Exchange for LatokenImpl {
+    fn describe(&self) -> Value { Latoken::describe(self) }
+}
 impl Latoken for LatokenImpl {}
 impl ValueTrait for LatokenImpl {
     fn is_undefined(&self) -> bool { self.0.is_undefined() }

@@ -1238,7 +1238,9 @@ pub trait P2b : Exchange {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct P2bImpl(Value);
-impl Exchange for P2bImpl {}
+impl Exchange for P2bImpl {
+    fn describe(&self) -> Value { P2b::describe(self) }
+}
 impl P2b for P2bImpl {}
 impl ValueTrait for P2bImpl {
     fn is_undefined(&self) -> bool { self.0.is_undefined() }

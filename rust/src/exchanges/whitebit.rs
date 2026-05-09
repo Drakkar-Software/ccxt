@@ -3469,7 +3469,9 @@ pub trait Whitebit : Exchange {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct WhitebitImpl(Value);
-impl Exchange for WhitebitImpl {}
+impl Exchange for WhitebitImpl {
+    fn describe(&self) -> Value { Whitebit::describe(self) }
+}
 impl Whitebit for WhitebitImpl {}
 impl ValueTrait for WhitebitImpl {
     fn is_undefined(&self) -> bool { self.0.is_undefined() }

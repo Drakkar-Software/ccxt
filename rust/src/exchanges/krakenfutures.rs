@@ -2566,7 +2566,9 @@ pub trait Krakenfutures : Exchange {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct KrakenfuturesImpl(Value);
-impl Exchange for KrakenfuturesImpl {}
+impl Exchange for KrakenfuturesImpl {
+    fn describe(&self) -> Value { Krakenfutures::describe(self) }
+}
 impl Krakenfutures for KrakenfuturesImpl {}
 impl ValueTrait for KrakenfuturesImpl {
     fn is_undefined(&self) -> bool { self.0.is_undefined() }

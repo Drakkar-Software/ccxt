@@ -2925,7 +2925,9 @@ pub trait Binanceusdm : Exchange {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BinanceusdmImpl(Value);
-impl Exchange for BinanceusdmImpl {}
+impl Exchange for BinanceusdmImpl {
+    fn describe(&self) -> Value { Binanceusdm::describe(self) }
+}
 impl Binanceusdm for BinanceusdmImpl {}
 impl ValueTrait for BinanceusdmImpl {
     fn is_undefined(&self) -> bool { self.0.is_undefined() }

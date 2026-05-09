@@ -2391,7 +2391,9 @@ pub trait Ndax : Exchange {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct NdaxImpl(Value);
-impl Exchange for NdaxImpl {}
+impl Exchange for NdaxImpl {
+    fn describe(&self) -> Value { Ndax::describe(self) }
+}
 impl Ndax for NdaxImpl {}
 impl ValueTrait for NdaxImpl {
     fn is_undefined(&self) -> bool { self.0.is_undefined() }

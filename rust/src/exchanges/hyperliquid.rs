@@ -4195,7 +4195,9 @@ pub trait Hyperliquid : Exchange {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct HyperliquidImpl(Value);
-impl Exchange for HyperliquidImpl {}
+impl Exchange for HyperliquidImpl {
+    fn describe(&self) -> Value { Hyperliquid::describe(self) }
+}
 impl Hyperliquid for HyperliquidImpl {}
 impl ValueTrait for HyperliquidImpl {
     fn is_undefined(&self) -> bool { self.0.is_undefined() }

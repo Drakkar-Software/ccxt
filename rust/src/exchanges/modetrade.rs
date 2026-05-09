@@ -2645,7 +2645,9 @@ pub trait Modetrade : Exchange {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ModetradeImpl(Value);
-impl Exchange for ModetradeImpl {}
+impl Exchange for ModetradeImpl {
+    fn describe(&self) -> Value { Modetrade::describe(self) }
+}
 impl Modetrade for ModetradeImpl {}
 impl ValueTrait for ModetradeImpl {
     fn is_undefined(&self) -> bool { self.0.is_undefined() }

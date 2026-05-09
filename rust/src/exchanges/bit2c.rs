@@ -1183,7 +1183,9 @@ pub trait Bit2c : Exchange {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Bit2cImpl(Value);
-impl Exchange for Bit2cImpl {}
+impl Exchange for Bit2cImpl {
+    fn describe(&self) -> Value { Bit2c::describe(self) }
+}
 impl Bit2c for Bit2cImpl {}
 impl ValueTrait for Bit2cImpl {
     fn is_undefined(&self) -> bool { self.0.is_undefined() }

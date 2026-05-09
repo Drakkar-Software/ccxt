@@ -1103,7 +1103,9 @@ pub trait Coinone : Exchange {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CoinoneImpl(Value);
-impl Exchange for CoinoneImpl {}
+impl Exchange for CoinoneImpl {
+    fn describe(&self) -> Value { Coinone::describe(self) }
+}
 impl Coinone for CoinoneImpl {}
 impl ValueTrait for CoinoneImpl {
     fn is_undefined(&self) -> bool { self.0.is_undefined() }

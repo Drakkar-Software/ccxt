@@ -1673,7 +1673,9 @@ pub trait Timex : Exchange {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TimexImpl(Value);
-impl Exchange for TimexImpl {}
+impl Exchange for TimexImpl {
+    fn describe(&self) -> Value { Timex::describe(self) }
+}
 impl Timex for TimexImpl {}
 impl ValueTrait for TimexImpl {
     fn is_undefined(&self) -> bool { self.0.is_undefined() }

@@ -1055,7 +1055,9 @@ pub trait Bitflyer : Exchange {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BitflyerImpl(Value);
-impl Exchange for BitflyerImpl {}
+impl Exchange for BitflyerImpl {
+    fn describe(&self) -> Value { Bitflyer::describe(self) }
+}
 impl Bitflyer for BitflyerImpl {}
 impl ValueTrait for BitflyerImpl {
     fn is_undefined(&self) -> bool { self.0.is_undefined() }

@@ -1292,7 +1292,9 @@ pub trait Indodax : Exchange {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct IndodaxImpl(Value);
-impl Exchange for IndodaxImpl {}
+impl Exchange for IndodaxImpl {
+    fn describe(&self) -> Value { Indodax::describe(self) }
+}
 impl Indodax for IndodaxImpl {}
 impl ValueTrait for IndodaxImpl {
     fn is_undefined(&self) -> bool { self.0.is_undefined() }

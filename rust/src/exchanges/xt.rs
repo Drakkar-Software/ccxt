@@ -4568,7 +4568,9 @@ pub trait Xt : Exchange {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct XtImpl(Value);
-impl Exchange for XtImpl {}
+impl Exchange for XtImpl {
+    fn describe(&self) -> Value { Xt::describe(self) }
+}
 impl Xt for XtImpl {}
 impl ValueTrait for XtImpl {
     fn is_undefined(&self) -> bool { self.0.is_undefined() }

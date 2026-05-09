@@ -2503,7 +2503,9 @@ pub trait Bydfi : Exchange {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BydfiImpl(Value);
-impl Exchange for BydfiImpl {}
+impl Exchange for BydfiImpl {
+    fn describe(&self) -> Value { Bydfi::describe(self) }
+}
 impl Bydfi for BydfiImpl {}
 impl ValueTrait for BydfiImpl {
     fn is_undefined(&self) -> bool { self.0.is_undefined() }

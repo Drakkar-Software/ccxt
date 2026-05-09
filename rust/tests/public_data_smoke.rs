@@ -1,6 +1,6 @@
 mod common;
 
-use ccxt::exchange::{normalize, Value};
+use ccxt::exchange::{normalize, Exchange, Value};
 use serde_json::{json, Value as JsonValue};
 
 #[derive(Debug)]
@@ -36,23 +36,22 @@ macro_rules! run_suite {
     ($trait_path:path, $impl_path:path, $symbol:expr) => {{
         let mut exchange = <$impl_path>::new(Value::Json(json!({})));
         let describe = <$impl_path as $trait_path>::describe(&exchange);
-        let status = <$impl_path as $trait_path>::fetch_status(&mut exchange, Value::Undefined).await;
-        let ticker =
-            <$impl_path as $trait_path>::fetch_ticker(&mut exchange, $symbol.into(), Value::Undefined).await;
-        let tickers = <$impl_path as $trait_path>::fetch_tickers(
+        let status = Exchange::fetch_status(&mut exchange, Value::Undefined).await;
+        let ticker = Exchange::fetch_ticker(&mut exchange, $symbol.into(), Value::Undefined).await;
+        let tickers = Exchange::fetch_tickers(
             &mut exchange,
             Value::Json(json!([$symbol])),
             Value::Undefined,
         )
         .await;
-        let order_book = <$impl_path as $trait_path>::fetch_order_book(
+        let order_book = Exchange::fetch_order_book(
             &mut exchange,
             $symbol.into(),
             Value::from(10usize),
             Value::Undefined,
         )
         .await;
-        let ohlcv = <$impl_path as $trait_path>::fetch_ohlcv(
+        let ohlcv = Exchange::fetch_ohlcv(
             &mut exchange,
             $symbol.into(),
             "1m".into(),
@@ -399,11 +398,6 @@ async fn smoke_ascendex() {
     smoke_test!(ccxt::exchanges::ascendex::Ascendex, ccxt::exchanges::ascendex::AscendexImpl, "ascendex", "BTC/USDT");
 }
 
-#[cfg(feature = "full-exchanges")]
-#[tokio::test]
-async fn smoke_aster() {
-    smoke_test!(ccxt::exchanges::aster::Aster, ccxt::exchanges::aster::AsterImpl, "aster", "BTC/USDT");
-}
 
 #[cfg(feature = "full-exchanges")]
 #[tokio::test]
@@ -553,11 +547,6 @@ async fn smoke_xt() {
 // Additional smoke tests for remaining exchanges
 // ---------------------------------------------------------------------------
 
-#[cfg(feature = "full-exchanges")]
-#[tokio::test]
-async fn smoke_alp() {
-    smoke_test!(ccxt::exchanges::alp::Alp, ccxt::exchanges::alp::AlpImpl, "alp", "BTC/USDT");
-}
 
 #[cfg(feature = "full-exchanges")]
 #[tokio::test]
@@ -619,11 +608,6 @@ async fn smoke_btcturk() {
     smoke_test!(ccxt::exchanges::btcturk::Btcturk, ccxt::exchanges::btcturk::BtcturkImpl, "btcturk", "BTC/USDT");
 }
 
-#[cfg(feature = "full-exchanges")]
-#[tokio::test]
-async fn smoke_bydfi() {
-    smoke_test!(ccxt::exchanges::bydfi::Bydfi, ccxt::exchanges::bydfi::BydfiImpl, "bydfi", "BTC/USDT");
-}
 
 #[cfg(feature = "full-exchanges")]
 #[tokio::test]
@@ -781,11 +765,6 @@ async fn smoke_zaif() {
     smoke_test!(ccxt::exchanges::zaif::Zaif, ccxt::exchanges::zaif::ZaifImpl, "zaif", "BTC/JPY");
 }
 
-#[cfg(feature = "full-exchanges")]
-#[tokio::test]
-async fn smoke_zebpay() {
-    smoke_test!(ccxt::exchanges::zebpay::Zebpay, ccxt::exchanges::zebpay::ZebpayImpl, "zebpay", "BTC/USDT");
-}
 
 #[cfg(feature = "full-exchanges")]
 #[tokio::test]

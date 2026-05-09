@@ -2447,7 +2447,9 @@ pub trait Toobit : Exchange {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ToobitImpl(Value);
-impl Exchange for ToobitImpl {}
+impl Exchange for ToobitImpl {
+    fn describe(&self) -> Value { Toobit::describe(self) }
+}
 impl Toobit for ToobitImpl {}
 impl ValueTrait for ToobitImpl {
     fn is_undefined(&self) -> bool { self.0.is_undefined() }

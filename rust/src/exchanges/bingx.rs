@@ -6250,7 +6250,9 @@ pub trait Bingx : Exchange {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BingxImpl(Value);
-impl Exchange for BingxImpl {}
+impl Exchange for BingxImpl {
+    fn describe(&self) -> Value { Bingx::describe(self) }
+}
 impl Bingx for BingxImpl {}
 impl ValueTrait for BingxImpl {
     fn is_undefined(&self) -> bool { self.0.is_undefined() }

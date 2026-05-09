@@ -1103,7 +1103,9 @@ pub trait Cryptomus : Exchange {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CryptomusImpl(Value);
-impl Exchange for CryptomusImpl {}
+impl Exchange for CryptomusImpl {
+    fn describe(&self) -> Value { Cryptomus::describe(self) }
+}
 impl Cryptomus for CryptomusImpl {}
 impl ValueTrait for CryptomusImpl {
     fn is_undefined(&self) -> bool { self.0.is_undefined() }

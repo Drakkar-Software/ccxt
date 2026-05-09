@@ -8164,7 +8164,9 @@ pub trait Bybit : Exchange {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BybitImpl(Value);
-impl Exchange for BybitImpl {}
+impl Exchange for BybitImpl {
+    fn describe(&self) -> Value { Bybit::describe(self) }
+}
 impl Bybit for BybitImpl {}
 impl ValueTrait for BybitImpl {
     fn is_undefined(&self) -> bool { self.0.is_undefined() }

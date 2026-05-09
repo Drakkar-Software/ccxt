@@ -1058,7 +1058,9 @@ pub trait Independentreserve : Exchange {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct IndependentreserveImpl(Value);
-impl Exchange for IndependentreserveImpl {}
+impl Exchange for IndependentreserveImpl {
+    fn describe(&self) -> Value { Independentreserve::describe(self) }
+}
 impl Independentreserve for IndependentreserveImpl {}
 impl ValueTrait for IndependentreserveImpl {
     fn is_undefined(&self) -> bool { self.0.is_undefined() }

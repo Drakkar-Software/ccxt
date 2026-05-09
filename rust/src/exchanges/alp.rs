@@ -994,7 +994,9 @@ pub trait Alp : Exchange {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AlpImpl(Value);
-impl Exchange for AlpImpl {}
+impl Exchange for AlpImpl {
+    fn describe(&self) -> Value { Alp::describe(self) }
+}
 impl Alp for AlpImpl {}
 impl ValueTrait for AlpImpl {
     fn is_undefined(&self) -> bool { self.0.is_undefined() }

@@ -1036,7 +1036,9 @@ pub trait Bitbank : Exchange {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BitbankImpl(Value);
-impl Exchange for BitbankImpl {}
+impl Exchange for BitbankImpl {
+    fn describe(&self) -> Value { Bitbank::describe(self) }
+}
 impl Bitbank for BitbankImpl {}
 impl ValueTrait for BitbankImpl {
     fn is_undefined(&self) -> bool { self.0.is_undefined() }

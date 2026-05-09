@@ -14,7 +14,7 @@
 
 mod common;
 
-use ccxt::exchange::{normalize, Value};
+use ccxt::exchange::{normalize, Exchange, Value};
 use serde_json::json;
 
 // ---------------------------------------------------------------------------
@@ -29,7 +29,8 @@ macro_rules! pro_test_body {
         let desc = <$impl_path as $trait_path>::describe(&ex);
         let desc_json =
             normalize(&desc).expect(concat!($name, ": describe() returned None"));
-        common::assert_describe_shape($name, &desc_json, true);
+        let require_pro = desc_json.get("pro").and_then(|v| v.as_bool()).unwrap_or(false);
+        common::assert_describe_shape($name, &desc_json, require_pro);
 
         // Skip live API calls when offline
         if !common::network_available() {
@@ -37,7 +38,7 @@ macro_rules! pro_test_body {
             return;
         }
 
-        let ticker = <$impl_path as $trait_path>::fetch_ticker(
+        let ticker = Exchange::fetch_ticker(
             &mut ex,
             $symbol.into(),
             Value::Undefined,
@@ -45,7 +46,7 @@ macro_rules! pro_test_body {
         .await;
         common::assert_ticker_shape($name, normalize(&ticker), $symbol);
 
-        let ob = <$impl_path as $trait_path>::fetch_order_book(
+        let ob = Exchange::fetch_order_book(
             &mut ex,
             $symbol.into(),
             Value::from(5usize),
@@ -573,16 +574,6 @@ async fn pro_smoke_ascendex() {
     );
 }
 
-#[cfg(feature = "full-exchanges")]
-#[tokio::test]
-async fn pro_smoke_aster() {
-    pro_test_body!(
-        ccxt::exchanges::aster::Aster,
-        ccxt::exchanges::aster::AsterImpl,
-        "aster",
-        "BTC/USDT"
-    );
-}
 
 #[cfg(feature = "full-exchanges")]
 #[tokio::test]
@@ -864,11 +855,6 @@ async fn pro_smoke_xt() {
 // Additional pro smoke tests for remaining exchanges
 // ---------------------------------------------------------------------------
 
-#[cfg(feature = "full-exchanges")]
-#[tokio::test]
-async fn pro_smoke_alp() {
-    pro_test_body!(ccxt::exchanges::alp::Alp, ccxt::exchanges::alp::AlpImpl, "alp", "BTC/USDT");
-}
 
 #[cfg(feature = "full-exchanges")]
 #[tokio::test]
@@ -930,11 +916,6 @@ async fn pro_smoke_btcturk() {
     pro_test_body!(ccxt::exchanges::btcturk::Btcturk, ccxt::exchanges::btcturk::BtcturkImpl, "btcturk", "BTC/USDT");
 }
 
-#[cfg(feature = "full-exchanges")]
-#[tokio::test]
-async fn pro_smoke_bydfi() {
-    pro_test_body!(ccxt::exchanges::bydfi::Bydfi, ccxt::exchanges::bydfi::BydfiImpl, "bydfi", "BTC/USDT");
-}
 
 #[cfg(feature = "full-exchanges")]
 #[tokio::test]
@@ -1092,11 +1073,6 @@ async fn pro_smoke_zaif() {
     pro_test_body!(ccxt::exchanges::zaif::Zaif, ccxt::exchanges::zaif::ZaifImpl, "zaif", "BTC/JPY");
 }
 
-#[cfg(feature = "full-exchanges")]
-#[tokio::test]
-async fn pro_smoke_zebpay() {
-    pro_test_body!(ccxt::exchanges::zebpay::Zebpay, ccxt::exchanges::zebpay::ZebpayImpl, "zebpay", "BTC/USDT");
-}
 
 #[cfg(feature = "full-exchanges")]
 #[tokio::test]

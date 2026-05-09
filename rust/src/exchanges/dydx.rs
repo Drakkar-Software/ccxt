@@ -2195,7 +2195,9 @@ pub trait Dydx : Exchange {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DydxImpl(Value);
-impl Exchange for DydxImpl {}
+impl Exchange for DydxImpl {
+    fn describe(&self) -> Value { Dydx::describe(self) }
+}
 impl Dydx for DydxImpl {}
 impl ValueTrait for DydxImpl {
     fn is_undefined(&self) -> bool { self.0.is_undefined() }

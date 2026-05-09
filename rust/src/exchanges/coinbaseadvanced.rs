@@ -711,7 +711,9 @@ pub trait Coinbaseadvanced : Exchange {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CoinbaseadvancedImpl(Value);
-impl Exchange for CoinbaseadvancedImpl {}
+impl Exchange for CoinbaseadvancedImpl {
+    fn describe(&self) -> Value { Coinbaseadvanced::describe(self) }
+}
 impl Coinbaseadvanced for CoinbaseadvancedImpl {}
 impl ValueTrait for CoinbaseadvancedImpl {
     fn is_undefined(&self) -> bool { self.0.is_undefined() }

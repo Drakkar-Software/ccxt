@@ -2646,7 +2646,9 @@ pub trait Aster : Exchange {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AsterImpl(Value);
-impl Exchange for AsterImpl {}
+impl Exchange for AsterImpl {
+    fn describe(&self) -> Value { Aster::describe(self) }
+}
 impl Aster for AsterImpl {}
 impl ValueTrait for AsterImpl {
     fn is_undefined(&self) -> bool { self.0.is_undefined() }

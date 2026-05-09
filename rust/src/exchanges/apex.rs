@@ -1770,7 +1770,9 @@ pub trait Apex : Exchange {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ApexImpl(Value);
-impl Exchange for ApexImpl {}
+impl Exchange for ApexImpl {
+    fn describe(&self) -> Value { Apex::describe(self) }
+}
 impl Apex for ApexImpl {}
 impl ValueTrait for ApexImpl {
     fn is_undefined(&self) -> bool { self.0.is_undefined() }

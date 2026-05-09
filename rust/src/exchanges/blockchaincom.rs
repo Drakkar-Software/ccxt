@@ -1178,7 +1178,9 @@ pub trait Blockchaincom : Exchange {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BlockchaincomImpl(Value);
-impl Exchange for BlockchaincomImpl {}
+impl Exchange for BlockchaincomImpl {
+    fn describe(&self) -> Value { Blockchaincom::describe(self) }
+}
 impl Blockchaincom for BlockchaincomImpl {}
 impl ValueTrait for BlockchaincomImpl {
     fn is_undefined(&self) -> bool { self.0.is_undefined() }

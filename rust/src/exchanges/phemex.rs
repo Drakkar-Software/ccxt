@@ -3893,7 +3893,9 @@ pub trait Phemex : Exchange {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PhemexImpl(Value);
-impl Exchange for PhemexImpl {}
+impl Exchange for PhemexImpl {
+    fn describe(&self) -> Value { Phemex::describe(self) }
+}
 impl Phemex for PhemexImpl {}
 impl ValueTrait for PhemexImpl {
     fn is_undefined(&self) -> bool { self.0.is_undefined() }

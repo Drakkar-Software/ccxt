@@ -3818,7 +3818,9 @@ pub trait Kucoinfutures : Exchange {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct KucoinfuturesImpl(Value);
-impl Exchange for KucoinfuturesImpl {}
+impl Exchange for KucoinfuturesImpl {
+    fn describe(&self) -> Value { Kucoinfutures::describe(self) }
+}
 impl Kucoinfutures for KucoinfuturesImpl {}
 impl ValueTrait for KucoinfuturesImpl {
     fn is_undefined(&self) -> bool { self.0.is_undefined() }

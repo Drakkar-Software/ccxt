@@ -1768,7 +1768,9 @@ pub trait Bitopro : Exchange {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BitoproImpl(Value);
-impl Exchange for BitoproImpl {}
+impl Exchange for BitoproImpl {
+    fn describe(&self) -> Value { Bitopro::describe(self) }
+}
 impl Bitopro for BitoproImpl {}
 impl ValueTrait for BitoproImpl {
     fn is_undefined(&self) -> bool { self.0.is_undefined() }

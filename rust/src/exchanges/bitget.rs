@@ -9687,7 +9687,9 @@ pub trait Bitget : Exchange {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BitgetImpl(Value);
-impl Exchange for BitgetImpl {}
+impl Exchange for BitgetImpl {
+    fn describe(&self) -> Value { Bitget::describe(self) }
+}
 impl Bitget for BitgetImpl {}
 impl ValueTrait for BitgetImpl {
     fn is_undefined(&self) -> bool { self.0.is_undefined() }

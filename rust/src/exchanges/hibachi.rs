@@ -1959,7 +1959,9 @@ pub trait Hibachi : Exchange {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct HibachiImpl(Value);
-impl Exchange for HibachiImpl {}
+impl Exchange for HibachiImpl {
+    fn describe(&self) -> Value { Hibachi::describe(self) }
+}
 impl Hibachi for HibachiImpl {}
 impl ValueTrait for HibachiImpl {
     fn is_undefined(&self) -> bool { self.0.is_undefined() }

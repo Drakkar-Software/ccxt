@@ -1891,7 +1891,9 @@ pub trait Huobi : Exchange {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct HuobiImpl(Value);
-impl Exchange for HuobiImpl {}
+impl Exchange for HuobiImpl {
+    fn describe(&self) -> Value { Huobi::describe(self) }
+}
 impl Huobi for HuobiImpl {}
 impl ValueTrait for HuobiImpl {
     fn is_undefined(&self) -> bool { self.0.is_undefined() }

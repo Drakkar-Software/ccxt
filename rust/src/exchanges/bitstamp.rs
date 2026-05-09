@@ -2469,7 +2469,9 @@ pub trait Bitstamp : Exchange {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BitstampImpl(Value);
-impl Exchange for BitstampImpl {}
+impl Exchange for BitstampImpl {
+    fn describe(&self) -> Value { Bitstamp::describe(self) }
+}
 impl Bitstamp for BitstampImpl {}
 impl ValueTrait for BitstampImpl {
     fn is_undefined(&self) -> bool { self.0.is_undefined() }

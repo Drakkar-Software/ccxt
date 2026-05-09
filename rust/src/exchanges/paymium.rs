@@ -693,7 +693,9 @@ pub trait Paymium : Exchange {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PaymiumImpl(Value);
-impl Exchange for PaymiumImpl {}
+impl Exchange for PaymiumImpl {
+    fn describe(&self) -> Value { Paymium::describe(self) }
+}
 impl Paymium for PaymiumImpl {}
 impl ValueTrait for PaymiumImpl {
     fn is_undefined(&self) -> bool { self.0.is_undefined() }

@@ -1242,7 +1242,9 @@ pub trait Yobit : Exchange {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct YobitImpl(Value);
-impl Exchange for YobitImpl {}
+impl Exchange for YobitImpl {
+    fn describe(&self) -> Value { Yobit::describe(self) }
+}
 impl Yobit for YobitImpl {}
 impl ValueTrait for YobitImpl {
     fn is_undefined(&self) -> bool { self.0.is_undefined() }

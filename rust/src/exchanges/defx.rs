@@ -1792,7 +1792,9 @@ pub trait Defx : Exchange {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DefxImpl(Value);
-impl Exchange for DefxImpl {}
+impl Exchange for DefxImpl {
+    fn describe(&self) -> Value { Defx::describe(self) }
+}
 impl Defx for DefxImpl {}
 impl ValueTrait for DefxImpl {
     fn is_undefined(&self) -> bool { self.0.is_undefined() }

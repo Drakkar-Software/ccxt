@@ -797,7 +797,9 @@ pub trait Fmfwio : Exchange {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FmfwioImpl(Value);
-impl Exchange for FmfwioImpl {}
+impl Exchange for FmfwioImpl {
+    fn describe(&self) -> Value { Fmfwio::describe(self) }
+}
 impl Fmfwio for FmfwioImpl {}
 impl ValueTrait for FmfwioImpl {
     fn is_undefined(&self) -> bool { self.0.is_undefined() }

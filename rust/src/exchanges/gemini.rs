@@ -1990,7 +1990,9 @@ pub trait Gemini : Exchange {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct GeminiImpl(Value);
-impl Exchange for GeminiImpl {}
+impl Exchange for GeminiImpl {
+    fn describe(&self) -> Value { Gemini::describe(self) }
+}
 impl Gemini for GeminiImpl {}
 impl ValueTrait for GeminiImpl {
     fn is_undefined(&self) -> bool { self.0.is_undefined() }

@@ -3089,7 +3089,9 @@ pub trait Cryptocom : Exchange {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CryptocomImpl(Value);
-impl Exchange for CryptocomImpl {}
+impl Exchange for CryptocomImpl {
+    fn describe(&self) -> Value { Cryptocom::describe(self) }
+}
 impl Cryptocom for CryptocomImpl {}
 impl ValueTrait for CryptocomImpl {
     fn is_undefined(&self) -> bool { self.0.is_undefined() }

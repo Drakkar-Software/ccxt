@@ -2783,7 +2783,9 @@ pub trait Bitmex : Exchange {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BitmexImpl(Value);
-impl Exchange for BitmexImpl {}
+impl Exchange for BitmexImpl {
+    fn describe(&self) -> Value { Bitmex::describe(self) }
+}
 impl Bitmex for BitmexImpl {}
 impl ValueTrait for BitmexImpl {
     fn is_undefined(&self) -> bool { self.0.is_undefined() }

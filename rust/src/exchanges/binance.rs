@@ -11186,7 +11186,9 @@ pub trait Binance : Exchange {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BinanceImpl(Value);
-impl Exchange for BinanceImpl {}
+impl Exchange for BinanceImpl {
+    fn describe(&self) -> Value { Binance::describe(self) }
+}
 impl Binance for BinanceImpl {}
 impl ValueTrait for BinanceImpl {
     fn is_undefined(&self) -> bool { self.0.is_undefined() }

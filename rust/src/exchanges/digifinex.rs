@@ -4101,7 +4101,9 @@ pub trait Digifinex : Exchange {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DigifinexImpl(Value);
-impl Exchange for DigifinexImpl {}
+impl Exchange for DigifinexImpl {
+    fn describe(&self) -> Value { Digifinex::describe(self) }
+}
 impl Digifinex for DigifinexImpl {}
 impl ValueTrait for DigifinexImpl {
     fn is_undefined(&self) -> bool { self.0.is_undefined() }

@@ -1792,7 +1792,9 @@ pub trait Hollaex : Exchange {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct HollaexImpl(Value);
-impl Exchange for HollaexImpl {}
+impl Exchange for HollaexImpl {
+    fn describe(&self) -> Value { Hollaex::describe(self) }
+}
 impl Hollaex for HollaexImpl {}
 impl ValueTrait for HollaexImpl {
     fn is_undefined(&self) -> bool { self.0.is_undefined() }

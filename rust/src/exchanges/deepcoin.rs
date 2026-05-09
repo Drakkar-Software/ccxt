@@ -56,7 +56,7 @@ use crate::exchange::{DECIMAL_PLACES, SIGNIFICANT_DIGITS, TICK_SIZE, NO_PADDING,
 #[async_trait(?Send)]
 pub trait Deepcoin : Exchange {
     fn describe(&self) -> Value {
-        return self.deep_extend_2(Exchange::describe(self), Value::Json(normalize(&Value::Json(json!({
+        return self.deep_extend_2(Value::Undefined, Value::Json(normalize(&Value::Json(json!({
             "id": "deepcoin",
             "name": "DeepCoin",
             "countries": Value::Json(serde_json::Value::Array(vec![Value::from("SG").into()])),
@@ -2647,7 +2647,9 @@ pub trait Deepcoin : Exchange {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DeepcoinImpl(Value);
-impl Exchange for DeepcoinImpl {}
+impl Exchange for DeepcoinImpl {
+    fn describe(&self) -> Value { Deepcoin::describe(self) }
+}
 impl Deepcoin for DeepcoinImpl {}
 impl ValueTrait for DeepcoinImpl {
     fn is_undefined(&self) -> bool { self.0.is_undefined() }

@@ -1870,7 +1870,9 @@ pub trait Bigone : Exchange {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BigoneImpl(Value);
-impl Exchange for BigoneImpl {}
+impl Exchange for BigoneImpl {
+    fn describe(&self) -> Value { Bigone::describe(self) }
+}
 impl Bigone for BigoneImpl {}
 impl ValueTrait for BigoneImpl {
     fn is_undefined(&self) -> bool { self.0.is_undefined() }

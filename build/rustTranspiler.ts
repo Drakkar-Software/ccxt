@@ -2870,7 +2870,9 @@ class RustTranspiler {
             '',
             '#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]',
             `pub struct ${capitalizedClassName}Impl(Value);`,
-            `impl Exchange for ${capitalizedClassName}Impl {}`,
+            `impl Exchange for ${capitalizedClassName}Impl {
+    fn describe(&self) -> Value { ${capitalizedClassName}::describe(self) }
+}`,
             `impl ${capitalizedClassName} for ${capitalizedClassName}Impl {}`,
             `impl ValueTrait for ${capitalizedClassName}Impl {
     fn is_undefined(&self) -> bool { self.0.is_undefined() }
@@ -3082,7 +3084,35 @@ class RustTranspiler {
         const body = moduleNames
             .map((m) => (always.has(m) ? `pub mod ${m};` : `#[cfg(feature = "full-exchanges")]\npub mod ${m};`))
             .join('\n');
-        overwriteFile(file, header + body + '\n');
+
+        // Only generate create_exchange for the REST exchanges file (not pro)
+        const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+        const factory = alwaysOn.length > 0
+            ? `
+/// Create a boxed exchange by lowercase name. Returns \`None\` for unknown names.
+pub fn create_exchange(
+    name: &str,
+    config: crate::exchange::Value,
+) -> Option<Box<dyn crate::exchange::Exchange + Send>> {
+    macro_rules! make {
+        ($mod:ident, $impl:ident) => {
+            Some(Box::new($mod::$impl::new(config)) as Box<dyn crate::exchange::Exchange + Send>)
+        };
+    }
+    match name.to_lowercase().as_str() {
+${moduleNames
+    .map((m) => {
+        const impl_name = capitalize(m) + 'Impl';
+        const prefix = always.has(m) ? '' : '        #[cfg(feature = "full-exchanges")]\n';
+        return `${prefix}        "${m}" => make!(${m}, ${impl_name}),`;
+    })
+    .join('\n')}
+        _ => None,
+    }
+}`
+            : '';
+
+        overwriteFile(file, header + body + '\n' + factory + '\n');
     }
 
     async transpileFor(exchangeId: string, ws = false) {

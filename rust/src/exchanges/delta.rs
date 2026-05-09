@@ -3031,7 +3031,9 @@ pub trait Delta : Exchange {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DeltaImpl(Value);
-impl Exchange for DeltaImpl {}
+impl Exchange for DeltaImpl {
+    fn describe(&self) -> Value { Delta::describe(self) }
+}
 impl Delta for DeltaImpl {}
 impl ValueTrait for DeltaImpl {
     fn is_undefined(&self) -> bool { self.0.is_undefined() }

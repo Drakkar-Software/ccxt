@@ -1840,7 +1840,9 @@ pub trait Bittrade : Exchange {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BittradeImpl(Value);
-impl Exchange for BittradeImpl {}
+impl Exchange for BittradeImpl {
+    fn describe(&self) -> Value { Bittrade::describe(self) }
+}
 impl Bittrade for BittradeImpl {}
 impl ValueTrait for BittradeImpl {
     fn is_undefined(&self) -> bool { self.0.is_undefined() }

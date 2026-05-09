@@ -831,7 +831,9 @@ pub trait Zaif : Exchange {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ZaifImpl(Value);
-impl Exchange for ZaifImpl {}
+impl Exchange for ZaifImpl {
+    fn describe(&self) -> Value { Zaif::describe(self) }
+}
 impl Zaif for ZaifImpl {}
 impl ValueTrait for ZaifImpl {
     fn is_undefined(&self) -> bool { self.0.is_undefined() }

@@ -3361,7 +3361,9 @@ pub trait Ascendex : Exchange {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AscendexImpl(Value);
-impl Exchange for AscendexImpl {}
+impl Exchange for AscendexImpl {
+    fn describe(&self) -> Value { Ascendex::describe(self) }
+}
 impl Ascendex for AscendexImpl {}
 impl ValueTrait for AscendexImpl {
     fn is_undefined(&self) -> bool { self.0.is_undefined() }

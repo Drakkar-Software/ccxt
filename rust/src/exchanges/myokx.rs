@@ -1429,7 +1429,9 @@ pub trait Myokx : Exchange {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MyokxImpl(Value);
-impl Exchange for MyokxImpl {}
+impl Exchange for MyokxImpl {
+    fn describe(&self) -> Value { Myokx::describe(self) }
+}
 impl Myokx for MyokxImpl {}
 impl ValueTrait for MyokxImpl {
     fn is_undefined(&self) -> bool { self.0.is_undefined() }

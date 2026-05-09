@@ -1648,7 +1648,9 @@ pub trait Zebpay : Exchange {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ZebpayImpl(Value);
-impl Exchange for ZebpayImpl {}
+impl Exchange for ZebpayImpl {
+    fn describe(&self) -> Value { Zebpay::describe(self) }
+}
 impl Zebpay for ZebpayImpl {}
 impl ValueTrait for ZebpayImpl {
     fn is_undefined(&self) -> bool { self.0.is_undefined() }

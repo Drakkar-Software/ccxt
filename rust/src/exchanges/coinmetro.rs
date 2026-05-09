@@ -1756,7 +1756,9 @@ pub trait Coinmetro : Exchange {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CoinmetroImpl(Value);
-impl Exchange for CoinmetroImpl {}
+impl Exchange for CoinmetroImpl {
+    fn describe(&self) -> Value { Coinmetro::describe(self) }
+}
 impl Coinmetro for CoinmetroImpl {}
 impl ValueTrait for CoinmetroImpl {
     fn is_undefined(&self) -> bool { self.0.is_undefined() }

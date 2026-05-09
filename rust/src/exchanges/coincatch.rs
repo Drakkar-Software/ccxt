@@ -4491,7 +4491,9 @@ pub trait Coincatch : Exchange {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CoincatchImpl(Value);
-impl Exchange for CoincatchImpl {}
+impl Exchange for CoincatchImpl {
+    fn describe(&self) -> Value { Coincatch::describe(self) }
+}
 impl Coincatch for CoincatchImpl {}
 impl ValueTrait for CoincatchImpl {
     fn is_undefined(&self) -> bool { self.0.is_undefined() }

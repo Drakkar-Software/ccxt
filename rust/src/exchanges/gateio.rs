@@ -1685,7 +1685,9 @@ pub trait Gateio : Exchange {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct GateioImpl(Value);
-impl Exchange for GateioImpl {}
+impl Exchange for GateioImpl {
+    fn describe(&self) -> Value { Gateio::describe(self) }
+}
 impl Gateio for GateioImpl {}
 impl ValueTrait for GateioImpl {
     fn is_undefined(&self) -> bool { self.0.is_undefined() }

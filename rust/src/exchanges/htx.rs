@@ -8729,7 +8729,9 @@ pub trait Htx : Exchange {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct HtxImpl(Value);
-impl Exchange for HtxImpl {}
+impl Exchange for HtxImpl {
+    fn describe(&self) -> Value { Htx::describe(self) }
+}
 impl Htx for HtxImpl {}
 impl ValueTrait for HtxImpl {
     fn is_undefined(&self) -> bool { self.0.is_undefined() }

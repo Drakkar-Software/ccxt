@@ -1060,7 +1060,9 @@ pub trait Coincheck : Exchange {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CoincheckImpl(Value);
-impl Exchange for CoincheckImpl {}
+impl Exchange for CoincheckImpl {
+    fn describe(&self) -> Value { Coincheck::describe(self) }
+}
 impl Coincheck for CoincheckImpl {}
 impl ValueTrait for CoincheckImpl {
     fn is_undefined(&self) -> bool { self.0.is_undefined() }

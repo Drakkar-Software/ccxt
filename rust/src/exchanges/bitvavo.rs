@@ -2067,7 +2067,9 @@ pub trait Bitvavo : Exchange {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BitvavoImpl(Value);
-impl Exchange for BitvavoImpl {}
+impl Exchange for BitvavoImpl {
+    fn describe(&self) -> Value { Bitvavo::describe(self) }
+}
 impl Bitvavo for BitvavoImpl {}
 impl ValueTrait for BitvavoImpl {
     fn is_undefined(&self) -> bool { self.0.is_undefined() }
