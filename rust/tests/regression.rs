@@ -2058,3 +2058,25 @@ async fn test_set_margin_mode_default_returns_undefined() {
     ).await;
     assert_value_undefined("set_margin_mode default", &result);
 }
+
+#[tokio::test]
+async fn test_break_label_in_async_fn() {
+    async fn inner(flag: bool) -> String {
+        let mut __try_error_0: String = String::new();
+        'try_block_0: {
+            let _ = async { "hello" }.await;
+            if flag {
+                __try_error_0 = String::from("NotSupported: test error");
+                break 'try_block_0;
+            }
+            let _ = async { "world" }.await;
+        }
+        if !__try_error_0.is_empty() {
+            return format!("caught: {}", __try_error_0);
+        }
+        "ok".to_string()
+    }
+
+    assert_eq!(inner(false).await, "ok");
+    assert_eq!(inner(true).await, "caught: NotSupported: test error");
+}

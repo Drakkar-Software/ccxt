@@ -353,7 +353,6 @@ function getArgumentCount(className: string, node: any) {
         safeTicker: 2, safeOrder: 2, safeLiquidation: 2, safeTrade: 2,
         isLinear: 2, isInverse: 2,
         lockId: 1, unlockId: 1,
-        handleToken: 2,
         parseNumber: 2, parseToInt: 1, parseToNumeric: 2, parseInt: 2,
         json: 1, encode: 1, urlencode: 1, rawencode: 1,
         hash: 3, hmac: 4, jwt: 4,
@@ -380,9 +379,7 @@ function getArgumentCount(className: string, node: any) {
         handleOption: 3,
         parseOrderTypeTimeInForceAndPostOnly: 3,
         customParseBidAsk: 4,
-        editOrderRequest: 7, fetchPosition: 2, createAuthToken: 1,
-        coinToMarketId: 1,
-        multiOrderSpotPrepareRequest: 2, spotOrderPrepareRequest: 6,
+        fetchPosition: 2, createAuthToken: 1,
     };
     const fname = getCalleeFunctionName(node);
     // argCounts overrides take priority (hand-tuned for Rust signatures)
@@ -949,6 +946,8 @@ function transpileMethodToRust(opts: {
         return 'value';
     };
 
+    let tryCounter = 0;
+
     walkRecursive(
         ast,
         {
@@ -1014,33 +1013,65 @@ function transpileMethodToRust(opts: {
                     fname.startsWith('parseToInt') ||
                     fname.startsWith('from') ||
                     fname.startsWith('getPrivateType') ||
-                    // Parse methods that transform without mutating self:
-                    // Exclude parseWS* (uppercase) — those methods update this.balance etc directly
-                    (fname.startsWith('parse') && !fname.startsWith('parseWS') && (
-                        fname.endsWith('Status') || fname.endsWith('Side') || fname.endsWith('Type') ||
-                        fname.endsWith('Fee') || fname.endsWith('Fees') || fname.endsWith('Id') || fname.endsWith('By') ||
-                        fname.endsWith('Precision') ||
-                        fname.endsWith('Market') || fname.endsWith('Markets') ||
-                        fname.endsWith('Currency') || fname.endsWith('Currencies') ||
-                        fname.endsWith('Ticker') || fname.endsWith('Tickers') ||
-                        fname.endsWith('Trade') || fname.endsWith('Trades') ||
-                        fname.endsWith('Ohlcv') || fname.endsWith('Ohlcvs') ||
-                        fname.endsWith('OHLCV') || fname.endsWith('OHLCVs') ||
-                        fname.endsWith('Balance') || fname.endsWith('Balances') ||
-                        fname.endsWith('Order') || fname.endsWith('Orders') ||
-                        fname.endsWith('Position') || fname.endsWith('Positions') ||
-                        fname.endsWith('Transaction') || fname.endsWith('Transactions') ||
-                        fname.endsWith('LedgerEntry') || fname.endsWith('LedgerEntries') ||
-                        fname.endsWith('FundingRate') || fname.endsWith('FundingRates') ||
-                        fname.endsWith('DepositAddress') || fname.endsWith('BorrowRate')
-                    )) ||
+                    // Parse methods that transform without mutating self.
+                    // Exclude parseWS* (uppercase) — those update this.balance etc directly.
+                    (fname.startsWith('parse') && !fname.startsWith('parseWS')) ||
                     // Currency/precision converters and trade helpers called from parseWs* context:
                     fname.endsWith('FromPrecision') ||
                     fname.endsWith('OrMaker') ||
                     fname.endsWith('Url') ||
-                    fname === 'calculateFee'
+                    fname === 'calculateFee' ||
+                    // Pure lookup/conversion/formatting helpers (no state mutation):
+                    fname.startsWith('find') ||
+                    fname.startsWith('format') ||
+                    fname.startsWith('calculate') ||
+                    // Specific well-known pure helpers that don't match prefixes above:
+                    fname === 'coinToMarketId' ||
+                    fname === 'getDelistedMarketById' ||
+                    fname === 'findMarketByAltnameOrId' ||
+                    fname === 'getSymbolFromAssetPair' ||
+                    fname === 'marketCodes' ||
+                    fname === 'assignDefaultDepositWithdrawFees' ||
+                    fname === 'getMarketFromSymbols' ||
+                    fname === 'hashMessage' ||
+                    fname === 'signHash'
                 ) {
                     isSelfImmutable = true;
+                }
+                // Override: if the body makes calls to known &mut self methods, it must be &mut self.
+                // Walk the AST to find: this.mutatingMethod() or this[variable]() (computed dispatch).
+                if (isSelfImmutable && node.body) {
+                    const mutatingMethodNames = new Set([
+                        'dispatch', 'request', 'loadMarkets', 'loadAccounts',
+                        'handleOptionAndParams', 'handleOptionAndParams2', 'handleOption',
+                        'handleMarketTypeAndParams', 'handleSubTypeAndParams',
+                        'handleMarginModeAndParams',
+                    ]);
+                    const bodyHasMutatingCall = (n: any): boolean => {
+                        if (!n || typeof n !== 'object') return false;
+                        if (n.type === 'CallExpression' && n.callee?.type === 'MemberExpression') {
+                            const callee = n.callee;
+                            if (callee.object?.type === 'ThisExpression') {
+                                // this[variable]() — computed dispatch
+                                if (callee.computed) return true;
+                                // this.mutatingMethod()
+                                if (callee.property?.type === 'Identifier' && mutatingMethodNames.has(callee.property.name)) return true;
+                            }
+                        }
+                        // Recurse into all child nodes
+                        for (const key of Object.keys(n)) {
+                            const child = n[key];
+                            if (Array.isArray(child)) {
+                                if (child.some((c: any) => bodyHasMutatingCall(c))) return true;
+                            } else if (child && typeof child === 'object' && child.type) {
+                                if (bodyHasMutatingCall(child)) return true;
+                            }
+                        }
+                        return false;
+                    };
+                    if (bodyHasMutatingCall(node.body)) {
+                        isSelfImmutable = false;
+                    }
                 }
 
                 if (fname.startsWith('throw')) {
@@ -1190,10 +1221,25 @@ function transpileMethodToRust(opts: {
             },
 
             ThrowStatement(node: any, state: any, c: any) {
-                // Use `panic!("{}", ...)` form so the raw string content is not treated as a format template
-                emit('panic!("{}", r###"');
-                c(node.argument, asType(state));
-                emit('"###)');
+                if (state.tryLabel) {
+                    // Inside a try block — capture error value and break out of labeled block
+                    emit(`{ ${state.tryErrorVar} = `);
+                    const arg = node.argument;
+                    if (arg.type === 'NewExpression' && arg.callee.type === 'Identifier') {
+                        // throw new ErrorClass(msg, ...) → use first arg as error value
+                        if (arg.arguments.length > 0) {
+                            c(arg.arguments[0], asType(state, 'value'));
+                        } else {
+                            emit(`Value::from("${arg.callee.name}")`);
+                        }
+                    } else {
+                        c(arg, asType(state, 'value'));
+                    }
+                    emit(`; break ${state.tryLabel}; }`);
+                } else {
+                    // Outside any try block — return undefined (can't propagate without Result types)
+                    emit('return Value::Undefined');
+                }
             },
 
             NewExpression(node: any, state: any, c: any) {
@@ -1287,7 +1333,7 @@ function transpileMethodToRust(opts: {
                             break;
                     }
                     emit(', ');
-                    c(node.right, asType(state, 'rvalue'));
+                    c(node.right, asType(state, 'value'));
                     emit(')');
                     return;
                 }
@@ -1506,7 +1552,7 @@ function transpileMethodToRust(opts: {
                     case '!':
                         switch (state.asType) {
                             case 'value':
-                                emit('(');
+                                emit('Value::from(');
                                 break;
                             case 'bool':
                             case undefined:
@@ -1518,7 +1564,7 @@ function transpileMethodToRust(opts: {
                         c(node.argument, asType(state, 'bool'));
                         switch (state.asType) {
                             case 'value':
-                                emit(').into()');
+                                emit(')');
                                 break;
                             case 'bool':
                             case undefined:
@@ -1585,40 +1631,49 @@ function transpileMethodToRust(opts: {
                         switch (state.asType) {
                             case 'rvalue':
                             case 'value':
-                                emit('(');
+                                // Emit as Value-preserving conditional: `(if lhs.is_truthy() { lhs } else { rhs })`
+                                // Parens required so serde_json json! macro doesn't misparse { } as object literal.
+                                if (node.operator === '||') {
+                                    emit('(if ');
+                                    c(node.left, asType(state, 'bool'));
+                                    emit(' { ');
+                                    c(node.left, asType(state, 'value'));
+                                    emit(' } else { ');
+                                    c(node.right, asType(state, 'value'));
+                                    emit(' })');
+                                } else {
+                                    // &&: if lhs falsy return lhs; else return rhs
+                                    emit('(if ');
+                                    c(node.left, asType(state, 'bool'));
+                                    emit(' { ');
+                                    c(node.right, asType(state, 'value'));
+                                    emit(' } else { ');
+                                    c(node.left, asType(state, 'value'));
+                                    emit(' })');
+                                }
                                 break;
                             case undefined:
                             case 'bool':
-                                break;
-                            default:
-                                throw new Error('Unexpected logical expression type');
-                        }
-                        c(node.left, asType(state, 'bool'));
-                        emit(' ');
-                        emit(node.operator);
-                        emit(' ');
-                        c(node.right, asType(state, 'bool'));
-                        switch (state.asType) {
-                            case 'rvalue':
-                            case 'value':
-                                emit(').into()');
-                                break;
-                            case undefined:
-                            case 'bool':
+                                c(node.left, asType(state, 'bool'));
+                                emit(' ');
+                                emit(node.operator);
+                                emit(' ');
+                                c(node.right, asType(state, 'bool'));
                                 break;
                             default:
                                 throw new Error('Unexpected logical expression type');
                         }
                         break;
                     case '??':
-                        // Nullish coalescing: a ?? b → if a is defined use a, else b
-                        emit('if ');
+                        // Nullish coalescing: a ?? b → (if a is defined use a, else b)
+                        // Parens prevent json! macro from misparising { } as object literal.
+                        emit('(if ');
                         c(node.left, asType(state, 'bool'));
                         emit('.is_nonnullish() { ');
                         c(node.left, asType(state, 'value'));
                         emit(' } else { ');
                         c(node.right, asType(state, 'value'));
-                        emit(' }');
+                        emit(' })');
                         break;
                     default:
                         throw new Error('Unexpected logical operator');
@@ -1651,7 +1706,7 @@ function transpileMethodToRust(opts: {
                     case '<':
                     case '>=':
                     case '<=':
-                        if (state.asType === 'value') emit('(');
+                        if (state.asType === 'value') emit('Value::from(');
                         const desiredExpressionType = inferType(node.left) || 'value';
                         c(node.left, asType(state, desiredExpressionType));
                         if (
@@ -1675,23 +1730,26 @@ function transpileMethodToRust(opts: {
                             const rhsType = (desiredExpressionType === 'usize' && rhsInferred !== 'usize') ? 'value' : desiredExpressionType;
                             c(node.right, asType(state, rhsType));
                         }
-                        if (state.asType === 'value') emit(').into()');
+                        if (state.asType === 'value') emit(')');
                         break;
                     case '+':
                     case '-':
                     case '*':
                     case '/':
-                    case '%':
-                        c(node.left, asType(state, 'value'));
+                    case '%': {
+                        const arithType = state.asType === 'usize' ? 'usize' : 'value';
+                        c(node.left, asType(state, arithType));
                         emit(' ');
                         emit(node.operator);
                         emit(' ');
-                        c(node.right, asType(state, 'value'));
+                        c(node.right, asType(state, arithType));
                         break;
+                    }
                     case 'instanceof':
                         // x instanceof Error → always false in Value runtime
+                        if (state.asType === 'value') emit('Value::from(');
                         emit('false');
-                        if (state.asType === 'value') emit('.into()');
+                        if (state.asType === 'value') emit(')');
                         break;
                     default:
                         throw new Error('Unexpected binary operator: ' + node.operator);
@@ -2155,8 +2213,9 @@ function transpileMethodToRust(opts: {
                             indent(state1);
                             // Handle both Literal keys (key.value) and Identifier keys (key.name)
                             const keyStr = node1.key.value !== undefined ? node1.key.value : node1.key.name;
-                            emit(`"${keyStr}": `);
-                            c(node1.value, asType(state1));
+                            const escapedKey = String(keyStr).replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+                            emit(`"${escapedKey}": `);
+                            c(node1.value, asType(state1, 'value'));
                             if (i < node.properties.length - 1) emit(',\n');
                             break;
                         case 'SpreadElement':
@@ -2184,17 +2243,54 @@ function transpileMethodToRust(opts: {
             },
 
             TryStatement(node: any, state: any, c: any) {
-                // Emit try block body inline (Rust has no try/catch — errors would need Result types)
-                for (const stmt of node.block.body) {
-                    indent(state);
-                    c(stmt, asType(state));
-                    emit(';\n');
-                }
                 if (node.handler) {
+                    const tryIdx = tryCounter++;
+                    const tryLabel = `'try_block_${tryIdx}`;
+                    const tryErrorVar = `__try_error_${tryIdx}`;
+                    const innerState = { ...state, tryLabel, tryErrorVar, indentLevel: state.indentLevel + 1 };
+
+                    // First line: no leading indent (parent BlockStatement already emitted it)
+                    emit(`let mut ${tryErrorVar}: Value = Value::Undefined;\n`);
+
+                    // Labeled block for try body
                     indent(state);
-                    emit('// catch block omitted (no exception support in Value runtime)\n');
+                    emit(`${tryLabel}: {\n`);
+                    for (const stmt of node.block.body) {
+                        indent(innerState);
+                        c(stmt, asType(innerState));
+                        emit(';\n');
+                    }
+                    indent(state);
+                    emit('}\n');
+
+                    // Catch body — original state (no tryLabel so throws inside catch escape)
+                    indent(state);
+                    emit(`if !${tryErrorVar}.is_undefined() {\n`);
+                    const catchBodyState = { ...state, indentLevel: state.indentLevel + 1 };
+                    const handler = node.handler;
+                    if (handler.param && handler.param.type === 'Identifier') {
+                        indent(catchBodyState);
+                        emit(`let mut ${transformIdentifier(handler.param.name)} = ${tryErrorVar}.clone();\n`);
+                    }
+                    for (const stmt of handler.body.body) {
+                        indent(catchBodyState);
+                        c(stmt, asType(catchBodyState));
+                        emit(';\n');
+                    }
+                    indent(state);
+                    emit('}');
+                    // Parent BlockStatement appends ';\n' after TryStatement returns
+                } else {
+                    // No handler: emit try body inline
+                    for (const stmt of node.block.body) {
+                        indent(state);
+                        c(stmt, asType(state));
+                        emit(';\n');
+                    }
                 }
+
                 if (node.finalizer) {
+                    emit('\n');
                     for (const stmt of node.finalizer.body) {
                         indent(state);
                         c(stmt, asType(state));

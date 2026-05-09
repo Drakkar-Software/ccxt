@@ -1,5 +1,4 @@
 #![allow(clippy::all)]
-#![allow(non_snake_case)]
 #![allow(dead_code)]
 #![allow(unreachable_code)]
 #![allow(unused_imports)]
@@ -13,6 +12,7 @@ use std::str::FromStr;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, BoolExt, JSON, Array, Object, Math, Promise, parse_int, shift_2, extend_2, normalize};
+use crate::ws::{ArrayCache, ArrayCacheByTimestamp, ArrayCacheBySymbolById, ArrayCacheBySymbolBySide};
 // Crypto hash identifiers
 fn sha256() -> Value { Value::from("sha256()") }
 fn sha384() -> Value { Value::from("sha384()") }
@@ -31,21 +31,30 @@ fn decimals(value: Value) -> Value { Value::from(0) }
 fn shift_1(value: Value) -> Value { value }
 fn shift_3(value: Value) -> (Value, Value, Value) { (value.clone(), Value::Undefined, Value::Undefined) }
 fn shift_4(value: Value) -> (Value, Value, Value, Value) { (value.clone(), Value::Undefined, Value::Undefined, Value::Undefined) }
-// Error type constructors
-fn BadRequest(msg: Value) -> Value { msg }
-fn InvalidOrder(msg: Value) -> Value { msg }
-fn ExchangeError(msg: Value) -> Value { msg }
-fn InsufficientFunds(msg: Value) -> Value { msg }
-fn OrderNotFound(msg: Value) -> Value { msg }
-fn AuthenticationError(msg: Value) -> Value { msg }
-fn PermissionDenied(msg: Value) -> Value { msg }
-fn ExchangeNotAvailable(msg: Value) -> Value { msg }
-fn ArgumentsRequired(msg: Value) -> Value { msg }
-fn RateLimitExceeded(msg: Value) -> Value { msg }
-fn OrderNotFillable(msg: Value) -> Value { msg }
-fn OrderImmediatelyFillable(msg: Value) -> Value { msg }
-fn NotSupported(msg: Value) -> Value { msg }
-fn DuplicateOrderId(msg: Value) -> Value { msg }
+// Error type constructors (stub structs with ::new for transpiled `new ErrorType(msg)` patterns)
+macro_rules! error_stub { ($name:ident) => { pub struct $name; impl $name { pub fn new(msg: Value) -> Value { msg } } }; }
+error_stub!(BadRequest);
+error_stub!(InvalidOrder);
+error_stub!(ExchangeError);
+error_stub!(InsufficientFunds);
+error_stub!(OrderNotFound);
+error_stub!(AuthenticationError);
+error_stub!(PermissionDenied);
+error_stub!(ExchangeNotAvailable);
+error_stub!(ArgumentsRequired);
+error_stub!(RateLimitExceeded);
+error_stub!(OrderNotFillable);
+error_stub!(OrderImmediatelyFillable);
+error_stub!(NotSupported);
+error_stub!(DuplicateOrderId);
+error_stub!(UnsubscribeError);
+error_stub!(ChecksumError);
+error_stub!(InvalidNonce);
+error_stub!(BadSymbol);
+// Array-like type stubs (Bids/Asks order book sides)
+macro_rules! array_side_stub { ($name:ident) => { pub struct $name; impl $name { pub fn new(data: Value, _limit: Value) -> Value { data } } }; }
+array_side_stub!(Bids);
+array_side_stub!(Asks);
 
 use crate::exchange::{PRECISE_BASE, TRUNCATE, ROUND, ROUND_UP, ROUND_DOWN};
 use crate::exchange::{DECIMAL_PLACES, SIGNIFICANT_DIGITS, TICK_SIZE, NO_PADDING, PAD_WITH_ZERO};
@@ -601,7 +610,7 @@ pub trait Tokocrypto : Exchange {
     }
 
 
-    fn parse_trade(&mut self, mut trade: Value, mut market: Value) -> Value {
+    fn parse_trade(&self, mut trade: Value, mut market: Value) -> Value {
         //
         // aggregate trades
         // https://github.com/binance-exchange/binance-official-api-docs/blob/master/rest-api.md#compressedaggregate-trades-list
@@ -734,19 +743,19 @@ pub trait Tokocrypto : Exchange {
             taker_or_maker = if trade.get(Value::from("maker")).is_truthy() { Value::from("maker") } else { Value::from("taker") };
         };
         return self.safe_trade(Value::Json(normalize(&Value::Json(json!({
-            "info": trade,
-            "timestamp": timestamp,
+            "info": trade.clone(),
+            "timestamp": timestamp.clone(),
             "datetime": self.iso8601(timestamp.clone()),
-            "symbol": symbol,
-            "id": id,
-            "order": order_id,
+            "symbol": symbol.clone(),
+            "id": id.clone(),
+            "order": order_id.clone(),
             "type": Value::Undefined,
-            "side": side,
-            "takerOrMaker": taker_or_maker,
-            "price": price,
-            "amount": amount,
-            "cost": cost,
-            "fee": fee
+            "side": side.clone(),
+            "takerOrMaker": taker_or_maker.clone(),
+            "price": price.clone(),
+            "amount": amount.clone(),
+            "cost": cost.clone(),
+            "fee": fee.clone()
         }))).unwrap()), market.clone());
     }
 
@@ -826,8 +835,8 @@ pub trait Tokocrypto : Exchange {
             quote_volume = self.safe_string(ticker.clone(), Value::from("quoteVolume"), Value::Undefined);
         };
         return self.safe_ticker(Value::Json(normalize(&Value::Json(json!({
-            "symbol": symbol,
-            "timestamp": timestamp,
+            "symbol": symbol.clone(),
+            "timestamp": timestamp.clone(),
             "datetime": self.iso8601(timestamp.clone()),
             "high": self.safe_string(ticker.clone(), Value::from("highPrice"), Value::Undefined),
             "low": self.safe_string(ticker.clone(), Value::from("lowPrice"), Value::Undefined),
@@ -837,15 +846,15 @@ pub trait Tokocrypto : Exchange {
             "askVolume": self.safe_string(ticker.clone(), Value::from("askQty"), Value::Undefined),
             "vwap": self.safe_string(ticker.clone(), Value::from("weightedAvgPrice"), Value::Undefined),
             "open": self.safe_string(ticker.clone(), Value::from("openPrice"), Value::Undefined),
-            "close": last,
-            "last": last,
+            "close": last.clone(),
+            "last": last.clone(),
             "previousClose": self.safe_string(ticker.clone(), Value::from("prevClosePrice"), Value::Undefined),
             "change": self.safe_string(ticker.clone(), Value::from("priceChange"), Value::Undefined),
             "percentage": self.safe_string(ticker.clone(), Value::from("priceChangePercent"), Value::Undefined),
             "average": Value::Undefined,
-            "baseVolume": base_volume,
-            "quoteVolume": quote_volume,
-            "info": ticker
+            "baseVolume": base_volume.clone(),
+            "quoteVolume": quote_volume.clone(),
+            "info": ticker.clone()
         }))).unwrap()), market.clone());
     }
 
@@ -963,7 +972,7 @@ pub trait Tokocrypto : Exchange {
         //         ]
         //     ]
         //
-        return Value::Json(serde_json::Value::Array(vec![self.safe_integer(ohlcv.clone(), Value::from(0), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from(1), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from(2), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from(3), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from(4), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from(5), Value::Undefined).into()]));
+        return Value::Json(serde_json::Value::Array(vec![(self.safe_integer(ohlcv.clone(), Value::from(0), Value::Undefined)).into(), (self.safe_number(ohlcv.clone(), Value::from(1), Value::Undefined)).into(), (self.safe_number(ohlcv.clone(), Value::from(2), Value::Undefined)).into(), (self.safe_number(ohlcv.clone(), Value::from(3), Value::Undefined)).into(), (self.safe_number(ohlcv.clone(), Value::from(4), Value::Undefined)).into(), (self.safe_number(ohlcv.clone(), Value::from(5), Value::Undefined)).into()]));
     }
 
     async fn fetch_ohlcv(&mut self, mut symbol: Value, mut timeframe: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
@@ -1034,14 +1043,14 @@ pub trait Tokocrypto : Exchange {
         //         "timestamp":1659666786943
         //     }
         //
-        return <Self as Tokocrypto>::parse_balance_custom(self, response.clone(), r#type.clone(), margin_mode.clone());
+        return <Self as Tokocrypto>::parse_balance_custom(self, response.clone(), r#type.clone(), margin_mode.clone()).await;
     }
 
     fn parse_balance_custom(&self, mut response: Value, mut r#type: Value, mut margin_mode: Value) -> Value {
         let mut timestamp: Value = self.safe_integer(response.clone(), Value::from("updateTime"), Value::Undefined);
         let mut result: Value = Value::Json(normalize(&Value::Json(json!({
-            "info": response,
-            "timestamp": timestamp,
+            "info": response.clone(),
+            "timestamp": timestamp.clone(),
             "datetime": self.iso8601(timestamp.clone())
         }))).unwrap());
         let mut data: Value = self.safe_value(response.clone(), Value::from("data"), Value::new_object());
@@ -1062,26 +1071,26 @@ pub trait Tokocrypto : Exchange {
 
     fn parse_order_status(&self, mut status: Value) -> Value {
         let mut statuses: Value = Value::Json(normalize(&Value::Json(json!({
-            "-2": "open",
-            "0": "open",
-            "1": "open",
-            "2": "closed",
-            "3": "canceled",
-            "4": "canceling",
-            "5": "rejected",
-            "6": "expired",
-            "NEW": "open",
-            "PARTIALLY_FILLED": "open",
-            "FILLED": "closed",
-            "CANCELED": "canceled",
-            "PENDING_CANCEL": "canceling",
-            "REJECTED": "rejected",
-            "EXPIRED": "expired"
+            "-2": Value::from("open"),
+            "0": Value::from("open"),
+            "1": Value::from("open"),
+            "2": Value::from("closed"),
+            "3": Value::from("canceled"),
+            "4": Value::from("canceling"),
+            "5": Value::from("rejected"),
+            "6": Value::from("expired"),
+            "NEW": Value::from("open"),
+            "PARTIALLY_FILLED": Value::from("open"),
+            "FILLED": Value::from("closed"),
+            "CANCELED": Value::from("canceled"),
+            "PENDING_CANCEL": Value::from("canceling"),
+            "REJECTED": Value::from("rejected"),
+            "EXPIRED": Value::from("expired")
         }))).unwrap());
         return self.safe_string(statuses.clone(), status.clone(), status.clone());
     }
 
-    fn parse_order(&mut self, mut order: Value, mut market: Value) -> Value {
+    fn parse_order(&self, mut order: Value, mut market: Value) -> Value {
         //
         // spot
         //
@@ -1190,7 +1199,7 @@ pub trait Tokocrypto : Exchange {
         let mut amount: Value = self.safe_string(order.clone(), Value::from("origQty"), Value::Undefined);
         // - Spot/Margin market: cummulativeQuoteQty
         //   Note this is not the actual cost, since Binance futures uses leverage to calculate margins.
-        let mut cost: Value = self.safe_string_n(order.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("cummulativeQuoteQty").into(), Value::from("cumQuote").into(), Value::from("executedQuoteQty").into(), Value::from("cumBase").into()])), Value::Undefined);
+        let mut cost: Value = self.safe_string_n(order.clone(), Value::Json(serde_json::Value::Array(vec![(Value::from("cummulativeQuoteQty")).into(), (Value::from("cumQuote")).into(), (Value::from("executedQuoteQty")).into(), (Value::from("cumBase")).into()])), Value::Undefined);
         let mut id: Value = self.safe_string(order.clone(), Value::from("orderId"), Value::Undefined);
         let mut r#type: Value = <Self as Tokocrypto>::parse_order_type(self, self.safe_string_lower(order.clone(), Value::from("type"), Value::Undefined));
         let mut side: Value = self.safe_string_lower(order.clone(), Value::from("side"), Value::Undefined);
@@ -1206,39 +1215,39 @@ pub trait Tokocrypto : Exchange {
             // GTX means "Good Till Crossing" and is an equivalent way of saying Post Only
             time_in_force = Value::from("PO");
         };
-        let mut post_only: Value = (r#type.clone() == Value::from("limit_maker") || time_in_force.clone() == Value::from("PO")).into();
+        let mut post_only: Value = (if r#type.clone() == Value::from("limit_maker") { Value::from(r#type.clone() == Value::from("limit_maker")) } else { Value::from(time_in_force.clone() == Value::from("PO")) });
         return self.safe_order(Value::Json(normalize(&Value::Json(json!({
-            "info": order,
-            "id": id,
-            "clientOrderId": client_order_id,
-            "timestamp": timestamp,
+            "info": order.clone(),
+            "id": id.clone(),
+            "clientOrderId": client_order_id.clone(),
+            "timestamp": timestamp.clone(),
             "datetime": self.iso8601(timestamp.clone()),
             "lastTradeTimestamp": Value::Undefined,
-            "symbol": symbol,
-            "type": r#type,
-            "timeInForce": time_in_force,
-            "postOnly": post_only,
+            "symbol": symbol.clone(),
+            "type": r#type.clone(),
+            "timeInForce": time_in_force.clone(),
+            "postOnly": post_only.clone(),
             "reduceOnly": self.safe_value(order.clone(), Value::from("reduceOnly"), Value::Undefined),
-            "side": side,
-            "price": price,
+            "side": side.clone(),
+            "price": price.clone(),
             "triggerPrice": self.parse_number(self.omit_zero(self.safe_string(order.clone(), Value::from("stopPrice"), Value::Undefined)), Value::Undefined),
-            "amount": amount,
-            "cost": cost,
-            "average": average,
-            "filled": filled,
+            "amount": amount.clone(),
+            "cost": cost.clone(),
+            "average": average.clone(),
+            "filled": filled.clone(),
             "remaining": Value::Undefined,
-            "status": status,
+            "status": status.clone(),
             "fee": Value::Undefined,
-            "trades": fills
+            "trades": fills.clone()
         }))).unwrap()), market.clone());
     }
 
     fn parse_order_type(&self, mut status: Value) -> Value {
         let mut statuses: Value = Value::Json(normalize(&Value::Json(json!({
-            "2": "market",
-            "1": "limit",
-            "4": "limit",
-            "7": "limit"
+            "2": Value::from("market"),
+            "1": Value::from("limit"),
+            "4": Value::from("limit"),
+            "7": Value::from("limit")
         }))).unwrap());
         return self.safe_string(statuses.clone(), status.clone(), status.clone());
     }
@@ -1248,17 +1257,17 @@ pub trait Tokocrypto : Exchange {
         self.load_markets(Value::Undefined, Value::Undefined).await;
         let mut market: Value = self.market(symbol.clone());
         let mut client_order_id: Value = self.safe_string_2(params.clone(), Value::from("clientOrderId"), Value::from("clientId"), Value::Undefined);
-        let mut post_only: Value = self.safe_bool(params.clone(), Value::from("postOnly"), false.into());
+        let mut post_only: Value = self.safe_bool(params.clone(), Value::from("postOnly"), Value::from(false));
         // only supported for spot/margin api
         if post_only.is_truthy() {
             r#type = Value::from("LIMIT_MAKER");
         };
-        params = self.omit(params.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("clientId").into(), Value::from("clientOrderId").into()])));
+        params = self.omit(params.clone(), Value::Json(serde_json::Value::Array(vec![(Value::from("clientId")).into(), (Value::from("clientOrderId")).into()])));
         let mut initial_uppercase_type: Value = r#type.to_upper_case();
         let mut uppercase_type: Value = initial_uppercase_type.clone();
         let mut trigger_price: Value = self.safe_value_2(params.clone(), Value::from("triggerPrice"), Value::from("stopPrice"), Value::Undefined);
         if trigger_price.clone().is_nonnullish() {
-            params = self.omit(params.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("triggerPrice").into(), Value::from("stopPrice").into()])));
+            params = self.omit(params.clone(), Value::Json(serde_json::Value::Array(vec![(Value::from("triggerPrice")).into(), (Value::from("stopPrice")).into()])));
             if uppercase_type.clone() == Value::from("MARKET") {
                 uppercase_type = Value::from("STOP_LOSS");
             } else if uppercase_type.clone() == Value::from("LIMIT") {
@@ -1268,19 +1277,19 @@ pub trait Tokocrypto : Exchange {
         let mut valid_order_types: Value = self.safe_value(market.get(Value::from("info")), Value::from("orderTypes"), Value::Undefined);
         if !self.in_array(uppercase_type.clone(), valid_order_types.clone()).is_truthy() {
             if initial_uppercase_type.clone() != uppercase_type.clone() {
-                panic!(r###"InvalidOrder::new(self.get("id".into()) + Value::from(" triggerPrice parameter is not allowed for ") + symbol.clone() + Value::from(" ") + r#type.clone() + Value::from(" orders"))"###);
+                return Value::Undefined;
             } else {
-                panic!(r###"InvalidOrder::new(self.get("id".into()) + Value::from(" ") + r#type.clone() + Value::from(" is not a valid order type for the ") + symbol.clone() + Value::from(" market"))"###);
+                return Value::Undefined;
             };
         };
         let mut reverse_order_type_mapping: Value = Value::Json(normalize(&Value::Json(json!({
-            "LIMIT": 1,
-            "MARKET": 2,
-            "STOP_LOSS": 3,
-            "STOP_LOSS_LIMIT": 4,
-            "TAKE_PROFIT": 5,
-            "TAKE_PROFIT_LIMIT": 6,
-            "LIMIT_MAKER": 7
+            "LIMIT": Value::from(1),
+            "MARKET": Value::from(2),
+            "STOP_LOSS": Value::from(3),
+            "STOP_LOSS_LIMIT": Value::from(4),
+            "TAKE_PROFIT": Value::from(5),
+            "TAKE_PROFIT_LIMIT": Value::from(6),
+            "LIMIT_MAKER": Value::from(7)
         }))).unwrap());
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
             "symbol": market.get(Value::from("baseId")) + Value::from("_") + market.get(Value::from("quoteId")),
@@ -1303,9 +1312,9 @@ pub trait Tokocrypto : Exchange {
             request.set("clientId".into(), client_order_id.clone());
         };
         // additional required fields depending on the order type
-        let mut price_is_required: Value = false.into();
-        let mut trigger_price_is_required: Value = false.into();
-        let mut quantity_is_required: Value = false.into();
+        let mut price_is_required: Value = Value::from(false);
+        let mut trigger_price_is_required: Value = Value::from(false);
+        let mut quantity_is_required: Value = Value::from(false);
         //
         // spot/margin
         //
@@ -1321,15 +1330,15 @@ pub trait Tokocrypto : Exchange {
             if side.clone() == Value::from("buy") {
                 let mut precision: Value = market.get(Value::from("precision")).get(Value::from("price"));
                 let mut quote_amount: Value = Value::Undefined;
-                let mut create_market_buy_order_requires_price: Value = true.into();
-                (create_market_buy_order_requires_price, params) = shift_2(self.handle_option_and_params(params.clone(), Value::from("createOrder"), Value::from("createMarketBuyOrderRequiresPrice"), true.into()));
+                let mut create_market_buy_order_requires_price: Value = Value::from(true);
+                (create_market_buy_order_requires_price, params) = shift_2(self.handle_option_and_params(params.clone(), Value::from("createOrder"), Value::from("createMarketBuyOrderRequiresPrice"), Value::from(true)));
                 let mut cost: Value = self.safe_number_2(params.clone(), Value::from("cost"), Value::from("quoteOrderQty"), Value::Undefined);
-                params = self.omit(params.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("cost").into(), Value::from("quoteOrderQty").into()])));
+                params = self.omit(params.clone(), Value::Json(serde_json::Value::Array(vec![(Value::from("cost")).into(), (Value::from("quoteOrderQty")).into()])));
                 if cost.clone().is_nonnullish() {
                     quote_amount = cost.clone();
                 } else if create_market_buy_order_requires_price.is_truthy() {
                     if price.clone().is_nullish() {
-                        panic!(r###"InvalidOrder::new(self.get("id".into()) + Value::from(" createOrder() requires the price argument for market buy orders to calculate the total cost to spend (amount * price), alternatively set the createMarketBuyOrderRequiresPrice option or param to false and pass the cost to spend (quote quantity) in the amount argument"))"###);
+                        return Value::Undefined;
                     } else {
                         let mut amount_string: Value = self.number_to_string(amount.clone());
                         let mut price_string: Value = self.number_to_string(price.clone());
@@ -1340,37 +1349,37 @@ pub trait Tokocrypto : Exchange {
                 };
                 request.set("quoteOrderQty".into(), self.decimal_to_precision(quote_amount.clone(), TRUNCATE.into(), precision.clone(), self.get("precisionMode".into()), Value::Undefined));
             } else {
-                quantity_is_required = true.into();
+                quantity_is_required = Value::from(true);
             };
         } else if uppercase_type.clone() == Value::from("LIMIT") {
-            price_is_required = true.into();
-            quantity_is_required = true.into();
+            price_is_required = Value::from(true);
+            quantity_is_required = Value::from(true);
         } else if uppercase_type.clone() == Value::from("STOP_LOSS") || uppercase_type.clone() == Value::from("TAKE_PROFIT") {
-            trigger_price_is_required = true.into();
-            quantity_is_required = true.into();
+            trigger_price_is_required = Value::from(true);
+            quantity_is_required = Value::from(true);
             if market.get(Value::from("linear")).is_truthy() || market.get(Value::from("inverse")).is_truthy() {
-                price_is_required = true.into();
+                price_is_required = Value::from(true);
             };
         } else if uppercase_type.clone() == Value::from("STOP_LOSS_LIMIT") || uppercase_type.clone() == Value::from("TAKE_PROFIT_LIMIT") {
-            quantity_is_required = true.into();
-            trigger_price_is_required = true.into();
-            price_is_required = true.into();
+            quantity_is_required = Value::from(true);
+            trigger_price_is_required = Value::from(true);
+            price_is_required = Value::from(true);
         } else if uppercase_type.clone() == Value::from("LIMIT_MAKER") {
-            price_is_required = true.into();
-            quantity_is_required = true.into();
+            price_is_required = Value::from(true);
+            quantity_is_required = Value::from(true);
         };
         if quantity_is_required.is_truthy() {
             request.set("quantity".into(), self.amount_to_precision(symbol.clone(), amount.clone()));
         };
         if price_is_required.is_truthy() {
             if price.clone().is_nullish() {
-                panic!(r###"InvalidOrder::new(self.get("id".into()) + Value::from(" createOrder() requires a price argument for a ") + r#type.clone() + Value::from(" order"))"###);
+                return Value::Undefined;
             };
             request.set("price".into(), self.price_to_precision(symbol.clone(), price.clone()));
         };
         if trigger_price_is_required.is_truthy() {
             if trigger_price.clone().is_nullish() {
-                panic!(r###"InvalidOrder::new(self.get("id".into()) + Value::from(" createOrder() requires a triggerPrice extra param for a ") + r#type.clone() + Value::from(" order"))"###);
+                return Value::Undefined;
             } else {
                 request.set("stopPrice".into(), self.price_to_precision(symbol.clone(), trigger_price.clone()));
             };
@@ -1405,13 +1414,13 @@ pub trait Tokocrypto : Exchange {
         //     }
         //
         let mut raw_order: Value = self.safe_dict(response.clone(), Value::from("data"), Value::new_object());
-        return <Self as Tokocrypto>::parse_order(self, raw_order.clone(), market.clone());
+        return <Self as Tokocrypto>::parse_order(self, raw_order.clone(), market.clone()).await;
     }
 
     async fn fetch_order(&mut self, mut id: Value, mut symbol: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
-            "orderId": id
+            "orderId": id.clone()
         }))).unwrap());
         let mut response: Value = self.dispatch("privateGetOpenV1Orders".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         //
@@ -1447,13 +1456,13 @@ pub trait Tokocrypto : Exchange {
         let mut data: Value = self.safe_value(response.clone(), Value::from("data"), Value::new_object());
         let mut list: Value = self.safe_value(data.clone(), Value::from("list"), Value::new_array());
         let mut raw_order: Value = self.safe_dict(list.clone(), Value::from(0), Value::new_object());
-        return <Self as Tokocrypto>::parse_order(self, raw_order.clone(), Value::Undefined);
+        return <Self as Tokocrypto>::parse_order(self, raw_order.clone(), Value::Undefined).await;
     }
 
     async fn fetch_orders(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         if symbol.clone().is_nullish() {
-            panic!(r###"ArgumentsRequired::new(self.get("id".into()) + Value::from(" fetchOrders() requires a symbol argument"))"###);
+            return Value::Undefined;
         };
         self.load_markets(Value::Undefined, Value::Undefined).await;
         let mut market: Value = self.market(symbol.clone());
@@ -1509,13 +1518,13 @@ pub trait Tokocrypto : Exchange {
         //
         let mut data: Value = self.safe_value(response.clone(), Value::from("data"), Value::new_object());
         let mut orders: Value = self.safe_list(data.clone(), Value::from("list"), Value::new_array());
-        return self.parse_orders(orders.clone(), market.clone(), since.clone(), limit.clone(), Value::Undefined);
+        return self.parse_orders(orders.clone(), market.clone(), since.clone(), limit.clone(), Value::Undefined).await;
     }
 
     async fn fetch_open_orders(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
-            "type": 1
+            "type": Value::from(1)
         }))).unwrap());
         // -1 = all, 1 = open, 2 = closed
         return <Self as Tokocrypto>::fetch_orders(self, symbol.clone(), since.clone(), limit.clone(), extend_2(request.clone(), params.clone())).await;
@@ -1524,7 +1533,7 @@ pub trait Tokocrypto : Exchange {
     async fn fetch_closed_orders(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
-            "type": 2
+            "type": Value::from(2)
         }))).unwrap());
         // -1 = all, 1 = open, 2 = closed
         return <Self as Tokocrypto>::fetch_orders(self, symbol.clone(), since.clone(), limit.clone(), extend_2(request.clone(), params.clone())).await;
@@ -1533,7 +1542,7 @@ pub trait Tokocrypto : Exchange {
     async fn cancel_order(&mut self, mut id: Value, mut symbol: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
-            "orderId": id
+            "orderId": id.clone()
         }))).unwrap());
         let mut response: Value = self.dispatch("privatePostOpenV1OrdersCancel".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         //
@@ -1564,13 +1573,13 @@ pub trait Tokocrypto : Exchange {
         //     }
         //
         let mut raw_order: Value = self.safe_dict(response.clone(), Value::from("data"), Value::new_object());
-        return <Self as Tokocrypto>::parse_order(self, raw_order.clone(), Value::Undefined);
+        return <Self as Tokocrypto>::parse_order(self, raw_order.clone(), Value::Undefined).await;
     }
 
     async fn fetch_my_trades(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         if symbol.clone().is_nullish() {
-            panic!(r###"ArgumentsRequired::new(self.get("id".into()) + Value::from(" fetchMyTrades() requires a symbol argument"))"###);
+            return Value::Undefined;
         };
         self.load_markets(Value::Undefined, Value::Undefined).await;
         let mut market: Value = self.market(symbol.clone());
@@ -1583,7 +1592,7 @@ pub trait Tokocrypto : Exchange {
         };
         if end_time.clone().is_nonnullish() {
             request.set("endTime".into(), end_time.clone());
-            params = self.omit(params.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("endTime").into(), Value::from("until").into()])));
+            params = self.omit(params.clone(), Value::Json(serde_json::Value::Array(vec![(Value::from("endTime")).into(), (Value::from("until")).into()])));
         };
         if limit.clone().is_nonnullish() {
             request.set("limit".into(), limit.clone());
@@ -1616,7 +1625,7 @@ pub trait Tokocrypto : Exchange {
         //
         let mut data: Value = self.safe_value(response.clone(), Value::from("data"), Value::new_object());
         let mut trades: Value = self.safe_list(data.clone(), Value::from("list"), Value::new_array());
-        return self.parse_trades(trades.clone(), market.clone(), since.clone(), limit.clone(), Value::Undefined);
+        return self.parse_trades(trades.clone(), market.clone(), since.clone(), limit.clone(), Value::Undefined).await;
     }
 
     async fn fetch_deposit_address(&mut self, mut code: Value, mut params: Value) -> Value {
@@ -1657,16 +1666,16 @@ pub trait Tokocrypto : Exchange {
         let mut data: Value = self.safe_value(response.clone(), Value::from("data"), Value::new_object());
         let mut address: Value = self.safe_string(data.clone(), Value::from("address"), Value::Undefined);
         let mut tag: Value = self.safe_string(data.clone(), Value::from("addressTag"), Value::from(""));
-        if tag.len() == 0 {
+        if tag.len() == Value::from(0) {
             tag = Value::Undefined;
         };
         self.check_address(address.clone());
         return Value::Json(normalize(&Value::Json(json!({
-            "info": response,
-            "currency": code,
+            "info": response.clone(),
+            "currency": code.clone(),
             "network": self.safe_string(data.clone(), Value::from("network"), Value::Undefined),
-            "address": address,
-            "tag": tag
+            "address": address.clone(),
+            "tag": tag.clone()
         }))).unwrap());
     }
 
@@ -1718,7 +1727,7 @@ pub trait Tokocrypto : Exchange {
         //
         let mut data: Value = self.safe_value(response.clone(), Value::from("data"), Value::new_object());
         let mut deposits: Value = self.safe_list(data.clone(), Value::from("list"), Value::new_array());
-        return self.parse_transactions(deposits.clone(), currency.clone(), since.clone(), limit.clone(), Value::Undefined);
+        return self.parse_transactions(deposits.clone(), currency.clone(), since.clone(), limit.clone(), Value::Undefined).await;
     }
 
     async fn fetch_withdrawals(&mut self, mut code: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
@@ -1766,23 +1775,23 @@ pub trait Tokocrypto : Exchange {
         //
         let mut data: Value = self.safe_value(response.clone(), Value::from("data"), Value::new_object());
         let mut withdrawals: Value = self.safe_list(data.clone(), Value::from("list"), Value::new_array());
-        return self.parse_transactions(withdrawals.clone(), currency.clone(), since.clone(), limit.clone(), Value::Undefined);
+        return self.parse_transactions(withdrawals.clone(), currency.clone(), since.clone(), limit.clone(), Value::Undefined).await;
     }
 
     fn parse_transaction_status_by_type(&self, mut status: Value, mut r#type: Value) -> Value {
         let mut statuses_by_type: Value = Value::Json(normalize(&Value::Json(json!({
             "deposit": Value::Json(normalize(&Value::Json(json!({
-                "0": "pending",
-                "1": "ok"
+                "0": Value::from("pending"),
+                "1": Value::from("ok")
             }))).unwrap()),
             "withdrawal": Value::Json(normalize(&Value::Json(json!({
-                "0": "pending",
-                "1": "canceled",
-                "2": "pending",
-                "3": "failed",
-                "4": "pending",
-                "5": "failed",
-                "10": "ok"
+                "0": Value::from("pending"),
+                "1": Value::from("canceled"),
+                "2": Value::from("pending"),
+                "3": Value::from("failed"),
+                "4": Value::from("pending"),
+                "5": Value::from("failed"),
+                "10": Value::from("ok")
             }))).unwrap())
         }))).unwrap());
         // Completed
@@ -1839,7 +1848,7 @@ pub trait Tokocrypto : Exchange {
         let mut tag: Value = self.safe_string(transaction.clone(), Value::from("addressTag"), Value::Undefined);
         // set but unused
         if tag.clone().is_nonnullish() {
-            if tag.len() < 1 {
+            if tag.len() < Value::from(1) {
                 tag = Value::Undefined;
             };
         };
@@ -1873,9 +1882,9 @@ pub trait Tokocrypto : Exchange {
             fee.set("cost".into(), fee_cost.clone());
         };
         let mut internal_raw: Value = self.safe_integer(transaction.clone(), Value::from("transferType"), Value::Undefined);
-        let mut internal: Value = false.into();
+        let mut internal: Value = Value::from(false);
         if internal_raw.clone().is_nonnullish() {
-            internal = true.into();
+            internal = Value::from(true);
         };
         let mut id: Value = self.safe_string(transaction.clone(), Value::from("id"), Value::Undefined);
         if id.clone().is_nullish() {
@@ -1884,26 +1893,26 @@ pub trait Tokocrypto : Exchange {
             r#type = Value::from("withdrawal");
         };
         return Value::Json(normalize(&Value::Json(json!({
-            "info": transaction,
-            "id": id,
-            "txid": txid,
-            "type": r#type,
-            "currency": code,
+            "info": transaction.clone(),
+            "id": id.clone(),
+            "txid": txid.clone(),
+            "type": r#type.clone(),
+            "currency": code.clone(),
             "network": self.safe_string(transaction.clone(), Value::from("network"), Value::Undefined),
             "amount": self.safe_number(transaction.clone(), Value::from("amount"), Value::Undefined),
             "status": <Self as Tokocrypto>::parse_transaction_status_by_type(self, self.safe_string(transaction.clone(), Value::from("status"), Value::Undefined), r#type.clone()),
-            "timestamp": timestamp,
+            "timestamp": timestamp.clone(),
             "datetime": self.iso8601(timestamp.clone()),
-            "address": address,
+            "address": address.clone(),
             "addressFrom": Value::Undefined,
-            "addressTo": address,
-            "tag": tag,
+            "addressTo": address.clone(),
+            "tag": tag.clone(),
             "tagFrom": Value::Undefined,
-            "tagTo": tag,
+            "tagTo": tag.clone(),
             "updated": self.safe_integer_2(transaction.clone(), Value::from("successTime"), Value::from("updateTime"), Value::Undefined),
             "comment": Value::Undefined,
-            "internal": internal,
-            "fee": fee
+            "internal": internal.clone(),
+            "fee": fee.clone()
         }))).unwrap());
     }
 
@@ -1915,7 +1924,7 @@ pub trait Tokocrypto : Exchange {
         let mut currency: Value = self.currency(code.clone());
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
             "asset": currency.get(Value::from("id")),
-            "address": address,
+            "address": address.clone(),
             "amount": self.number_to_string(amount.clone())
         }))).unwrap());
         // 'clientId': 'string', // // client's custom id for withdraw order, server does not check it's uniqueness, automatically generated if not sent
@@ -1940,14 +1949,14 @@ pub trait Tokocrypto : Exchange {
         //         "timestamp": 1571745049095
         //     }
         //
-        return <Self as Tokocrypto>::parse_transaction(self, response.clone(), currency.clone());
+        return <Self as Tokocrypto>::parse_transaction(self, response.clone(), currency.clone()).await;
     }
 
     
 
     
 
-    fn calculate_rate_limiter_cost(&mut self, mut api: Value, mut method: Value, mut path: Value, mut params: Value, mut config: Value) -> Value {
+    fn calculate_rate_limiter_cost(&self, mut api: Value, mut method: Value, mut path: Value, mut params: Value, mut config: Value) -> Value {
         config = config.or_default(Value::new_object());
         if config.contains_key(Value::from("noCoin")) && !params.contains_key(Value::from("coin")) {
             return config.get(Value::from("noCoin"));
@@ -1974,7 +1983,7 @@ pub trait Tokocrypto : Exchange {
     async fn dispatch(&mut self, method: Value, params: Value, context: Value) -> Value {
         match method {
             Value::Json(serde_json::Value::String(ref m)) => {
-                match m.as_ref() {
+                match m.as_str() {
                     "binanceGetPing" => self.request("ping".into(), "binance".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "binanceGetTime" => self.request("time".into(), "binance".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "binanceGetDepth" => self.request("depth".into(), "binance".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
