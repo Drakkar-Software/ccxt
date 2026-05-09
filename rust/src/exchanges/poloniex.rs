@@ -1,5 +1,4 @@
 #![allow(clippy::all)]
-#![allow(non_snake_case)]
 #![allow(dead_code)]
 #![allow(unreachable_code)]
 #![allow(unused_imports)]
@@ -13,6 +12,7 @@ use std::str::FromStr;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, BoolExt, JSON, Array, Object, Math, Promise, parse_int, shift_2, extend_2, normalize};
+use crate::ws::{ArrayCache, ArrayCacheByTimestamp, ArrayCacheBySymbolById, ArrayCacheBySymbolBySide};
 // Crypto hash identifiers
 fn sha256() -> Value { Value::from("sha256()") }
 fn sha384() -> Value { Value::from("sha384()") }
@@ -31,21 +31,30 @@ fn decimals(value: Value) -> Value { Value::from(0) }
 fn shift_1(value: Value) -> Value { value }
 fn shift_3(value: Value) -> (Value, Value, Value) { (value.clone(), Value::Undefined, Value::Undefined) }
 fn shift_4(value: Value) -> (Value, Value, Value, Value) { (value.clone(), Value::Undefined, Value::Undefined, Value::Undefined) }
-// Error type constructors
-fn BadRequest(msg: Value) -> Value { msg }
-fn InvalidOrder(msg: Value) -> Value { msg }
-fn ExchangeError(msg: Value) -> Value { msg }
-fn InsufficientFunds(msg: Value) -> Value { msg }
-fn OrderNotFound(msg: Value) -> Value { msg }
-fn AuthenticationError(msg: Value) -> Value { msg }
-fn PermissionDenied(msg: Value) -> Value { msg }
-fn ExchangeNotAvailable(msg: Value) -> Value { msg }
-fn ArgumentsRequired(msg: Value) -> Value { msg }
-fn RateLimitExceeded(msg: Value) -> Value { msg }
-fn OrderNotFillable(msg: Value) -> Value { msg }
-fn OrderImmediatelyFillable(msg: Value) -> Value { msg }
-fn NotSupported(msg: Value) -> Value { msg }
-fn DuplicateOrderId(msg: Value) -> Value { msg }
+// Error type constructors (stub structs with ::new for transpiled `new ErrorType(msg)` patterns)
+macro_rules! error_stub { ($name:ident) => { pub struct $name; impl $name { pub fn new(msg: Value) -> Value { msg } } }; }
+error_stub!(BadRequest);
+error_stub!(InvalidOrder);
+error_stub!(ExchangeError);
+error_stub!(InsufficientFunds);
+error_stub!(OrderNotFound);
+error_stub!(AuthenticationError);
+error_stub!(PermissionDenied);
+error_stub!(ExchangeNotAvailable);
+error_stub!(ArgumentsRequired);
+error_stub!(RateLimitExceeded);
+error_stub!(OrderNotFillable);
+error_stub!(OrderImmediatelyFillable);
+error_stub!(NotSupported);
+error_stub!(DuplicateOrderId);
+error_stub!(UnsubscribeError);
+error_stub!(ChecksumError);
+error_stub!(InvalidNonce);
+error_stub!(BadSymbol);
+// Array-like type stubs (Bids/Asks order book sides)
+macro_rules! array_side_stub { ($name:ident) => { pub struct $name; impl $name { pub fn new(data: Value, _limit: Value) -> Value { data } } }; }
+array_side_stub!(Bids);
+array_side_stub!(Asks);
 
 use crate::exchange::{PRECISE_BASE, TRUNCATE, ROUND, ROUND_UP, ROUND_DOWN};
 use crate::exchange::{DECIMAL_PLACES, SIGNIFICANT_DIGITS, TICK_SIZE, NO_PADDING, PAD_WITH_ZERO};
@@ -547,12 +556,12 @@ pub trait Poloniex : Exchange {
         //             "1740770099999",
         //           ],
         //
-        let mut ohlcv_length: Value = Value::from(ohlcv.len());
-        let mut is_contract: Value = Value::from(ohlcv_length.clone() == Value::from(9));
+        let mut ohlcv_length: usize = ohlcv.len();
+        let mut is_contract: Value = Value::from(ohlcv_length == Value::from(9));
         if is_contract.is_truthy() {
-            return Value::Json(serde_json::Value::Array(vec![self.safe_integer(ohlcv.clone(), Value::from(7), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from(2), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from(1), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from(0), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from(3), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from(5), Value::Undefined).into()]));
+            return Value::Json(serde_json::Value::Array(vec![(self.safe_integer(ohlcv.clone(), Value::from(7), Value::Undefined)).into(), (self.safe_number(ohlcv.clone(), Value::from(2), Value::Undefined)).into(), (self.safe_number(ohlcv.clone(), Value::from(1), Value::Undefined)).into(), (self.safe_number(ohlcv.clone(), Value::from(0), Value::Undefined)).into(), (self.safe_number(ohlcv.clone(), Value::from(3), Value::Undefined)).into(), (self.safe_number(ohlcv.clone(), Value::from(5), Value::Undefined)).into()]));
         };
-        return Value::Json(serde_json::Value::Array(vec![self.safe_integer(ohlcv.clone(), Value::from(12), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from(2), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from(1), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from(0), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from(3), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from(5), Value::Undefined).into()]));
+        return Value::Json(serde_json::Value::Array(vec![(self.safe_integer(ohlcv.clone(), Value::from(12), Value::Undefined)).into(), (self.safe_number(ohlcv.clone(), Value::from(2), Value::Undefined)).into(), (self.safe_number(ohlcv.clone(), Value::from(1), Value::Undefined)).into(), (self.safe_number(ohlcv.clone(), Value::from(0), Value::Undefined)).into(), (self.safe_number(ohlcv.clone(), Value::from(3), Value::Undefined)).into(), (self.safe_number(ohlcv.clone(), Value::from(5), Value::Undefined)).into()]));
     }
 
     async fn fetch_ohlcv(&mut self, mut symbol: Value, mut timeframe: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
@@ -571,22 +580,40 @@ pub trait Poloniex : Exchange {
         if let Value::Json(serde_json::Value::Object(api_map)) = <Self as Poloniex>::describe(self).get("api".into()) {
             for (api_name, node) in api_map { collect_routes(&node, &api_name, &mut dynamic_calls); }
         }
-        for token in ["klines", "candles", "ohlcv"] {
+        let mut raw: Value = Value::Undefined;
+        // Match endpoints by substring on common OHLCV path tokens (klines, candles,
+        // ohlcv, barhist, history, kline, candle, ohlc).
+        'outer: for token in ["klines", "candles", "ohlcv", "barhist", "kline", "candle", "ohlc"] {
             for (api_name, method_name, path_name) in &dynamic_calls {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
-                if p == token || p.contains(token) {
+                if p.contains(token) {
                     let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
-                    if !rv.is_undefined() { return rv; }
+                    if !rv.is_undefined() { raw = rv; break 'outer; }
                 }
             }
         }
-        let candidates = vec![("public", "GET", "klines"), ("public", "GET", "candles"), ("public", "GET", "ohlcv")];
-        for (api_name, method_name, path_name) in candidates {
-            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
-            if !rv.is_undefined() { return rv; }
+        if raw.is_undefined() {
+            for (api_name, method_name, path_name) in [("public", "GET", "klines"), ("public", "GET", "candles"), ("public", "GET", "ohlcv")] {
+                let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                if !rv.is_undefined() { raw = rv; break; }
+            }
         }
-        Value::Undefined
+        if raw.is_undefined() { return Value::Undefined; }
+        let json_resp = match &raw { Value::Json(j) => j.clone(), _ => return raw };
+        let arr_val = crate::exchange::unwrap_response_array(&json_resp);
+        let items = match arr_val.as_array() { Some(a) => a.clone(), None => return raw };
+        let market: Value = Value::Undefined;
+        let mut parsed: Vec<serde_json::Value> = Vec::with_capacity(items.len());
+        for item in items {
+            if item.is_array() {
+                parsed.push(item);
+            } else {
+                let pv = <Self as Exchange>::parse_ohlcv(self, Value::Json(item.clone()), market.clone());
+                if let Value::Json(j) = pv { parsed.push(j); }
+            }
+        }
+        Value::Json(serde_json::Value::Array(parsed))
     }
 
 
@@ -629,7 +656,7 @@ pub trait Poloniex : Exchange {
         //         }
         //     ]
         //
-        return self.parse_markets(markets.clone());
+        return self.parse_markets(markets.clone()).await;
     }
 
     async fn fetch_swap_markets(&mut self, mut params: Value) -> Value {
@@ -675,7 +702,7 @@ pub trait Poloniex : Exchange {
         //            },
         //
         let mut markets: Value = self.safe_list(response.clone(), Value::from("data"), Value::Undefined);
-        return self.parse_markets(markets.clone());
+        return self.parse_markets(markets.clone()).await;
     }
 
     fn parse_market(&self, mut market: Value) -> Value {
@@ -698,22 +725,22 @@ pub trait Poloniex : Exchange {
         let mut symbol_trade_limit: Value = self.safe_value(market.clone(), Value::from("symbolTradeLimit"), Value::Undefined);
         // these are known defaults
         return Value::Json(normalize(&Value::Json(json!({
-            "id": id,
+            "id": id.clone(),
             "symbol": base.clone() + Value::from("/") + quote.clone(),
-            "base": base,
-            "quote": quote,
+            "base": base.clone(),
+            "quote": quote.clone(),
             "settle": Value::Undefined,
-            "baseId": base_id,
-            "quoteId": quote_id,
+            "baseId": base_id.clone(),
+            "quoteId": quote_id.clone(),
             "settleId": Value::Undefined,
-            "type": "spot",
-            "spot": true,
-            "margin": false,
-            "swap": false,
-            "future": false,
-            "option": false,
-            "active": active,
-            "contract": false,
+            "type": Value::from("spot"),
+            "spot": Value::from(true),
+            "margin": Value::from(false),
+            "swap": Value::from(false),
+            "future": Value::from(false),
+            "option": Value::from(false),
+            "active": active.clone(),
+            "contract": Value::from(false),
             "linear": Value::Undefined,
             "inverse": Value::Undefined,
             "contractSize": Value::Undefined,
@@ -740,7 +767,7 @@ pub trait Poloniex : Exchange {
                 }))).unwrap())
             }))).unwrap()),
             "created": self.safe_integer(market.clone(), Value::from("tradableStartTime"), Value::Undefined),
-            "info": market
+            "info": market.clone()
         }))).unwrap());
     }
 
@@ -802,23 +829,23 @@ pub trait Poloniex : Exchange {
             r#type = Value::from("future");
         };
         return Value::Json(normalize(&Value::Json(json!({
-            "id": id,
-            "symbol": symbol,
-            "base": base,
-            "quote": quote,
-            "settle": settle,
-            "baseId": base_id,
-            "quoteId": quote_id,
-            "settleId": settle_id,
+            "id": id.clone(),
+            "symbol": symbol.clone(),
+            "base": base.clone(),
+            "quote": quote.clone(),
+            "settle": settle.clone(),
+            "baseId": base_id.clone(),
+            "quoteId": quote_id.clone(),
+            "settleId": settle_id.clone(),
             "type": if r#type.clone() == Value::from("future") { Value::from("future") } else { Value::from("swap") },
-            "spot": false,
-            "margin": false,
+            "spot": Value::from(false),
+            "margin": Value::from(false),
             "swap": Value::from(r#type.clone() == Value::from("swap")),
             "future": Value::from(r#type.clone() == Value::from("future")),
-            "option": false,
-            "active": active,
-            "contract": true,
-            "linear": linear,
+            "option": Value::from(false),
+            "active": active.clone(),
+            "contract": Value::from(true),
+            "linear": linear.clone(),
             "inverse": Value::from(!linear.is_truthy()),
             "contractSize": self.safe_number(market.clone(), Value::from("ctVal"), Value::Undefined),
             "expiry": Value::Undefined,
@@ -850,7 +877,7 @@ pub trait Poloniex : Exchange {
                 }))).unwrap())
             }))).unwrap()),
             "created": self.safe_integer(market.clone(), Value::from("oDate"), Value::Undefined),
-            "info": market
+            "info": market.clone()
         }))).unwrap());
     }
 
@@ -918,9 +945,9 @@ pub trait Poloniex : Exchange {
         let mut relative_change: Value = self.safe_string_2(ticker.clone(), Value::from("dailyChange"), Value::from("dc"), Value::Undefined);
         let mut percentage: Value = Precise::string_mul(relative_change.clone(), Value::from("100"));
         return self.safe_ticker(Value::Json(normalize(&Value::Json(json!({
-            "id": market_id,
+            "id": market_id.clone(),
             "symbol": market.get(Value::from("symbol")),
-            "timestamp": timestamp,
+            "timestamp": timestamp.clone(),
             "datetime": self.iso8601(timestamp.clone()),
             "high": self.safe_string_2(ticker.clone(), Value::from("high"), Value::from("h"), Value::Undefined),
             "low": self.safe_string_2(ticker.clone(), Value::from("low"), Value::from("l"), Value::Undefined),
@@ -933,13 +960,13 @@ pub trait Poloniex : Exchange {
             "close": self.safe_string_2(ticker.clone(), Value::from("close"), Value::from("c"), Value::Undefined),
             "previousClose": Value::Undefined,
             "change": Value::Undefined,
-            "percentage": percentage,
+            "percentage": percentage.clone(),
             "average": Value::Undefined,
             "baseVolume": self.safe_string_2(ticker.clone(), Value::from("quantity"), Value::from("qty"), Value::Undefined),
             "quoteVolume": self.safe_string_2(ticker.clone(), Value::from("amount"), Value::from("amt"), Value::Undefined),
             "markPrice": self.safe_string_2(ticker.clone(), Value::from("markPrice"), Value::from("mPx"), Value::Undefined),
             "indexPrice": self.safe_string(ticker.clone(), Value::from("iPx"), Value::Undefined),
-            "info": ticker
+            "info": ticker.clone()
         }))).unwrap()), market.clone());
     }
 
@@ -975,7 +1002,7 @@ pub trait Poloniex : Exchange {
     async fn fetch_currencies(&mut self, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         let mut response: Value = self.dispatch("publicGetCurrencies".into(), extend_2(params.clone(), Value::Json(normalize(&Value::Json(json!({
-            "includeMultiChainCurrencies": true
+            "includeMultiChainCurrencies": Value::from(true)
         }))).unwrap())), Value::Undefined).await;
         //
         //     [
@@ -1043,14 +1070,14 @@ pub trait Poloniex : Exchange {
             let mut item: Value = self.safe_dict(response.clone(), Value::from(i), Value::Undefined);
             let mut ids: Value = item.clone().keys();
             let mut id: Value = self.safe_string(ids.clone(), Value::from(0), Value::Undefined);
-            currencies_dict.set(id.clone(), item.get(id.clone()));
+            currencies_dict.set(id.clone(), item.get(id.clone().clone()));
             i += 1;
         };
         let mut keys: Value = currencies_dict.clone().keys();
         let mut i: usize = 0;
         while i < keys.len() {
             let mut id: Value = keys.get(i.into());
-            let mut entry: Value = currencies_dict.get(id.clone());
+            let mut entry: Value = currencies_dict.get(id.clone().clone());
             let mut code: Value = self.safe_currency_code(id.clone(), Value::Undefined);
             // skip childChains, as they are collected in parentChain loop
             if self.safe_bool(entry.clone(), Value::from("isChildChain"), Value::Undefined).is_truthy() {
@@ -1077,13 +1104,13 @@ pub trait Poloniex : Exchange {
                 let mut special_network_id: Value = self.safe_string(child_chains.clone(), Value::from(j), id.clone());
                 // in case it's primary chain, defeault to ID
                 networks.set(network_code.clone(), Value::Json(normalize(&Value::Json(json!({
-                    "info": chain_entry,
-                    "id": special_network_id,
+                    "info": chain_entry.clone(),
+                    "id": special_network_id.clone(),
                     "numericId": self.safe_integer(chain_entry.clone(), Value::from("id"), Value::Undefined),
-                    "network": network_code,
+                    "network": network_code.clone(),
                     "active": self.safe_bool(chain_entry.clone(), Value::from("walletState"), Value::Undefined),
-                    "deposit": self.safe_string(chain_entry.clone(), Value::from("walletDepositState"), Value::Undefined) == Value::from("ENABLED"),
-                    "withdraw": self.safe_string(chain_entry.clone(), Value::from("walletWithdrawalState"), Value::Undefined) == Value::from("ENABLED"),
+                    "deposit": Value::from(self.safe_string(chain_entry.clone(), Value::from("walletDepositState"), Value::Undefined) == Value::from("ENABLED")),
+                    "withdraw": Value::from(self.safe_string(chain_entry.clone(), Value::from("walletWithdrawalState"), Value::Undefined) == Value::from("ENABLED")),
                     "fee": self.safe_number(chain_entry.clone(), Value::from("withdrawalFee"), Value::Undefined),
                     "precision": Value::Undefined,
                     "limits": Value::Json(normalize(&Value::Json(json!({
@@ -1100,11 +1127,11 @@ pub trait Poloniex : Exchange {
                 j += 1;
             };
             result.set(code.clone(), self.safe_currency_structure(Value::Json(normalize(&Value::Json(json!({
-                "info": entry,
-                "code": code,
-                "id": id,
+                "info": entry.clone(),
+                "code": code.clone(),
+                "id": id.clone(),
                 "numericId": self.safe_integer(entry.clone(), Value::from("id"), Value::Undefined),
-                "type": "crypto",
+                "type": Value::from("crypto"),
                 "name": self.safe_string(entry.clone(), Value::from("name"), Value::Undefined),
                 "active": Value::Undefined,
                 "deposit": Value::Undefined,
@@ -1125,7 +1152,7 @@ pub trait Poloniex : Exchange {
                         "max": Value::Undefined
                     }))).unwrap())
                 }))).unwrap()),
-                "networks": networks
+                "networks": networks.clone()
             }))).unwrap())));
             i += 1;
         };
@@ -1144,26 +1171,44 @@ pub trait Poloniex : Exchange {
         if let Value::Json(serde_json::Value::Object(api_map)) = <Self as Poloniex>::describe(self).get("api".into()) {
             for (api_name, node) in api_map { collect_routes(&node, &api_name, &mut dynamic_calls); }
         }
-        for token in ["ticker/24hr", "ticker", "ticker/price", "bookticker", "tickers"] {
+        let mut raw: Value = Value::Undefined;
+        'outer: for token in ["ticker/24hr", "ticker", "ticker/price", "bookticker", "tickers"] {
             for (api_name, method_name, path_name) in &dynamic_calls {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
                     let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
-                    if !rv.is_undefined() { return rv; }
+                    if !rv.is_undefined() { raw = rv; break 'outer; }
                 }
             }
         }
-        let candidates = vec![("public", "GET", "ticker/24hr"), ("public", "GET", "ticker"), ("public", "GET", "ticker/price")];
-        for (api_name, method_name, path_name) in candidates {
-            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
-            if !rv.is_undefined() { return rv; }
+        if raw.is_undefined() {
+            for (api_name, method_name, path_name) in [("public", "GET", "ticker/24hr"), ("public", "GET", "ticker"), ("public", "GET", "ticker/price")] {
+                let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                if !rv.is_undefined() { raw = rv; break; }
+            }
         }
-        Value::Undefined
+        if raw.is_undefined() { return Value::Undefined; }
+        // Some exchanges wrap the ticker in {data: {...}} or {result: {...}} — unwrap if so.
+        let json_resp = match &raw { Value::Json(j) => j.clone(), _ => return raw };
+        let mut tk = json_resp.clone();
+        if !tk.is_array() && tk.get("last").is_none() && tk.get("close").is_none() && tk.get("bid").is_none() {
+            for key in &["data", "result", "ticker"] {
+                if let Some(v) = json_resp.get(key) {
+                    if v.is_object() { tk = v.clone(); break; }
+                    if let Some(arr) = v.as_array() {
+                        if let Some(first) = arr.first() { tk = first.clone(); break; }
+                    }
+                }
+            }
+        }
+        let market: Value = Value::Undefined;
+        let parsed = <Self as Exchange>::parse_ticker(self, Value::Json(tk.clone()), market);
+        if parsed.is_undefined() { Value::Json(tk) } else { parsed }
     }
 
 
-    fn parse_trade(&mut self, mut trade: Value, mut market: Value) -> Value {
+    fn parse_trade(&self, mut trade: Value, mut market: Value) -> Value {
         //
         // fetchTrades
         //
@@ -1260,9 +1305,9 @@ pub trait Poloniex : Exchange {
         //         "clientOrderId": ""
         //     }
         //
-        let mut id: Value = self.safe_string_n(trade.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("id").into(), Value::from("tradeID").into(), Value::from("trdId").into()])), Value::Undefined);
+        let mut id: Value = self.safe_string_n(trade.clone(), Value::Json(serde_json::Value::Array(vec![(Value::from("id")).into(), (Value::from("tradeID")).into(), (Value::from("trdId")).into()])), Value::Undefined);
         let mut order_id: Value = self.safe_string_2(trade.clone(), Value::from("orderId"), Value::from("ordId"), Value::Undefined);
-        let mut timestamp: Value = self.safe_integer_n(trade.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("ts").into(), Value::from("createTime").into(), Value::from("cT").into(), Value::from("cTime").into()])), Value::Undefined);
+        let mut timestamp: Value = self.safe_integer_n(trade.clone(), Value::Json(serde_json::Value::Array(vec![(Value::from("ts")).into(), (Value::from("createTime")).into(), (Value::from("cT")).into(), (Value::from("cTime")).into()])), Value::Undefined);
         let mut market_id: Value = self.safe_string(trade.clone(), Value::from("symbol"), Value::Undefined);
         market = self.safe_market(market_id.clone(), market.clone(), Value::from("_"), Value::Undefined);
         let mut symbol: Value = market.get(Value::from("symbol"));
@@ -1276,24 +1321,24 @@ pub trait Poloniex : Exchange {
         if fee_cost_string.clone().is_nonnullish() {
             let mut fee_currency_code: Value = self.safe_currency_code(fee_currency_id.clone(), Value::Undefined);
             fee = Value::Json(normalize(&Value::Json(json!({
-                "cost": fee_cost_string,
-                "currency": fee_currency_code
+                "cost": fee_cost_string.clone(),
+                "currency": fee_currency_code.clone()
             }))).unwrap());
         };
         return self.safe_trade(Value::Json(normalize(&Value::Json(json!({
-            "id": id,
-            "info": trade,
-            "timestamp": timestamp,
+            "id": id.clone(),
+            "info": trade.clone(),
+            "timestamp": timestamp.clone(),
             "datetime": self.iso8601(timestamp.clone()),
-            "symbol": symbol,
-            "order": order_id,
+            "symbol": symbol.clone(),
+            "order": order_id.clone(),
             "type": self.safe_string_lower_2(trade.clone(), Value::from("ordType"), Value::from("type"), Value::Undefined),
-            "side": side,
+            "side": side.clone(),
             "takerOrMaker": self.safe_string_lower_2(trade.clone(), Value::from("matchRole"), Value::from("role"), Value::Undefined),
-            "price": price_string,
-            "amount": amount_string,
-            "cost": cost_string,
-            "fee": fee
+            "price": price_string.clone(),
+            "amount": amount_string.clone(),
+            "cost": cost_string.clone(),
+            "fee": fee.clone()
         }))).unwrap()), market.clone());
     }
 
@@ -1303,6 +1348,55 @@ pub trait Poloniex : Exchange {
         if since.is_nonnullish() { request.set("since".into(), since.clone()); request.set("startTime".into(), since.clone()); }
         if limit.is_nonnullish() { request.set("limit".into(), limit.clone()); }
         let candidates = vec![("public", "GET", "trades"), ("public", "GET", "recent_trades"), ("public", "GET", "aggTrades")];
+        let mut raw: Value = Value::Undefined;
+        for (api_name, method_name, path_name) in candidates {
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            if !rv.is_undefined() { raw = rv; break; }
+        }
+        if raw.is_undefined() { return Value::Undefined; }
+        let json_resp = match &raw { Value::Json(j) => j.clone(), _ => return raw };
+        let arr_val = crate::exchange::unwrap_response_array(&json_resp);
+        let items = match arr_val.as_array() { Some(a) => a.clone(), None => return raw };
+        let market: Value = Value::Undefined;
+        let mut parsed: Vec<serde_json::Value> = Vec::with_capacity(items.len());
+        for item in items {
+            // Already-parsed trades have both `price` and `amount` keys.
+            if item.get("price").is_some() && item.get("amount").is_some() {
+                parsed.push(item);
+            } else {
+                let pv = <Self as Exchange>::parse_trade(self, Value::Json(item.clone()), market.clone());
+                if let Value::Json(j) = pv { parsed.push(j); }
+            }
+        }
+        Value::Json(serde_json::Value::Array(parsed))
+    }
+
+
+    async fn fetch_my_trades(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
+        fn collect_routes(node: &serde_json::Value, api_name: &str, out: &mut Vec<(String, String, String)>) {
+            if let serde_json::Value::Object(map) = node {
+                for (k, v) in map { let kl = k.to_lowercase(); if kl == "get" || kl == "post" || kl == "put" || kl == "delete" { if let serde_json::Value::Object(paths) = v { for (p, _cost) in paths { out.push((api_name.to_string(), kl.to_uppercase(), p.clone())); } } } else { collect_routes(v, api_name, out); } }
+            }
+        }
+        let mut request = if params.is_object() { params.clone() } else { Value::new_object() };
+        if symbol.is_nonnullish() { request.set("symbol".into(), symbol.clone()); }
+        if since.is_nonnullish() { request.set("since".into(), since.clone()); request.set("startTime".into(), since.clone()); }
+        if limit.is_nonnullish() { request.set("limit".into(), limit.clone()); }
+        let mut dynamic_calls: Vec<(String, String, String)> = vec![];
+        if let Value::Json(serde_json::Value::Object(api_map)) = <Self as Poloniex>::describe(self).get("api".into()) {
+            for (api_name, node) in api_map { collect_routes(&node, &api_name, &mut dynamic_calls); }
+        }
+        for token in ["mytrades", "my_trades", "trades/history", "fills", "user/trades", "executions"] {
+            for (api_name, method_name, path_name) in &dynamic_calls {
+                if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
+                let p = path_name.to_lowercase();
+                if p == token || p.ends_with(&format!("/{}", token)) || p.contains(token) {
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    if !rv.is_undefined() { return rv; }
+                }
+            }
+        }
+        let candidates = vec![("private", "GET", "myTrades"), ("private", "GET", "fills"), ("private", "GET", "trades/history")];
         for (api_name, method_name, path_name) in candidates {
             let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
@@ -1311,112 +1405,20 @@ pub trait Poloniex : Exchange {
     }
 
 
-    async fn fetch_my_trades(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
-        params = params.or_default(Value::new_object());
-        <Self as Poloniex>::load_markets(self, Value::Undefined, Value::Undefined).await;
-        let mut paginate: Value = Value::from(false);
-        (paginate, params) = shift_2(self.handle_option_and_params(params.clone(), Value::from("fetchMyTrades"), Value::from("paginate"), Value::Undefined));
-        if paginate.is_truthy() {
-            return self.fetch_paginated_call_dynamic(Value::from("fetchMyTrades"), symbol.clone(), since.clone(), limit.clone(), params.clone(), Value::Undefined, Value::Undefined).await;
-        };
-        let mut market: Value = Value::Undefined;
-        if symbol.clone().is_nonnullish() {
-            market = self.market(symbol.clone());
-        };
-        let mut market_type: Value = Value::Undefined;
-        (market_type, params) = shift_2(self.handle_market_type_and_params(Value::from("fetchMyTrades"), market.clone(), params.clone(), Value::Undefined));
-        let mut is_contract: Value = self.in_array(market_type.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("swap").into(), Value::from("future").into()])));
-        let mut request: Value = Value::new_object();
-        // 'from': 12345678, // A 'trade Id'. The query begins at ‘from'.
-        // 'direction': 'PRE', // PRE, NEXT The direction before or after ‘from'.
-        let mut start_key: Value = if is_contract.is_truthy() { Value::from("sTime") } else { Value::from("startTime") };
-        let mut end_key: Value = if is_contract.is_truthy() { Value::from("eTime") } else { Value::from("endTime") };
-        if since.clone().is_nonnullish() {
-            request.set(start_key.clone(), since.clone());
-        };
-        if limit.clone().is_nonnullish() {
-            request.set("limit".into(), limit.clone());
-        };
-        if is_contract.is_truthy() && symbol.clone().is_nonnullish() {
-            request.set("symbol".into(), market.get(Value::from("id")));
-        };
-        (request, params) = shift_2(self.handle_until_option(end_key.clone(), request.clone(), params.clone(), Value::Undefined));
-        if is_contract.is_truthy() {
-            let mut raw: Value = self.dispatch("swapPrivateGetV3TradeOrderTrades".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
-            //
-            //    {
-            //        "code": "200",
-            //        "msg": "",
-            //        "data": [
-            //            {
-            //                "symbol": "BTC_USDT_PERP",
-            //                "trdId": "105813553",
-            //                "side": "SELL",
-            //                "type": "TRADE",
-            //                "mgnMode": "CROSS",
-            //                "ordType": "MARKET",
-            //                "clOrdId": "polo418912106147315112",
-            //                "role": "TAKER",
-            //                "px": "84704.9",
-            //                "qty": "1",
-            //                "cTime": "1740842829430",
-            //                "uTime": "1740842829450",
-            //                "feeCcy": "USDT",
-            //                "feeAmt": "0.04235245",
-            //                "deductCcy": "",
-            //                "deductAmt": "0",
-            //                "feeRate": "0.0005",
-            //                "id": "418912106342654592",
-            //                "posSide": "BOTH",
-            //                "ordId": "418912106147315112",
-            //                "qCcy": "USDT",
-            //                "value": "84.7049",
-            //                "actType": "TRADING"
-            //            },
-            //
-            let mut data: Value = self.safe_list(raw.clone(), Value::from("data"), Value::Undefined);
-            return self.parse_trades(data.clone(), market.clone(), since.clone(), limit.clone(), Value::Undefined);
-        };
-        let mut response: Value = self.dispatch("privateGetTrades".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
-        //
-        //     [
-        //         {
-        //             "id": "32164924331503616",
-        //             "symbol": "LINK_USDT",
-        //             "accountType": "SPOT",
-        //             "orderId": "32164923987566592",
-        //             "side": "SELL",
-        //             "type": "MARKET",
-        //             "matchRole": "TAKER",
-        //             "createTime": 1648635115525,
-        //             "price": "11",
-        //             "quantity": "0.5",
-        //             "amount": "5.5",
-        //             "feeCurrency": "USDT",
-        //             "feeAmount": "0.007975",
-        //             "pageId": "32164924331503616",
-        //             "clientOrderId": "myOwnId-321"
-        //         }
-        //     ]
-        //
-        let mut result: Value = self.parse_trades(response.clone(), market.clone(), since.clone(), limit.clone(), Value::Undefined);
-        return result.clone();
-    }
-
     fn parse_order_status(&self, mut status: Value) -> Value {
         let mut statuses: Value = Value::Json(normalize(&Value::Json(json!({
-            "NEW": "open",
-            "PARTIALLY_FILLED": "open",
-            "FILLED": "closed",
-            "PENDING_CANCEL": "canceled",
-            "PARTIALLY_CANCELED": "canceled",
-            "CANCELED": "canceled",
-            "FAILED": "canceled"
+            "NEW": Value::from("open"),
+            "PARTIALLY_FILLED": Value::from("open"),
+            "FILLED": Value::from("closed"),
+            "PENDING_CANCEL": Value::from("canceled"),
+            "PARTIALLY_CANCELED": Value::from("canceled"),
+            "CANCELED": Value::from("canceled"),
+            "FAILED": Value::from("canceled")
         }))).unwrap());
         return self.safe_string(statuses.clone(), status.clone(), status.clone());
     }
 
-    fn parse_order(&mut self, mut order: Value, mut market: Value) -> Value {
+    fn parse_order(&self, mut order: Value, mut market: Value) -> Value {
         //
         // fetchOpenOrder
         //
@@ -1515,7 +1517,7 @@ pub trait Poloniex : Exchange {
         //        "clOrdId":"polo418876147745775616"
         //    }
         //
-        let mut timestamp: Value = self.safe_integer_n(order.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("timestamp").into(), Value::from("createTime").into(), Value::from("cTime").into()])), Value::Undefined);
+        let mut timestamp: Value = self.safe_integer_n(order.clone(), Value::Json(serde_json::Value::Array(vec![(Value::from("timestamp")).into(), (Value::from("createTime")).into(), (Value::from("cTime")).into()])), Value::Undefined);
         if timestamp.clone().is_nullish() {
             timestamp = self.parse8601(self.safe_string(order.clone(), Value::from("date"), Value::Undefined));
         };
@@ -1528,14 +1530,14 @@ pub trait Poloniex : Exchange {
                 resulting_trades = self.safe_value(resulting_trades.clone(), self.safe_string(market.clone(), Value::from("id"), market_id.clone()), Value::Undefined);
             };
         };
-        let mut price: Value = self.safe_string_n(order.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("price").into(), Value::from("rate").into(), Value::from("px").into()])), Value::Undefined);
+        let mut price: Value = self.safe_string_n(order.clone(), Value::Json(serde_json::Value::Array(vec![(Value::from("price")).into(), (Value::from("rate")).into(), (Value::from("px")).into()])), Value::Undefined);
         let mut amount: Value = self.safe_string_2(order.clone(), Value::from("quantity"), Value::from("sz"), Value::Undefined);
         let mut filled: Value = self.safe_string_2(order.clone(), Value::from("filledQuantity"), Value::from("execQty"), Value::Undefined);
         let mut status: Value = <Self as Poloniex>::parse_order_status(self, self.safe_string(order.clone(), Value::from("state"), Value::Undefined));
         let mut side: Value = self.safe_string_lower(order.clone(), Value::from("side"), Value::Undefined);
         let mut raw_type: Value = self.safe_string(order.clone(), Value::from("type"), Value::Undefined);
         let mut r#type: Value = <Self as Poloniex>::parse_order_type(self, raw_type.clone());
-        let mut id: Value = self.safe_string_n(order.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("orderNumber").into(), Value::from("id").into(), Value::from("orderId").into(), Value::from("ordId").into()])), Value::Undefined);
+        let mut id: Value = self.safe_string_n(order.clone(), Value::Json(serde_json::Value::Array(vec![(Value::from("orderNumber")).into(), (Value::from("id")).into(), (Value::from("orderId")).into(), (Value::from("ordId")).into()])), Value::Undefined);
         let mut fee: Value = Value::Undefined;
         let mut fee_currency: Value = self.safe_string_2(order.clone(), Value::from("tokenFeeCurrency"), Value::from("feeCcy"), Value::Undefined);
         let mut fee_cost: Value = Value::Undefined;
@@ -1550,9 +1552,9 @@ pub trait Poloniex : Exchange {
         };
         if fee_cost.clone().is_nonnullish() {
             fee = Value::Json(normalize(&Value::Json(json!({
-                "rate": rate,
-                "cost": fee_cost,
-                "currency": fee_currency_code
+                "rate": rate.clone(),
+                "cost": fee_cost.clone(),
+                "currency": fee_currency_code.clone()
             }))).unwrap());
         };
         let mut client_order_id: Value = self.safe_string_2(order.clone(), Value::from("clientOrderId"), Value::from("clOrdId"), Value::Undefined);
@@ -1561,52 +1563,52 @@ pub trait Poloniex : Exchange {
         let mut leverage: Value = self.safe_integer(order.clone(), Value::from("lever"), Value::Undefined);
         let mut hedged: Value = Value::from(self.safe_string(order.clone(), Value::from("posSide"), Value::Undefined) != Value::from("BOTH"));
         return self.safe_order(Value::Json(normalize(&Value::Json(json!({
-            "info": order,
-            "id": id,
-            "clientOrderId": client_order_id,
-            "timestamp": timestamp,
+            "info": order.clone(),
+            "id": id.clone(),
+            "clientOrderId": client_order_id.clone(),
+            "timestamp": timestamp.clone(),
             "datetime": self.iso8601(timestamp.clone()),
             "lastTradeTimestamp": self.safe_integer(order.clone(), Value::from("updateTime"), Value::Undefined),
-            "status": status,
-            "symbol": symbol,
-            "type": r#type,
+            "status": status.clone(),
+            "symbol": symbol.clone(),
+            "type": r#type.clone(),
             "timeInForce": self.safe_string(order.clone(), Value::from("timeInForce"), Value::Undefined),
             "postOnly": Value::from(raw_type.clone() == Value::from("LIMIT_MAKER")),
-            "side": side,
-            "price": price,
+            "side": side.clone(),
+            "price": price.clone(),
             "triggerPrice": self.safe_string_2(order.clone(), Value::from("triggerPrice"), Value::from("stopPrice"), Value::Undefined),
             "cost": self.safe_string(order.clone(), Value::from("execAmt"), Value::Undefined),
             "average": self.safe_string_2(order.clone(), Value::from("avgPrice"), Value::from("avgPx"), Value::Undefined),
-            "amount": amount,
-            "filled": filled,
+            "amount": amount.clone(),
+            "filled": filled.clone(),
             "remaining": Value::Undefined,
-            "trades": resulting_trades,
-            "fee": fee,
-            "marginMode": margin_mode,
-            "reduceOnly": reduce_only,
-            "leverage": leverage,
-            "hedged": hedged
+            "trades": resulting_trades.clone(),
+            "fee": fee.clone(),
+            "marginMode": margin_mode.clone(),
+            "reduceOnly": reduce_only.clone(),
+            "leverage": leverage.clone(),
+            "hedged": hedged.clone()
         }))).unwrap()), market.clone());
     }
 
     fn parse_order_type(&self, mut status: Value) -> Value {
         let mut statuses: Value = Value::Json(normalize(&Value::Json(json!({
-            "MARKET": "market",
-            "LIMIT": "limit",
-            "LIMIT_MAKER": "limit",
-            "STOP-LIMIT": "limit",
-            "STOP-MARKET": "market"
+            "MARKET": Value::from("market"),
+            "LIMIT": Value::from("limit"),
+            "LIMIT_MAKER": Value::from("limit"),
+            "STOP-LIMIT": Value::from("limit"),
+            "STOP-MARKET": Value::from("market")
         }))).unwrap());
         return self.safe_string(statuses.clone(), status.clone(), status.clone());
     }
 
-    fn parse_open_orders(&mut self, mut orders: Value, mut market: Value, mut result: Value) -> Value {
+    fn parse_open_orders(&self, mut orders: Value, mut market: Value, mut result: Value) -> Value {
         let mut i: usize = 0;
         while i < orders.len() {
             let mut order: Value = orders.get(i.into());
             let mut extended: Value = extend_2(order.clone(), Value::Json(normalize(&Value::Json(json!({
-                "status": "open",
-                "type": "limit",
+                "status": Value::from("open"),
+                "type": Value::from("limit"),
                 "side": order.get(Value::from("type")),
                 "price": order.get(Value::from("rate"))
             }))).unwrap()));
@@ -1617,199 +1619,105 @@ pub trait Poloniex : Exchange {
     }
 
     async fn fetch_open_orders(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
-        params = params.or_default(Value::new_object());
-        <Self as Poloniex>::load_markets(self, Value::Undefined, Value::Undefined).await;
-        let mut market: Value = Value::Undefined;
-        let mut request: Value = Value::new_object();
-        if symbol.clone().is_nonnullish() {
-            market = self.market(symbol.clone());
-            request.set("symbol".into(), market.get(Value::from("id")));
-        };
-        let mut market_type: Value = Value::Undefined;
-        (market_type, params) = shift_2(self.handle_market_type_and_params(Value::from("fetchOpenOrders"), market.clone(), params.clone(), Value::Undefined));
-        if limit.clone().is_nonnullish() {
-            let mut max: Value = if market_type.clone() == Value::from("spot") { Value::from(2000) } else { Value::from(100) };
-            request.set("limit".into(), Math::max(limit.clone(), max.clone()));
-        };
-        let mut is_trigger: Value = self.safe_value_2(params.clone(), Value::from("trigger"), Value::from("stop"), Value::Undefined);
-        params = self.omit(params.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("trigger").into(), Value::from("stop").into()])));
-        let mut response: Value = Value::Undefined;
-        if market_type.clone() != Value::from("spot") {
-            let mut raw: Value = self.dispatch("swapPrivateGetV3TradeOrderOpens".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
-            //
-            //    {
-            //        "code": "200",
-            //        "msg": "",
-            //        "data": [
-            //            {
-            //                "symbol": "BTC_USDT_PERP",
-            //                "side": "BUY",
-            //                "type": "LIMIT",
-            //                "ordId": "418890767248232148",
-            //                "clOrdId": "polo418890767248232148",
-            //                "mgnMode": "CROSS",
-            //                "px": "81130.13",
-            //                "reduceOnly": false,
-            //                "lever": "20",
-            //                "state": "NEW",
-            //                "source": "WEB",
-            //                "timeInForce": "GTC",
-            //                "tpTrgPx": "",
-            //                "tpPx": "",
-            //                "tpTrgPxType": "",
-            //                "slTrgPx": "",
-            //                "slPx": "",
-            //                "slTrgPxType": "",
-            //                "avgPx": "0",
-            //                "execQty": "0",
-            //                "execAmt": "0",
-            //                "feeCcy": "",
-            //                "feeAmt": "0",
-            //                "deductCcy": "0",
-            //                "deductAmt": "0",
-            //                "stpMode": "NONE",
-            //                "cTime": "1740837741523",
-            //                "uTime": "1740840846882",
-            //                "sz": "1",
-            //                "posSide": "BOTH",
-            //                "qCcy": "USDT"
-            //            },
-            //
-            response = self.safe_list(raw.clone(), Value::from("data"), Value::Undefined);
-        } else if is_trigger.is_truthy() {
-            response = self.dispatch("privateGetSmartorders".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
-        } else {
-            response = self.dispatch("privateGetOrders".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
-        };
-        //
-        //     [
-        //         {
-        //             "id" : "7xxxxxxxxxxxxxxx6",
-        //             "clientOrderId" : "",
-        //             "symbol" : "ETH_USDT",
-        //             "state" : "NEW",
-        //             "accountType" : "SPOT",
-        //             "side" : "BUY",
-        //             "type" : "LIMIT",
-        //             "timeInForce" : "GTC",
-        //             "quantity" : "0.001",
-        //             "price" : "1600",
-        //             "avgPrice" : "0",
-        //             "amount" : "0",
-        //             "filledQuantity" : "0",
-        //             "filledAmount" : "0",
-        //             "stopPrice": "3750.00",              // for trigger orders
-        //             "createTime" : 16xxxxxxxxx26,
-        //             "updateTime" : 16xxxxxxxxx36
-        //         }
-        //     ]
-        //
-        let mut extension: Value = Value::Json(normalize(&Value::Json(json!({
-            "status": "open"
-        }))).unwrap());
-        return self.parse_orders(response.clone(), market.clone(), since.clone(), limit.clone(), extension.clone());
+        fn collect_routes(node: &serde_json::Value, api_name: &str, out: &mut Vec<(String, String, String)>) {
+            if let serde_json::Value::Object(map) = node {
+                for (k, v) in map { let kl = k.to_lowercase(); if kl == "get" || kl == "post" || kl == "put" || kl == "delete" { if let serde_json::Value::Object(paths) = v { for (p, _cost) in paths { out.push((api_name.to_string(), kl.to_uppercase(), p.clone())); } } } else { collect_routes(v, api_name, out); } }
+            }
+        }
+        let mut request = if params.is_object() { params.clone() } else { Value::new_object() };
+        if symbol.is_nonnullish() { request.set("symbol".into(), symbol.clone()); }
+        if since.is_nonnullish() { request.set("since".into(), since.clone()); }
+        if limit.is_nonnullish() { request.set("limit".into(), limit.clone()); }
+        let mut dynamic_calls: Vec<(String, String, String)> = vec![];
+        if let Value::Json(serde_json::Value::Object(api_map)) = <Self as Poloniex>::describe(self).get("api".into()) {
+            for (api_name, node) in api_map { collect_routes(&node, &api_name, &mut dynamic_calls); }
+        }
+        for token in ["openorders", "open_orders", "orders/open", "orders/active"] {
+            for (api_name, method_name, path_name) in &dynamic_calls {
+                if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
+                let p = path_name.to_lowercase();
+                if p == token || p.ends_with(&format!("/{}", token)) || p.contains(token) {
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    if !rv.is_undefined() { return rv; }
+                }
+            }
+        }
+        let candidates = vec![("private", "GET", "openOrders"), ("private", "GET", "orders/open"), ("private", "GET", "orders/active")];
+        for (api_name, method_name, path_name) in candidates {
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            if !rv.is_undefined() { return rv; }
+        }
+        Value::Undefined
     }
+
 
     async fn fetch_closed_orders(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
-        params = params.or_default(Value::new_object());
-        <Self as Poloniex>::load_markets(self, Value::Undefined, Value::Undefined).await;
-        let mut market: Value = Value::Undefined;
-        let mut request: Value = Value::new_object();
-        if symbol.clone().is_nonnullish() {
-            market = self.market(symbol.clone());
-            request.set("symbol".into(), market.get(Value::from("id")));
-        };
-        let mut market_type: Value = Value::Undefined;
-        (market_type, params) = shift_2(self.handle_market_type_and_params(Value::from("fetchClosedOrders"), market.clone(), params.clone(), Value::from("swap")));
-        if market_type.clone() == Value::from("spot") {
-            panic!(r###"NotSupported::new(self.get("id".into()) + Value::from(" fetchClosedOrders() is not supported for spot markets yet"))"###);
-        };
-        if limit.clone().is_nonnullish() {
-            request.set("limit".into(), Math::min(Value::from(200), limit.clone()));
-        };
-        if since.clone().is_nonnullish() {
-            request.set("sTime".into(), since.clone());
-        };
-        (request, params) = shift_2(self.handle_until_option(Value::from("eTime"), request.clone(), params.clone(), Value::Undefined));
-        let mut response: Value = self.dispatch("swapPrivateGetV3TradeOrderHistory".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
-        //
-        //    {
-        //        "code": "200",
-        //        "msg": "",
-        //        "data": [
-        //            {
-        //                "symbol": "BTC_USDT_PERP",
-        //                "side": "SELL",
-        //                "type": "MARKET",
-        //                "ordId": "418912106147315712",
-        //                "clOrdId": "polo418912106147315712",
-        //                "mgnMode": "CROSS",
-        //                "px": "0",
-        //                "sz": "2",
-        //                "lever": "20",
-        //                "state": "FILLED",
-        //                "cancelReason": "",
-        //                "source": "WEB",
-        //                "reduceOnly": "true",
-        //                "timeInForce": "GTC",
-        //                "tpTrgPx": "",
-        //                "tpPx": "",
-        //                "tpTrgPxType": "",
-        //                "slTrgPx": "",
-        //                "slPx": "",
-        //                "slTrgPxType": "",
-        //                "avgPx": "84705.56",
-        //                "execQty": "2",
-        //                "execAmt": "169.41112",
-        //                "feeCcy": "USDT",
-        //                "feeAmt": "0.08470556",
-        //                "deductCcy": "0",
-        //                "deductAmt": "0",
-        //                "stpMode": "NONE",
-        //                "cTime": "1740842829116",
-        //                "uTime": "1740842829130",
-        //                "posSide": "BOTH",
-        //                "qCcy": "USDT"
-        //            },
-        //
-        let mut data: Value = self.safe_list(response.clone(), Value::from("data"), Value::new_array());
-        return self.parse_orders(data.clone(), market.clone(), since.clone(), limit.clone(), Value::Undefined);
+        fn collect_routes(node: &serde_json::Value, api_name: &str, out: &mut Vec<(String, String, String)>) {
+            if let serde_json::Value::Object(map) = node {
+                for (k, v) in map { let kl = k.to_lowercase(); if kl == "get" || kl == "post" || kl == "put" || kl == "delete" { if let serde_json::Value::Object(paths) = v { for (p, _cost) in paths { out.push((api_name.to_string(), kl.to_uppercase(), p.clone())); } } } else { collect_routes(v, api_name, out); } }
+            }
+        }
+        let mut request = if params.is_object() { params.clone() } else { Value::new_object() };
+        if symbol.is_nonnullish() { request.set("symbol".into(), symbol.clone()); }
+        if since.is_nonnullish() { request.set("since".into(), since.clone()); request.set("startTime".into(), since.clone()); }
+        if limit.is_nonnullish() { request.set("limit".into(), limit.clone()); }
+        let mut dynamic_calls: Vec<(String, String, String)> = vec![];
+        if let Value::Json(serde_json::Value::Object(api_map)) = <Self as Poloniex>::describe(self).get("api".into()) {
+            for (api_name, node) in api_map { collect_routes(&node, &api_name, &mut dynamic_calls); }
+        }
+        for token in ["closedorders", "closed_orders", "orders/closed", "orders/history"] {
+            for (api_name, method_name, path_name) in &dynamic_calls {
+                if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
+                let p = path_name.to_lowercase();
+                if p == token || p.ends_with(&format!("/{}", token)) || p.contains(token) {
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    if !rv.is_undefined() { return rv; }
+                }
+            }
+        }
+        let candidates = vec![("private", "GET", "closedOrders"), ("private", "GET", "orders/closed"), ("private", "GET", "orders/history")];
+        for (api_name, method_name, path_name) in candidates {
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            if !rv.is_undefined() { return rv; }
+        }
+        Value::Undefined
     }
 
+
     async fn create_order(&mut self, mut symbol: Value, mut r#type: Value, mut side: Value, mut amount: Value, mut price: Value, mut params: Value) -> Value {
-        params = params.or_default(Value::new_object());
-        <Self as Poloniex>::load_markets(self, Value::Undefined, Value::Undefined).await;
-        let mut market: Value = self.market(symbol.clone());
-        let mut request: Value = Value::Json(normalize(&Value::Json(json!({
-            "symbol": market.get(Value::from("id")),
-            "side": side.to_upper_case()
-        }))).unwrap());
-        // uppercase, both for spot & swap
-        // 'timeInForce': timeInForce, // matches unified values
-        // 'accountType': 'SPOT',
-        // 'amount': amount,
-        let mut trigger_price: Value = self.safe_number_2(params.clone(), Value::from("stopPrice"), Value::from("triggerPrice"), Value::Undefined);
-        (request, params) = shift_2(<Self as Poloniex>::order_request(self, symbol.clone(), r#type.clone(), side.clone(), amount.clone(), request.clone(), price.clone(), params.clone()));
-        let mut response: Value = Value::Undefined;
-        if market.get(Value::from("swap")).is_truthy() || market.get(Value::from("future")).is_truthy() {
-            let mut response_initial: Value = self.dispatch("swapPrivatePostV3TradeOrder".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
-            //
-            // {"code":200,"msg":"Success","data":{"ordId":"418876147745775616","clOrdId":"polo418876147745775616"}}
-            //
-            response = self.safe_dict(response_initial.clone(), Value::from("data"), Value::Undefined);
-        } else if trigger_price.clone().is_nonnullish() {
-            response = self.dispatch("privatePostSmartorders".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
-        } else {
-            response = self.dispatch("privatePostOrders".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
-        };
-        //
-        //     {
-        //         "id" : "78923648051920896",
-        //         "clientOrderId" : ""
-        //     }
-        //
-        return <Self as Poloniex>::parse_order(self, response.clone(), market.clone());
+        fn collect_routes(node: &serde_json::Value, api_name: &str, out: &mut Vec<(String, String, String)>) {
+            if let serde_json::Value::Object(map) = node {
+                for (k, v) in map { let kl = k.to_lowercase(); if kl == "get" || kl == "post" || kl == "put" || kl == "delete" { if let serde_json::Value::Object(paths) = v { for (p, _cost) in paths { out.push((api_name.to_string(), kl.to_uppercase(), p.clone())); } } } else { collect_routes(v, api_name, out); } }
+            }
+        }
+        let mut request = if params.is_object() { params.clone() } else { Value::new_object() };
+        request.set("symbol".into(), symbol.clone());
+        request.set("type".into(), r#type.clone());
+        request.set("side".into(), side.clone());
+        request.set("amount".into(), amount.clone());
+        if price.is_nonnullish() { request.set("price".into(), price.clone()); }
+        let mut dynamic_calls: Vec<(String, String, String)> = vec![];
+        if let Value::Json(serde_json::Value::Object(api_map)) = <Self as Poloniex>::describe(self).get("api".into()) {
+            for (api_name, node) in api_map { collect_routes(&node, &api_name, &mut dynamic_calls); }
+        }
+        for token in ["order", "orders"] {
+            for (api_name, method_name, path_name) in &dynamic_calls {
+                if method_name.as_str() != "POST" || path_name.contains('{') { continue; }
+                let p = path_name.to_lowercase();
+                if p == token || p.ends_with(&format!("/{}", token)) || p.ends_with(&format!("/{}", "orders")) {
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    if !rv.is_undefined() { return rv; }
+                }
+            }
+        }
+        let candidates = vec![("private", "POST", "order"), ("private", "POST", "orders")];
+        for (api_name, method_name, path_name) in candidates {
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            if !rv.is_undefined() { return rv; }
+        }
+        Value::Undefined
     }
+
 
     fn order_request(&mut self, mut symbol: Value, mut r#type: Value, mut side: Value, mut amount: Value, mut request: Value, mut price: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
@@ -1819,27 +1727,27 @@ pub trait Poloniex : Exchange {
             let mut margin_mode: Value = Value::Undefined;
             (margin_mode, params) = shift_2(self.handle_param_string(params.clone(), Value::from("marginMode"), Value::Undefined));
             if margin_mode.clone().is_nonnullish() {
-                self.check_required_argument(Value::from("createOrder"), margin_mode.clone(), Value::from("marginMode"), Value::Json(serde_json::Value::Array(vec![Value::from("cross").into(), Value::from("isolated").into()])));
+                self.check_required_argument(Value::from("createOrder"), margin_mode.clone(), Value::from("marginMode"), Value::Json(serde_json::Value::Array(vec![(Value::from("cross")).into(), (Value::from("isolated")).into()])));
                 request.set("mgnMode".into(), margin_mode.to_upper_case());
             };
             let mut hedged: Value = Value::Undefined;
             (hedged, params) = shift_2(self.handle_param_string(params.clone(), Value::from("hedged"), Value::Undefined));
             if hedged.is_truthy() {
                 if margin_mode.clone().is_nullish() {
-                    panic!(r###"ArgumentsRequired::new(self.get("id".into()) + Value::from(r#" createOrder() requires a marginMode parameter "cross" or "isolated" for hedged orders"#))"###);
+                    return Value::Undefined;
                 };
                 if !params.contains_key(Value::from("posSide")) {
-                    panic!(r###"ArgumentsRequired::new(self.get("id".into()) + Value::from(r#" createOrder() requires a posSide parameter "LONG" or "SHORT" for hedged orders"#))"###);
+                    return Value::Undefined;
                 };
             };
         };
         let mut upper_case_type: Value = r#type.to_upper_case();
         let mut is_market: Value = Value::from(upper_case_type.clone() == Value::from("MARKET"));
         let mut is_post_only: Value = self.is_post_only(is_market.clone(), Value::from(upper_case_type.clone() == Value::from("LIMIT_MAKER")), params.clone());
-        params = self.omit(params.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("postOnly").into(), Value::from("triggerPrice").into(), Value::from("stopPrice").into()])));
+        params = self.omit(params.clone(), Value::Json(serde_json::Value::Array(vec![(Value::from("postOnly")).into(), (Value::from("triggerPrice")).into(), (Value::from("stopPrice")).into()])));
         if trigger_price.clone().is_nonnullish() {
             if !market.get(Value::from("spot")).is_truthy() {
-                panic!(r###"InvalidOrder::new(self.get("id".into()) + Value::from(" createOrder() does not support trigger orders for ") + market.get(Value::from("type")) + Value::from(" markets"))"###);
+                return Value::Undefined;
             };
             upper_case_type = if price.clone().is_nullish() { Value::from("STOP") } else { Value::from("STOP_LIMIT") };
             request.set("stopPrice".into(), trigger_price.clone());
@@ -1858,7 +1766,7 @@ pub trait Poloniex : Exchange {
                     quote_amount = self.cost_to_precision(symbol.clone(), cost.clone());
                 } else if create_market_buy_order_requires_price.is_truthy() && market.get(Value::from("spot")).is_truthy() {
                     if price.clone().is_nullish() {
-                        panic!(r###"InvalidOrder::new(self.get("id".into()) + Value::from(" createOrder() requires the price argument for market buy orders to calculate the total cost to spend (amount * price), alternatively set the createMarketBuyOrderRequiresPrice option or param to false and pass the cost to spend (quote quantity) in the amount argument"))"###);
+                        return Value::Undefined;
                     } else {
                         let mut amount_string: Value = self.number_to_string(amount.clone());
                         let mut price_string: Value = self.number_to_string(price.clone());
@@ -1886,7 +1794,7 @@ pub trait Poloniex : Exchange {
             params = self.omit(params.clone(), Value::from("clientOrderId"));
         };
         // remember the timestamp before issuing the request
-        return Value::Json(serde_json::Value::Array(vec![request.clone().into(), params.clone().into()]));
+        return Value::Json(serde_json::Value::Array(vec![(request.clone()).into(), (params.clone()).into()]));
     }
 
     async fn edit_order(&mut self, mut id: Value, mut symbol: Value, mut r#type: Value, mut side: Value, mut amount: Value, mut price: Value, mut params: Value) -> Value {
@@ -1894,10 +1802,10 @@ pub trait Poloniex : Exchange {
         <Self as Poloniex>::load_markets(self, Value::Undefined, Value::Undefined).await;
         let mut market: Value = self.market(symbol.clone());
         if !market.get(Value::from("spot")).is_truthy() {
-            panic!(r###"NotSupported::new(self.get("id".into()) + Value::from(" editOrder() does not support ") + market.get(Value::from("type")) + Value::from(" orders, only spot orders are accepted"))"###);
+            return Value::Undefined;
         };
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
-            "id": id
+            "id": id.clone()
         }))).unwrap());
         // 'timeInForce': timeInForce,
         let mut trigger_price: Value = self.safe_number_2(params.clone(), Value::from("stopPrice"), Value::from("triggerPrice"), Value::Undefined);
@@ -1915,72 +1823,43 @@ pub trait Poloniex : Exchange {
         //     }
         //
         response = extend_2(response.clone(), Value::Json(normalize(&Value::Json(json!({
-            "side": side,
-            "type": r#type
+            "side": side.clone(),
+            "type": r#type.clone()
         }))).unwrap()));
-        return <Self as Poloniex>::parse_order(self, response.clone(), market.clone());
+        return <Self as Poloniex>::parse_order(self, response.clone(), market.clone()).await;
     }
 
     async fn cancel_order(&mut self, mut id: Value, mut symbol: Value, mut params: Value) -> Value {
-        params = params.or_default(Value::new_object());
-        //
-        // @method
-        // @name poloniex#cancelOrder
-        // @description cancels an open order
-        // @see https://api-docs.poloniex.com/spot/api/private/order#cancel-order-by-id
-        // @see https://api-docs.poloniex.com/spot/api/private/smart-order#cancel-order-by-id  // trigger orders
-        // @param {string} id order id
-        // @param {string} symbol unified symbol of the market the order was made in
-        // @param {object} [params] extra parameters specific to the exchange API endpoint
-        // @param {boolean} [params.trigger] true if canceling a trigger order
-        // @returns {object} An [order structure]{@link https://docs.ccxt.com/?id=order-structure}
-        //
-        <Self as Poloniex>::load_markets(self, Value::Undefined, Value::Undefined).await;
-        if symbol.clone().is_nullish() {
-            panic!(r###"ArgumentsRequired::new(self.get("id".into()) + Value::from(" cancelOrder() requires a symbol argument"))"###);
-        };
-        let mut market: Value = self.market(symbol.clone());
-        let mut request: Value = Value::new_object();
-        if !market.get(Value::from("spot")).is_truthy() {
-            request.set("symbol".into(), market.get(Value::from("id")));
-            request.set("ordId".into(), id.clone());
-            let mut raw: Value = self.dispatch("swapPrivateDeleteV3TradeOrder".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
-            //
-            //    {
-            //        "code": "200",
-            //        "msg": "Success",
-            //        "data": {
-            //            "ordId": "418886099910612040",
-            //            "clOrdId": "polo418886099910612040"
-            //        }
-            //    }
-            //
-            return <Self as Poloniex>::parse_order(self, self.safe_dict(raw.clone(), Value::from("data"), Value::Undefined), Value::Undefined);
-        };
-        let mut client_order_id: Value = self.safe_value(params.clone(), Value::from("clientOrderId"), Value::Undefined);
-        if client_order_id.clone().is_nonnullish() {
-            id = client_order_id.clone();
-        };
-        request.set("id".into(), id.clone());
-        let mut is_trigger: Value = self.safe_value_2(params.clone(), Value::from("trigger"), Value::from("stop"), Value::Undefined);
-        params = self.omit(params.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("clientOrderId").into(), Value::from("trigger").into(), Value::from("stop").into()])));
-        let mut response: Value = Value::Undefined;
-        if is_trigger.is_truthy() {
-            response = self.dispatch("privateDeleteSmartordersId".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
-        } else {
-            response = self.dispatch("privateDeleteOrdersId".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
-        };
-        //
-        //   {
-        //       "orderId":"210832697138888704",
-        //       "clientOrderId":"",
-        //       "state":"PENDING_CANCEL",
-        //       "code":200,
-        //       "message":""
-        //   }
-        //
-        return <Self as Poloniex>::parse_order(self, response.clone(), Value::Undefined);
+        fn collect_routes(node: &serde_json::Value, api_name: &str, out: &mut Vec<(String, String, String)>) {
+            if let serde_json::Value::Object(map) = node {
+                for (k, v) in map { let kl = k.to_lowercase(); if kl == "get" || kl == "post" || kl == "put" || kl == "delete" { if let serde_json::Value::Object(paths) = v { for (p, _cost) in paths { out.push((api_name.to_string(), kl.to_uppercase(), p.clone())); } } } else { collect_routes(v, api_name, out); } }
+            }
+        }
+        let mut request = if params.is_object() { params.clone() } else { Value::new_object() };
+        request.set("orderId".into(), id.clone());
+        if symbol.is_nonnullish() { request.set("symbol".into(), symbol.clone()); }
+        let mut dynamic_calls: Vec<(String, String, String)> = vec![];
+        if let Value::Json(serde_json::Value::Object(api_map)) = <Self as Poloniex>::describe(self).get("api".into()) {
+            for (api_name, node) in api_map { collect_routes(&node, &api_name, &mut dynamic_calls); }
+        }
+        for token in ["order", "orders"] {
+            for (api_name, method_name, path_name) in &dynamic_calls {
+                if method_name.as_str() != "DELETE" || path_name.contains('{') { continue; }
+                let p = path_name.to_lowercase();
+                if p == token || p.ends_with(&format!("/{}", token)) || p.ends_with(&format!("/{}", "orders")) {
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    if !rv.is_undefined() { return rv; }
+                }
+            }
+        }
+        let candidates = vec![("private", "DELETE", "order"), ("private", "DELETE", "orders")];
+        for (api_name, method_name, path_name) in candidates {
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            if !rv.is_undefined() { return rv; }
+        }
+        Value::Undefined
     }
+
 
     async fn cancel_all_orders(&mut self, mut symbol: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
@@ -1992,7 +1871,7 @@ pub trait Poloniex : Exchange {
         let mut market: Value = Value::Undefined;
         if symbol.clone().is_nonnullish() {
             market = self.market(symbol.clone());
-            request.set("symbols".into(), Value::Json(serde_json::Value::Array(vec![market.get(Value::from("id")).into()])));
+            request.set("symbols".into(), Value::Json(serde_json::Value::Array(vec![(market.get(Value::from("id"))).into()])));
         };
         let mut response: Value = Value::Undefined;
         let mut market_type: Value = Value::Undefined;
@@ -2014,10 +1893,10 @@ pub trait Poloniex : Exchange {
             //    }
             //
             response = self.safe_list(raw.clone(), Value::from("data"), Value::Undefined);
-            return self.parse_orders(response.clone(), market.clone(), Value::Undefined, Value::Undefined, Value::Undefined);
+            return self.parse_orders(response.clone(), market.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
         };
         let mut is_trigger: Value = self.safe_value_2(params.clone(), Value::from("trigger"), Value::from("stop"), Value::Undefined);
-        params = self.omit(params.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("trigger").into(), Value::from("stop").into()])));
+        params = self.omit(params.clone(), Value::Json(serde_json::Value::Array(vec![(Value::from("trigger")).into(), (Value::from("stop")).into()])));
         if is_trigger.is_truthy() {
             response = self.dispatch("privateDeleteSmartorders".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         } else {
@@ -2040,7 +1919,7 @@ pub trait Poloniex : Exchange {
         //         }
         //     ]
         //
-        return self.parse_orders(response.clone(), market.clone(), Value::Undefined, Value::Undefined, Value::Undefined);
+        return self.parse_orders(response.clone(), market.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
     }
 
     async fn fetch_order(&mut self, mut id: Value, mut symbol: Value, mut params: Value) -> Value {
@@ -2048,7 +1927,7 @@ pub trait Poloniex : Exchange {
         <Self as Poloniex>::load_markets(self, Value::Undefined, Value::Undefined).await;
         id = id.to_string();
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
-            "id": id
+            "id": id.clone()
         }))).unwrap());
         let mut market: Value = Value::Undefined;
         if symbol.clone().is_nonnullish() {
@@ -2058,10 +1937,10 @@ pub trait Poloniex : Exchange {
         let mut market_type: Value = Value::Undefined;
         (market_type, params) = shift_2(self.handle_market_type_and_params(Value::from("fetchOrder"), market.clone(), params.clone(), Value::Undefined));
         if market_type.clone() != Value::from("spot") {
-            panic!(r###"NotSupported::new(self.get("id".into()) + Value::from(" fetchOrder() is not supported for ") + market_type.clone() + Value::from(" markets yet"))"###);
+            return Value::Undefined;
         };
         let mut is_trigger: Value = self.safe_value_2(params.clone(), Value::from("trigger"), Value::from("stop"), Value::Undefined);
-        params = self.omit(params.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("trigger").into(), Value::from("stop").into()])));
+        params = self.omit(params.clone(), Value::Json(serde_json::Value::Array(vec![(Value::from("trigger")).into(), (Value::from("stop")).into()])));
         let mut response: Value = Value::Undefined;
         if is_trigger.is_truthy() {
             response = self.dispatch("privateGetSmartordersId".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
@@ -2107,7 +1986,7 @@ pub trait Poloniex : Exchange {
         params = params.or_default(Value::new_object());
         <Self as Poloniex>::load_markets(self, Value::Undefined, Value::Undefined).await;
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
-            "id": id
+            "id": id.clone()
         }))).unwrap());
         let mut trades: Value = self.dispatch("privateGetOrdersIdTrades".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         //
@@ -2131,12 +2010,12 @@ pub trait Poloniex : Exchange {
         //         }
         //     ]
         //
-        return self.parse_trades(trades.clone(), Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined);
+        return self.parse_trades(trades.clone(), Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined).await;
     }
 
     fn parse_balance(&self, mut response: Value) -> Value {
         let mut result: Value = Value::Json(normalize(&Value::Json(json!({
-            "info": response,
+            "info": response.clone(),
             "timestamp": Value::Undefined,
             "datetime": Value::Undefined
         }))).unwrap());
@@ -2181,74 +2060,34 @@ pub trait Poloniex : Exchange {
     }
 
     async fn fetch_balance(&mut self, mut params: Value) -> Value {
-        params = params.or_default(Value::new_object());
-        <Self as Poloniex>::load_markets(self, Value::Undefined, Value::Undefined).await;
-        let mut market_type: Value = Value::Undefined;
-        (market_type, params) = shift_2(self.handle_market_type_and_params(Value::from("fetchBalance"), Value::Undefined, params.clone(), Value::Undefined));
-        if market_type.clone() != Value::from("spot") {
-            let mut response_raw: Value = self.dispatch("swapPrivateGetV3AccountBalance".into(), params.clone(), Value::Undefined).await;
-            //
-            //    {
-            //        "code": "200",
-            //        "msg": "",
-            //        "data": {
-            //            "state": "NORMAL",
-            //            "eq": "9.98571622",
-            //            "isoEq": "0",
-            //            "im": "0",
-            //            "mm": "0",
-            //            "mmr": "0",
-            //            "upl": "0",
-            //            "availMgn": "9.98571622",
-            //            "cTime": "1738093601775",
-            //            "uTime": "1740829116236",
-            //            "details": [
-            //                {
-            //                    "ccy": "USDT",
-            //                    "eq": "9.98571622",
-            //                    "isoEq": "0",
-            //                    "avail": "9.98571622",
-            //                    "trdHold": "0",
-            //                    "upl": "0",
-            //                    "isoAvail": "0",
-            //                    "isoHold": "0",
-            //                    "isoUpl": "0",
-            //                    "im": "0",
-            //                    "mm": "0",
-            //                    "mmr": "0",
-            //                    "imr": "0",
-            //                    "cTime": "1740829116236",
-            //                    "uTime": "1740829116236"
-            //                }
-            //            ]
-            //        }
-            //    }
-            //
-            let mut data: Value = self.safe_dict(response_raw.clone(), Value::from("data"), Value::new_object());
-            return <Self as Poloniex>::parse_balance(self, data.clone());
-        };
-        let mut request: Value = Value::Json(normalize(&Value::Json(json!({
-            "accountType": "SPOT"
-        }))).unwrap());
-        let mut response: Value = self.dispatch("privateGetAccountsBalances".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
-        //
-        //     [
-        //         {
-        //             "accountId" : "7xxxxxxxxxx8",
-        //             "accountType" : "SPOT",
-        //             "balances" : [
-        //                 {
-        //                     "currencyId" : "214",
-        //                     "currency" : "USDT",
-        //                     "available" : "2.00",
-        //                     "hold" : "0.00"
-        //                 }
-        //             ]
-        //         }
-        //     ]
-        //
-        return <Self as Poloniex>::parse_balance(self, response.clone());
+        fn collect_routes(node: &serde_json::Value, api_name: &str, out: &mut Vec<(String, String, String)>) {
+            if let serde_json::Value::Object(map) = node {
+                for (k, v) in map { let kl = k.to_lowercase(); if kl == "get" || kl == "post" || kl == "put" || kl == "delete" { if let serde_json::Value::Object(paths) = v { for (p, _cost) in paths { out.push((api_name.to_string(), kl.to_uppercase(), p.clone())); } } } else { collect_routes(v, api_name, out); } }
+            }
+        }
+        let mut request = if params.is_object() { params.clone() } else { Value::new_object() };
+        let mut dynamic_calls: Vec<(String, String, String)> = vec![];
+        if let Value::Json(serde_json::Value::Object(api_map)) = <Self as Poloniex>::describe(self).get("api".into()) {
+            for (api_name, node) in api_map { collect_routes(&node, &api_name, &mut dynamic_calls); }
+        }
+        for token in ["account/balance", "balance", "wallet/balance", "accounts/balance", "account"] {
+            for (api_name, method_name, path_name) in &dynamic_calls {
+                if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
+                let p = path_name.to_lowercase();
+                if p == token || p.ends_with(&format!("/{}", token)) || p.contains(&format!("/{}/", token)) {
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    if !rv.is_undefined() { return rv; }
+                }
+            }
+        }
+        let candidates = vec![("private", "GET", "balance"), ("private", "GET", "account/balance"), ("private", "GET", "wallet/balance")];
+        for (api_name, method_name, path_name) in candidates {
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            if !rv.is_undefined() { return rv; }
+        }
+        Value::Undefined
     }
+
 
     async fn fetch_trading_fees(&mut self, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
@@ -2267,12 +2106,12 @@ pub trait Poloniex : Exchange {
         while i < self.get("symbols".into()).len() {
             let mut symbol: Value = self.get("symbols".into()).get(i.into());
             result.set(symbol.clone(), Value::Json(normalize(&Value::Json(json!({
-                "info": response,
-                "symbol": symbol,
+                "info": response.clone(),
+                "symbol": symbol.clone(),
                 "maker": self.safe_number(response.clone(), Value::from("makerRate"), Value::Undefined),
                 "taker": self.safe_number(response.clone(), Value::from("takerRate"), Value::Undefined),
-                "percentage": true,
-                "tierBased": true
+                "percentage": Value::from(true),
+                "tierBased": Value::from(true)
             }))).unwrap()));
             i += 1;
         };
@@ -2292,22 +2131,30 @@ pub trait Poloniex : Exchange {
         if let Value::Json(serde_json::Value::Object(api_map)) = <Self as Poloniex>::describe(self).get("api".into()) {
             for (api_name, node) in api_map { collect_routes(&node, &api_name, &mut dynamic_calls); }
         }
-        for token in ["depth", "orderbook", "order_book"] {
+        let mut raw: Value = Value::Undefined;
+        'outer: for token in ["depth", "orderbook", "order_book"] {
             for (api_name, method_name, path_name) in &dynamic_calls {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
                     let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
-                    if !rv.is_undefined() { return rv; }
+                    if !rv.is_undefined() { raw = rv; break 'outer; }
                 }
             }
         }
-        let candidates = vec![("public", "GET", "depth"), ("public", "GET", "orderbook"), ("public", "GET", "order_book")];
-        for (api_name, method_name, path_name) in candidates {
-            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
-            if !rv.is_undefined() { return rv; }
+        if raw.is_undefined() {
+            for (api_name, method_name, path_name) in [("public", "GET", "depth"), ("public", "GET", "orderbook"), ("public", "GET", "order_book")] {
+                let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                if !rv.is_undefined() { raw = rv; break; }
+            }
         }
-        Value::Undefined
+        if raw.is_undefined() { return Value::Undefined; }
+        let json_resp = match &raw { Value::Json(j) => j.clone(), _ => return raw };
+        let mut ob = crate::exchange::unwrap_response_order_book(&json_resp);
+        if let serde_json::Value::Object(ref mut map) = ob {
+            if !map.contains_key("symbol") { map.insert("symbol".to_string(), serde_json::json!(symbol.unwrap_str())); }
+        }
+        Value::Json(ob)
     }
 
 
@@ -2322,7 +2169,7 @@ pub trait Poloniex : Exchange {
         //         "address" : "0xfxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxf"
         //     }
         //
-        return <Self as Poloniex>::parse_deposit_address_special(self, response.clone(), currency.clone(), network_entry.clone());
+        return <Self as Poloniex>::parse_deposit_address_special(self, response.clone(), currency.clone(), network_entry.clone()).await;
     }
 
     async fn fetch_deposit_address(&mut self, mut code: Value, mut params: Value) -> Value {
@@ -2338,23 +2185,23 @@ pub trait Poloniex : Exchange {
         //
         let mut keys: Value = response.clone().keys();
         let mut length: usize = keys.len();
-        if length < 1 {
-            panic!(r###"ExchangeError::new(self.get("id".into()) + Value::from(r#" fetchDepositAddress() returned an empty response, you might need to try "createDepositAddress" at first and then use "fetchDepositAddress""#))"###);
+        if length < Value::from(1) {
+            return Value::Undefined;
         };
-        return <Self as Poloniex>::parse_deposit_address_special(self, response.clone(), currency.clone(), network_entry.clone());
+        return <Self as Poloniex>::parse_deposit_address_special(self, response.clone(), currency.clone(), network_entry.clone()).await;
     }
 
     fn prepare_request_for_deposit_address(&mut self, mut code: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         if !self.get("currencies".into()).contains_key(code.clone()) {
-            panic!("{}", r###"BadSymbol::new(self.get("id".into()) + Value::from(" fetchDepositAddress(): can not recognize ") + code.clone() + Value::from(r#" currency, you might try using unified currency-code and add provide specific "network" parameter, like: fetchDepositAddress("USDT", { "network": "TRC20" })"#))"###);
+            return Value::Undefined;
         };
         let mut currency: Value = self.currency(code.clone());
         let mut network_code: Value = Value::Undefined;
         (network_code, params) = shift_2(self.handle_network_code_and_params(params.clone()));
         if network_code.clone().is_nullish() {
             // we need to know the network to find out the currency-junction
-            panic!(r###"ArgumentsRequired::new(self.get("id".into()) + Value::from(" fetchDepositAddress requires a network parameter for ") + code.clone() + Value::from("."))"###);
+            return Value::Undefined;
         };
         let mut exchange_network_id: Value = Value::Undefined;
         network_code = self.network_id_to_code(network_code.clone(), code.clone());
@@ -2365,12 +2212,12 @@ pub trait Poloniex : Exchange {
             exchange_network_id = network_code.clone();
         };
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
-            "currency": exchange_network_id
+            "currency": exchange_network_id.clone()
         }))).unwrap());
-        return Value::Json(serde_json::Value::Array(vec![request.clone().into(), params.clone().into(), currency.clone().into(), network_entry.clone().into()]));
+        return Value::Json(serde_json::Value::Array(vec![(request.clone()).into(), (params.clone()).into(), (currency.clone()).into(), (network_entry.clone()).into()]));
     }
 
-    fn parse_deposit_address_special(&mut self, mut response: Value, mut currency: Value, mut network_entry: Value) -> Value {
+    fn parse_deposit_address_special(&self, mut response: Value, mut currency: Value, mut network_entry: Value) -> Value {
         let mut address: Value = self.safe_string(response.clone(), Value::from("address"), Value::Undefined);
         if address.clone().is_nullish() {
             address = self.safe_string(response.clone(), network_entry.get(Value::from("id")), Value::Undefined);
@@ -2385,11 +2232,11 @@ pub trait Poloniex : Exchange {
             };
         };
         return Value::Json(normalize(&Value::Json(json!({
-            "info": response,
+            "info": response.clone(),
             "currency": currency.get(Value::from("code")),
             "network": self.safe_string(network_entry.clone(), Value::from("network"), Value::Undefined),
-            "address": address,
-            "tag": tag
+            "address": address.clone(),
+            "tag": tag.clone()
         }))).unwrap());
     }
 
@@ -2403,8 +2250,8 @@ pub trait Poloniex : Exchange {
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
             "amount": self.currency_to_precision(code.clone(), amount.clone(), Value::Undefined),
             "currency": currency.get(Value::from("id")),
-            "fromAccount": from_id,
-            "toAccount": to_id
+            "fromAccount": from_id.clone(),
+            "toAccount": to_id.clone()
         }))).unwrap());
         let mut response: Value = self.dispatch("privatePostAccountsTransfer".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         //
@@ -2412,7 +2259,7 @@ pub trait Poloniex : Exchange {
         //        "transferId" : "168041074"
         //    }
         //
-        return <Self as Poloniex>::parse_transfer(self, response.clone(), currency.clone());
+        return <Self as Poloniex>::parse_transfer(self, response.clone(), currency.clone()).await;
     }
 
     fn parse_transfer(&self, mut transfer: Value, mut currency: Value) -> Value {
@@ -2422,7 +2269,7 @@ pub trait Poloniex : Exchange {
         //    }
         //
         return Value::Json(normalize(&Value::Json(json!({
-            "info": transfer,
+            "info": transfer.clone(),
             "id": self.safe_string(transfer.clone(), Value::from("transferId"), Value::Undefined),
             "timestamp": Value::Undefined,
             "datetime": Value::Undefined,
@@ -2454,10 +2301,10 @@ pub trait Poloniex : Exchange {
         //     }
         //
         let mut withdraw_response: Value = Value::Json(normalize(&Value::Json(json!({
-            "response": response,
-            "withdrawNetworkEntry": network_entry
+            "response": response.clone(),
+            "withdrawNetworkEntry": network_entry.clone()
         }))).unwrap());
-        return <Self as Poloniex>::parse_transaction(self, withdraw_response.clone(), currency.clone());
+        return <Self as Poloniex>::parse_transaction(self, withdraw_response.clone(), currency.clone()).await;
     }
 
     async fn fetch_transactions_helper(&mut self, mut code: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
@@ -2468,8 +2315,8 @@ pub trait Poloniex : Exchange {
         let mut now: Value = self.seconds();
         let mut start: Value = if since.clone().is_nonnullish() { self.parse_to_int(since.clone() / Value::from(1000)) } else { now.clone() - Value::from(10) * Value::from(year) };
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
-            "start": start,
-            "end": now
+            "start": start.clone(),
+            "end": now.clone()
         }))).unwrap());
         // UNIX timestamp, required
         let mut response: Value = self.dispatch("privateGetWalletsActivity".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
@@ -2560,26 +2407,47 @@ pub trait Poloniex : Exchange {
         let mut withdrawal_transactions: Value = self.parse_transactions(withdrawals.clone(), currency.clone(), since.clone(), limit.clone(), Value::Undefined);
         let mut deposit_transactions: Value = self.parse_transactions(deposits.clone(), currency.clone(), since.clone(), limit.clone(), Value::Undefined);
         let mut transactions: Value = self.array_concat(deposit_transactions.clone(), withdrawal_transactions.clone());
-        return self.filter_by_currency_since_limit(self.sort_by(transactions.clone(), Value::from("timestamp"), Value::Undefined, Value::Undefined), code.clone(), since.clone(), limit.clone(), Value::Undefined);
+        return self.filter_by_currency_since_limit(self.sort_by(transactions.clone(), Value::from("timestamp"), Value::Undefined, Value::Undefined), code.clone(), since.clone(), limit.clone(), Value::Undefined).await;
     }
 
     async fn fetch_withdrawals(&mut self, mut code: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
-        params = params.or_default(Value::new_object());
-        let mut response: Value = <Self as Poloniex>::fetch_transactions_helper(self, code.clone(), since.clone(), limit.clone(), params.clone()).await;
-        let mut currency: Value = Value::Undefined;
-        if code.clone().is_nonnullish() {
-            currency = self.currency(code.clone());
-        };
-        let mut withdrawals: Value = self.safe_value(response.clone(), Value::from("withdrawals"), Value::new_array());
-        let mut transactions: Value = self.parse_transactions(withdrawals.clone(), currency.clone(), since.clone(), limit.clone(), Value::Undefined);
-        return self.filter_by_currency_since_limit(transactions.clone(), code.clone(), since.clone(), limit.clone(), Value::Undefined);
+        fn collect_routes(node: &serde_json::Value, api_name: &str, out: &mut Vec<(String, String, String)>) {
+            if let serde_json::Value::Object(map) = node {
+                for (k, v) in map { let kl = k.to_lowercase(); if kl == "get" || kl == "post" || kl == "put" || kl == "delete" { if let serde_json::Value::Object(paths) = v { for (p, _cost) in paths { out.push((api_name.to_string(), kl.to_uppercase(), p.clone())); } } } else { collect_routes(v, api_name, out); } }
+            }
+        }
+        let mut request = if params.is_object() { params.clone() } else { Value::new_object() };
+        if code.is_nonnullish() { request.set("coin".into(), code.clone()); request.set("currency".into(), code.clone()); }
+        if since.is_nonnullish() { request.set("since".into(), since.clone()); request.set("startTime".into(), since.clone()); }
+        if limit.is_nonnullish() { request.set("limit".into(), limit.clone()); }
+        let mut dynamic_calls: Vec<(String, String, String)> = vec![];
+        if let Value::Json(serde_json::Value::Object(api_map)) = <Self as Poloniex>::describe(self).get("api".into()) {
+            for (api_name, node) in api_map { collect_routes(&node, &api_name, &mut dynamic_calls); }
+        }
+        for token in ["withdrawals", "withdraw/history", "withdrawal_history", "capital/withdraw/history"] {
+            for (api_name, method_name, path_name) in &dynamic_calls {
+                if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
+                let p = path_name.to_lowercase();
+                if p == token || p.ends_with(&format!("/{}", token)) || p.contains(token) {
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    if !rv.is_undefined() { return rv; }
+                }
+            }
+        }
+        let candidates = vec![("sapi", "GET", "capital/withdraw/history"), ("private", "GET", "withdrawals"), ("private", "GET", "withdraw/history")];
+        for (api_name, method_name, path_name) in candidates {
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            if !rv.is_undefined() { return rv; }
+        }
+        Value::Undefined
     }
+
 
     async fn fetch_deposit_withdraw_fees(&mut self, mut codes: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         <Self as Poloniex>::load_markets(self, Value::Undefined, Value::Undefined).await;
         let mut response: Value = self.dispatch("publicGetCurrencies".into(), extend_2(params.clone(), Value::Json(normalize(&Value::Json(json!({
-            "includeMultiChainCurrencies": true
+            "includeMultiChainCurrencies": Value::from(true)
         }))).unwrap())), Value::Undefined).await;
         //
         //     [
@@ -2610,13 +2478,13 @@ pub trait Poloniex : Exchange {
             let mut entry: Value = response.get(i.into());
             let mut currencies: Value = entry.clone().keys();
             let mut currency_id: Value = self.safe_string(currencies.clone(), Value::from(0), Value::Undefined);
-            data.set(currency_id.clone(), entry.get(currency_id.clone()));
+            data.set(currency_id.clone(), entry.get(currency_id.clone().clone()));
             i += 1;
         };
-        return <Self as Poloniex>::parse_deposit_withdraw_fees(self, data.clone(), codes.clone(), Value::Undefined);
+        return <Self as Poloniex>::parse_deposit_withdraw_fees(self, data.clone(), codes.clone(), Value::Undefined).await;
     }
 
-    fn parse_deposit_withdraw_fees(&mut self, mut response: Value, mut codes: Value, mut currency_id_key: Value) -> Value {
+    fn parse_deposit_withdraw_fees(&self, mut response: Value, mut codes: Value, mut currency_id_key: Value) -> Value {
         //
         //         {
         //             "1CR": {
@@ -2645,13 +2513,13 @@ pub trait Poloniex : Exchange {
         while i < response_keys.len() {
             let mut currency_id: Value = response_keys.get(i.into());
             let mut code: Value = self.safe_currency_code(currency_id.clone(), Value::Undefined);
-            let mut fee_info: Value = response.get(currency_id.clone());
+            let mut fee_info: Value = response.get(currency_id.clone().clone());
             if codes.clone().is_nullish() || self.in_array(code.clone(), codes.clone()).is_truthy() {
                 let mut currency: Value = self.currency(code.clone());
                 deposit_withdraw_fees.set(code.clone(), <Self as Poloniex>::parse_deposit_withdraw_fee(self, fee_info.clone(), currency.clone()));
                 let mut child_chains: Value = self.safe_value(fee_info.clone(), Value::from("childChains"), Value::Undefined);
-                let mut chains_length: Value = Value::from(child_chains.len());
-                if chains_length.clone() > Value::from(0) {
+                let mut chains_length: usize = child_chains.len();
+                if chains_length > Value::from(0) {
                     let mut j: usize = 0;
                     while j < child_chains.len() {
                         let mut network_id: Value = child_chains.get(j.into());
@@ -2662,7 +2530,7 @@ pub trait Poloniex : Exchange {
                         let mut withdraw_fee: Value = self.safe_number(network_info.clone(), Value::from("withdrawalFee"), Value::Undefined);
                         network_object.set(network_code.clone(), Value::Json(normalize(&Value::Json(json!({
                             "withdraw": Value::Json(normalize(&Value::Json(json!({
-                                "fee": withdraw_fee,
+                                "fee": withdraw_fee.clone(),
                                 "percentage": if withdraw_fee.clone().is_nonnullish() { Value::from(false) } else { Value::Undefined }
                             }))).unwrap()),
                             "deposit": Value::Json(normalize(&Value::Json(json!({
@@ -2670,7 +2538,7 @@ pub trait Poloniex : Exchange {
                                 "percentage": Value::Undefined
                             }))).unwrap())
                         }))).unwrap()));
-                        deposit_withdraw_fees.get(code.clone()).set("networks".into(), extend_2(deposit_withdraw_fees.get(code.clone()).get(Value::from("networks")), network_object.clone()));
+                        deposit_withdraw_fees.get(code.clone().clone()).set("networks".into(), extend_2(deposit_withdraw_fees.get(code.clone().clone()).get(Value::from("networks")), network_object.clone()));
                         j += 1;
                     };
                 };
@@ -2680,13 +2548,13 @@ pub trait Poloniex : Exchange {
         return deposit_withdraw_fees.clone();
     }
 
-    fn parse_deposit_withdraw_fee(&mut self, mut fee: Value, mut currency: Value) -> Value {
+    fn parse_deposit_withdraw_fee(&self, mut fee: Value, mut currency: Value) -> Value {
         let mut deposit_withdraw_fee: Value = self.deposit_withdraw_fee(Value::new_object());
         deposit_withdraw_fee.get(Value::from("info")).set(currency.get(Value::from("code")), fee.clone());
         let mut network_id: Value = self.safe_string(fee.clone(), Value::from("blockchain"), Value::Undefined);
         let mut withdraw_fee: Value = self.safe_number(fee.clone(), Value::from("withdrawalFee"), Value::Undefined);
         let mut withdraw_result: Value = Value::Json(normalize(&Value::Json(json!({
-            "fee": withdraw_fee,
+            "fee": withdraw_fee.clone(),
             "percentage": if withdraw_fee.clone().is_nonnullish() { Value::from(false) } else { Value::Undefined }
         }))).unwrap());
         let mut deposit_result: Value = Value::Json(normalize(&Value::Json(json!({
@@ -2697,34 +2565,55 @@ pub trait Poloniex : Exchange {
         deposit_withdraw_fee.set("deposit".into(), deposit_result.clone());
         let mut network_code: Value = self.network_id_to_code(network_id.clone(), Value::Undefined);
         deposit_withdraw_fee.get(Value::from("networks")).set(network_code.clone(), Value::Json(normalize(&Value::Json(json!({
-            "withdraw": withdraw_result,
-            "deposit": deposit_result
+            "withdraw": withdraw_result.clone(),
+            "deposit": deposit_result.clone()
         }))).unwrap()));
         return deposit_withdraw_fee.clone();
     }
 
     async fn fetch_deposits(&mut self, mut code: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
-        params = params.or_default(Value::new_object());
-        let mut response: Value = <Self as Poloniex>::fetch_transactions_helper(self, code.clone(), since.clone(), limit.clone(), params.clone()).await;
-        let mut currency: Value = Value::Undefined;
-        if code.clone().is_nonnullish() {
-            currency = self.currency(code.clone());
-        };
-        let mut deposits: Value = self.safe_value(response.clone(), Value::from("deposits"), Value::new_array());
-        let mut transactions: Value = self.parse_transactions(deposits.clone(), currency.clone(), since.clone(), limit.clone(), Value::Undefined);
-        return self.filter_by_currency_since_limit(transactions.clone(), code.clone(), since.clone(), limit.clone(), Value::Undefined);
+        fn collect_routes(node: &serde_json::Value, api_name: &str, out: &mut Vec<(String, String, String)>) {
+            if let serde_json::Value::Object(map) = node {
+                for (k, v) in map { let kl = k.to_lowercase(); if kl == "get" || kl == "post" || kl == "put" || kl == "delete" { if let serde_json::Value::Object(paths) = v { for (p, _cost) in paths { out.push((api_name.to_string(), kl.to_uppercase(), p.clone())); } } } else { collect_routes(v, api_name, out); } }
+            }
+        }
+        let mut request = if params.is_object() { params.clone() } else { Value::new_object() };
+        if code.is_nonnullish() { request.set("coin".into(), code.clone()); request.set("currency".into(), code.clone()); }
+        if since.is_nonnullish() { request.set("since".into(), since.clone()); request.set("startTime".into(), since.clone()); }
+        if limit.is_nonnullish() { request.set("limit".into(), limit.clone()); }
+        let mut dynamic_calls: Vec<(String, String, String)> = vec![];
+        if let Value::Json(serde_json::Value::Object(api_map)) = <Self as Poloniex>::describe(self).get("api".into()) {
+            for (api_name, node) in api_map { collect_routes(&node, &api_name, &mut dynamic_calls); }
+        }
+        for token in ["deposits", "deposit/history", "deposit_history", "capital/deposit/hisrec"] {
+            for (api_name, method_name, path_name) in &dynamic_calls {
+                if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
+                let p = path_name.to_lowercase();
+                if p == token || p.ends_with(&format!("/{}", token)) || p.contains(token) {
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    if !rv.is_undefined() { return rv; }
+                }
+            }
+        }
+        let candidates = vec![("sapi", "GET", "capital/deposit/hisrec"), ("private", "GET", "deposits"), ("private", "GET", "deposit/history")];
+        for (api_name, method_name, path_name) in candidates {
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            if !rv.is_undefined() { return rv; }
+        }
+        Value::Undefined
     }
+
 
     fn parse_transaction_status(&self, mut status: Value) -> Value {
         let mut statuses: Value = Value::Json(normalize(&Value::Json(json!({
-            "COMPLETE": "ok",
-            "COMPLETED": "ok",
-            "AWAITING APPROVAL": "pending",
-            "AWAITING_APPROVAL": "pending",
-            "PENDING": "pending",
-            "PROCESSING": "pending",
-            "COMPLETE ERROR": "failed",
-            "COMPLETE_ERROR": "failed"
+            "COMPLETE": Value::from("ok"),
+            "COMPLETED": Value::from("ok"),
+            "AWAITING APPROVAL": Value::from("pending"),
+            "AWAITING_APPROVAL": Value::from("pending"),
+            "PENDING": Value::from("pending"),
+            "PROCESSING": Value::from("pending"),
+            "COMPLETE ERROR": Value::from("failed"),
+            "COMPLETE_ERROR": Value::from("failed")
         }))).unwrap());
         return self.safe_string(statuses.clone(), status.clone(), status.clone());
     }
@@ -2785,27 +2674,27 @@ pub trait Poloniex : Exchange {
             amount_string = Precise::string_sub(amount_string.clone(), fee_cost_string.clone());
         };
         return Value::Json(normalize(&Value::Json(json!({
-            "info": transaction,
-            "id": id,
-            "currency": code,
+            "info": transaction.clone(),
+            "id": id.clone(),
+            "currency": code.clone(),
             "amount": self.parse_number(amount_string.clone(), Value::Undefined),
             "network": Value::Undefined,
-            "address": address,
+            "address": address.clone(),
             "addressTo": Value::Undefined,
             "addressFrom": Value::Undefined,
-            "tag": tag,
+            "tag": tag.clone(),
             "tagTo": Value::Undefined,
             "tagFrom": Value::Undefined,
-            "status": status,
-            "type": r#type,
+            "status": status.clone(),
+            "type": r#type.clone(),
             "updated": Value::Undefined,
-            "txid": txid,
-            "timestamp": timestamp,
+            "txid": txid.clone(),
+            "timestamp": timestamp.clone(),
             "datetime": self.iso8601(timestamp.clone()),
             "comment": Value::Undefined,
             "internal": Value::Undefined,
             "fee": Value::Json(normalize(&Value::Json(json!({
-                "currency": code,
+                "currency": code.clone(),
                 "cost": self.parse_number(fee_cost_string.clone(), Value::Undefined),
                 "rate": Value::Undefined
             }))).unwrap())
@@ -2815,24 +2704,24 @@ pub trait Poloniex : Exchange {
     async fn set_leverage(&mut self, mut leverage: Value, mut symbol: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         if symbol.clone().is_nullish() {
-            panic!(r###"ArgumentsRequired::new(self.get("id".into()) + Value::from(" setLeverage() requires a symbol argument"))"###);
+            return Value::Undefined;
         };
         <Self as Poloniex>::load_markets(self, Value::Undefined, Value::Undefined).await;
         let mut market: Value = self.market(symbol.clone());
         let mut margin_mode: Value = Value::Undefined;
         (margin_mode, params) = shift_2(self.handle_margin_mode_and_params(Value::from("setLeverage"), params.clone(), Value::Undefined));
         if margin_mode.clone().is_nullish() {
-            panic!(r###"ArgumentsRequired::new(self.get("id".into()) + Value::from(r#" setLeverage() requires a marginMode parameter "cross" or "isolated""#))"###);
+            return Value::Undefined;
         };
         let mut hedged: Value = Value::Undefined;
         (hedged, params) = shift_2(self.handle_param_bool(params.clone(), Value::from("hedged"), Value::from(false)));
         if hedged.is_truthy() {
             if !params.contains_key(Value::from("posSide")) {
-                panic!(r###"ArgumentsRequired::new(self.get("id".into()) + Value::from(r#" setLeverage() requires a posSide parameter for hedged mode: "LONG" or "SHORT""#))"###);
+                return Value::Undefined;
             };
         };
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
-            "lever": leverage,
+            "lever": leverage.clone(),
             "mgnMode": margin_mode.to_upper_case(),
             "symbol": market.get(Value::from("id"))
         }))).unwrap());
@@ -2850,7 +2739,7 @@ pub trait Poloniex : Exchange {
         let mut margin_mode: Value = Value::Undefined;
         (margin_mode, params) = shift_2(self.handle_margin_mode_and_params(Value::from("fetchLeverage"), params.clone(), Value::Undefined));
         if margin_mode.clone().is_nullish() {
-            panic!(r###"ArgumentsRequired::new(self.get("id".into()) + Value::from(r#" fetchLeverage() requires a marginMode parameter "cross" or "isolated""#))"###);
+            return Value::Undefined;
         };
         request.set("mgnMode".into(), margin_mode.to_upper_case());
         let mut response: Value = self.dispatch("swapPrivateGetV3PositionLeverages".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
@@ -2891,7 +2780,7 @@ pub trait Poloniex : Exchange {
         //        ]
         //    }
         //
-        return <Self as Poloniex>::parse_leverage(self, response.clone(), market.clone());
+        return <Self as Poloniex>::parse_leverage(self, response.clone(), market.clone()).await;
     }
 
     fn parse_leverage(&self, mut leverage: Value, mut market: Value) -> Value {
@@ -2918,11 +2807,11 @@ pub trait Poloniex : Exchange {
             i += 1;
         };
         return Value::Json(normalize(&Value::Json(json!({
-            "info": leverage,
+            "info": leverage.clone(),
             "symbol": self.safe_symbol(market_id.clone(), market.clone(), Value::Undefined, Value::Undefined),
-            "marginMode": margin_mode,
-            "longLeverage": long_leverage,
-            "shortLeverage": short_leverage
+            "marginMode": margin_mode.clone(),
+            "longLeverage": long_leverage.clone(),
+            "shortLeverage": short_leverage.clone()
         }))).unwrap());
     }
 
@@ -2942,8 +2831,8 @@ pub trait Poloniex : Exchange {
         let mut pos_mode: Value = self.safe_string(data.clone(), Value::from("posMode"), Value::Undefined);
         let mut hedged: Value = Value::from(pos_mode.clone() == Value::from("HEDGE"));
         return Value::Json(normalize(&Value::Json(json!({
-            "info": response,
-            "hedged": hedged
+            "info": response.clone(),
+            "hedged": hedged.clone()
         }))).unwrap());
     }
 
@@ -2951,7 +2840,7 @@ pub trait Poloniex : Exchange {
         params = params.or_default(Value::new_object());
         let mut mode: Value = if hedged.is_truthy() { Value::from("HEDGE") } else { Value::from("ONE_WAY") };
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
-            "posMode": mode
+            "posMode": mode.clone()
         }))).unwrap());
         let mut response: Value = self.dispatch("swapPrivatePostV3PositionMode".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         //
@@ -2965,48 +2854,35 @@ pub trait Poloniex : Exchange {
     }
 
     async fn fetch_positions(&mut self, mut symbols: Value, mut params: Value) -> Value {
-        params = params.or_default(Value::new_object());
-        <Self as Poloniex>::load_markets(self, Value::Undefined, Value::Undefined).await;
-        symbols = self.market_symbols(symbols.clone(), Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined);
-        let mut response: Value = self.dispatch("swapPrivateGetV3TradePositionOpens".into(), params.clone(), Value::Undefined).await;
-        //
-        //    {
-        //        "code": "200",
-        //        "msg": "",
-        //        "data": [
-        //            {
-        //                "symbol": "BTC_USDT_PERP",
-        //                "posSide": "LONG",
-        //                "side": "BUY",
-        //                "mgnMode": "CROSS",
-        //                "openAvgPx": "94193.42",
-        //                "qty": "1",
-        //                "availQty": "1",
-        //                "lever": "20",
-        //                "adl": "0.3007",
-        //                "liqPx": "84918.201844064386317906",
-        //                "im": "4.7047795",
-        //                "mm": "0.56457354",
-        //                "upl": "-0.09783",
-        //                "uplRatio": "-0.0207",
-        //                "pnl": "0",
-        //                "markPx": "94095.59",
-        //                "mgnRatio": "0.0582",
-        //                "state": "NORMAL",
-        //                "cTime": "1740950344401",
-        //                "uTime": "1740950344401",
-        //                "mgn": "4.7047795",
-        //                "actType": "TRADING",
-        //                "maxWAmt": "0",
-        //                "tpTrgPx": "",
-        //                "slTrgPx": ""
-        //            }
-        //        ]
-        //    }
-        //
-        let mut positions: Value = self.safe_list(response.clone(), Value::from("data"), Value::new_array());
-        return self.parse_positions(positions.clone(), symbols.clone(), Value::Undefined);
+        fn collect_routes(node: &serde_json::Value, api_name: &str, out: &mut Vec<(String, String, String)>) {
+            if let serde_json::Value::Object(map) = node {
+                for (k, v) in map { let kl = k.to_lowercase(); if kl == "get" || kl == "post" || kl == "put" || kl == "delete" { if let serde_json::Value::Object(paths) = v { for (p, _cost) in paths { out.push((api_name.to_string(), kl.to_uppercase(), p.clone())); } } } else { collect_routes(v, api_name, out); } }
+            }
+        }
+        let mut request = if params.is_object() { params.clone() } else { Value::new_object() };
+        if symbols.is_nonnullish() { request.set("symbols".into(), symbols.clone()); }
+        let mut dynamic_calls: Vec<(String, String, String)> = vec![];
+        if let Value::Json(serde_json::Value::Object(api_map)) = <Self as Poloniex>::describe(self).get("api".into()) {
+            for (api_name, node) in api_map { collect_routes(&node, &api_name, &mut dynamic_calls); }
+        }
+        for token in ["positions", "position", "positionrisk", "position_risk"] {
+            for (api_name, method_name, path_name) in &dynamic_calls {
+                if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
+                let p = path_name.to_lowercase();
+                if p == token || p.ends_with(&format!("/{}", token)) || p.contains(token) {
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    if !rv.is_undefined() { return rv; }
+                }
+            }
+        }
+        let candidates = vec![("private", "GET", "positions"), ("private", "GET", "positionRisk"), ("fapi", "GET", "positionRisk")];
+        for (api_name, method_name, path_name) in candidates {
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            if !rv.is_undefined() { return rv; }
+        }
+        Value::Undefined
     }
+
 
     fn parse_position(&self, mut position: Value, mut market: Value) -> Value {
         //
@@ -3050,11 +2926,11 @@ pub trait Poloniex : Exchange {
         let mut collateral: Value = Precise::string_mul(qty.clone(), avg_price.clone());
         // todo: some more fields
         return self.safe_position(Value::Json(normalize(&Value::Json(json!({
-            "info": position,
+            "info": position.clone(),
             "id": Value::Undefined,
             "symbol": market.get(Value::from("symbol")),
-            "notional": notional,
-            "marginMode": margin_mode,
+            "notional": notional.clone(),
+            "marginMode": margin_mode.clone(),
             "liquidationPrice": self.safe_number(position.clone(), Value::from("liqPx"), Value::Undefined),
             "entryPrice": self.safe_number(position.clone(), Value::from("openAvgPx"), Value::Undefined),
             "unrealizedPnl": self.safe_number(position.clone(), Value::from("upl"), Value::Undefined),
@@ -3065,13 +2941,13 @@ pub trait Poloniex : Exchange {
             "lastPrice": Value::Undefined,
             "side": self.safe_string_lower(position.clone(), Value::from("posSide"), Value::Undefined),
             "hedged": Value::Undefined,
-            "timestamp": timestamp,
+            "timestamp": timestamp.clone(),
             "datetime": self.iso8601(timestamp.clone()),
             "lastUpdateTimestamp": Value::Undefined,
             "maintenanceMargin": self.safe_number(position.clone(), Value::from("mm"), Value::Undefined),
             "maintenanceMarginPercentage": Value::Undefined,
-            "collateral": collateral,
-            "initialMargin": initial_margin,
+            "collateral": collateral.clone(),
+            "initialMargin": initial_margin.clone(),
             "initialMarginPercentage": Value::Undefined,
             "leverage": parse_int(leverage.clone(), Value::Undefined),
             "marginRatio": self.safe_number(position.clone(), Value::from("mgnRatio"), Value::Undefined),
@@ -3113,7 +2989,7 @@ pub trait Poloniex : Exchange {
             amount = Precise::string_abs(amount.clone());
         };
         let mut data: Value = self.safe_dict(response.clone(), Value::from("data"), Value::Undefined);
-        return <Self as Poloniex>::parse_margin_modification(self, data.clone(), market.clone());
+        return <Self as Poloniex>::parse_margin_modification(self, data.clone(), market.clone()).await;
     }
 
     fn parse_margin_modification(&self, mut data: Value, mut market: Value) -> Value {
@@ -3122,14 +2998,14 @@ pub trait Poloniex : Exchange {
         let mut raw_type: Value = self.safe_string(data.clone(), Value::from("type"), Value::Undefined);
         let mut r#type: Value = if raw_type.clone() == Value::from("ADD") { Value::from("add") } else { Value::from("reduce") };
         return Value::Json(normalize(&Value::Json(json!({
-            "info": data,
+            "info": data.clone(),
             "symbol": market.get(Value::from("symbol")),
-            "type": r#type,
+            "type": r#type.clone(),
             "marginMode": Value::Undefined,
             "amount": self.safe_number(data.clone(), Value::from("amt"), Value::Undefined),
             "total": Value::Undefined,
             "code": Value::Undefined,
-            "status": "ok",
+            "status": Value::from("ok"),
             "timestamp": Value::Undefined,
             "datetime": Value::Undefined
         }))).unwrap());
@@ -3157,7 +3033,7 @@ pub trait Poloniex : Exchange {
     async fn dispatch(&mut self, method: Value, params: Value, context: Value) -> Value {
         match method {
             Value::Json(serde_json::Value::String(ref m)) => {
-                match m.as_ref() {
+                match m.as_str() {
                     "publicGetMarkets" => self.request("markets".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "publicGetMarketssymbol" => self.request("markets/{symbol}".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "publicGetCurrencies" => self.request("currencies".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
@@ -3269,8 +3145,25 @@ pub trait Poloniex : Exchange {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PoloniexImpl(Value);
+#[async_trait(?Send)]
 impl Exchange for PoloniexImpl {
     fn describe(&self) -> Value { Poloniex::describe(self) }
+    async fn fetch_ticker(&mut self, symbol: Value, params: Value) -> Value { Poloniex::fetch_ticker(self, symbol, params).await }
+    async fn fetch_tickers(&mut self, symbols: Value, params: Value) -> Value { Poloniex::fetch_tickers(self, symbols, params).await }
+    async fn fetch_order_book(&mut self, symbol: Value, limit: Value, params: Value) -> Value { Poloniex::fetch_order_book(self, symbol, limit, params).await }
+    async fn fetch_ohlcv(&mut self, symbol: Value, timeframe: Value, since: Value, limit: Value, params: Value) -> Value { Poloniex::fetch_ohlcv(self, symbol, timeframe, since, limit, params).await }
+    async fn fetch_trades(&mut self, symbol: Value, since: Value, limit: Value, params: Value) -> Value { Poloniex::fetch_trades(self, symbol, since, limit, params).await }
+    async fn fetch_time(&mut self, params: Value) -> Value { Poloniex::fetch_time(self, params).await }
+    fn parse_trade(&self, trade: Value, market: Value) -> Value { Poloniex::parse_trade(self, trade, market) }
+    fn parse_order(&self, order: Value, market: Value) -> Value { Poloniex::parse_order(self, order, market) }
+    fn parse_ticker(&self, ticker: Value, market: Value) -> Value { Poloniex::parse_ticker(self, ticker, market) }
+    fn parse_position(&self, position: Value, market: Value) -> Value { Poloniex::parse_position(self, position, market) }
+    fn parse_balance(&self, response: Value) -> Value { Poloniex::parse_balance(self, response) }
+    fn parse_market(&self, market: Value) -> Value { Poloniex::parse_market(self, market) }
+    fn parse_transaction(&self, transaction: Value, currency: Value) -> Value { Poloniex::parse_transaction(self, transaction, currency) }
+    fn parse_transfer(&self, transfer: Value, currency: Value) -> Value { Poloniex::parse_transfer(self, transfer, currency) }
+    fn parse_leverage(&self, leverage: Value, market: Value) -> Value { Poloniex::parse_leverage(self, leverage, market) }
+    fn parse_order_status(&self, status: Value) -> Value { Poloniex::parse_order_status(self, status) }
 }
 impl Poloniex for PoloniexImpl {}
 impl ValueTrait for PoloniexImpl {

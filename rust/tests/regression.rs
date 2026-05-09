@@ -7,7 +7,7 @@
 
 use ccxt::exchange::{
     normalize, safe_get, value_to_string_opt, value_to_i64_opt, value_to_f64_opt,
-    extend_2, shift_2, Value,
+    extend_2, shift_2, Value, ValueTrait,
 };
 use ccxt::exchange::Exchange;
 use serde_json::{json, Value as JsonValue};
@@ -2079,4 +2079,55 @@ async fn test_break_label_in_async_fn() {
 
     assert_eq!(inner(false).await, "ok");
     assert_eq!(inner(true).await, "caught: NotSupported: test error");
+}
+
+#[test]
+fn pilot_binance_parse_ticker() {
+    let response_path = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../ts/src/test/static/response/binance.json"
+    );
+    let markets_path = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../ts/src/test/static/markets/binance.json"
+    );
+    let response_str = std::fs::read_to_string(response_path).expect("response fixture missing");
+    let markets_str = std::fs::read_to_string(markets_path).expect("markets fixture missing");
+    let fixture: JsonValue = serde_json::from_str(&response_str).expect("bad response JSON");
+    let markets_json: JsonValue = serde_json::from_str(&markets_str).expect("bad markets JSON");
+
+    let entry = &fixture["methods"]["fetchTicker"][0];
+    let http_response = entry["httpResponse"].clone();
+    let expected = &entry["parsedResponse"];
+
+    let mut ex = make_binance();
+    ex.set(Value::from("markets"), Value::Json(markets_json.clone()));
+    // build markets_by_id: { "BTCUSDT": [market_obj], ... }
+    let mut mbi = serde_json::Map::new();
+    if let JsonValue::Object(m) = &markets_json {
+        for (sym, mkt) in m {
+            let id = mkt.get("id").and_then(|v| v.as_str()).unwrap_or(sym.as_str());
+            mbi.entry(id.to_string())
+                .or_insert_with(|| JsonValue::Array(vec![]))
+                .as_array_mut()
+                .unwrap()
+                .push(mkt.clone());
+        }
+    }
+    ex.set(Value::from("markets_by_id"), Value::Json(JsonValue::Object(mbi)));
+
+    let market = Value::Json(markets_json["BTC/USDT"].clone());
+    let result = <BinanceImpl as Binance>::parse_ticker(&ex, Value::Json(http_response), market);
+
+    let got = normalize(&result);
+    eprintln!("GOT:      {:?}", got);
+    eprintln!("EXPECTED: {:?}", expected);
+    // Verify key fields
+    if let Some(JsonValue::Object(got_obj)) = &got {
+        for key in &["symbol", "last", "high", "low", "bid", "ask", "open", "close"] {
+            let g = got_obj.get(*key);
+            let e = expected.get(*key);
+            eprintln!("  {}: got={:?} expected={:?}", key, g, e);
+        }
+    }
 }

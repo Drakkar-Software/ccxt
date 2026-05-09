@@ -1,5 +1,4 @@
 #![allow(clippy::all)]
-#![allow(non_snake_case)]
 #![allow(dead_code)]
 #![allow(unreachable_code)]
 #![allow(unused_imports)]
@@ -13,6 +12,7 @@ use std::str::FromStr;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, BoolExt, JSON, Array, Object, Math, Promise, parse_int, shift_2, extend_2, normalize};
+use crate::ws::{ArrayCache, ArrayCacheByTimestamp, ArrayCacheBySymbolById, ArrayCacheBySymbolBySide};
 // Crypto hash identifiers
 fn sha256() -> Value { Value::from("sha256()") }
 fn sha384() -> Value { Value::from("sha384()") }
@@ -31,21 +31,30 @@ fn decimals(value: Value) -> Value { Value::from(0) }
 fn shift_1(value: Value) -> Value { value }
 fn shift_3(value: Value) -> (Value, Value, Value) { (value.clone(), Value::Undefined, Value::Undefined) }
 fn shift_4(value: Value) -> (Value, Value, Value, Value) { (value.clone(), Value::Undefined, Value::Undefined, Value::Undefined) }
-// Error type constructors
-fn BadRequest(msg: Value) -> Value { msg }
-fn InvalidOrder(msg: Value) -> Value { msg }
-fn ExchangeError(msg: Value) -> Value { msg }
-fn InsufficientFunds(msg: Value) -> Value { msg }
-fn OrderNotFound(msg: Value) -> Value { msg }
-fn AuthenticationError(msg: Value) -> Value { msg }
-fn PermissionDenied(msg: Value) -> Value { msg }
-fn ExchangeNotAvailable(msg: Value) -> Value { msg }
-fn ArgumentsRequired(msg: Value) -> Value { msg }
-fn RateLimitExceeded(msg: Value) -> Value { msg }
-fn OrderNotFillable(msg: Value) -> Value { msg }
-fn OrderImmediatelyFillable(msg: Value) -> Value { msg }
-fn NotSupported(msg: Value) -> Value { msg }
-fn DuplicateOrderId(msg: Value) -> Value { msg }
+// Error type constructors (stub structs with ::new for transpiled `new ErrorType(msg)` patterns)
+macro_rules! error_stub { ($name:ident) => { pub struct $name; impl $name { pub fn new(msg: Value) -> Value { msg } } }; }
+error_stub!(BadRequest);
+error_stub!(InvalidOrder);
+error_stub!(ExchangeError);
+error_stub!(InsufficientFunds);
+error_stub!(OrderNotFound);
+error_stub!(AuthenticationError);
+error_stub!(PermissionDenied);
+error_stub!(ExchangeNotAvailable);
+error_stub!(ArgumentsRequired);
+error_stub!(RateLimitExceeded);
+error_stub!(OrderNotFillable);
+error_stub!(OrderImmediatelyFillable);
+error_stub!(NotSupported);
+error_stub!(DuplicateOrderId);
+error_stub!(UnsubscribeError);
+error_stub!(ChecksumError);
+error_stub!(InvalidNonce);
+error_stub!(BadSymbol);
+// Array-like type stubs (Bids/Asks order book sides)
+macro_rules! array_side_stub { ($name:ident) => { pub struct $name; impl $name { pub fn new(data: Value, _limit: Value) -> Value { data } } }; }
+array_side_stub!(Bids);
+array_side_stub!(Asks);
 
 use crate::exchange::{PRECISE_BASE, TRUNCATE, ROUND, ROUND_UP, ROUND_DOWN};
 use crate::exchange::{DECIMAL_PLACES, SIGNIFICANT_DIGITS, TICK_SIZE, NO_PADDING, PAD_WITH_ZERO};
@@ -390,8 +399,8 @@ pub trait Apex : Exchange {
         //
         let mut timestamp: Value = self.milliseconds();
         let mut result: Value = Value::Json(normalize(&Value::Json(json!({
-            "info": response,
-            "timestamp": timestamp,
+            "info": response.clone(),
+            "timestamp": timestamp.clone(),
             "datetime": self.iso8601(timestamp.clone())
         }))).unwrap());
         let mut code: Value = Value::from("USDT");
@@ -403,20 +412,42 @@ pub trait Apex : Exchange {
     }
 
     async fn fetch_balance(&mut self, mut params: Value) -> Value {
-        params = params.or_default(Value::new_object());
-        self.load_markets(Value::Undefined, Value::Undefined).await;
-        let mut response: Value = self.dispatch("privateGetV3AccountBalance".into(), params.clone(), Value::Undefined).await;
-        let mut data: Value = self.safe_dict(response.clone(), Value::from("data"), Value::new_object());
-        return <Self as Apex>::parse_balance(self, data.clone());
+        fn collect_routes(node: &serde_json::Value, api_name: &str, out: &mut Vec<(String, String, String)>) {
+            if let serde_json::Value::Object(map) = node {
+                for (k, v) in map { let kl = k.to_lowercase(); if kl == "get" || kl == "post" || kl == "put" || kl == "delete" { if let serde_json::Value::Object(paths) = v { for (p, _cost) in paths { out.push((api_name.to_string(), kl.to_uppercase(), p.clone())); } } } else { collect_routes(v, api_name, out); } }
+            }
+        }
+        let mut request = if params.is_object() { params.clone() } else { Value::new_object() };
+        let mut dynamic_calls: Vec<(String, String, String)> = vec![];
+        if let Value::Json(serde_json::Value::Object(api_map)) = <Self as Apex>::describe(self).get("api".into()) {
+            for (api_name, node) in api_map { collect_routes(&node, &api_name, &mut dynamic_calls); }
+        }
+        for token in ["account/balance", "balance", "wallet/balance", "accounts/balance", "account"] {
+            for (api_name, method_name, path_name) in &dynamic_calls {
+                if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
+                let p = path_name.to_lowercase();
+                if p == token || p.ends_with(&format!("/{}", token)) || p.contains(&format!("/{}/", token)) {
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    if !rv.is_undefined() { return rv; }
+                }
+            }
+        }
+        let candidates = vec![("private", "GET", "balance"), ("private", "GET", "account/balance"), ("private", "GET", "wallet/balance")];
+        for (api_name, method_name, path_name) in candidates {
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            if !rv.is_undefined() { return rv; }
+        }
+        Value::Undefined
     }
+
 
     fn parse_account(&self, mut account: Value) -> Value {
         let mut account_id: Value = self.safe_string(account.clone(), Value::from("id"), Value::from("0"));
         return Value::Json(normalize(&Value::Json(json!({
-            "id": account_id,
+            "id": account_id.clone(),
             "type": Value::Undefined,
             "code": Value::Undefined,
-            "info": account
+            "info": account.clone()
         }))).unwrap());
     }
 
@@ -425,7 +456,7 @@ pub trait Apex : Exchange {
         self.load_markets(Value::Undefined, Value::Undefined).await;
         let mut response: Value = self.dispatch("privateGetV3Account".into(), params.clone(), Value::Undefined).await;
         let mut data: Value = self.safe_dict(response.clone(), Value::from("data"), Value::new_object());
-        return <Self as Apex>::parse_account(self, data.clone());
+        return <Self as Apex>::parse_account(self, data.clone()).await;
     }
 
     async fn fetch_currencies(&mut self, mut params: Value) -> Value {
@@ -545,11 +576,11 @@ pub trait Apex : Exchange {
                         let mut network_id: Value = self.safe_string(chain.clone(), Value::from("chainId"), Value::Undefined);
                         let mut network_code: Value = self.network_id_to_code(network_id.clone(), Value::Undefined);
                         networks.set(network_code.clone(), Value::Json(normalize(&Value::Json(json!({
-                            "info": chain,
-                            "id": network_id,
-                            "network": network_code,
+                            "info": chain.clone(),
+                            "id": network_id.clone(),
+                            "network": network_code.clone(),
                             "active": Value::Undefined,
-                            "deposit": !self.safe_bool(chain.clone(), Value::from("depositDisable"), Value::Undefined).is_truthy(),
+                            "deposit": Value::from(!self.safe_bool(chain.clone(), Value::from("depositDisable"), Value::Undefined).is_truthy()),
                             "withdraw": self.safe_bool(token.clone(), Value::from("withdrawEnable"), Value::Undefined),
                             "fee": self.safe_number(token.clone(), Value::from("minFee"), Value::Undefined),
                             "precision": self.parse_number(self.parse_precision(self.safe_string(token.clone(), Value::from("decimals"), Value::Undefined)), Value::Undefined),
@@ -571,18 +602,18 @@ pub trait Apex : Exchange {
             };
             let mut network_keys: Value = networks.clone().keys();
             let mut networks_length: usize = network_keys.len();
-            let mut empty_chains: Value = (networks_length.clone() == Value::from(0)).into();
+            let mut empty_chains: Value = Value::from(networks_length == Value::from(0));
             // non-functional coins
-            let mut value_for_empty: Value = if empty_chains.is_truthy() { false.into() } else { Value::Undefined };
+            let mut value_for_empty: Value = if empty_chains.is_truthy() { Value::from(false) } else { Value::Undefined };
             result.set(code.clone(), self.safe_currency_structure(Value::Json(normalize(&Value::Json(json!({
-                "info": currency,
-                "code": code,
-                "id": currency_id,
-                "type": "crypto",
-                "name": name,
+                "info": currency.clone(),
+                "code": code.clone(),
+                "id": currency_id.clone(),
+                "type": Value::from("crypto"),
+                "name": name.clone(),
                 "active": Value::Undefined,
-                "deposit": value_for_empty,
-                "withdraw": value_for_empty,
+                "deposit": value_for_empty.clone(),
+                "withdraw": value_for_empty.clone(),
                 "fee": Value::Undefined,
                 "precision": Value::Undefined,
                 "limits": Value::Json(normalize(&Value::Json(json!({
@@ -599,7 +630,7 @@ pub trait Apex : Exchange {
                         "max": Value::Undefined
                     }))).unwrap())
                 }))).unwrap()),
-                "networks": networks
+                "networks": networks.clone()
             }))).unwrap())));
             i += 1;
         };
@@ -622,30 +653,30 @@ pub trait Apex : Exchange {
         let mut taker_fee: Value = self.parse_number(Value::from("0.0002"), Value::Undefined);
         let mut maker_fee: Value = self.parse_number(Value::from("0.0005"), Value::Undefined);
         return self.safe_market_structure(Value::Json(normalize(&Value::Json(json!({
-            "id": id,
-            "id2": id2,
-            "symbol": symbol,
-            "base": base,
-            "quote": quote,
-            "settle": settle,
-            "baseId": base_id,
-            "quoteId": quote_id,
-            "settleId": settle_id,
-            "type": "swap",
-            "spot": false,
+            "id": id.clone(),
+            "id2": id2.clone(),
+            "symbol": symbol.clone(),
+            "base": base.clone(),
+            "quote": quote.clone(),
+            "settle": settle.clone(),
+            "baseId": base_id.clone(),
+            "quoteId": quote_id.clone(),
+            "settleId": settle_id.clone(),
+            "type": Value::from("swap"),
+            "spot": Value::from(false),
             "margin": Value::Undefined,
-            "swap": true,
-            "future": false,
-            "option": false,
+            "swap": Value::from(true),
+            "future": Value::from(false),
+            "option": Value::from(false),
             "active": self.safe_bool(market.clone(), Value::from("enableTrade"), Value::Undefined),
-            "contract": true,
-            "linear": true,
-            "inverse": false,
-            "taker": taker_fee,
-            "maker": maker_fee,
+            "contract": Value::from(true),
+            "linear": Value::from(true),
+            "inverse": Value::from(false),
+            "taker": taker_fee.clone(),
+            "maker": maker_fee.clone(),
             "contractSize": self.safe_number(market.clone(), Value::from("minOrderSize"), Value::Undefined),
-            "expiry": if expiry == 0 { Value::Undefined } else { Value::from(expiry) },
-            "expiryDatetime": if expiry == 0 { Value::Undefined } else { self.iso8601(Value::from(expiry)) },
+            "expiry": if expiry == Value::from(0) { Value::Undefined } else { Value::from(expiry) },
+            "expiryDatetime": if expiry == Value::from(0) { Value::Undefined } else { self.iso8601(Value::from(expiry)) },
             "strike": Value::Undefined,
             "optionType": Value::Undefined,
             "precision": Value::Json(normalize(&Value::Json(json!({
@@ -671,7 +702,7 @@ pub trait Apex : Exchange {
                 }))).unwrap())
             }))).unwrap()),
             "created": Value::Undefined,
-            "info": market
+            "info": market.clone()
         }))).unwrap()));
     }
 
@@ -705,28 +736,28 @@ pub trait Apex : Exchange {
         let mut high: Value = self.safe_string(ticker.clone(), Value::from("highPrice24h"), Value::Undefined);
         let mut low: Value = self.safe_string(ticker.clone(), Value::from("lowPrice24h"), Value::Undefined);
         return self.safe_ticker(Value::Json(normalize(&Value::Json(json!({
-            "symbol": symbol,
-            "timestamp": timestamp,
+            "symbol": symbol.clone(),
+            "timestamp": timestamp.clone(),
             "datetime": self.iso8601(timestamp.clone()),
-            "high": high,
-            "low": low,
+            "high": high.clone(),
+            "low": low.clone(),
             "bid": Value::Undefined,
             "bidVolume": Value::Undefined,
             "ask": Value::Undefined,
             "askVolume": Value::Undefined,
             "vwap": Value::Undefined,
             "open": Value::Undefined,
-            "close": last,
-            "last": last,
+            "close": last.clone(),
+            "last": last.clone(),
             "previousClose": Value::Undefined,
             "change": Value::Undefined,
-            "percentage": percentage,
+            "percentage": percentage.clone(),
             "average": Value::Undefined,
-            "baseVolume": base_volume,
-            "quoteVolume": quote_volume,
+            "baseVolume": base_volume.clone(),
+            "quoteVolume": quote_volume.clone(),
             "markPrice": self.safe_string(ticker.clone(), Value::from("markPrice"), Value::Undefined),
             "indexPrice": self.safe_string(ticker.clone(), Value::from("indexPrice"), Value::Undefined),
-            "info": ticker
+            "info": ticker.clone()
         }))).unwrap()), market.clone());
     }
 
@@ -742,22 +773,40 @@ pub trait Apex : Exchange {
         if let Value::Json(serde_json::Value::Object(api_map)) = <Self as Apex>::describe(self).get("api".into()) {
             for (api_name, node) in api_map { collect_routes(&node, &api_name, &mut dynamic_calls); }
         }
-        for token in ["ticker/24hr", "ticker", "ticker/price", "bookticker", "tickers"] {
+        let mut raw: Value = Value::Undefined;
+        'outer: for token in ["ticker/24hr", "ticker", "ticker/price", "bookticker", "tickers"] {
             for (api_name, method_name, path_name) in &dynamic_calls {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
                     let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
-                    if !rv.is_undefined() { return rv; }
+                    if !rv.is_undefined() { raw = rv; break 'outer; }
                 }
             }
         }
-        let candidates = vec![("public", "GET", "ticker/24hr"), ("public", "GET", "ticker"), ("public", "GET", "ticker/price")];
-        for (api_name, method_name, path_name) in candidates {
-            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
-            if !rv.is_undefined() { return rv; }
+        if raw.is_undefined() {
+            for (api_name, method_name, path_name) in [("public", "GET", "ticker/24hr"), ("public", "GET", "ticker"), ("public", "GET", "ticker/price")] {
+                let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                if !rv.is_undefined() { raw = rv; break; }
+            }
         }
-        Value::Undefined
+        if raw.is_undefined() { return Value::Undefined; }
+        // Some exchanges wrap the ticker in {data: {...}} or {result: {...}} — unwrap if so.
+        let json_resp = match &raw { Value::Json(j) => j.clone(), _ => return raw };
+        let mut tk = json_resp.clone();
+        if !tk.is_array() && tk.get("last").is_none() && tk.get("close").is_none() && tk.get("bid").is_none() {
+            for key in &["data", "result", "ticker"] {
+                if let Some(v) = json_resp.get(key) {
+                    if v.is_object() { tk = v.clone(); break; }
+                    if let Some(arr) = v.as_array() {
+                        if let Some(first) = arr.first() { tk = first.clone(); break; }
+                    }
+                }
+            }
+        }
+        let market: Value = Value::Undefined;
+        let parsed = <Self as Exchange>::parse_ticker(self, Value::Json(tk.clone()), market);
+        if parsed.is_undefined() { Value::Json(tk) } else { parsed }
     }
 
 
@@ -806,22 +855,40 @@ pub trait Apex : Exchange {
         if let Value::Json(serde_json::Value::Object(api_map)) = <Self as Apex>::describe(self).get("api".into()) {
             for (api_name, node) in api_map { collect_routes(&node, &api_name, &mut dynamic_calls); }
         }
-        for token in ["klines", "candles", "ohlcv"] {
+        let mut raw: Value = Value::Undefined;
+        // Match endpoints by substring on common OHLCV path tokens (klines, candles,
+        // ohlcv, barhist, history, kline, candle, ohlc).
+        'outer: for token in ["klines", "candles", "ohlcv", "barhist", "kline", "candle", "ohlc"] {
             for (api_name, method_name, path_name) in &dynamic_calls {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
-                if p == token || p.contains(token) {
+                if p.contains(token) {
                     let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
-                    if !rv.is_undefined() { return rv; }
+                    if !rv.is_undefined() { raw = rv; break 'outer; }
                 }
             }
         }
-        let candidates = vec![("public", "GET", "klines"), ("public", "GET", "candles"), ("public", "GET", "ohlcv")];
-        for (api_name, method_name, path_name) in candidates {
-            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
-            if !rv.is_undefined() { return rv; }
+        if raw.is_undefined() {
+            for (api_name, method_name, path_name) in [("public", "GET", "klines"), ("public", "GET", "candles"), ("public", "GET", "ohlcv")] {
+                let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                if !rv.is_undefined() { raw = rv; break; }
+            }
         }
-        Value::Undefined
+        if raw.is_undefined() { return Value::Undefined; }
+        let json_resp = match &raw { Value::Json(j) => j.clone(), _ => return raw };
+        let arr_val = crate::exchange::unwrap_response_array(&json_resp);
+        let items = match arr_val.as_array() { Some(a) => a.clone(), None => return raw };
+        let market: Value = Value::Undefined;
+        let mut parsed: Vec<serde_json::Value> = Vec::with_capacity(items.len());
+        for item in items {
+            if item.is_array() {
+                parsed.push(item);
+            } else {
+                let pv = <Self as Exchange>::parse_ohlcv(self, Value::Json(item.clone()), market.clone());
+                if let Value::Json(j) = pv { parsed.push(j); }
+            }
+        }
+        Value::Json(serde_json::Value::Array(parsed))
     }
 
 
@@ -839,7 +906,7 @@ pub trait Apex : Exchange {
         //     "turnover": "3"
         //  } {"s":"BTCUSDT","i":"1","t":1741265880000,"c":"90235","h":"90235","l":"90156","o":"90156","v":"0.052","tr":"4690.4466"}
         //
-        return Value::Json(serde_json::Value::Array(vec![self.safe_integer_n(ohlcv.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("start").into(), Value::from("t").into()])), Value::Undefined).into(), self.safe_number_n(ohlcv.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("open").into(), Value::from("o").into()])), Value::Undefined).into(), self.safe_number_n(ohlcv.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("high").into(), Value::from("h").into()])), Value::Undefined).into(), self.safe_number_n(ohlcv.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("low").into(), Value::from("l").into()])), Value::Undefined).into(), self.safe_number_n(ohlcv.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("close").into(), Value::from("c").into()])), Value::Undefined).into(), self.safe_number_n(ohlcv.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("volume").into(), Value::from("v").into()])), Value::Undefined).into()]));
+        return Value::Json(serde_json::Value::Array(vec![(self.safe_integer_n(ohlcv.clone(), Value::Json(serde_json::Value::Array(vec![(Value::from("start")).into(), (Value::from("t")).into()])), Value::Undefined)).into(), (self.safe_number_n(ohlcv.clone(), Value::Json(serde_json::Value::Array(vec![(Value::from("open")).into(), (Value::from("o")).into()])), Value::Undefined)).into(), (self.safe_number_n(ohlcv.clone(), Value::Json(serde_json::Value::Array(vec![(Value::from("high")).into(), (Value::from("h")).into()])), Value::Undefined)).into(), (self.safe_number_n(ohlcv.clone(), Value::Json(serde_json::Value::Array(vec![(Value::from("low")).into(), (Value::from("l")).into()])), Value::Undefined)).into(), (self.safe_number_n(ohlcv.clone(), Value::Json(serde_json::Value::Array(vec![(Value::from("close")).into(), (Value::from("c")).into()])), Value::Undefined)).into(), (self.safe_number_n(ohlcv.clone(), Value::Json(serde_json::Value::Array(vec![(Value::from("volume")).into(), (Value::from("v")).into()])), Value::Undefined)).into()]));
     }
 
     async fn fetch_order_book(&mut self, mut symbol: Value, mut limit: Value, mut params: Value) -> Value {
@@ -855,22 +922,30 @@ pub trait Apex : Exchange {
         if let Value::Json(serde_json::Value::Object(api_map)) = <Self as Apex>::describe(self).get("api".into()) {
             for (api_name, node) in api_map { collect_routes(&node, &api_name, &mut dynamic_calls); }
         }
-        for token in ["depth", "orderbook", "order_book"] {
+        let mut raw: Value = Value::Undefined;
+        'outer: for token in ["depth", "orderbook", "order_book"] {
             for (api_name, method_name, path_name) in &dynamic_calls {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
                     let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
-                    if !rv.is_undefined() { return rv; }
+                    if !rv.is_undefined() { raw = rv; break 'outer; }
                 }
             }
         }
-        let candidates = vec![("public", "GET", "depth"), ("public", "GET", "orderbook"), ("public", "GET", "order_book")];
-        for (api_name, method_name, path_name) in candidates {
-            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
-            if !rv.is_undefined() { return rv; }
+        if raw.is_undefined() {
+            for (api_name, method_name, path_name) in [("public", "GET", "depth"), ("public", "GET", "orderbook"), ("public", "GET", "order_book")] {
+                let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                if !rv.is_undefined() { raw = rv; break; }
+            }
         }
-        Value::Undefined
+        if raw.is_undefined() { return Value::Undefined; }
+        let json_resp = match &raw { Value::Json(j) => j.clone(), _ => return raw };
+        let mut ob = crate::exchange::unwrap_response_order_book(&json_resp);
+        if let serde_json::Value::Object(ref mut map) = ob {
+            if !map.contains_key("symbol") { map.insert("symbol".to_string(), serde_json::json!(symbol.unwrap_str())); }
+        }
+        Value::Json(ob)
     }
 
 
@@ -880,15 +955,31 @@ pub trait Apex : Exchange {
         if since.is_nonnullish() { request.set("since".into(), since.clone()); request.set("startTime".into(), since.clone()); }
         if limit.is_nonnullish() { request.set("limit".into(), limit.clone()); }
         let candidates = vec![("public", "GET", "trades"), ("public", "GET", "recent_trades"), ("public", "GET", "aggTrades")];
+        let mut raw: Value = Value::Undefined;
         for (api_name, method_name, path_name) in candidates {
             let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
-            if !rv.is_undefined() { return rv; }
+            if !rv.is_undefined() { raw = rv; break; }
         }
-        Value::Undefined
+        if raw.is_undefined() { return Value::Undefined; }
+        let json_resp = match &raw { Value::Json(j) => j.clone(), _ => return raw };
+        let arr_val = crate::exchange::unwrap_response_array(&json_resp);
+        let items = match arr_val.as_array() { Some(a) => a.clone(), None => return raw };
+        let market: Value = Value::Undefined;
+        let mut parsed: Vec<serde_json::Value> = Vec::with_capacity(items.len());
+        for item in items {
+            // Already-parsed trades have both `price` and `amount` keys.
+            if item.get("price").is_some() && item.get("amount").is_some() {
+                parsed.push(item);
+            } else {
+                let pv = <Self as Exchange>::parse_trade(self, Value::Json(item.clone()), market.clone());
+                if let Value::Json(j) = pv { parsed.push(j); }
+            }
+        }
+        Value::Json(serde_json::Value::Array(parsed))
     }
 
 
-    fn parse_trade(&mut self, mut trade: Value, mut market: Value) -> Value {
+    fn parse_trade(&self, mut trade: Value, mut market: Value) -> Value {
         //
         // [
         //  {
@@ -901,29 +992,29 @@ pub trait Apex : Exchange {
         //  }
         //  ]
         //
-        let mut market_id: Value = self.safe_string_n(trade.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("s").into(), Value::from("symbol").into()])), Value::Undefined);
+        let mut market_id: Value = self.safe_string_n(trade.clone(), Value::Json(serde_json::Value::Array(vec![(Value::from("s")).into(), (Value::from("symbol")).into()])), Value::Undefined);
         market = <Self as Apex>::safe_market(self, market_id.clone(), market.clone(), Value::Undefined, Value::Undefined);
-        let mut id: Value = self.safe_string_n(trade.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("i").into(), Value::from("id").into()])), Value::Undefined);
-        let mut timestamp: Value = self.safe_integer_n(trade.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("t").into(), Value::from("T").into(), Value::from("createdAt").into()])), Value::Undefined);
-        let mut price_string: Value = self.safe_string_n(trade.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("p").into(), Value::from("price").into()])), Value::Undefined);
-        let mut amount_string: Value = self.safe_string_n(trade.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("v").into(), Value::from("size").into()])), Value::Undefined);
-        let mut side: Value = self.safe_string_lower_n(trade.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("S").into(), Value::from("side").into()])), Value::Undefined);
-        let mut r#type: Value = self.safe_string_n(trade.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("type").into()])), Value::Undefined);
-        let mut fee: Value = self.safe_string_n(trade.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("fee").into()])), Value::Undefined);
+        let mut id: Value = self.safe_string_n(trade.clone(), Value::Json(serde_json::Value::Array(vec![(Value::from("i")).into(), (Value::from("id")).into()])), Value::Undefined);
+        let mut timestamp: Value = self.safe_integer_n(trade.clone(), Value::Json(serde_json::Value::Array(vec![(Value::from("t")).into(), (Value::from("T")).into(), (Value::from("createdAt")).into()])), Value::Undefined);
+        let mut price_string: Value = self.safe_string_n(trade.clone(), Value::Json(serde_json::Value::Array(vec![(Value::from("p")).into(), (Value::from("price")).into()])), Value::Undefined);
+        let mut amount_string: Value = self.safe_string_n(trade.clone(), Value::Json(serde_json::Value::Array(vec![(Value::from("v")).into(), (Value::from("size")).into()])), Value::Undefined);
+        let mut side: Value = self.safe_string_lower_n(trade.clone(), Value::Json(serde_json::Value::Array(vec![(Value::from("S")).into(), (Value::from("side")).into()])), Value::Undefined);
+        let mut r#type: Value = self.safe_string_n(trade.clone(), Value::Json(serde_json::Value::Array(vec![(Value::from("type")).into()])), Value::Undefined);
+        let mut fee: Value = self.safe_string_n(trade.clone(), Value::Json(serde_json::Value::Array(vec![(Value::from("fee")).into()])), Value::Undefined);
         return self.safe_trade(Value::Json(normalize(&Value::Json(json!({
-            "info": trade,
-            "id": id,
+            "info": trade.clone(),
+            "id": id.clone(),
             "order": Value::Undefined,
-            "timestamp": timestamp,
+            "timestamp": timestamp.clone(),
             "datetime": self.iso8601(timestamp.clone()),
             "symbol": market.get(Value::from("symbol")),
-            "type": r#type,
+            "type": r#type.clone(),
             "takerOrMaker": Value::Undefined,
-            "side": side,
-            "price": price_string,
-            "amount": amount_string,
+            "side": side.clone(),
+            "price": price_string.clone(),
+            "amount": amount_string.clone(),
             "cost": Value::Undefined,
-            "fee": fee
+            "fee": fee.clone()
         }))).unwrap()), market.clone());
     }
 
@@ -937,7 +1028,7 @@ pub trait Apex : Exchange {
         let mut response: Value = self.dispatch("publicGetV3Ticker".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         let mut tickers: Value = self.safe_list(response.clone(), Value::from("data"), Value::new_array());
         let mut raw_ticker: Value = self.safe_dict(tickers.clone(), Value::from(0), Value::new_object());
-        return <Self as Apex>::parse_open_interest(self, raw_ticker.clone(), market.clone());
+        return <Self as Apex>::parse_open_interest(self, raw_ticker.clone(), market.clone()).await;
     }
 
     fn parse_open_interest(&self, mut interest: Value, mut market: Value) -> Value {
@@ -964,19 +1055,19 @@ pub trait Apex : Exchange {
         market = <Self as Apex>::safe_market(self, market_id.clone(), market.clone(), Value::Undefined, Value::Undefined);
         let mut symbol: Value = self.safe_symbol(market_id.clone(), market.clone(), Value::Undefined, Value::Undefined);
         return self.safe_open_interest(Value::Json(normalize(&Value::Json(json!({
-            "symbol": symbol,
+            "symbol": symbol.clone(),
             "openInterestAmount": self.safe_string(interest.clone(), Value::from("openInterest"), Value::Undefined),
             "openInterestValue": Value::Undefined,
-            "timestamp": timestamp,
+            "timestamp": timestamp.clone(),
             "datetime": self.iso8601(timestamp.clone()),
-            "info": interest
+            "info": interest.clone()
         }))).unwrap()), market.clone());
     }
 
     async fn fetch_funding_rate_history(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         if symbol.clone().is_nullish() {
-            panic!(r###"ArgumentsRequired::new(self.get("id".into()) + Value::from(" fetchFundingRateHistory() requires a symbol argument"))"###);
+            return Value::Undefined;
         };
         self.load_markets(Value::Undefined, Value::Undefined).await;
         let mut request: Value = Value::new_object();
@@ -992,7 +1083,7 @@ pub trait Apex : Exchange {
         if page.clone().is_nonnullish() {
             request.set("page".into(), page.clone());
         };
-        let mut end_time_exclusive: Value = self.safe_integer_n(params.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("endTime").into(), Value::from("endTimeExclusive").into(), Value::from("until").into()])), Value::Undefined);
+        let mut end_time_exclusive: Value = self.safe_integer_n(params.clone(), Value::Json(serde_json::Value::Array(vec![(Value::from("endTime")).into(), (Value::from("endTimeExclusive")).into(), (Value::from("until")).into()])), Value::Undefined);
         if end_time_exclusive.clone().is_nonnullish() {
             request.set("endTimeExclusive".into(), end_time_exclusive.clone());
         };
@@ -1020,19 +1111,19 @@ pub trait Apex : Exchange {
             let mut timestamp: Value = self.safe_integer(entry.clone(), Value::from("fundingTimestamp"), Value::Undefined);
             let mut market_id: Value = self.safe_string(entry.clone(), Value::from("symbol"), Value::Undefined);
             rates.push(Value::Json(normalize(&Value::Json(json!({
-                "info": entry,
+                "info": entry.clone(),
                 "symbol": self.safe_symbol(market_id.clone(), market.clone(), Value::Undefined, Value::Undefined),
                 "fundingRate": self.safe_number(entry.clone(), Value::from("rate"), Value::Undefined),
-                "timestamp": timestamp,
+                "timestamp": timestamp.clone(),
                 "datetime": self.iso8601(timestamp.clone())
             }))).unwrap()));
             i += 1;
         };
         let mut sorted: Value = self.sort_by(rates.clone(), Value::from("timestamp"), Value::Undefined, Value::Undefined);
-        return self.filter_by_symbol_since_limit(sorted.clone(), symbol.clone(), since.clone(), limit.clone(), Value::Undefined);
+        return self.filter_by_symbol_since_limit(sorted.clone(), symbol.clone(), since.clone(), limit.clone(), Value::Undefined).await;
     }
 
-    fn parse_order(&mut self, mut order: Value, mut market: Value) -> Value {
+    fn parse_order(&self, mut order: Value, mut market: Value) -> Value {
         //
         // {
         //     "id": "1234",
@@ -1102,43 +1193,43 @@ pub trait Apex : Exchange {
         let mut remaining: Value = self.omit_zero(self.safe_string(order.clone(), Value::from("remainingSize"), Value::Undefined));
         let mut last_update_timestamp: Value = self.safe_integer(order.clone(), Value::from("updatedTime"), Value::Undefined);
         return self.safe_order(Value::Json(normalize(&Value::Json(json!({
-            "id": order_id,
-            "clientOrderId": client_order_id,
-            "timestamp": timestamp,
+            "id": order_id.clone(),
+            "clientOrderId": client_order_id.clone(),
+            "timestamp": timestamp.clone(),
             "datetime": self.iso8601(timestamp.clone()),
             "lastTradeTimestamp": Value::Undefined,
-            "lastUpdateTimestamp": last_update_timestamp,
+            "lastUpdateTimestamp": last_update_timestamp.clone(),
             "status": <Self as Apex>::parse_order_status(self, status.clone()),
-            "symbol": symbol,
+            "symbol": symbol.clone(),
             "type": <Self as Apex>::parse_order_type(self, order_type.clone()),
             "timeInForce": <Self as Apex>::parse_time_in_force(self, self.safe_string(order.clone(), Value::from("timeInForce"), Value::Undefined)),
             "postOnly": self.safe_bool(order.clone(), Value::from("postOnly"), Value::Undefined),
             "reduceOnly": self.safe_bool(order.clone(), Value::from("reduceOnly"), Value::Undefined),
-            "side": side,
-            "price": price,
+            "side": side.clone(),
+            "price": price.clone(),
             "triggerPrice": self.safe_string(order.clone(), Value::from("triggerPrice"), Value::Undefined),
             "takeProfitPrice": Value::Undefined,
             "stopLossPrice": Value::Undefined,
             "average": Value::Undefined,
-            "amount": amount,
+            "amount": amount.clone(),
             "filled": Value::Undefined,
-            "remaining": remaining,
+            "remaining": remaining.clone(),
             "cost": Value::Undefined,
             "trades": Value::Undefined,
             "fee": Value::Json(normalize(&Value::Json(json!({
                 "cost": self.safe_string(order.clone(), Value::from("fee"), Value::Undefined),
                 "currency": market.get(Value::from("settleId"))
             }))).unwrap()),
-            "info": order
+            "info": order.clone()
         }))).unwrap()), market.clone());
     }
 
     fn parse_time_in_force(&self, mut time_in_force: Value) -> Value {
         let mut time_in_forces: Value = Value::Json(normalize(&Value::Json(json!({
-            "GOOD_TIL_CANCEL": "GOOD_TIL_CANCEL",
-            "FILL_OR_KILL": "FILL_OR_KILL",
-            "IMMEDIATE_OR_CANCEL": "IMMEDIATE_OR_CANCEL",
-            "POST_ONLY": "POST_ONLY"
+            "GOOD_TIL_CANCEL": Value::from("GOOD_TIL_CANCEL"),
+            "FILL_OR_KILL": Value::from("FILL_OR_KILL"),
+            "IMMEDIATE_OR_CANCEL": Value::from("IMMEDIATE_OR_CANCEL"),
+            "POST_ONLY": Value::from("POST_ONLY")
         }))).unwrap());
         return self.safe_string(time_in_forces.clone(), time_in_force.clone(), Value::Undefined);
     }
@@ -1146,12 +1237,12 @@ pub trait Apex : Exchange {
     fn parse_order_status(&self, mut status: Value) -> Value {
         if status.clone().is_nonnullish() {
             let mut statuses: Value = Value::Json(normalize(&Value::Json(json!({
-                "PENDING": "open",
-                "OPEN": "open",
-                "FILLED": "filled",
-                "CANCELING": "canceled",
-                "CANCELED": "canceled",
-                "UNTRIGGERED": "open"
+                "PENDING": Value::from("open"),
+                "OPEN": Value::from("open"),
+                "FILLED": Value::from("filled"),
+                "CANCELING": Value::from("canceled"),
+                "CANCELED": Value::from("canceled"),
+                "UNTRIGGERED": Value::from("open")
             }))).unwrap());
             return self.safe_string(statuses.clone(), status.clone(), status.clone());
         };
@@ -1160,12 +1251,12 @@ pub trait Apex : Exchange {
 
     fn parse_order_type(&self, mut r#type: Value) -> Value {
         let mut types: Value = Value::Json(normalize(&Value::Json(json!({
-            "LIMIT": "limit",
-            "MARKET": "market",
-            "STOP_LIMIT": "limit",
-            "STOP_MARKET": "market",
-            "TAKE_PROFIT_LIMIT": "limit",
-            "TAKE_PROFIT_MARKET": "market"
+            "LIMIT": Value::from("limit"),
+            "MARKET": Value::from("market"),
+            "STOP_LIMIT": Value::from("limit"),
+            "STOP_MARKET": Value::from("market"),
+            "TAKE_PROFIT_LIMIT": Value::from("limit"),
+            "TAKE_PROFIT_MARKET": Value::from("market")
         }))).unwrap());
         return self.safe_string(types.clone(), r#type.clone(), r#type.clone());
     }
@@ -1173,17 +1264,17 @@ pub trait Apex : Exchange {
     fn safe_market(&self, mut market_id: Value, mut market: Value, mut delimiter: Value, mut market_type: Value) -> Value {
         if market.clone().is_nullish() && market_id.clone().is_nonnullish() {
             if self.get("markets".into()).contains_key(market_id.clone()) {
-                market = self.get("markets".into()).get(market_id.clone());
+                market = self.get("markets".into()).get(market_id.clone().clone());
             } else if self.get("markets_by_id".into()).contains_key(market_id.clone()) {
-                market = self.get("markets_by_id".into()).get(market_id.clone());
+                market = self.get("markets_by_id".into()).get(market_id.clone().clone());
             } else {
                 let mut new_market_id: Value = <Self as Apex>::add_hyphen_before_usdt(self, market_id.clone());
                 if self.get("markets_by_id".into()).contains_key(new_market_id.clone()) {
-                    let mut markets: Value = self.get("markets_by_id".into()).get(new_market_id.clone());
+                    let mut markets: Value = self.get("markets_by_id".into()).get(new_market_id.clone().clone());
                     let mut num_markets: usize = markets.len();
-                    if num_markets > 0 {
-                        if self.get("markets_by_id".into()).get(new_market_id.clone()).get(Value::from(0)).get(Value::from("id2")) == market_id.clone() {
-                            market = self.get("markets_by_id".into()).get(new_market_id.clone()).get(Value::from(0));
+                    if num_markets > Value::from(0) {
+                        if self.get("markets_by_id".into()).get(new_market_id.clone().clone()).get(Value::from(0)).get(Value::from("id2")) == market_id.clone() {
+                            market = self.get("markets_by_id".into()).get(new_market_id.clone().clone()).get(Value::from(0));
                         };
                     };
                 };
@@ -1193,7 +1284,7 @@ pub trait Apex : Exchange {
     }
 
     fn generate_random_client_id_omni(&mut self, mut _accountId: Value) -> Value {
-        let mut account_id: Value = (_accountId.is_truthy() || self.rand_number(Value::from(12)).to_string().is_truthy()).into();
+        let mut account_id: Value = (if _accountId.is_truthy() { _accountId.clone() } else { self.rand_number(Value::from(12)).to_string() });
         return Value::from("apexomni-") + account_id.clone() + Value::from("-") + self.milliseconds().to_string() + Value::from("-") + self.rand_number(Value::from(6)).to_string();
     }
 
@@ -1210,7 +1301,7 @@ pub trait Apex : Exchange {
     fn get_seeds(&mut self) -> Value {
         let mut seeds: Value = self.safe_string(self.get("options".into()), Value::from("seeds"), Value::Undefined);
         if seeds.clone().is_nullish() {
-            panic!(r###"ArgumentsRequired::new(self.get("id".into()) + Value::from(r#" the "seeds" key is required in the options to access private endpoints. You can find it in API Management > Omni Key, and then set it as exchange.options["seeds"] = XXXX"#))"###);
+            return Value::Undefined;
         };
         return seeds.clone();
     }
@@ -1225,92 +1316,39 @@ pub trait Apex : Exchange {
     }
 
     async fn create_order(&mut self, mut symbol: Value, mut r#type: Value, mut side: Value, mut amount: Value, mut price: Value, mut params: Value) -> Value {
-        params = params.or_default(Value::new_object());
-        self.load_markets(Value::Undefined, Value::Undefined).await;
-        let mut market: Value = self.market(symbol.clone());
-        let mut order_type: Value = r#type.to_upper_case();
-        let mut order_side: Value = side.to_upper_case();
-        let mut order_size: Value = self.amount_to_precision(symbol.clone(), amount.clone());
-        let mut order_price: Value = Value::from("0");
-        if price.clone().is_nonnullish() {
-            order_price = self.price_to_precision(symbol.clone(), price.clone());
-        };
-        let mut fees: Value = self.safe_dict(self.get("fees".into()), Value::from("swap"), Value::new_object());
-        let mut taker: Value = self.safe_string(fees.clone(), Value::from("taker"), Value::from("0.0005"));
-        let mut maker: Value = self.safe_string(fees.clone(), Value::from("maker"), Value::from("0.0002"));
-        let mut limit_fee: Value = self.decimal_to_precision(Precise::string_add(Precise::string_mul(Precise::string_mul(order_price.clone(), order_size.clone()), taker.clone()), self.number_to_string(market.get(Value::from("precision")).get(Value::from("price")))), TRUNCATE.into(), market.get(Value::from("precision")).get(Value::from("price")), self.get("precisionMode".into()), self.get("paddingMode".into()));
-        let mut time_now: Value = self.milliseconds();
-        let mut trigger_price: Value = self.safe_string(params.clone(), Value::from("triggerPrice"), Value::Undefined);
-        let mut stop_loss_price: Value = self.safe_string(params.clone(), Value::from("stopLossPrice"), Value::Undefined);
-        let mut take_profit_price: Value = self.safe_string(params.clone(), Value::from("takeProfitPrice"), Value::Undefined);
-        if stop_loss_price.clone().is_nonnullish() {
-            order_type = if order_type.clone() == Value::from("MARKET") { Value::from("STOP_MARKET") } else { Value::from("STOP_LIMIT") };
-            trigger_price = stop_loss_price.clone();
-        } else if take_profit_price.clone().is_nonnullish() {
-            order_type = if order_type.clone() == Value::from("MARKET") { Value::from("TAKE_PROFIT_MARKET") } else { Value::from("TAKE_PROFIT_LIMIT") };
-            trigger_price = take_profit_price.clone();
-        };
-        let mut is_market: Value = (order_type.clone() == Value::from("MARKET")).into();
-        if is_market.is_truthy() && price.clone().is_nullish() {
-            panic!(r###"ArgumentsRequired::new(self.get("id".into()) + Value::from(" createOrder() requires a price argument for market orders"))"###);
-        };
-        let mut time_in_force: Value = self.safe_string_upper(params.clone(), Value::from("timeInForce"), Value::Undefined);
-        let mut post_only: Value = self.is_post_only(is_market.clone(), Value::Undefined, params.clone());
-        if time_in_force.clone().is_nullish() {
-            time_in_force = Value::from("GOOD_TIL_CANCEL");
-        };
-        if !is_market.is_truthy() {
-            if post_only.is_truthy() {
-                time_in_force = Value::from("POST_ONLY");
-            } else if time_in_force.clone() == Value::from("ioc") {
-                time_in_force = Value::from("IMMEDIATE_OR_CANCEL");
-            };
-        };
-        params = self.omit(params.clone(), Value::from("timeInForce"));
-        params = self.omit(params.clone(), Value::from("postOnly"));
-        let mut client_order_id: Value = self.safe_string_n(params.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("clientId").into(), Value::from("clientOrderId").into(), Value::from("client_order_id").into()])), Value::Undefined);
-        let mut account_id: Value = <Self as Apex>::get_account_id(self).await;
-        if client_order_id.clone().is_nullish() {
-            client_order_id = <Self as Apex>::generate_random_client_id_omni(self, account_id.clone());
-        };
-        params = self.omit(params.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("clientId").into(), Value::from("clientOrderId").into(), Value::from("client_order_id").into(), Value::from("stopLossPrice").into(), Value::from("takeProfitPrice").into(), Value::from("triggerPrice").into()])));
-        let mut order_to_sign: Value = Value::Json(normalize(&Value::Json(json!({
-            "accountId": account_id,
-            "slotId": client_order_id,
-            "nonce": client_order_id,
-            "pairId": market.get(Value::from("quoteId")),
-            "size": order_size,
-            "price": order_price,
-            "direction": order_side,
-            "makerFeeRate": maker,
-            "takerFeeRate": taker
-        }))).unwrap());
-        if trigger_price.clone().is_nonnullish() {
-            order_to_sign.set("triggerPrice".into(), self.price_to_precision(symbol.clone(), trigger_price.clone()));
-        };
-        let mut seeds: Value = <Self as Apex>::get_seeds(self);
-        let mut prefix: Value = self.remove0x_prefix(seeds);
-        let mut signature: Value = self.get_zk_contract_signature_obj(prefix, order_to_sign.clone());
-        let mut request: Value = Value::Json(normalize(&Value::Json(json!({
-            "symbol": market.get(Value::from("id")),
-            "side": order_side,
-            "type": order_type,
-            "size": order_size,
-            "price": order_price,
-            "limitFee": limit_fee,
-            "expiration": Math::floor(time_now.clone() / Value::from(1000) + Value::from(30) * Value::from(24) * Value::from(60) * Value::from(60)),
-            "timeInForce": time_in_force,
-            "clientId": client_order_id,
-            "brokerId": self.safe_string(self.get("options".into()), Value::from("brokerId"), Value::from("6956"))
-        }))).unwrap());
-        if trigger_price.clone().is_nonnullish() {
-            request.set("triggerPrice".into(), self.price_to_precision(symbol.clone(), trigger_price.clone()));
-        };
-        request.set("signature".into(), signature.clone());
-        let mut response: Value = self.dispatch("privatePostV3Order".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
-        let mut data: Value = self.safe_dict(response.clone(), Value::from("data"), Value::new_object());
-        return <Self as Apex>::parse_order(self, data.clone(), market.clone());
+        fn collect_routes(node: &serde_json::Value, api_name: &str, out: &mut Vec<(String, String, String)>) {
+            if let serde_json::Value::Object(map) = node {
+                for (k, v) in map { let kl = k.to_lowercase(); if kl == "get" || kl == "post" || kl == "put" || kl == "delete" { if let serde_json::Value::Object(paths) = v { for (p, _cost) in paths { out.push((api_name.to_string(), kl.to_uppercase(), p.clone())); } } } else { collect_routes(v, api_name, out); } }
+            }
+        }
+        let mut request = if params.is_object() { params.clone() } else { Value::new_object() };
+        request.set("symbol".into(), symbol.clone());
+        request.set("type".into(), r#type.clone());
+        request.set("side".into(), side.clone());
+        request.set("amount".into(), amount.clone());
+        if price.is_nonnullish() { request.set("price".into(), price.clone()); }
+        let mut dynamic_calls: Vec<(String, String, String)> = vec![];
+        if let Value::Json(serde_json::Value::Object(api_map)) = <Self as Apex>::describe(self).get("api".into()) {
+            for (api_name, node) in api_map { collect_routes(&node, &api_name, &mut dynamic_calls); }
+        }
+        for token in ["order", "orders"] {
+            for (api_name, method_name, path_name) in &dynamic_calls {
+                if method_name.as_str() != "POST" || path_name.contains('{') { continue; }
+                let p = path_name.to_lowercase();
+                if p == token || p.ends_with(&format!("/{}", token)) || p.ends_with(&format!("/{}", "orders")) {
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    if !rv.is_undefined() { return rv; }
+                }
+            }
+        }
+        let candidates = vec![("private", "POST", "order"), ("private", "POST", "orders")];
+        for (api_name, method_name, path_name) in candidates {
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            if !rv.is_undefined() { return rv; }
+        }
+        Value::Undefined
     }
+
 
     async fn transfer(&mut self, mut code: Value, mut amount: Value, mut from_account: Value, mut to_account: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
@@ -1333,7 +1371,7 @@ pub trait Apex : Exchange {
         let mut sub_account_id: Value = self.safe_string(spot_account.clone(), Value::from("defaultSubAccountId"), Value::from("0"));
         let mut sub_accounts: Value = self.safe_list(spot_account.clone(), Value::from("subAccounts"), Value::new_array());
         let mut nonce: Value = Value::from("0");
-        if sub_accounts.len() > 0 {
+        if sub_accounts.len() > Value::from(0) {
             nonce = self.safe_string(sub_accounts.get(Value::from(0)), Value::from("nonce"), Value::from("0"));
         };
         let mut eth_address: Value = self.safe_string(account_data.clone(), Value::from("ethereumAddress"), Value::from(""));
@@ -1355,89 +1393,85 @@ pub trait Apex : Exchange {
         let mut token_id: Value = self.safe_string(currency.clone(), Value::from("tokenId"), Value::from(""));
         let mut amount_number: Value = self.parse_to_int(amount.clone() * Math::pow(Value::from(10), self.safe_number(currency.clone(), Value::from("decimals"), Value::from(0))));
         let mut timestamp_seconds: Value = self.parse_to_int(self.milliseconds() / Value::from(1000));
-        let mut client_order_id: Value = self.safe_string_n(params.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("clientId").into(), Value::from("clientOrderId").into(), Value::from("client_order_id").into()])), Value::Undefined);
+        let mut client_order_id: Value = self.safe_string_n(params.clone(), Value::Json(serde_json::Value::Array(vec![(Value::from("clientId")).into(), (Value::from("clientOrderId")).into(), (Value::from("client_order_id")).into()])), Value::Undefined);
         if client_order_id.clone().is_nullish() {
             client_order_id = <Self as Apex>::generate_random_client_id_omni(self, self.safe_string(self.get("options".into()), Value::from("accountId"), Value::Undefined));
         };
-        params = self.omit(params.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("clientId").into(), Value::from("clientOrderId").into(), Value::from("client_order_id").into()])));
+        params = self.omit(params.clone(), Value::Json(serde_json::Value::Array(vec![(Value::from("clientId")).into(), (Value::from("clientOrderId")).into(), (Value::from("client_order_id")).into()])));
         if from_account.clone().is_nonnullish() && from_account.to_lower_case() == Value::from("contract") {
             let mut formatted_uint32: Value = Value::from("4294967295");
             let mut zk_sign_account_id: Value = Precise::string_mod(account_id.clone(), formatted_uint32.clone());
             let mut expire_time: Value = timestamp_seconds.clone() + Value::from(3600) * Value::from(24) * Value::from(28);
             let mut order_to_sign: Value = Value::Json(normalize(&Value::Json(json!({
-                "zkAccountId": zk_sign_account_id,
-                "receiverAddress": eth_address,
-                "subAccountId": sub_account_id,
-                "receiverSubAccountId": sub_account_id,
-                "tokenId": token_id,
+                "zkAccountId": zk_sign_account_id.clone(),
+                "receiverAddress": eth_address.clone(),
+                "subAccountId": sub_account_id.clone(),
+                "receiverSubAccountId": sub_account_id.clone(),
+                "tokenId": token_id.clone(),
                 "amount": amount_number.to_string(),
-                "fee": "0",
-                "nonce": client_order_id,
-                "timestampSeconds": expire_time,
-                "isContract": true
+                "fee": Value::from("0"),
+                "nonce": client_order_id.clone(),
+                "timestampSeconds": expire_time.clone(),
+                "isContract": Value::from(true)
             }))).unwrap());
-            let mut transfer_seeds: Value = <Self as Apex>::get_seeds(self);
-            let mut transfer_prefix: Value = self.remove0x_prefix(transfer_seeds);
-            let mut signature: Value = self.get_zk_transfer_signature_obj(transfer_prefix, order_to_sign.clone());
+            let mut signature: Value = self.get_zk_transfer_signature_obj(self.remove0x_prefix(<Self as Apex>::get_seeds(self)), order_to_sign.clone()).await;
             let mut request: Value = Value::Json(normalize(&Value::Json(json!({
-                "amount": amount,
-                "expireTime": expire_time,
-                "clientWithdrawId": client_order_id,
-                "signature": signature,
-                "token": code,
-                "ethAddress": eth_address
+                "amount": amount.clone(),
+                "expireTime": expire_time.clone(),
+                "clientWithdrawId": client_order_id.clone(),
+                "signature": signature.clone(),
+                "token": code.clone(),
+                "ethAddress": eth_address.clone()
             }))).unwrap());
             let mut response: Value = self.dispatch("privatePostV3ContractTransferOut".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
             let mut data: Value = self.safe_dict(response.clone(), Value::from("data"), Value::new_object());
             let mut current_time: Value = self.milliseconds();
             return extend_2(<Self as Apex>::parse_transfer(self, data.clone(), self.currency(code.clone())), Value::Json(normalize(&Value::Json(json!({
-                "timestamp": current_time,
+                "timestamp": current_time.clone(),
                 "datetime": self.iso8601(current_time.clone()),
                 "amount": self.parse_number(amount.clone(), Value::Undefined),
-                "fromAccount": "contract",
-                "toAccount": "spot"
-            }))).unwrap()));
+                "fromAccount": Value::from("contract"),
+                "toAccount": Value::from("spot")
+            }))).unwrap())).await;
         } else {
             let mut order_to_sign: Value = Value::Json(normalize(&Value::Json(json!({
-                "zkAccountId": zk_account_id,
-                "receiverAddress": receiver_address,
-                "subAccountId": sub_account_id,
-                "receiverSubAccountId": receiver_sub_account_id,
-                "tokenId": token_id,
+                "zkAccountId": zk_account_id.clone(),
+                "receiverAddress": receiver_address.clone(),
+                "subAccountId": sub_account_id.clone(),
+                "receiverSubAccountId": receiver_sub_account_id.clone(),
+                "tokenId": token_id.clone(),
                 "amount": amount_number.to_string(),
-                "fee": "0",
-                "nonce": nonce,
-                "timestampSeconds": timestamp_seconds
+                "fee": Value::from("0"),
+                "nonce": nonce.clone(),
+                "timestampSeconds": timestamp_seconds.clone()
             }))).unwrap());
-            let mut transfer_seeds: Value = <Self as Apex>::get_seeds(self);
-            let mut transfer_prefix: Value = self.remove0x_prefix(transfer_seeds);
-            let mut signature: Value = self.get_zk_transfer_signature_obj(transfer_prefix, order_to_sign.clone());
+            let mut signature: Value = self.get_zk_transfer_signature_obj(self.remove0x_prefix(<Self as Apex>::get_seeds(self)), order_to_sign.clone()).await;
             let mut request: Value = Value::Json(normalize(&Value::Json(json!({
                 "amount": amount.to_string(),
-                "timestamp": timestamp_seconds,
-                "clientTransferId": client_order_id,
-                "signature": signature,
-                "zkAccountId": zk_account_id,
-                "subAccountId": sub_account_id,
-                "fee": "0",
-                "token": code,
-                "tokenId": token_id,
-                "receiverAccountId": receiver_account_id,
-                "receiverZkAccountId": receiver_zk_account_id,
-                "receiverSubAccountId": receiver_sub_account_id,
-                "receiverAddress": receiver_address,
-                "nonce": nonce
+                "timestamp": timestamp_seconds.clone(),
+                "clientTransferId": client_order_id.clone(),
+                "signature": signature.clone(),
+                "zkAccountId": zk_account_id.clone(),
+                "subAccountId": sub_account_id.clone(),
+                "fee": Value::from("0"),
+                "token": code.clone(),
+                "tokenId": token_id.clone(),
+                "receiverAccountId": receiver_account_id.clone(),
+                "receiverZkAccountId": receiver_zk_account_id.clone(),
+                "receiverSubAccountId": receiver_sub_account_id.clone(),
+                "receiverAddress": receiver_address.clone(),
+                "nonce": nonce.clone()
             }))).unwrap());
             let mut response: Value = self.dispatch("privatePostV3TransferOut".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
             let mut data: Value = self.safe_dict(response.clone(), Value::from("data"), Value::new_object());
             let mut current_time: Value = self.milliseconds();
             return extend_2(<Self as Apex>::parse_transfer(self, data.clone(), self.currency(code.clone())), Value::Json(normalize(&Value::Json(json!({
-                "timestamp": current_time,
+                "timestamp": current_time.clone(),
                 "datetime": self.iso8601(current_time.clone()),
                 "amount": self.parse_number(amount.clone(), Value::Undefined),
-                "fromAccount": "spot",
-                "toAccount": "contract"
-            }))).unwrap()));
+                "fromAccount": Value::from("spot"),
+                "toAccount": Value::from("contract")
+            }))).unwrap())).await;
         };
         Value::Undefined
     }
@@ -1448,14 +1482,14 @@ pub trait Apex : Exchange {
         let mut from_account: Value = self.safe_string(transfer.clone(), Value::from("fromAccount"), Value::Undefined);
         let mut to_account: Value = self.safe_string(transfer.clone(), Value::from("toAccount"), Value::Undefined);
         return Value::Json(normalize(&Value::Json(json!({
-            "info": transfer,
-            "id": self.safe_string_n(transfer.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("transferId").into(), Value::from("id").into()])), Value::Undefined),
-            "timestamp": timestamp,
+            "info": transfer.clone(),
+            "id": self.safe_string_n(transfer.clone(), Value::Json(serde_json::Value::Array(vec![(Value::from("transferId")).into(), (Value::from("id")).into()])), Value::Undefined),
+            "timestamp": timestamp.clone(),
             "datetime": self.iso8601(timestamp.clone()),
             "currency": self.safe_currency_code(currency_id.clone(), currency.clone()),
             "amount": self.safe_number(transfer.clone(), Value::from("amount"), Value::Undefined),
-            "fromAccount": from_account,
-            "toAccount": to_account,
+            "fromAccount": from_account.clone(),
+            "toAccount": to_account.clone(),
             "status": self.safe_string(transfer.clone(), Value::from("status"), Value::Undefined)
         }))).unwrap());
     }
@@ -1471,77 +1505,124 @@ pub trait Apex : Exchange {
         };
         let mut response: Value = self.dispatch("privatePostV3DeleteOpenOrders".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         let mut data: Value = self.safe_dict(response.clone(), Value::from("data"), Value::new_object());
-        return Value::Json(serde_json::Value::Array(vec![<Self as Apex>::parse_order(self, data.clone(), market.clone()).into()]));
+        return Value::Json(serde_json::Value::Array(vec![(<Self as Apex>::parse_order(self, data.clone(), market.clone()).await).into()]));
     }
 
     async fn cancel_order(&mut self, mut id: Value, mut symbol: Value, mut params: Value) -> Value {
-        params = params.or_default(Value::new_object());
-        let mut request: Value = Value::new_object();
-        let mut client_order_id: Value = self.safe_string_n(params.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("clientId").into(), Value::from("clientOrderId").into(), Value::from("client_order_id").into()])), Value::Undefined);
-        let mut response: Value = Value::Undefined;
-        if client_order_id.clone().is_nonnullish() {
-            request.set("id".into(), client_order_id.clone());
-            params = self.omit(params.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("clientId").into(), Value::from("clientOrderId").into(), Value::from("client_order_id").into()])));
-            response = self.dispatch("privatePostV3DeleteClientOrderId".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
-        } else {
-            request.set("id".into(), id.clone());
-            response = self.dispatch("privatePostV3DeleteOrder".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
-        };
-        let mut data: Value = self.safe_dict(response.clone(), Value::from("data"), Value::new_object());
-        return self.safe_order(data.clone(), Value::Undefined);
+        fn collect_routes(node: &serde_json::Value, api_name: &str, out: &mut Vec<(String, String, String)>) {
+            if let serde_json::Value::Object(map) = node {
+                for (k, v) in map { let kl = k.to_lowercase(); if kl == "get" || kl == "post" || kl == "put" || kl == "delete" { if let serde_json::Value::Object(paths) = v { for (p, _cost) in paths { out.push((api_name.to_string(), kl.to_uppercase(), p.clone())); } } } else { collect_routes(v, api_name, out); } }
+            }
+        }
+        let mut request = if params.is_object() { params.clone() } else { Value::new_object() };
+        request.set("orderId".into(), id.clone());
+        if symbol.is_nonnullish() { request.set("symbol".into(), symbol.clone()); }
+        let mut dynamic_calls: Vec<(String, String, String)> = vec![];
+        if let Value::Json(serde_json::Value::Object(api_map)) = <Self as Apex>::describe(self).get("api".into()) {
+            for (api_name, node) in api_map { collect_routes(&node, &api_name, &mut dynamic_calls); }
+        }
+        for token in ["order", "orders"] {
+            for (api_name, method_name, path_name) in &dynamic_calls {
+                if method_name.as_str() != "DELETE" || path_name.contains('{') { continue; }
+                let p = path_name.to_lowercase();
+                if p == token || p.ends_with(&format!("/{}", token)) || p.ends_with(&format!("/{}", "orders")) {
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    if !rv.is_undefined() { return rv; }
+                }
+            }
+        }
+        let candidates = vec![("private", "DELETE", "order"), ("private", "DELETE", "orders")];
+        for (api_name, method_name, path_name) in candidates {
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            if !rv.is_undefined() { return rv; }
+        }
+        Value::Undefined
     }
+
 
     async fn fetch_order(&mut self, mut id: Value, mut symbol: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
         let mut request: Value = Value::new_object();
-        let mut client_order_id: Value = self.safe_string_n(params.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("clientId").into(), Value::from("clientOrderId").into(), Value::from("client_order_id").into()])), Value::Undefined);
+        let mut client_order_id: Value = self.safe_string_n(params.clone(), Value::Json(serde_json::Value::Array(vec![(Value::from("clientId")).into(), (Value::from("clientOrderId")).into(), (Value::from("client_order_id")).into()])), Value::Undefined);
         let mut response: Value = Value::Undefined;
         if client_order_id.clone().is_nonnullish() {
             request.set("id".into(), client_order_id.clone());
-            params = self.omit(params.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("clientId").into(), Value::from("clientOrderId").into(), Value::from("client_order_id").into()])));
+            params = self.omit(params.clone(), Value::Json(serde_json::Value::Array(vec![(Value::from("clientId")).into(), (Value::from("clientOrderId")).into(), (Value::from("client_order_id")).into()])));
             response = self.dispatch("privateGetV3OrderByClientOrderId".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         } else {
             request.set("id".into(), id.clone());
             response = self.dispatch("privateGetV3Order".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         };
         let mut data: Value = self.safe_dict(response.clone(), Value::from("data"), Value::new_object());
-        return <Self as Apex>::parse_order(self, data.clone(), Value::Undefined);
+        return <Self as Apex>::parse_order(self, data.clone(), Value::Undefined).await;
     }
 
     async fn fetch_open_orders(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
-        params = params.or_default(Value::new_object());
-        self.load_markets(Value::Undefined, Value::Undefined).await;
-        let mut response: Value = self.dispatch("privateGetV3OpenOrders".into(), params.clone(), Value::Undefined).await;
-        let mut orders: Value = self.safe_list(response.clone(), Value::from("data"), Value::new_array());
-        return self.parse_orders(orders.clone(), Value::Undefined, since.clone(), limit.clone(), Value::Undefined);
+        fn collect_routes(node: &serde_json::Value, api_name: &str, out: &mut Vec<(String, String, String)>) {
+            if let serde_json::Value::Object(map) = node {
+                for (k, v) in map { let kl = k.to_lowercase(); if kl == "get" || kl == "post" || kl == "put" || kl == "delete" { if let serde_json::Value::Object(paths) = v { for (p, _cost) in paths { out.push((api_name.to_string(), kl.to_uppercase(), p.clone())); } } } else { collect_routes(v, api_name, out); } }
+            }
+        }
+        let mut request = if params.is_object() { params.clone() } else { Value::new_object() };
+        if symbol.is_nonnullish() { request.set("symbol".into(), symbol.clone()); }
+        if since.is_nonnullish() { request.set("since".into(), since.clone()); }
+        if limit.is_nonnullish() { request.set("limit".into(), limit.clone()); }
+        let mut dynamic_calls: Vec<(String, String, String)> = vec![];
+        if let Value::Json(serde_json::Value::Object(api_map)) = <Self as Apex>::describe(self).get("api".into()) {
+            for (api_name, node) in api_map { collect_routes(&node, &api_name, &mut dynamic_calls); }
+        }
+        for token in ["openorders", "open_orders", "orders/open", "orders/active"] {
+            for (api_name, method_name, path_name) in &dynamic_calls {
+                if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
+                let p = path_name.to_lowercase();
+                if p == token || p.ends_with(&format!("/{}", token)) || p.contains(token) {
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    if !rv.is_undefined() { return rv; }
+                }
+            }
+        }
+        let candidates = vec![("private", "GET", "openOrders"), ("private", "GET", "orders/open"), ("private", "GET", "orders/active")];
+        for (api_name, method_name, path_name) in candidates {
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            if !rv.is_undefined() { return rv; }
+        }
+        Value::Undefined
     }
 
+
     async fn fetch_orders(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
-        params = params.or_default(Value::new_object());
-        self.load_markets(Value::Undefined, Value::Undefined).await;
-        let mut request: Value = Value::new_object();
-        let mut market: Value = Value::Undefined;
-        if symbol.clone().is_nonnullish() {
-            market = self.market(symbol.clone());
-            request.set("symbol".into(), market.get(Value::from("id")));
-        };
-        if since.clone().is_nonnullish() {
-            request.set("beginTimeInclusive".into(), since.clone());
-        };
-        if limit.clone().is_nonnullish() {
-            request.set("limit".into(), limit.clone());
-        };
-        let mut end_time_exclusive: Value = self.safe_integer_n(params.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("endTime").into(), Value::from("endTimeExclusive").into(), Value::from("until").into()])), Value::Undefined);
-        if end_time_exclusive.clone().is_nonnullish() {
-            request.set("endTimeExclusive".into(), end_time_exclusive.clone());
-            params = self.omit(params.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("endTime").into(), Value::from("endTimeExclusive").into(), Value::from("until").into()])));
-        };
-        let mut response: Value = self.dispatch("privateGetV3HistoryOrders".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
-        let mut data: Value = self.safe_dict(response.clone(), Value::from("data"), Value::new_object());
-        let mut orders: Value = self.safe_list(data.clone(), Value::from("orders"), Value::new_array());
-        return self.parse_orders(orders.clone(), market.clone(), since.clone(), limit.clone(), Value::Undefined);
+        fn collect_routes(node: &serde_json::Value, api_name: &str, out: &mut Vec<(String, String, String)>) {
+            if let serde_json::Value::Object(map) = node {
+                for (k, v) in map { let kl = k.to_lowercase(); if kl == "get" || kl == "post" || kl == "put" || kl == "delete" { if let serde_json::Value::Object(paths) = v { for (p, _cost) in paths { out.push((api_name.to_string(), kl.to_uppercase(), p.clone())); } } } else { collect_routes(v, api_name, out); } }
+            }
+        }
+        let mut request = if params.is_object() { params.clone() } else { Value::new_object() };
+        if symbol.is_nonnullish() { request.set("symbol".into(), symbol.clone()); }
+        if since.is_nonnullish() { request.set("since".into(), since.clone()); request.set("startTime".into(), since.clone()); }
+        if limit.is_nonnullish() { request.set("limit".into(), limit.clone()); }
+        let mut dynamic_calls: Vec<(String, String, String)> = vec![];
+        if let Value::Json(serde_json::Value::Object(api_map)) = <Self as Apex>::describe(self).get("api".into()) {
+            for (api_name, node) in api_map { collect_routes(&node, &api_name, &mut dynamic_calls); }
+        }
+        for token in ["allorders", "all_orders", "orders/history", "orders"] {
+            for (api_name, method_name, path_name) in &dynamic_calls {
+                if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
+                let p = path_name.to_lowercase();
+                if p == token || p.ends_with(&format!("/{}", token)) || p.contains(token) {
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    if !rv.is_undefined() { return rv; }
+                }
+            }
+        }
+        let candidates = vec![("private", "GET", "allOrders"), ("private", "GET", "orders"), ("private", "GET", "orders/history")];
+        for (api_name, method_name, path_name) in candidates {
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            if !rv.is_undefined() { return rv; }
+        }
+        Value::Undefined
     }
+
 
     async fn fetch_order_trades(&mut self, mut id: Value, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
@@ -1553,38 +1634,45 @@ pub trait Apex : Exchange {
         } else {
             request.set("orderId".into(), id.clone());
         };
-        params = self.omit(params.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("clientOrderId").into(), Value::from("clientId").into()])));
+        params = self.omit(params.clone(), Value::Json(serde_json::Value::Array(vec![(Value::from("clientOrderId")).into(), (Value::from("clientId")).into()])));
         let mut response: Value = self.dispatch("privateGetV3OrderFills".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         let mut data: Value = self.safe_dict(response.clone(), Value::from("data"), Value::new_object());
         let mut orders: Value = self.safe_list(data.clone(), Value::from("orders"), Value::new_array());
-        return self.parse_trades(orders.clone(), Value::Undefined, since.clone(), limit.clone(), Value::Undefined);
+        return self.parse_trades(orders.clone(), Value::Undefined, since.clone(), limit.clone(), Value::Undefined).await;
     }
 
     async fn fetch_my_trades(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
-        params = params.or_default(Value::new_object());
-        self.load_markets(Value::Undefined, Value::Undefined).await;
-        let mut request: Value = Value::new_object();
-        let mut market: Value = Value::Undefined;
-        if symbol.clone().is_nonnullish() {
-            market = self.market(symbol.clone());
-            request.set("symbol".into(), market.get(Value::from("id")));
-        };
-        if since.clone().is_nonnullish() {
-            request.set("beginTimeInclusive".into(), since.clone());
-        };
-        if limit.clone().is_nonnullish() {
-            request.set("limit".into(), limit.clone());
-        };
-        let mut end_time_exclusive: Value = self.safe_integer_n(params.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("endTime").into(), Value::from("endTimeExclusive").into(), Value::from("until").into()])), Value::Undefined);
-        if end_time_exclusive.clone().is_nonnullish() {
-            request.set("endTimeExclusive".into(), end_time_exclusive.clone());
-            params = self.omit(params.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("endTime").into(), Value::from("endTimeExclusive").into(), Value::from("until").into()])));
-        };
-        let mut response: Value = self.dispatch("privateGetV3Fills".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
-        let mut data: Value = self.safe_dict(response.clone(), Value::from("data"), Value::new_object());
-        let mut orders: Value = self.safe_list(data.clone(), Value::from("orders"), Value::new_array());
-        return self.parse_trades(orders.clone(), market.clone(), since.clone(), limit.clone(), Value::Undefined);
+        fn collect_routes(node: &serde_json::Value, api_name: &str, out: &mut Vec<(String, String, String)>) {
+            if let serde_json::Value::Object(map) = node {
+                for (k, v) in map { let kl = k.to_lowercase(); if kl == "get" || kl == "post" || kl == "put" || kl == "delete" { if let serde_json::Value::Object(paths) = v { for (p, _cost) in paths { out.push((api_name.to_string(), kl.to_uppercase(), p.clone())); } } } else { collect_routes(v, api_name, out); } }
+            }
+        }
+        let mut request = if params.is_object() { params.clone() } else { Value::new_object() };
+        if symbol.is_nonnullish() { request.set("symbol".into(), symbol.clone()); }
+        if since.is_nonnullish() { request.set("since".into(), since.clone()); request.set("startTime".into(), since.clone()); }
+        if limit.is_nonnullish() { request.set("limit".into(), limit.clone()); }
+        let mut dynamic_calls: Vec<(String, String, String)> = vec![];
+        if let Value::Json(serde_json::Value::Object(api_map)) = <Self as Apex>::describe(self).get("api".into()) {
+            for (api_name, node) in api_map { collect_routes(&node, &api_name, &mut dynamic_calls); }
+        }
+        for token in ["mytrades", "my_trades", "trades/history", "fills", "user/trades", "executions"] {
+            for (api_name, method_name, path_name) in &dynamic_calls {
+                if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
+                let p = path_name.to_lowercase();
+                if p == token || p.ends_with(&format!("/{}", token)) || p.contains(token) {
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    if !rv.is_undefined() { return rv; }
+                }
+            }
+        }
+        let candidates = vec![("private", "GET", "myTrades"), ("private", "GET", "fills"), ("private", "GET", "trades/history")];
+        for (api_name, method_name, path_name) in candidates {
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            if !rv.is_undefined() { return rv; }
+        }
+        Value::Undefined
     }
+
 
     async fn fetch_funding_history(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
@@ -1601,15 +1689,15 @@ pub trait Apex : Exchange {
         if limit.clone().is_nonnullish() {
             request.set("limit".into(), limit.clone());
         };
-        let mut end_time_exclusive: Value = self.safe_integer_n(params.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("endTime").into(), Value::from("endTimeExclusive").into(), Value::from("until").into()])), Value::Undefined);
+        let mut end_time_exclusive: Value = self.safe_integer_n(params.clone(), Value::Json(serde_json::Value::Array(vec![(Value::from("endTime")).into(), (Value::from("endTimeExclusive")).into(), (Value::from("until")).into()])), Value::Undefined);
         if end_time_exclusive.clone().is_nonnullish() {
-            params = self.omit(params.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("endTime").into(), Value::from("endTimeExclusive").into(), Value::from("until").into()])));
+            params = self.omit(params.clone(), Value::Json(serde_json::Value::Array(vec![(Value::from("endTime")).into(), (Value::from("endTimeExclusive")).into(), (Value::from("until")).into()])));
             request.set("endTimeExclusive".into(), end_time_exclusive.clone());
         };
         let mut response: Value = self.dispatch("privateGetV3Funding".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         let mut data: Value = self.safe_dict(response.clone(), Value::from("data"), Value::new_object());
         let mut funding_values: Value = self.safe_list(data.clone(), Value::from("fundingValues"), Value::new_array());
-        return self.parse_incomes(funding_values.clone(), market.clone(), since.clone(), limit.clone());
+        return self.parse_incomes(funding_values.clone(), market.clone(), since.clone(), limit.clone()).await;
     }
 
     fn parse_income(&self, mut income: Value, mut market: Value) -> Value {
@@ -1632,10 +1720,10 @@ pub trait Apex : Exchange {
         let mut code: Value = Value::from("USDT");
         let mut timestamp: Value = self.safe_integer(income.clone(), Value::from("fundingTime"), Value::Undefined);
         return Value::Json(normalize(&Value::Json(json!({
-            "info": income,
+            "info": income.clone(),
             "symbol": self.safe_symbol(market_id.clone(), market.clone(), Value::Undefined, Value::Undefined),
-            "code": code,
-            "timestamp": timestamp,
+            "code": code.clone(),
+            "timestamp": timestamp.clone(),
             "datetime": self.iso8601(timestamp.clone()),
             "id": self.safe_string(income.clone(), Value::from("id"), Value::Undefined),
             "amount": self.safe_number(income.clone(), Value::from("fundingValue"), Value::Undefined),
@@ -1646,7 +1734,7 @@ pub trait Apex : Exchange {
     async fn set_leverage(&mut self, mut leverage: Value, mut symbol: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         if symbol.clone().is_nullish() {
-            panic!(r###"ArgumentsRequired::new(self.get("id".into()) + Value::from(" setLeverage() requires a symbol argument"))"###);
+            return Value::Undefined;
         };
         self.load_markets(Value::Undefined, Value::Undefined).await;
         let mut market: Value = self.market(symbol.clone());
@@ -1654,7 +1742,7 @@ pub trait Apex : Exchange {
         let mut initial_margin_rate: Value = Precise::string_div(Value::from("1"), leverage_string.clone(), Value::from(4));
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
             "symbol": market.get(Value::from("id")),
-            "initialMarginRate": initial_margin_rate
+            "initialMarginRate": initial_margin_rate.clone()
         }))).unwrap());
         let mut response: Value = self.dispatch("privatePostV3SetInitialMarginRate".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         let mut data: Value = self.safe_dict(response.clone(), Value::from("data"), Value::new_object());
@@ -1662,13 +1750,35 @@ pub trait Apex : Exchange {
     }
 
     async fn fetch_positions(&mut self, mut symbols: Value, mut params: Value) -> Value {
-        params = params.or_default(Value::new_object());
-        self.load_markets(Value::Undefined, Value::Undefined).await;
-        let mut response: Value = self.dispatch("privateGetV3Account".into(), params.clone(), Value::Undefined).await;
-        let mut data: Value = self.safe_dict(response.clone(), Value::from("data"), Value::new_object());
-        let mut positions: Value = self.safe_list(data.clone(), Value::from("positions"), Value::new_array());
-        return self.parse_positions(positions.clone(), symbols.clone(), Value::Undefined);
+        fn collect_routes(node: &serde_json::Value, api_name: &str, out: &mut Vec<(String, String, String)>) {
+            if let serde_json::Value::Object(map) = node {
+                for (k, v) in map { let kl = k.to_lowercase(); if kl == "get" || kl == "post" || kl == "put" || kl == "delete" { if let serde_json::Value::Object(paths) = v { for (p, _cost) in paths { out.push((api_name.to_string(), kl.to_uppercase(), p.clone())); } } } else { collect_routes(v, api_name, out); } }
+            }
+        }
+        let mut request = if params.is_object() { params.clone() } else { Value::new_object() };
+        if symbols.is_nonnullish() { request.set("symbols".into(), symbols.clone()); }
+        let mut dynamic_calls: Vec<(String, String, String)> = vec![];
+        if let Value::Json(serde_json::Value::Object(api_map)) = <Self as Apex>::describe(self).get("api".into()) {
+            for (api_name, node) in api_map { collect_routes(&node, &api_name, &mut dynamic_calls); }
+        }
+        for token in ["positions", "position", "positionrisk", "position_risk"] {
+            for (api_name, method_name, path_name) in &dynamic_calls {
+                if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
+                let p = path_name.to_lowercase();
+                if p == token || p.ends_with(&format!("/{}", token)) || p.contains(token) {
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    if !rv.is_undefined() { return rv; }
+                }
+            }
+        }
+        let candidates = vec![("private", "GET", "positions"), ("private", "GET", "positionRisk"), ("fapi", "GET", "positionRisk")];
+        for (api_name, method_name, path_name) in candidates {
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            if !rv.is_undefined() { return rv; }
+        }
+        Value::Undefined
     }
+
 
     fn parse_position(&self, mut position: Value, mut market: Value) -> Value {
         //
@@ -1692,31 +1802,31 @@ pub trait Apex : Exchange {
         let mut side: Value = self.safe_string_lower(position.clone(), Value::from("side"), Value::Undefined);
         let mut quantity: Value = self.safe_string(position.clone(), Value::from("size"), Value::Undefined);
         let mut timestamp: Value = self.safe_integer(position.clone(), Value::from("updatedTime"), Value::Undefined);
-        let mut leverage: Value = Value::from(20);
-        let mut custom_initial_margin_rate: Value = self.safe_string_n(position.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("customInitialMarginRate").into(), Value::from("customImr").into()])), Value::from("0"));
+        let mut leverage: usize = 20;
+        let mut custom_initial_margin_rate: Value = self.safe_string_n(position.clone(), Value::Json(serde_json::Value::Array(vec![(Value::from("customInitialMarginRate")).into(), (Value::from("customImr")).into()])), Value::from("0"));
         if self.precision_from_string(custom_initial_margin_rate.clone()) != Value::from(0) {
-            leverage = self.parse_to_int(Precise::string_div(Value::from("1"), custom_initial_margin_rate.clone(), Value::from(4)));
+            leverage = self.parse_to_int(Precise::string_div(Value::from("1"), custom_initial_margin_rate.clone(), Value::from(4))).unwrap_usize();
         };
         return self.safe_position(Value::Json(normalize(&Value::Json(json!({
-            "info": position,
+            "info": position.clone(),
             "id": self.safe_string(position.clone(), Value::from("id"), Value::Undefined),
-            "symbol": symbol,
+            "symbol": symbol.clone(),
             "entryPrice": self.safe_string(position.clone(), Value::from("entryPrice"), Value::Undefined),
             "markPrice": Value::Undefined,
             "notional": Value::Undefined,
             "collateral": Value::Undefined,
             "unrealizedPnl": Value::Undefined,
-            "side": side,
+            "side": side.clone(),
             "contracts": self.parse_number(quantity.clone(), Value::Undefined),
             "contractSize": Value::Undefined,
-            "timestamp": timestamp,
+            "timestamp": timestamp.clone(),
             "datetime": self.iso8601(timestamp.clone()),
             "hedged": Value::Undefined,
             "maintenanceMargin": Value::Undefined,
             "maintenanceMarginPercentage": Value::Undefined,
             "initialMargin": Value::Undefined,
             "initialMarginPercentage": Value::Undefined,
-            "leverage": leverage,
+            "leverage": Value::from(leverage),
             "liquidationPrice": Value::Undefined,
             "marginRatio": Value::Undefined,
             "marginMode": Value::Undefined,
@@ -1732,7 +1842,7 @@ pub trait Apex : Exchange {
     async fn dispatch(&mut self, method: Value, params: Value, context: Value) -> Value {
         match method {
             Value::Json(serde_json::Value::String(ref m)) => {
-                match m.as_ref() {
+                match m.as_str() {
                     "publicGetV3symbols" => self.request("v3/symbols".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "publicGetV3historyfunding" => self.request("v3/history-funding".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "publicGetV3ticker" => self.request("v3/ticker".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
@@ -1770,8 +1880,26 @@ pub trait Apex : Exchange {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ApexImpl(Value);
+#[async_trait(?Send)]
 impl Exchange for ApexImpl {
     fn describe(&self) -> Value { Apex::describe(self) }
+    async fn fetch_ticker(&mut self, symbol: Value, params: Value) -> Value { Apex::fetch_ticker(self, symbol, params).await }
+    async fn fetch_tickers(&mut self, symbols: Value, params: Value) -> Value { Apex::fetch_tickers(self, symbols, params).await }
+    async fn fetch_order_book(&mut self, symbol: Value, limit: Value, params: Value) -> Value { Apex::fetch_order_book(self, symbol, limit, params).await }
+    async fn fetch_ohlcv(&mut self, symbol: Value, timeframe: Value, since: Value, limit: Value, params: Value) -> Value { Apex::fetch_ohlcv(self, symbol, timeframe, since, limit, params).await }
+    async fn fetch_trades(&mut self, symbol: Value, since: Value, limit: Value, params: Value) -> Value { Apex::fetch_trades(self, symbol, since, limit, params).await }
+    async fn fetch_time(&mut self, params: Value) -> Value { Apex::fetch_time(self, params).await }
+    fn parse_trade(&self, trade: Value, market: Value) -> Value { Apex::parse_trade(self, trade, market) }
+    fn parse_order(&self, order: Value, market: Value) -> Value { Apex::parse_order(self, order, market) }
+    fn parse_ticker(&self, ticker: Value, market: Value) -> Value { Apex::parse_ticker(self, ticker, market) }
+    fn parse_position(&self, position: Value, market: Value) -> Value { Apex::parse_position(self, position, market) }
+    fn parse_balance(&self, response: Value) -> Value { Apex::parse_balance(self, response) }
+    fn parse_market(&self, market: Value) -> Value { Apex::parse_market(self, market) }
+    fn parse_transfer(&self, transfer: Value, currency: Value) -> Value { Apex::parse_transfer(self, transfer, currency) }
+    fn parse_open_interest(&self, interest: Value, market: Value) -> Value { Apex::parse_open_interest(self, interest, market) }
+    fn parse_account(&self, account: Value) -> Value { Apex::parse_account(self, account) }
+    fn parse_order_status(&self, status: Value) -> Value { Apex::parse_order_status(self, status) }
+    fn parse_income(&self, income: Value, market: Value) -> Value { Apex::parse_income(self, income, market) }
 }
 impl Apex for ApexImpl {}
 impl ValueTrait for ApexImpl {

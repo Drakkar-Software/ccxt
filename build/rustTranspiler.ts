@@ -18,6 +18,28 @@ type Dict<T = string> = { [key: string]: T };
 
 const pythonCodingUtf8 = '# -*- coding: utf-8 -*-'; // kept for parity with existing build scripts
 const baseExchangeJsFile = './js/src/base/Exchange.js';
+const exchangeRuntimeFile = './rust/src/exchange.rs';
+
+// Build the camelCase set of `&mut self` methods declared in the runtime
+// Exchange trait. The transpiler uses this to decide whether a method-body's
+// `this.foo()` call requires the calling method to itself be `&mut self`.
+function loadMutatingMethodNames(): Set<string> {
+    let contents = '';
+    try { contents = fs.readFileSync(exchangeRuntimeFile, 'utf8'); }
+    catch { return new Set(); }
+    const out = new Set<string>();
+    const re = /fn\s+([a-z_][a-z0-9_]*)\s*\(\s*&mut\s+self\b/gi;
+    let m;
+    while ((m = re.exec(contents)) !== null) {
+        const snake = m[1];
+        // snake_case → camelCase to match JS identifiers used in body-walk.
+        const camel = snake.replace(/_(.)/g, (_, c) => c.toUpperCase());
+        out.add(camel);
+        out.add(snake);
+    }
+    return out;
+}
+const RUNTIME_MUTATING_METHOD_NAMES = loadMutatingMethodNames();
 
 const metaFileUrl = import.meta.url;
 const __dirname = path.dirname(fileURLToPath(metaFileUrl));
@@ -616,22 +638,40 @@ function transpileMethodToRust(opts: {
         if let Value::Json(serde_json::Value::Object(api_map)) = <Self as ${capitalizeFirstLetter(className)}>::describe(self).get("api".into()) {
             for (api_name, node) in api_map { collect_routes(&node, &api_name, &mut dynamic_calls); }
         }
-        for token in ["ticker/24hr", "ticker", "ticker/price", "bookticker", "tickers"] {
+        let mut raw: Value = Value::Undefined;
+        'outer: for token in ["ticker/24hr", "ticker", "ticker/price", "bookticker", "tickers"] {
             for (api_name, method_name, path_name) in &dynamic_calls {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
                     let rv = ${requestCall || 'self.request('}path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
-                    if !rv.is_undefined() { return rv; }
+                    if !rv.is_undefined() { raw = rv; break 'outer; }
                 }
             }
         }
-        let candidates = vec![("public", "GET", "ticker/24hr"), ("public", "GET", "ticker"), ("public", "GET", "ticker/price")];
-        for (api_name, method_name, path_name) in candidates {
-            let rv = ${requestCall || 'self.request('}path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
-            if !rv.is_undefined() { return rv; }
+        if raw.is_undefined() {
+            for (api_name, method_name, path_name) in [("public", "GET", "ticker/24hr"), ("public", "GET", "ticker"), ("public", "GET", "ticker/price")] {
+                let rv = ${requestCall || 'self.request('}path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                if !rv.is_undefined() { raw = rv; break; }
+            }
         }
-        Value::Undefined
+        if raw.is_undefined() { return Value::Undefined; }
+        // Some exchanges wrap the ticker in {data: {...}} or {result: {...}} — unwrap if so.
+        let json_resp = match &raw { Value::Json(j) => j.clone(), _ => return raw };
+        let mut tk = json_resp.clone();
+        if !tk.is_array() && tk.get("last").is_none() && tk.get("close").is_none() && tk.get("bid").is_none() {
+            for key in &["data", "result", "ticker"] {
+                if let Some(v) = json_resp.get(key) {
+                    if v.is_object() { tk = v.clone(); break; }
+                    if let Some(arr) = v.as_array() {
+                        if let Some(first) = arr.first() { tk = first.clone(); break; }
+                    }
+                }
+            }
+        }
+        let market: Value = Value::Undefined;
+        let parsed = <Self as Exchange>::parse_ticker(self, Value::Json(tk.clone()), market);
+        if parsed.is_undefined() { Value::Json(tk) } else { parsed }
     }\n`,
         fetchTickers: (header, requestCall) => header + `{
         fn collect_routes(node: &serde_json::Value, api_name: &str, out: &mut Vec<(String, String, String)>) {
@@ -673,22 +713,30 @@ function transpileMethodToRust(opts: {
         if let Value::Json(serde_json::Value::Object(api_map)) = <Self as ${capitalizeFirstLetter(className)}>::describe(self).get("api".into()) {
             for (api_name, node) in api_map { collect_routes(&node, &api_name, &mut dynamic_calls); }
         }
-        for token in ["depth", "orderbook", "order_book"] {
+        let mut raw: Value = Value::Undefined;
+        'outer: for token in ["depth", "orderbook", "order_book"] {
             for (api_name, method_name, path_name) in &dynamic_calls {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
                     let rv = ${requestCall || 'self.request('}path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
-                    if !rv.is_undefined() { return rv; }
+                    if !rv.is_undefined() { raw = rv; break 'outer; }
                 }
             }
         }
-        let candidates = vec![("public", "GET", "depth"), ("public", "GET", "orderbook"), ("public", "GET", "order_book")];
-        for (api_name, method_name, path_name) in candidates {
-            let rv = ${requestCall || 'self.request('}path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
-            if !rv.is_undefined() { return rv; }
+        if raw.is_undefined() {
+            for (api_name, method_name, path_name) in [("public", "GET", "depth"), ("public", "GET", "orderbook"), ("public", "GET", "order_book")] {
+                let rv = ${requestCall || 'self.request('}path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                if !rv.is_undefined() { raw = rv; break; }
+            }
         }
-        Value::Undefined
+        if raw.is_undefined() { return Value::Undefined; }
+        let json_resp = match &raw { Value::Json(j) => j.clone(), _ => return raw };
+        let mut ob = crate::exchange::unwrap_response_order_book(&json_resp);
+        if let serde_json::Value::Object(ref mut map) = ob {
+            if !map.contains_key("symbol") { map.insert("symbol".to_string(), serde_json::json!(symbol.unwrap_str())); }
+        }
+        Value::Json(ob)
     }\n`,
         fetchOHLCV: (header, requestCall) => header + `{
         fn collect_routes(node: &serde_json::Value, api_name: &str, out: &mut Vec<(String, String, String)>) {
@@ -706,22 +754,40 @@ function transpileMethodToRust(opts: {
         if let Value::Json(serde_json::Value::Object(api_map)) = <Self as ${capitalizeFirstLetter(className)}>::describe(self).get("api".into()) {
             for (api_name, node) in api_map { collect_routes(&node, &api_name, &mut dynamic_calls); }
         }
-        for token in ["klines", "candles", "ohlcv"] {
+        let mut raw: Value = Value::Undefined;
+        // Match endpoints by substring on common OHLCV path tokens (klines, candles,
+        // ohlcv, barhist, history, kline, candle, ohlc).
+        'outer: for token in ["klines", "candles", "ohlcv", "barhist", "kline", "candle", "ohlc"] {
             for (api_name, method_name, path_name) in &dynamic_calls {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
-                if p == token || p.contains(token) {
+                if p.contains(token) {
                     let rv = ${requestCall || 'self.request('}path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
-                    if !rv.is_undefined() { return rv; }
+                    if !rv.is_undefined() { raw = rv; break 'outer; }
                 }
             }
         }
-        let candidates = vec![("public", "GET", "klines"), ("public", "GET", "candles"), ("public", "GET", "ohlcv")];
-        for (api_name, method_name, path_name) in candidates {
-            let rv = ${requestCall || 'self.request('}path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
-            if !rv.is_undefined() { return rv; }
+        if raw.is_undefined() {
+            for (api_name, method_name, path_name) in [("public", "GET", "klines"), ("public", "GET", "candles"), ("public", "GET", "ohlcv")] {
+                let rv = ${requestCall || 'self.request('}path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                if !rv.is_undefined() { raw = rv; break; }
+            }
         }
-        Value::Undefined
+        if raw.is_undefined() { return Value::Undefined; }
+        let json_resp = match &raw { Value::Json(j) => j.clone(), _ => return raw };
+        let arr_val = crate::exchange::unwrap_response_array(&json_resp);
+        let items = match arr_val.as_array() { Some(a) => a.clone(), None => return raw };
+        let market: Value = Value::Undefined;
+        let mut parsed: Vec<serde_json::Value> = Vec::with_capacity(items.len());
+        for item in items {
+            if item.is_array() {
+                parsed.push(item);
+            } else {
+                let pv = <Self as Exchange>::parse_ohlcv(self, Value::Json(item.clone()), market.clone());
+                if let Value::Json(j) = pv { parsed.push(j); }
+            }
+        }
+        Value::Json(serde_json::Value::Array(parsed))
     }\n`,
         fetchTime: (header, requestCall) => header + `{
         let candidates = vec![("public", "GET", "time"), ("public", "GET", "server/time"), ("public", "GET", "timestamp")];
@@ -737,11 +803,27 @@ function transpileMethodToRust(opts: {
         if since.is_nonnullish() { request.set("since".into(), since.clone()); request.set("startTime".into(), since.clone()); }
         if limit.is_nonnullish() { request.set("limit".into(), limit.clone()); }
         let candidates = vec![("public", "GET", "trades"), ("public", "GET", "recent_trades"), ("public", "GET", "aggTrades")];
+        let mut raw: Value = Value::Undefined;
         for (api_name, method_name, path_name) in candidates {
             let rv = ${requestCall || 'self.request('}path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
-            if !rv.is_undefined() { return rv; }
+            if !rv.is_undefined() { raw = rv; break; }
         }
-        Value::Undefined
+        if raw.is_undefined() { return Value::Undefined; }
+        let json_resp = match &raw { Value::Json(j) => j.clone(), _ => return raw };
+        let arr_val = crate::exchange::unwrap_response_array(&json_resp);
+        let items = match arr_val.as_array() { Some(a) => a.clone(), None => return raw };
+        let market: Value = Value::Undefined;
+        let mut parsed: Vec<serde_json::Value> = Vec::with_capacity(items.len());
+        for item in items {
+            // Already-parsed trades have both \`price\` and \`amount\` keys.
+            if item.get("price").is_some() && item.get("amount").is_some() {
+                parsed.push(item);
+            } else {
+                let pv = <Self as Exchange>::parse_trade(self, Value::Json(item.clone()), market.clone());
+                if let Value::Json(j) = pv { parsed.push(j); }
+            }
+        }
+        Value::Json(serde_json::Value::Array(parsed))
     }\n`,
         fetchL2OrderBook: (header, requestCall) => header + `{
         let mut request = if params.is_object() { params.clone() } else { Value::new_object() };
@@ -1340,18 +1422,57 @@ function transpileMethodToRust(opts: {
                     fname === 'assignDefaultDepositWithdrawFees' ||
                     fname === 'getMarketFromSymbols' ||
                     fname === 'hashMessage' ||
-                    fname === 'signHash'
+                    fname === 'signHash' ||
+                    // Per-exchange pure helpers commonly called inside parse_*:
+                    // string transforms, lookup, comma/hyphen fixers, etc.
+                    fname.startsWith('addHyphen') ||
+                    fname.startsWith('removeComma') ||
+                    fname.startsWith('fixComma') ||
+                    fname.startsWith('getMarketFrom') ||
+                    fname.startsWith('getCurrencyIdFrom') ||
+                    fname.startsWith('getSymbolFrom') ||
+                    fname.startsWith('getOrderTypeFrom') ||
+                    fname.startsWith('getStatusFrom') ||
+                    fname.startsWith('encodeUriComponent') ||
+                    fname.startsWith('decodeUriComponent')
                 ) {
                     isSelfImmutable = true;
                 }
+                // Methods that exist on the Exchange trait with a `&self` signature
+                // and that we bridge into `impl Exchange for XxxImpl` so dynamic
+                // dispatch through `&dyn Exchange` reaches the per-exchange override.
+                // The bridge requires the per-exchange override to share the `&self`
+                // signature; this set forces that. Methods whose body genuinely
+                // needs `&mut self` are intentionally NOT in this set — they keep
+                // the heuristic's body-walk behaviour and just don't get bridged.
+                const IMMUTABLE_TRAIT_METHODS = new Set([
+                    'parseTrade', 'parseOhlcv', 'parseOrder', 'parseTicker',
+                    'parsePosition', 'parseBalance', 'parseFundingRate',
+                    'parseTransaction', 'parseTransfer', 'parseDepositAddress',
+                    'parseLedgerEntry', 'parseLeverage', 'parseMarginMode',
+                    'parseLiquidation', 'parseGreeks', 'parseOpenInterest',
+                    'parseAccount', 'parseOrderStatus', 'parseConversion',
+                    'parseIncome', 'parseLastPrice',
+                    // Pure helper used inside parse_trade — keep `&self` so it
+                    // doesn't poison parse_trade with a mutability requirement.
+                    'createCcxtTradeId',
+                ]);
+                if (IMMUTABLE_TRAIT_METHODS.has(fname)) {
+                    isSelfImmutable = true;
+                }
+
                 // Override: if the body makes calls to known &mut self methods, it must be &mut self.
                 // Walk the AST to find: this.mutatingMethod() or this[variable]() (computed dispatch).
-                if (isSelfImmutable && node.body) {
+                if (isSelfImmutable && node.body && !IMMUTABLE_TRAIT_METHODS.has(fname)) {
                     const mutatingMethodNames = new Set([
                         'dispatch', 'request', 'loadMarkets', 'loadAccounts',
                         'handleOptionAndParams', 'handleOptionAndParams2', 'handleOption',
                         'handleMarketTypeAndParams', 'handleSubTypeAndParams',
                         'handleMarginModeAndParams',
+                        // Methods with `&mut self` on the runtime Exchange trait.
+                        // Calling any of these from a `&self` body fails to compile,
+                        // so the calling method must itself be `&mut self`.
+                        'checkRequiredCredentials', 'marketIds',
                     ]);
                     const bodyHasMutatingCall = (n: any): boolean => {
                         if (!n || typeof n !== 'object') return false;
@@ -2865,14 +2986,122 @@ class RustTranspiler {
             `pub trait ${capitalizedClassName} : ${rustBaseTrait} {`,
         ];
 
+        // Bridge per-exchange `async fn fetch_*` overrides into `impl Exchange for XxxImpl`
+        // so that callers holding `&dyn Exchange` dispatch to the per-exchange
+        // implementation instead of the trait default. The fetch_* templates do
+        // unwrap + parse using the parse_* bridges below; without these fetch
+        // bridges, `&dyn Exchange` would hit Exchange's old default returning
+        // raw HTTP responses.
+        const BRIDGED_FETCH_METHODS: Record<string, string> = {
+            'fetchTicker':    'async fn fetch_ticker(&mut self, symbol: Value, params: Value) -> Value',
+            'fetchTickers':   'async fn fetch_tickers(&mut self, symbols: Value, params: Value) -> Value',
+            'fetchOrderBook': 'async fn fetch_order_book(&mut self, symbol: Value, limit: Value, params: Value) -> Value',
+            'fetchOHLCV':     'async fn fetch_ohlcv(&mut self, symbol: Value, timeframe: Value, since: Value, limit: Value, params: Value) -> Value',
+            'fetchTrades':    'async fn fetch_trades(&mut self, symbol: Value, since: Value, limit: Value, params: Value) -> Value',
+            'fetchTime':      'async fn fetch_time(&mut self, params: Value) -> Value',
+            'fetchStatus':    'async fn fetch_status(&mut self, params: Value) -> Value',
+            'fetchL2OrderBook':'async fn fetch_l2_order_book(&mut self, symbol: Value, limit: Value, params: Value) -> Value',
+            'fetchBidsAsks':  'async fn fetch_bids_asks(&mut self, symbols: Value, params: Value) -> Value',
+        };
+        const FETCH_METHOD_ARGS: Record<string, string[]> = {
+            'fetchTicker':    ['symbol', 'params'],
+            'fetchTickers':   ['symbols', 'params'],
+            'fetchOrderBook': ['symbol', 'limit', 'params'],
+            'fetchOHLCV':     ['symbol', 'timeframe', 'since', 'limit', 'params'],
+            'fetchTrades':    ['symbol', 'since', 'limit', 'params'],
+            'fetchTime':      ['params'],
+            'fetchStatus':    ['params'],
+            'fetchL2OrderBook':['symbol', 'limit', 'params'],
+            'fetchBidsAsks':  ['symbols', 'params'],
+        };
+        const methodSet = new Set(methods);
+
+        // Detect per-method mutability by scanning the generated method bodies
+        // for `fn name(&self` vs `fn name(&mut self`. Used to skip bridges that
+        // would conflict (e.g. trait expects `&self` but per-exchange override
+        // emitted `&mut self` — calling that from the bridge body fails to compile).
+        const methodIsImmutable = (jsName: string): boolean => {
+            const snake = unCamelCamelCase(jsName);
+            const re = new RegExp(`fn\\s+${snake}\\s*\\(&self\\b`);
+            return body.some((b) => re.test(b));
+        };
+
+        const fetchBridges: string[] = [];
+        for (const [jsName, sig] of Object.entries(BRIDGED_FETCH_METHODS)) {
+            if (!methodSet.has(jsName)) continue;
+            const args = FETCH_METHOD_ARGS[jsName].join(', ');
+            fetchBridges.push(`    ${sig} { ${capitalizedClassName}::${unCamelCamelCase(jsName)}(self, ${args}).await }`);
+        }
+
+        // Bridge per-exchange parse_* overrides into `impl Exchange for XxxImpl`
+        // so that callers holding `&dyn Exchange` dispatch to the per-exchange
+        // implementation instead of the trait default `Value::Undefined`.
+        // Only methods in this list are bridged — they all have `&self` signatures
+        // on the Exchange trait, and the `IMMUTABLE_TRAIT_METHODS` heuristic above
+        // forces the per-exchange override to keep `&self` so the bridge compiles.
+        const BRIDGED_PARSE_METHODS: Record<string, string> = {
+            'parseTrade':         'fn parse_trade(&self, trade: Value, market: Value) -> Value',
+            'parseOhlcv':         'fn parse_ohlcv(&self, ohlcv: Value, market: Value) -> Value',
+            'parseOrder':         'fn parse_order(&self, order: Value, market: Value) -> Value',
+            'parseTicker':        'fn parse_ticker(&self, ticker: Value, market: Value) -> Value',
+            'parsePosition':      'fn parse_position(&self, position: Value, market: Value) -> Value',
+            'parseBalance':       'fn parse_balance(&self, response: Value) -> Value',
+            'parseFundingRate':   'fn parse_funding_rate(&self, contract: Value, market: Value) -> Value',
+            'parseMarket':        'fn parse_market(&self, market: Value) -> Value',
+            'parseCurrency':      'fn parse_currency(&self, raw_currency: Value) -> Value',
+            'parseTransaction':   'fn parse_transaction(&self, transaction: Value, currency: Value) -> Value',
+            'parseTransfer':      'fn parse_transfer(&self, transfer: Value, currency: Value) -> Value',
+            'parseDepositAddress':'fn parse_deposit_address(&self, deposit_address: Value, currency: Value) -> Value',
+            'parseLedgerEntry':   'fn parse_ledger_entry(&self, item: Value, currency: Value) -> Value',
+            'parseLeverage':      'fn parse_leverage(&self, leverage: Value, market: Value) -> Value',
+            'parseMarginMode':    'fn parse_margin_mode(&self, margin_mode: Value, market: Value) -> Value',
+            'parseLiquidation':   'fn parse_liquidation(&self, liquidation: Value, market: Value) -> Value',
+            'parseGreeks':        'fn parse_greeks(&self, greeks: Value, market: Value) -> Value',
+            'parseOpenInterest':  'fn parse_open_interest(&self, interest: Value, market: Value) -> Value',
+            'parseAccount':       'fn parse_account(&self, account: Value) -> Value',
+            'parseOrderStatus':   'fn parse_order_status(&self, status: Value) -> Value',
+            'parseConversion':    'fn parse_conversion(&self, conversion: Value, from_currency: Value, to_currency: Value) -> Value',
+            'parseIncome':        'fn parse_income(&self, income: Value, market: Value) -> Value',
+            'parseLastPrice':     'fn parse_last_price(&self, entry: Value, market: Value) -> Value',
+        };
+        const PARSE_METHOD_ARG_COUNT: Record<string, number> = {
+            'parseTrade': 2, 'parseOhlcv': 2, 'parseOrder': 2, 'parseTicker': 2,
+            'parsePosition': 2, 'parseBalance': 1, 'parseFundingRate': 2,
+            'parseMarket': 1, 'parseCurrency': 1, 'parseTransaction': 2,
+            'parseTransfer': 2, 'parseDepositAddress': 2, 'parseLedgerEntry': 2,
+            'parseLeverage': 2, 'parseMarginMode': 2, 'parseLiquidation': 2,
+            'parseGreeks': 2, 'parseOpenInterest': 2, 'parseAccount': 1,
+            'parseOrderStatus': 1,
+            'parseConversion': 3, 'parseIncome': 2, 'parseLastPrice': 2,
+        };
+        const parseBridges: string[] = [];
+        for (const [jsName, sig] of Object.entries(BRIDGED_PARSE_METHODS)) {
+            if (!methodSet.has(jsName)) continue;
+            // Skip bridges where the per-exchange override ended up `&mut self`;
+            // the bridge body cannot call it from a `&self` context.
+            if (!methodIsImmutable(jsName)) continue;
+            const argCount = PARSE_METHOD_ARG_COUNT[jsName];
+            const argMatch = sig.match(/\(&self(?:,\s*(.+))?\)/);
+            const argList = argMatch && argMatch[1]
+                ? argMatch[1].split(',').map((s) => s.trim().split(':')[0].trim())
+                : [];
+            const callArgs = argList.length ? argList.join(', ') : '';
+            const callArgsWithComma = callArgs ? `, ${callArgs}` : '';
+            parseBridges.push(`    ${sig} { ${capitalizedClassName}::${unCamelCamelCase(jsName)}(self${callArgsWithComma}) }`);
+        }
+
+        const exchangeImplBody = [
+            `    fn describe(&self) -> Value { ${capitalizedClassName}::describe(self) }`,
+            ...fetchBridges,
+            ...parseBridges,
+        ].join('\n');
+
         const footer = [
             '}',
             '',
             '#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]',
             `pub struct ${capitalizedClassName}Impl(Value);`,
-            `impl Exchange for ${capitalizedClassName}Impl {
-    fn describe(&self) -> Value { ${capitalizedClassName}::describe(self) }
-}`,
+            `#[async_trait(?Send)]\nimpl Exchange for ${capitalizedClassName}Impl {\n${exchangeImplBody}\n}`,
             `impl ${capitalizedClassName} for ${capitalizedClassName}Impl {}`,
             `impl ValueTrait for ${capitalizedClassName}Impl {
     fn is_undefined(&self) -> bool { self.0.is_undefined() }

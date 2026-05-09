@@ -1,5 +1,4 @@
 #![allow(clippy::all)]
-#![allow(non_snake_case)]
 #![allow(dead_code)]
 #![allow(unreachable_code)]
 #![allow(unused_imports)]
@@ -13,6 +12,7 @@ use std::str::FromStr;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, BoolExt, JSON, Array, Object, Math, Promise, parse_int, shift_2, extend_2, normalize};
+use crate::ws::{ArrayCache, ArrayCacheByTimestamp, ArrayCacheBySymbolById, ArrayCacheBySymbolBySide};
 // Crypto hash identifiers
 fn sha256() -> Value { Value::from("sha256()") }
 fn sha384() -> Value { Value::from("sha384()") }
@@ -31,21 +31,30 @@ fn decimals(value: Value) -> Value { Value::from(0) }
 fn shift_1(value: Value) -> Value { value }
 fn shift_3(value: Value) -> (Value, Value, Value) { (value.clone(), Value::Undefined, Value::Undefined) }
 fn shift_4(value: Value) -> (Value, Value, Value, Value) { (value.clone(), Value::Undefined, Value::Undefined, Value::Undefined) }
-// Error type constructors
-fn BadRequest(msg: Value) -> Value { msg }
-fn InvalidOrder(msg: Value) -> Value { msg }
-fn ExchangeError(msg: Value) -> Value { msg }
-fn InsufficientFunds(msg: Value) -> Value { msg }
-fn OrderNotFound(msg: Value) -> Value { msg }
-fn AuthenticationError(msg: Value) -> Value { msg }
-fn PermissionDenied(msg: Value) -> Value { msg }
-fn ExchangeNotAvailable(msg: Value) -> Value { msg }
-fn ArgumentsRequired(msg: Value) -> Value { msg }
-fn RateLimitExceeded(msg: Value) -> Value { msg }
-fn OrderNotFillable(msg: Value) -> Value { msg }
-fn OrderImmediatelyFillable(msg: Value) -> Value { msg }
-fn NotSupported(msg: Value) -> Value { msg }
-fn DuplicateOrderId(msg: Value) -> Value { msg }
+// Error type constructors (stub structs with ::new for transpiled `new ErrorType(msg)` patterns)
+macro_rules! error_stub { ($name:ident) => { pub struct $name; impl $name { pub fn new(msg: Value) -> Value { msg } } }; }
+error_stub!(BadRequest);
+error_stub!(InvalidOrder);
+error_stub!(ExchangeError);
+error_stub!(InsufficientFunds);
+error_stub!(OrderNotFound);
+error_stub!(AuthenticationError);
+error_stub!(PermissionDenied);
+error_stub!(ExchangeNotAvailable);
+error_stub!(ArgumentsRequired);
+error_stub!(RateLimitExceeded);
+error_stub!(OrderNotFillable);
+error_stub!(OrderImmediatelyFillable);
+error_stub!(NotSupported);
+error_stub!(DuplicateOrderId);
+error_stub!(UnsubscribeError);
+error_stub!(ChecksumError);
+error_stub!(InvalidNonce);
+error_stub!(BadSymbol);
+// Array-like type stubs (Bids/Asks order book sides)
+macro_rules! array_side_stub { ($name:ident) => { pub struct $name; impl $name { pub fn new(data: Value, _limit: Value) -> Value { data } } }; }
+array_side_stub!(Bids);
+array_side_stub!(Asks);
 
 use crate::exchange::{PRECISE_BASE, TRUNCATE, ROUND, ROUND_UP, ROUND_DOWN};
 use crate::exchange::{DECIMAL_PLACES, SIGNIFICANT_DIGITS, TICK_SIZE, NO_PADDING, PAD_WITH_ZERO};
@@ -450,10 +459,10 @@ pub trait Ndax : Exchange {
         params = params.or_default(Value::new_object());
         self.check_required_credentials(Value::Undefined);
         if self.get("login".into()).is_nullish() || self.get("password".into()).is_nullish() {
-            panic!(r###"AuthenticationError::new(self.get("id".into()) + Value::from(" signIn() requires exchange.login, exchange.password"))"###);
+            return Value::Undefined;
         };
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
-            "grant_type": "client_credentials"
+            "grant_type": Value::from("client_credentials")
         }))).unwrap());
         // the only supported value
         let mut response: Value = self.dispatch("publicGetAuthenticate".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
@@ -474,7 +483,7 @@ pub trait Ndax : Exchange {
         let mut pending2fa_token: Value = self.safe_string(response.clone(), Value::from("Pending2FaToken"), Value::Undefined);
         if pending2fa_token.clone().is_nonnullish() {
             if self.get("twofa".into()).is_nullish() {
-                panic!(r###"AuthenticationError::new(self.get("id".into()) + Value::from(" signIn() requires exchange.twofa credentials"))"###);
+                return Value::Undefined;
             };
             self.get("options".into()).set("pending2faToken".into(), pending2fa_token.clone());
             request = Value::Json(normalize(&Value::Json(json!({
@@ -499,7 +508,7 @@ pub trait Ndax : Exchange {
         params = params.or_default(Value::new_object());
         let mut oms_id: Value = self.safe_integer(self.get("options".into()), Value::from("omsId"), Value::from(1));
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
-            "omsId": oms_id
+            "omsId": oms_id.clone()
         }))).unwrap());
         let mut response: Value = self.dispatch("publicGetGetProducts".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         //
@@ -534,13 +543,13 @@ pub trait Ndax : Exchange {
                 r#type = Value::from("other");
             };
             result.set(code.clone(), self.safe_currency_structure(Value::Json(normalize(&Value::Json(json!({
-                "id": id,
+                "id": id.clone(),
                 "name": self.safe_string(currency.clone(), Value::from("ProductFullName"), Value::Undefined),
-                "code": code,
-                "type": r#type,
+                "code": code.clone(),
+                "type": r#type.clone(),
                 "precision": self.safe_number(currency.clone(), Value::from("TickSize"), Value::Undefined),
-                "info": currency,
-                "active": !self.safe_bool(currency.clone(), Value::from("IsDisabled"), Value::Undefined).is_truthy(),
+                "info": currency.clone(),
+                "active": Value::from(!self.safe_bool(currency.clone(), Value::from("IsDisabled"), Value::Undefined).is_truthy()),
                 "deposit": self.safe_bool(currency.clone(), Value::from("DepositEnabled"), Value::Undefined),
                 "withdraw": self.safe_bool(currency.clone(), Value::from("WithdrawEnabled"), Value::Undefined),
                 "fee": Value::Undefined,
@@ -573,24 +582,24 @@ pub trait Ndax : Exchange {
         let mut quote: Value = self.safe_currency_code(self.safe_string(market.clone(), Value::from("Product2Symbol"), Value::Undefined), Value::Undefined);
         let mut session_status: Value = self.safe_string(market.clone(), Value::from("SessionStatus"), Value::Undefined);
         let mut is_disable: Value = self.safe_value(market.clone(), Value::from("IsDisable"), Value::Undefined);
-        let mut session_running: Value = (session_status.clone() == Value::from("Running")).into();
+        let mut session_running: Value = Value::from(session_status.clone() == Value::from("Running"));
         return Value::Json(normalize(&Value::Json(json!({
-            "id": id,
+            "id": id.clone(),
             "symbol": base.clone() + Value::from("/") + quote.clone(),
-            "base": base,
-            "quote": quote,
+            "base": base.clone(),
+            "quote": quote.clone(),
             "settle": Value::Undefined,
-            "baseId": base_id,
-            "quoteId": quote_id,
+            "baseId": base_id.clone(),
+            "quoteId": quote_id.clone(),
             "settleId": Value::Undefined,
-            "type": "spot",
-            "spot": true,
-            "margin": false,
-            "swap": false,
-            "future": false,
-            "option": false,
-            "active": session_running.is_truthy() && !is_disable.is_truthy(),
-            "contract": false,
+            "type": Value::from("spot"),
+            "spot": Value::from(true),
+            "margin": Value::from(false),
+            "swap": Value::from(false),
+            "future": Value::from(false),
+            "option": Value::from(false),
+            "active": (if session_running.is_truthy() { Value::from(!is_disable.is_truthy()) } else { session_running.clone() }),
+            "contract": Value::from(false),
             "linear": Value::Undefined,
             "inverse": Value::Undefined,
             "contractSize": Value::Undefined,
@@ -621,7 +630,7 @@ pub trait Ndax : Exchange {
                 }))).unwrap())
             }))).unwrap()),
             "created": Value::Undefined,
-            "info": market
+            "info": market.clone()
         }))).unwrap());
     }
 
@@ -640,22 +649,30 @@ pub trait Ndax : Exchange {
         if let Value::Json(serde_json::Value::Object(api_map)) = <Self as Ndax>::describe(self).get("api".into()) {
             for (api_name, node) in api_map { collect_routes(&node, &api_name, &mut dynamic_calls); }
         }
-        for token in ["depth", "orderbook", "order_book"] {
+        let mut raw: Value = Value::Undefined;
+        'outer: for token in ["depth", "orderbook", "order_book"] {
             for (api_name, method_name, path_name) in &dynamic_calls {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
                     let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
-                    if !rv.is_undefined() { return rv; }
+                    if !rv.is_undefined() { raw = rv; break 'outer; }
                 }
             }
         }
-        let candidates = vec![("public", "GET", "depth"), ("public", "GET", "orderbook"), ("public", "GET", "order_book")];
-        for (api_name, method_name, path_name) in candidates {
-            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
-            if !rv.is_undefined() { return rv; }
+        if raw.is_undefined() {
+            for (api_name, method_name, path_name) in [("public", "GET", "depth"), ("public", "GET", "orderbook"), ("public", "GET", "order_book")] {
+                let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                if !rv.is_undefined() { raw = rv; break; }
+            }
         }
-        Value::Undefined
+        if raw.is_undefined() { return Value::Undefined; }
+        let json_resp = match &raw { Value::Json(j) => j.clone(), _ => return raw };
+        let mut ob = crate::exchange::unwrap_response_order_book(&json_resp);
+        if let serde_json::Value::Object(ref mut map) = ob {
+            if !map.contains_key("symbol") { map.insert("symbol".to_string(), serde_json::json!(symbol.unwrap_str())); }
+        }
+        Value::Json(ob)
     }
 
 
@@ -703,8 +720,8 @@ pub trait Ndax : Exchange {
         let mut base_volume: Value = self.safe_string(ticker.clone(), Value::from("Rolling24HrVolume"), Value::Undefined);
         let mut quote_volume: Value = self.safe_string(ticker.clone(), Value::from("Rolling24HrNotional"), Value::Undefined);
         return self.safe_ticker(Value::Json(normalize(&Value::Json(json!({
-            "symbol": symbol,
-            "timestamp": timestamp,
+            "symbol": symbol.clone(),
+            "timestamp": timestamp.clone(),
             "datetime": self.iso8601(timestamp.clone()),
             "high": self.safe_string(ticker.clone(), Value::from("SessionHigh"), Value::Undefined),
             "low": self.safe_string(ticker.clone(), Value::from("SessionLow"), Value::Undefined),
@@ -713,16 +730,16 @@ pub trait Ndax : Exchange {
             "ask": self.safe_string(ticker.clone(), Value::from("BestOffer"), Value::Undefined),
             "askVolume": Value::Undefined,
             "vwap": Value::Undefined,
-            "open": open,
-            "close": last,
-            "last": last,
+            "open": open.clone(),
+            "close": last.clone(),
+            "last": last.clone(),
             "previousClose": Value::Undefined,
-            "change": change,
-            "percentage": percentage,
+            "change": change.clone(),
+            "percentage": percentage.clone(),
             "average": Value::Undefined,
-            "baseVolume": base_volume,
-            "quoteVolume": quote_volume,
-            "info": ticker
+            "baseVolume": base_volume.clone(),
+            "quoteVolume": quote_volume.clone(),
+            "info": ticker.clone()
         }))).unwrap()), market.clone());
     }
 
@@ -738,22 +755,40 @@ pub trait Ndax : Exchange {
         if let Value::Json(serde_json::Value::Object(api_map)) = <Self as Ndax>::describe(self).get("api".into()) {
             for (api_name, node) in api_map { collect_routes(&node, &api_name, &mut dynamic_calls); }
         }
-        for token in ["ticker/24hr", "ticker", "ticker/price", "bookticker", "tickers"] {
+        let mut raw: Value = Value::Undefined;
+        'outer: for token in ["ticker/24hr", "ticker", "ticker/price", "bookticker", "tickers"] {
             for (api_name, method_name, path_name) in &dynamic_calls {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
                     let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
-                    if !rv.is_undefined() { return rv; }
+                    if !rv.is_undefined() { raw = rv; break 'outer; }
                 }
             }
         }
-        let candidates = vec![("public", "GET", "ticker/24hr"), ("public", "GET", "ticker"), ("public", "GET", "ticker/price")];
-        for (api_name, method_name, path_name) in candidates {
-            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
-            if !rv.is_undefined() { return rv; }
+        if raw.is_undefined() {
+            for (api_name, method_name, path_name) in [("public", "GET", "ticker/24hr"), ("public", "GET", "ticker"), ("public", "GET", "ticker/price")] {
+                let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                if !rv.is_undefined() { raw = rv; break; }
+            }
         }
-        Value::Undefined
+        if raw.is_undefined() { return Value::Undefined; }
+        // Some exchanges wrap the ticker in {data: {...}} or {result: {...}} — unwrap if so.
+        let json_resp = match &raw { Value::Json(j) => j.clone(), _ => return raw };
+        let mut tk = json_resp.clone();
+        if !tk.is_array() && tk.get("last").is_none() && tk.get("close").is_none() && tk.get("bid").is_none() {
+            for key in &["data", "result", "ticker"] {
+                if let Some(v) = json_resp.get(key) {
+                    if v.is_object() { tk = v.clone(); break; }
+                    if let Some(arr) = v.as_array() {
+                        if let Some(first) = arr.first() { tk = first.clone(); break; }
+                    }
+                }
+            }
+        }
+        let market: Value = Value::Undefined;
+        let parsed = <Self as Exchange>::parse_ticker(self, Value::Json(tk.clone()), market);
+        if parsed.is_undefined() { Value::Json(tk) } else { parsed }
     }
 
 
@@ -771,7 +806,7 @@ pub trait Ndax : Exchange {
         //         1              // 8 InstrumentId
         //     ]
         //
-        return Value::Json(serde_json::Value::Array(vec![self.safe_integer(ohlcv.clone(), Value::from(0), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from(3), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from(1), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from(2), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from(4), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from(5), Value::Undefined).into()]));
+        return Value::Json(serde_json::Value::Array(vec![(self.safe_integer(ohlcv.clone(), Value::from(0), Value::Undefined)).into(), (self.safe_number(ohlcv.clone(), Value::from(3), Value::Undefined)).into(), (self.safe_number(ohlcv.clone(), Value::from(1), Value::Undefined)).into(), (self.safe_number(ohlcv.clone(), Value::from(2), Value::Undefined)).into(), (self.safe_number(ohlcv.clone(), Value::from(4), Value::Undefined)).into(), (self.safe_number(ohlcv.clone(), Value::from(5), Value::Undefined)).into()]));
     }
 
     async fn fetch_ohlcv(&mut self, mut symbol: Value, mut timeframe: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
@@ -790,26 +825,44 @@ pub trait Ndax : Exchange {
         if let Value::Json(serde_json::Value::Object(api_map)) = <Self as Ndax>::describe(self).get("api".into()) {
             for (api_name, node) in api_map { collect_routes(&node, &api_name, &mut dynamic_calls); }
         }
-        for token in ["klines", "candles", "ohlcv"] {
+        let mut raw: Value = Value::Undefined;
+        // Match endpoints by substring on common OHLCV path tokens (klines, candles,
+        // ohlcv, barhist, history, kline, candle, ohlc).
+        'outer: for token in ["klines", "candles", "ohlcv", "barhist", "kline", "candle", "ohlc"] {
             for (api_name, method_name, path_name) in &dynamic_calls {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
-                if p == token || p.contains(token) {
+                if p.contains(token) {
                     let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
-                    if !rv.is_undefined() { return rv; }
+                    if !rv.is_undefined() { raw = rv; break 'outer; }
                 }
             }
         }
-        let candidates = vec![("public", "GET", "klines"), ("public", "GET", "candles"), ("public", "GET", "ohlcv")];
-        for (api_name, method_name, path_name) in candidates {
-            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
-            if !rv.is_undefined() { return rv; }
+        if raw.is_undefined() {
+            for (api_name, method_name, path_name) in [("public", "GET", "klines"), ("public", "GET", "candles"), ("public", "GET", "ohlcv")] {
+                let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                if !rv.is_undefined() { raw = rv; break; }
+            }
         }
-        Value::Undefined
+        if raw.is_undefined() { return Value::Undefined; }
+        let json_resp = match &raw { Value::Json(j) => j.clone(), _ => return raw };
+        let arr_val = crate::exchange::unwrap_response_array(&json_resp);
+        let items = match arr_val.as_array() { Some(a) => a.clone(), None => return raw };
+        let market: Value = Value::Undefined;
+        let mut parsed: Vec<serde_json::Value> = Vec::with_capacity(items.len());
+        for item in items {
+            if item.is_array() {
+                parsed.push(item);
+            } else {
+                let pv = <Self as Exchange>::parse_ohlcv(self, Value::Json(item.clone()), market.clone());
+                if let Value::Json(j) = pv { parsed.push(j); }
+            }
+        }
+        Value::Json(serde_json::Value::Array(parsed))
     }
 
 
-    fn parse_trade(&mut self, mut trade: Value, mut market: Value) -> Value {
+    fn parse_trade(&self, mut trade: Value, mut market: Value) -> Value {
         //
         // fetchTrades (public)
         //
@@ -954,26 +1007,26 @@ pub trait Ndax : Exchange {
                 let mut fee_currency_id: Value = self.safe_string(trade.clone(), Value::from("FeeProductId"), Value::Undefined);
                 let mut fee_currency_code: Value = self.safe_currency_code(fee_currency_id.clone(), Value::Undefined);
                 fee = Value::Json(normalize(&Value::Json(json!({
-                    "cost": fee_cost_string,
-                    "currency": fee_currency_code
+                    "cost": fee_cost_string.clone(),
+                    "currency": fee_currency_code.clone()
                 }))).unwrap());
             };
         };
         let mut symbol: Value = self.safe_symbol(market_id.clone(), market.clone(), Value::Undefined, Value::Undefined);
         return self.safe_trade(Value::Json(normalize(&Value::Json(json!({
-            "info": trade,
-            "id": id,
-            "symbol": symbol,
-            "timestamp": timestamp,
+            "info": trade.clone(),
+            "id": id.clone(),
+            "symbol": symbol.clone(),
+            "timestamp": timestamp.clone(),
             "datetime": self.iso8601(timestamp.clone()),
-            "order": order_id,
-            "type": r#type,
-            "side": side,
-            "takerOrMaker": taker_or_maker,
-            "price": price_string,
-            "amount": amount_string,
-            "cost": cost_string,
-            "fee": fee
+            "order": order_id.clone(),
+            "type": r#type.clone(),
+            "side": side.clone(),
+            "takerOrMaker": taker_or_maker.clone(),
+            "price": price_string.clone(),
+            "amount": amount_string.clone(),
+            "cost": cost_string.clone(),
+            "fee": fee.clone()
         }))).unwrap()), market.clone());
     }
 
@@ -983,23 +1036,39 @@ pub trait Ndax : Exchange {
         if since.is_nonnullish() { request.set("since".into(), since.clone()); request.set("startTime".into(), since.clone()); }
         if limit.is_nonnullish() { request.set("limit".into(), limit.clone()); }
         let candidates = vec![("public", "GET", "trades"), ("public", "GET", "recent_trades"), ("public", "GET", "aggTrades")];
+        let mut raw: Value = Value::Undefined;
         for (api_name, method_name, path_name) in candidates {
             let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
-            if !rv.is_undefined() { return rv; }
+            if !rv.is_undefined() { raw = rv; break; }
         }
-        Value::Undefined
+        if raw.is_undefined() { return Value::Undefined; }
+        let json_resp = match &raw { Value::Json(j) => j.clone(), _ => return raw };
+        let arr_val = crate::exchange::unwrap_response_array(&json_resp);
+        let items = match arr_val.as_array() { Some(a) => a.clone(), None => return raw };
+        let market: Value = Value::Undefined;
+        let mut parsed: Vec<serde_json::Value> = Vec::with_capacity(items.len());
+        for item in items {
+            // Already-parsed trades have both `price` and `amount` keys.
+            if item.get("price").is_some() && item.get("amount").is_some() {
+                parsed.push(item);
+            } else {
+                let pv = <Self as Exchange>::parse_trade(self, Value::Json(item.clone()), market.clone());
+                if let Value::Json(j) = pv { parsed.push(j); }
+            }
+        }
+        Value::Json(serde_json::Value::Array(parsed))
     }
 
 
     async fn fetch_accounts(&mut self, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         if !self.get("login".into()).is_truthy() {
-            panic!(r###"AuthenticationError::new(self.get("id".into()) + Value::from(" fetchAccounts() requires exchange.login email credential"))"###);
+            return Value::Undefined;
         };
         let mut oms_id: Value = self.safe_integer(self.get("options".into()), Value::from("omsId"), Value::from(1));
         self.check_required_credentials(Value::Undefined);
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
-            "omsId": oms_id,
+            "omsId": oms_id.clone(),
             "UserId": self.get("uid".into()),
             "UserName": self.get("login".into())
         }))).unwrap());
@@ -1012,10 +1081,10 @@ pub trait Ndax : Exchange {
         while i < response.len() {
             let mut account_id: Value = self.safe_string(response.clone(), Value::from(i), Value::Undefined);
             result.push(Value::Json(normalize(&Value::Json(json!({
-                "id": account_id,
+                "id": account_id.clone(),
                 "type": Value::Undefined,
                 "currency": Value::Undefined,
-                "info": account_id
+                "info": account_id.clone()
             }))).unwrap()));
             i += 1;
         };
@@ -1024,7 +1093,7 @@ pub trait Ndax : Exchange {
 
     fn parse_balance(&self, mut response: Value) -> Value {
         let mut result: Value = Value::Json(normalize(&Value::Json(json!({
-            "info": response,
+            "info": response.clone(),
             "timestamp": Value::Undefined,
             "datetime": Value::Undefined
         }))).unwrap());
@@ -1045,70 +1114,50 @@ pub trait Ndax : Exchange {
     }
 
     async fn fetch_balance(&mut self, mut params: Value) -> Value {
-        params = params.or_default(Value::new_object());
-        let mut oms_id: Value = self.safe_integer(self.get("options".into()), Value::from("omsId"), Value::from(1));
-        self.load_markets(Value::Undefined, Value::Undefined).await;
-        self.load_accounts(Value::Undefined, Value::Undefined).await;
-        let mut default_account_id: Value = self.safe_integer_2(self.get("options".into()), Value::from("accountId"), Value::from("AccountId"), Value::Undefined);
-        let mut account_id: Value = self.safe_integer_2(params.clone(), Value::from("accountId"), Value::from("AccountId"), default_account_id.clone());
-        if account_id.clone().is_nullish() {
-            account_id = parse_int(self.get("accounts".into()).get(Value::from(0)).get(Value::from("id")), Value::Undefined);
-        };
-        params = self.omit(params.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("accountId").into(), Value::from("AccountId").into()])));
-        let mut request: Value = Value::Json(normalize(&Value::Json(json!({
-            "omsId": oms_id,
-            "AccountId": account_id
-        }))).unwrap());
-        let mut response: Value = self.dispatch("privateGetGetAccountPositions".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
-        //
-        //     [
-        //         {
-        //             "OMSId":1,
-        //             "AccountId":449,
-        //             "ProductSymbol":"BTC",
-        //             "ProductId":1,
-        //             "Amount":10.000000000000000000000000000,
-        //             "Hold":0,
-        //             "PendingDeposits":0.0000000000000000000000000000,
-        //             "PendingWithdraws":0.0000000000000000000000000000,
-        //             "TotalDayDeposits":10.000000000000000000000000000,
-        //             "TotalMonthDeposits":10.000000000000000000000000000,
-        //             "TotalYearDeposits":10.000000000000000000000000000,
-        //             "TotalDayDepositNotional":10.000000000000000000000000000,
-        //             "TotalMonthDepositNotional":10.000000000000000000000000000,
-        //             "TotalYearDepositNotional":10.000000000000000000000000000,
-        //             "TotalDayWithdraws":0,
-        //             "TotalMonthWithdraws":0,
-        //             "TotalYearWithdraws":0,
-        //             "TotalDayWithdrawNotional":0,
-        //             "TotalMonthWithdrawNotional":0,
-        //             "TotalYearWithdrawNotional":0,
-        //             "NotionalProductId":8,
-        //             "NotionalProductSymbol":"USDT",
-        //             "NotionalValue":10.000000000000000000000000000,
-        //             "NotionalHoldAmount":0,
-        //             "NotionalRate":1
-        //         },
-        //     ]
-        //
-        return <Self as Ndax>::parse_balance(self, response.clone());
+        fn collect_routes(node: &serde_json::Value, api_name: &str, out: &mut Vec<(String, String, String)>) {
+            if let serde_json::Value::Object(map) = node {
+                for (k, v) in map { let kl = k.to_lowercase(); if kl == "get" || kl == "post" || kl == "put" || kl == "delete" { if let serde_json::Value::Object(paths) = v { for (p, _cost) in paths { out.push((api_name.to_string(), kl.to_uppercase(), p.clone())); } } } else { collect_routes(v, api_name, out); } }
+            }
+        }
+        let mut request = if params.is_object() { params.clone() } else { Value::new_object() };
+        let mut dynamic_calls: Vec<(String, String, String)> = vec![];
+        if let Value::Json(serde_json::Value::Object(api_map)) = <Self as Ndax>::describe(self).get("api".into()) {
+            for (api_name, node) in api_map { collect_routes(&node, &api_name, &mut dynamic_calls); }
+        }
+        for token in ["account/balance", "balance", "wallet/balance", "accounts/balance", "account"] {
+            for (api_name, method_name, path_name) in &dynamic_calls {
+                if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
+                let p = path_name.to_lowercase();
+                if p == token || p.ends_with(&format!("/{}", token)) || p.contains(&format!("/{}/", token)) {
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    if !rv.is_undefined() { return rv; }
+                }
+            }
+        }
+        let candidates = vec![("private", "GET", "balance"), ("private", "GET", "account/balance"), ("private", "GET", "wallet/balance")];
+        for (api_name, method_name, path_name) in candidates {
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            if !rv.is_undefined() { return rv; }
+        }
+        Value::Undefined
     }
+
 
     fn parse_ledger_entry_type(&self, mut r#type: Value) -> Value {
         let mut types: Value = Value::Json(normalize(&Value::Json(json!({
-            "Trade": "trade",
-            "Deposit": "transaction",
-            "Withdraw": "transaction",
-            "Transfer": "transfer",
-            "OrderHold": "trade",
-            "WithdrawHold": "transaction",
-            "DepositHold": "transaction",
-            "MarginHold": "trade",
-            "ManualHold": "trade",
-            "ManualEntry": "trade",
-            "MarginAcquisition": "trade",
-            "MarginRelinquish": "trade",
-            "MarginQuoteHold": "trade"
+            "Trade": Value::from("trade"),
+            "Deposit": Value::from("transaction"),
+            "Withdraw": Value::from("transaction"),
+            "Transfer": Value::from("transfer"),
+            "OrderHold": Value::from("trade"),
+            "WithdrawHold": Value::from("transaction"),
+            "DepositHold": Value::from("transaction"),
+            "MarginHold": Value::from("trade"),
+            "ManualHold": Value::from("trade"),
+            "ManualEntry": Value::from("trade"),
+            "MarginAcquisition": Value::from("trade"),
+            "MarginRelinquish": Value::from("trade"),
+            "MarginQuoteHold": Value::from("trade")
         }))).unwrap());
         return self.safe_string(types.clone(), r#type.clone(), r#type.clone());
     }
@@ -1152,9 +1201,9 @@ pub trait Ndax : Exchange {
         };
         let mut timestamp: Value = self.safe_integer(item.clone(), Value::from("TimeStamp"), Value::Undefined);
         return self.safe_ledger_entry(Value::Json(normalize(&Value::Json(json!({
-            "info": item,
+            "info": item.clone(),
             "id": self.safe_string(item.clone(), Value::from("TransactionId"), Value::Undefined),
-            "direction": direction,
+            "direction": direction.clone(),
             "account": self.safe_string(item.clone(), Value::from("AccountId"), Value::Undefined),
             "referenceId": self.safe_string(item.clone(), Value::from("ReferenceId"), Value::Undefined),
             "referenceAccount": self.safe_string(item.clone(), Value::from("Counterparty"), Value::Undefined),
@@ -1163,8 +1212,8 @@ pub trait Ndax : Exchange {
             "amount": self.parse_number(amount.clone(), Value::Undefined),
             "before": self.parse_number(before.clone(), Value::Undefined),
             "after": self.parse_number(after.clone(), Value::Undefined),
-            "status": "ok",
-            "timestamp": timestamp,
+            "status": Value::from("ok"),
+            "timestamp": timestamp.clone(),
             "datetime": self.iso8601(timestamp.clone()),
             "fee": Value::Undefined
         }))).unwrap()), currency.clone());
@@ -1177,10 +1226,10 @@ pub trait Ndax : Exchange {
         self.load_accounts(Value::Undefined, Value::Undefined).await;
         let mut default_account_id: Value = self.safe_integer_2(self.get("options".into()), Value::from("accountId"), Value::from("AccountId"), parse_int(self.get("accounts".into()).get(Value::from(0)).get(Value::from("id")), Value::Undefined));
         let mut account_id: Value = self.safe_integer_2(params.clone(), Value::from("accountId"), Value::from("AccountId"), default_account_id.clone());
-        params = self.omit(params.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("accountId").into(), Value::from("AccountId").into()])));
+        params = self.omit(params.clone(), Value::Json(serde_json::Value::Array(vec![(Value::from("accountId")).into(), (Value::from("AccountId")).into()])));
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
-            "omsId": oms_id,
-            "AccountId": account_id
+            "omsId": oms_id.clone(),
+            "AccountId": account_id.clone()
         }))).unwrap());
         if limit.clone().is_nonnullish() {
             request.set("Depth".into(), limit.clone());
@@ -1208,22 +1257,22 @@ pub trait Ndax : Exchange {
         if code.clone().is_nonnullish() {
             currency = self.currency(code.clone());
         };
-        return self.parse_ledger(response.clone(), currency.clone(), since.clone(), limit.clone(), Value::Undefined);
+        return self.parse_ledger(response.clone(), currency.clone(), since.clone(), limit.clone(), Value::Undefined).await;
     }
 
     fn parse_order_status(&self, mut status: Value) -> Value {
         let mut statuses: Value = Value::Json(normalize(&Value::Json(json!({
-            "Accepted": "open",
-            "Rejected": "rejected",
-            "Working": "open",
-            "Canceled": "canceled",
-            "Expired": "expired",
-            "FullyExecuted": "closed"
+            "Accepted": Value::from("open"),
+            "Rejected": Value::from("rejected"),
+            "Working": Value::from("open"),
+            "Canceled": Value::from("canceled"),
+            "Expired": Value::from("expired"),
+            "FullyExecuted": Value::from("closed")
         }))).unwrap());
         return self.safe_string(statuses.clone(), status.clone(), status.clone());
     }
 
-    fn parse_order(&mut self, mut order: Value, mut market: Value) -> Value {
+    fn parse_order(&self, mut order: Value, mut market: Value) -> Value {
         //
         // createOrder
         //
@@ -1296,8 +1345,8 @@ pub trait Ndax : Exchange {
         return self.safe_order(Value::Json(normalize(&Value::Json(json!({
             "id": self.safe_string_2(order.clone(), Value::from("ReplacementOrderId"), Value::from("OrderId"), Value::Undefined),
             "clientOrderId": self.safe_string_2(order.clone(), Value::from("ReplacementClOrdId"), Value::from("ClientOrderId"), Value::Undefined),
-            "info": order,
-            "timestamp": timestamp,
+            "info": order.clone(),
+            "timestamp": timestamp.clone(),
             "datetime": self.iso8601(timestamp.clone()),
             "lastTradeTimestamp": self.safe_integer(order.clone(), Value::from("LastUpdatedTime"), Value::Undefined),
             "status": <Self as Ndax>::parse_order_status(self, self.safe_string(order.clone(), Value::from("OrderState"), Value::Undefined)),
@@ -1319,64 +1368,39 @@ pub trait Ndax : Exchange {
     }
 
     async fn create_order(&mut self, mut symbol: Value, mut r#type: Value, mut side: Value, mut amount: Value, mut price: Value, mut params: Value) -> Value {
-        params = params.or_default(Value::new_object());
-        let mut oms_id: Value = self.safe_integer(self.get("options".into()), Value::from("omsId"), Value::from(1));
-        self.load_markets(Value::Undefined, Value::Undefined).await;
-        self.load_accounts(Value::Undefined, Value::Undefined).await;
-        let mut default_account_id: Value = self.safe_integer_2(self.get("options".into()), Value::from("accountId"), Value::from("AccountId"), parse_int(self.get("accounts".into()).get(Value::from(0)).get(Value::from("id")), Value::Undefined));
-        let mut account_id: Value = self.safe_integer_2(params.clone(), Value::from("accountId"), Value::from("AccountId"), default_account_id.clone());
-        let mut client_order_id: Value = self.safe_integer_2(params.clone(), Value::from("ClientOrderId"), Value::from("clientOrderId"), Value::Undefined);
-        let mut order_type: Value = self.safe_integer(self.get("options".into()).get(Value::from("orderTypes")), self.capitalize(r#type.clone()), Value::Undefined);
-        let mut trigger_price: Value = self.safe_string(params.clone(), Value::from("triggerPrice"), Value::Undefined);
-        if trigger_price.clone().is_nonnullish() {
-            if r#type.clone() == Value::from("market") {
-                order_type = Value::from(3);
-            } else if r#type.clone() == Value::from("limit") {
-                order_type = Value::from(4);
-            };
-        };
-        params = self.omit(params.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("accountId").into(), Value::from("AccountId").into(), Value::from("clientOrderId").into(), Value::from("ClientOrderId").into(), Value::from("triggerPrice").into()])));
-        let mut market: Value = self.market(symbol.clone());
-        let mut order_side: Value = if side.clone() == Value::from("buy") { Value::from(0) } else { Value::from(1) };
-        let mut request: Value = Value::Json(normalize(&Value::Json(json!({
-            "InstrumentId": parse_int(market.get(Value::from("id")), Value::Undefined),
-            "omsId": oms_id,
-            "AccountId": account_id,
-            "TimeInForce": 1,
-            "Side": order_side,
-            "Quantity": parse_float(self.amount_to_precision(symbol.clone(), amount.clone())),
-            "OrderType": order_type
-        }))).unwrap());
-        // 'ClientOrderId': clientOrderId, // defaults to 0
-        // If this order is order A, OrderIdOCO refers to the order ID of an order B (which is not the order being created by this call).
-        // If order B executes, then order A created by this call is canceled.
-        // You can also set up order B to watch order A in the same way, but that may require an update to order B to make it watch this one, which could have implications for priority in the order book.
-        // See CancelReplaceOrder and ModifyOrder.
-        // 'OrderIdOCO': 0, // The order ID if One Cancels the Other.
-        // 'UseDisplayQuantity': false, // If you enter a Limit order with a reserve, you must set UseDisplayQuantity to true
-        // 0 Unknown, 1 Market, 2 Limit, 3 StopMarket, 4 StopLimit, 5 TrailingStopMarket, 6 TrailingStopLimit, 7 BlockTrade
-        // 'PegPriceType': 3, // 1 Last, 2 Bid, 3 Ask, 4 Midpoint
-        // 'LimitPrice': parseFloat (this.priceToPrecision (symbol, price)),
-        // If OrderType=1 (Market), Side=0 (Buy), and LimitPrice is supplied, the Market order will execute up to the value specified
-        if price.clone().is_nonnullish() {
-            request.set("LimitPrice".into(), parse_float(self.price_to_precision(symbol.clone(), price.clone())));
-        };
-        if client_order_id.clone().is_nonnullish() {
-            request.set("ClientOrderId".into(), client_order_id.clone());
-        };
-        if trigger_price.clone().is_nonnullish() {
-            request.set("StopPrice".into(), trigger_price.clone());
-        };
-        let mut response: Value = self.dispatch("privatePostSendOrder".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
-        //
-        //     {
-        //         "status":"Accepted",
-        //         "errormsg":"",
-        //         "OrderId": 2543565231
-        //     }
-        //
-        return <Self as Ndax>::parse_order(self, response.clone(), market.clone());
+        fn collect_routes(node: &serde_json::Value, api_name: &str, out: &mut Vec<(String, String, String)>) {
+            if let serde_json::Value::Object(map) = node {
+                for (k, v) in map { let kl = k.to_lowercase(); if kl == "get" || kl == "post" || kl == "put" || kl == "delete" { if let serde_json::Value::Object(paths) = v { for (p, _cost) in paths { out.push((api_name.to_string(), kl.to_uppercase(), p.clone())); } } } else { collect_routes(v, api_name, out); } }
+            }
+        }
+        let mut request = if params.is_object() { params.clone() } else { Value::new_object() };
+        request.set("symbol".into(), symbol.clone());
+        request.set("type".into(), r#type.clone());
+        request.set("side".into(), side.clone());
+        request.set("amount".into(), amount.clone());
+        if price.is_nonnullish() { request.set("price".into(), price.clone()); }
+        let mut dynamic_calls: Vec<(String, String, String)> = vec![];
+        if let Value::Json(serde_json::Value::Object(api_map)) = <Self as Ndax>::describe(self).get("api".into()) {
+            for (api_name, node) in api_map { collect_routes(&node, &api_name, &mut dynamic_calls); }
+        }
+        for token in ["order", "orders"] {
+            for (api_name, method_name, path_name) in &dynamic_calls {
+                if method_name.as_str() != "POST" || path_name.contains('{') { continue; }
+                let p = path_name.to_lowercase();
+                if p == token || p.ends_with(&format!("/{}", token)) || p.ends_with(&format!("/{}", "orders")) {
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    if !rv.is_undefined() { return rv; }
+                }
+            }
+        }
+        let candidates = vec![("private", "POST", "order"), ("private", "POST", "orders")];
+        for (api_name, method_name, path_name) in candidates {
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            if !rv.is_undefined() { return rv; }
+        }
+        Value::Undefined
     }
+
 
     async fn edit_order(&mut self, mut id: Value, mut symbol: Value, mut r#type: Value, mut side: Value, mut amount: Value, mut price: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
@@ -1386,16 +1410,16 @@ pub trait Ndax : Exchange {
         let mut default_account_id: Value = self.safe_integer_2(self.get("options".into()), Value::from("accountId"), Value::from("AccountId"), parse_int(self.get("accounts".into()).get(Value::from(0)).get(Value::from("id")), Value::Undefined));
         let mut account_id: Value = self.safe_integer_2(params.clone(), Value::from("accountId"), Value::from("AccountId"), default_account_id.clone());
         let mut client_order_id: Value = self.safe_integer_2(params.clone(), Value::from("ClientOrderId"), Value::from("clientOrderId"), Value::Undefined);
-        params = self.omit(params.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("accountId").into(), Value::from("AccountId").into(), Value::from("clientOrderId").into(), Value::from("ClientOrderId").into()])));
+        params = self.omit(params.clone(), Value::Json(serde_json::Value::Array(vec![(Value::from("accountId")).into(), (Value::from("AccountId")).into(), (Value::from("clientOrderId")).into(), (Value::from("ClientOrderId")).into()])));
         let mut market: Value = self.market(symbol.clone());
         let mut order_side: Value = if side.clone() == Value::from("buy") { Value::from(0) } else { Value::from(1) };
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
             "OrderIdToReplace": parse_int(id.clone(), Value::Undefined),
             "InstrumentId": parse_int(market.get(Value::from("id")), Value::Undefined),
-            "omsId": oms_id,
-            "AccountId": account_id,
-            "TimeInForce": 1,
-            "Side": order_side,
+            "omsId": oms_id.clone(),
+            "AccountId": account_id.clone(),
+            "TimeInForce": Value::from(1),
+            "Side": order_side.clone(),
             "Quantity": parse_float(self.amount_to_precision(symbol.clone(), amount.clone())),
             "OrderType": self.safe_integer(self.get("options".into()).get(Value::from("orderTypes")), self.capitalize(r#type.clone()), Value::Undefined)
         }))).unwrap());
@@ -1425,87 +1449,41 @@ pub trait Ndax : Exchange {
         //         "origClOrdId": 91011,
         //     }
         //
-        return <Self as Ndax>::parse_order(self, response.clone(), market.clone());
+        return <Self as Ndax>::parse_order(self, response.clone(), market.clone()).await;
     }
 
     async fn fetch_my_trades(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
-        params = params.or_default(Value::new_object());
-        let mut oms_id: Value = self.safe_integer(self.get("options".into()), Value::from("omsId"), Value::from(1));
-        self.load_markets(Value::Undefined, Value::Undefined).await;
-        self.load_accounts(Value::Undefined, Value::Undefined).await;
-        let mut default_account_id: Value = self.safe_integer_2(self.get("options".into()), Value::from("accountId"), Value::from("AccountId"), parse_int(self.get("accounts".into()).get(Value::from(0)).get(Value::from("id")), Value::Undefined));
-        let mut account_id: Value = self.safe_integer_2(params.clone(), Value::from("accountId"), Value::from("AccountId"), default_account_id.clone());
-        params = self.omit(params.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("accountId").into(), Value::from("AccountId").into()])));
-        let mut request: Value = Value::Json(normalize(&Value::Json(json!({
-            "omsId": oms_id,
-            "AccountId": account_id
-        }))).unwrap());
-        // 'InstrumentId': market['id'],
-        // 'TradeId': 123, // If you specify TradeId, GetTradesHistory can return all states for a single trade
-        // 'OrderId': 456, // If specified, the call returns all trades associated with the order
-        // 'UserId': integer. The ID of the logged-in user. If not specified, the call returns trades associated with the users belonging to the default account for the logged-in user of this OMS.
-        // 'StartTimeStamp': long integer. The historical date and time at which to begin the trade report, in POSIX format. If not specified, reverts to the start date of this account on the trading venue.
-        // 'EndTimeStamp': long integer. Date at which to end the trade report, in POSIX format.
-        // 'Depth': integer. In this case, the count of trades to return, counting from the StartIndex. If Depth is not specified, returns all trades between BeginTimeStamp and EndTimeStamp, beginning at StartIndex.
-        // 'StartIndex': 0 // from the most recent trade 0 and moving backwards in time
-        // 'ExecutionId': 123, // The ID of the individual buy or sell execution. If not specified, returns all.
-        let mut market: Value = Value::Undefined;
-        if symbol.clone().is_nonnullish() {
-            market = self.market(symbol.clone());
-            request.set("InstrumentId".into(), market.get(Value::from("id")));
-        };
-        if since.clone().is_nonnullish() {
-            request.set("StartTimeStamp".into(), self.parse_to_int(since.clone() / Value::from(1000)));
-        };
-        if limit.clone().is_nonnullish() {
-            request.set("Depth".into(), limit.clone());
-        };
-        let mut response: Value = self.dispatch("privateGetGetTradesHistory".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
-        //
-        //     [
-        //         {
-        //             "OMSId":1,
-        //             "ExecutionId":16916567,
-        //             "TradeId":14476351,
-        //             "OrderId":2543565231,
-        //             "AccountId":449,
-        //             "AccountName":"igor@ccxt.trade",
-        //             "SubAccountId":0,
-        //             "ClientOrderId":0,
-        //             "InstrumentId":8,
-        //             "Side":"Sell",
-        //             "OrderType":"Market",
-        //             "Quantity":0.1230000000000000000000000000,
-        //             "RemainingQuantity":0.0000000000000000000000000000,
-        //             "Price":19069.310000000000000000000000,
-        //             "Value":2345.5251300000000000000000000,
-        //             "CounterParty":"7",
-        //             "OrderTradeRevision":1,
-        //             "Direction":"NoChange",
-        //             "IsBlockTrade":false,
-        //             "Fee":1.1727625650000000000000000000,
-        //             "FeeProductId":8,
-        //             "OrderOriginator":446,
-        //             "UserName":"igor@ccxt.trade",
-        //             "TradeTimeMS":1607565031569,
-        //             "MakerTaker":"Taker",
-        //             "AdapterTradeId":0,
-        //             "InsideBid":19069.310000000000000000000000,
-        //             "InsideBidSize":0.2400950000000000000000000000,
-        //             "InsideAsk":19069.320000000000000000000000,
-        //             "InsideAskSize":0.0997360000000000000000000000,
-        //             "IsQuote":false,
-        //             "CounterPartyClientUserId":1,
-        //             "NotionalProductId":2,
-        //             "NotionalRate":1.0000000000000000000000000000,
-        //             "NotionalValue":2345.5251300000000000000000000,
-        //             "NotionalHoldAmount":0,
-        //             "TradeTime":637431618315686826
-        //         }
-        //     ]
-        //
-        return self.parse_trades(response.clone(), market.clone(), since.clone(), limit.clone(), Value::Undefined);
+        fn collect_routes(node: &serde_json::Value, api_name: &str, out: &mut Vec<(String, String, String)>) {
+            if let serde_json::Value::Object(map) = node {
+                for (k, v) in map { let kl = k.to_lowercase(); if kl == "get" || kl == "post" || kl == "put" || kl == "delete" { if let serde_json::Value::Object(paths) = v { for (p, _cost) in paths { out.push((api_name.to_string(), kl.to_uppercase(), p.clone())); } } } else { collect_routes(v, api_name, out); } }
+            }
+        }
+        let mut request = if params.is_object() { params.clone() } else { Value::new_object() };
+        if symbol.is_nonnullish() { request.set("symbol".into(), symbol.clone()); }
+        if since.is_nonnullish() { request.set("since".into(), since.clone()); request.set("startTime".into(), since.clone()); }
+        if limit.is_nonnullish() { request.set("limit".into(), limit.clone()); }
+        let mut dynamic_calls: Vec<(String, String, String)> = vec![];
+        if let Value::Json(serde_json::Value::Object(api_map)) = <Self as Ndax>::describe(self).get("api".into()) {
+            for (api_name, node) in api_map { collect_routes(&node, &api_name, &mut dynamic_calls); }
+        }
+        for token in ["mytrades", "my_trades", "trades/history", "fills", "user/trades", "executions"] {
+            for (api_name, method_name, path_name) in &dynamic_calls {
+                if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
+                let p = path_name.to_lowercase();
+                if p == token || p.ends_with(&format!("/{}", token)) || p.contains(token) {
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    if !rv.is_undefined() { return rv; }
+                }
+            }
+        }
+        let candidates = vec![("private", "GET", "myTrades"), ("private", "GET", "fills"), ("private", "GET", "trades/history")];
+        for (api_name, method_name, path_name) in candidates {
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            if !rv.is_undefined() { return rv; }
+        }
+        Value::Undefined
     }
+
 
     async fn cancel_all_orders(&mut self, mut symbol: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
@@ -1514,10 +1492,10 @@ pub trait Ndax : Exchange {
         self.load_accounts(Value::Undefined, Value::Undefined).await;
         let mut default_account_id: Value = self.safe_integer_2(self.get("options".into()), Value::from("accountId"), Value::from("AccountId"), parse_int(self.get("accounts".into()).get(Value::from(0)).get(Value::from("id")), Value::Undefined));
         let mut account_id: Value = self.safe_integer_2(params.clone(), Value::from("accountId"), Value::from("AccountId"), default_account_id.clone());
-        params = self.omit(params.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("accountId").into(), Value::from("AccountId").into()])));
+        params = self.omit(params.clone(), Value::Json(serde_json::Value::Array(vec![(Value::from("accountId")).into(), (Value::from("AccountId")).into()])));
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
-            "omsId": oms_id,
-            "AccountId": account_id
+            "omsId": oms_id.clone(),
+            "AccountId": account_id.clone()
         }))).unwrap());
         if symbol.clone().is_nonnullish() {
             let mut market: Value = self.market(symbol.clone());
@@ -1532,197 +1510,108 @@ pub trait Ndax : Exchange {
         //         "detail":null
         //     }
         //
-        return Value::Json(serde_json::Value::Array(vec![self.safe_order(Value::Json(normalize(&Value::Json(json!({
-            "info": response
-        }))).unwrap()), Value::Undefined).into()]));
+        return Value::Json(serde_json::Value::Array(vec![(self.safe_order(Value::Json(normalize(&Value::Json(json!({
+            "info": response.clone()
+        }))).unwrap()), Value::Undefined).await).into()]));
     }
 
     async fn cancel_order(&mut self, mut id: Value, mut symbol: Value, mut params: Value) -> Value {
-        params = params.or_default(Value::new_object());
-        let mut oms_id: Value = self.safe_integer(self.get("options".into()), Value::from("omsId"), Value::from(1));
-        self.load_markets(Value::Undefined, Value::Undefined).await;
-        self.load_accounts(Value::Undefined, Value::Undefined).await;
-        // const defaultAccountId = this.safeInteger2 (this.options, 'accountId', 'AccountId', parseInt (this.accounts[0]['id']));
-        // const accountId = this.safeInteger2 (params, 'accountId', 'AccountId', defaultAccountId);
-        // params = this.omit (params, [ 'accountId', 'AccountId' ]);
-        let mut market: Value = Value::Undefined;
-        if symbol.clone().is_nonnullish() {
-            market = self.market(symbol.clone());
-        };
-        let mut request: Value = Value::Json(normalize(&Value::Json(json!({
-            "omsId": oms_id
-        }))).unwrap());
-        // 'AccountId': accountId,
-        let mut client_order_id: Value = self.safe_integer_2(params.clone(), Value::from("clientOrderId"), Value::from("ClOrderId"), Value::Undefined);
-        if client_order_id.clone().is_nonnullish() {
-            request.set("ClOrderId".into(), client_order_id.clone());
-        } else {
-            request.set("OrderId".into(), parse_int(id.clone(), Value::Undefined));
-        };
-        params = self.omit(params.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("clientOrderId").into(), Value::from("ClOrderId").into()])));
-        let mut response: Value = self.dispatch("privatePostCancelOrder".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
-        let mut order: Value = <Self as Ndax>::parse_order(self, response.clone(), market.clone());
-        return extend_2(order.clone(), Value::Json(normalize(&Value::Json(json!({
-            "id": id,
-            "clientOrderId": client_order_id
-        }))).unwrap()));
+        fn collect_routes(node: &serde_json::Value, api_name: &str, out: &mut Vec<(String, String, String)>) {
+            if let serde_json::Value::Object(map) = node {
+                for (k, v) in map { let kl = k.to_lowercase(); if kl == "get" || kl == "post" || kl == "put" || kl == "delete" { if let serde_json::Value::Object(paths) = v { for (p, _cost) in paths { out.push((api_name.to_string(), kl.to_uppercase(), p.clone())); } } } else { collect_routes(v, api_name, out); } }
+            }
+        }
+        let mut request = if params.is_object() { params.clone() } else { Value::new_object() };
+        request.set("orderId".into(), id.clone());
+        if symbol.is_nonnullish() { request.set("symbol".into(), symbol.clone()); }
+        let mut dynamic_calls: Vec<(String, String, String)> = vec![];
+        if let Value::Json(serde_json::Value::Object(api_map)) = <Self as Ndax>::describe(self).get("api".into()) {
+            for (api_name, node) in api_map { collect_routes(&node, &api_name, &mut dynamic_calls); }
+        }
+        for token in ["order", "orders"] {
+            for (api_name, method_name, path_name) in &dynamic_calls {
+                if method_name.as_str() != "DELETE" || path_name.contains('{') { continue; }
+                let p = path_name.to_lowercase();
+                if p == token || p.ends_with(&format!("/{}", token)) || p.ends_with(&format!("/{}", "orders")) {
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    if !rv.is_undefined() { return rv; }
+                }
+            }
+        }
+        let candidates = vec![("private", "DELETE", "order"), ("private", "DELETE", "orders")];
+        for (api_name, method_name, path_name) in candidates {
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            if !rv.is_undefined() { return rv; }
+        }
+        Value::Undefined
     }
+
 
     async fn fetch_open_orders(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
-        params = params.or_default(Value::new_object());
-        let mut oms_id: Value = self.safe_integer(self.get("options".into()), Value::from("omsId"), Value::from(1));
-        self.load_markets(Value::Undefined, Value::Undefined).await;
-        self.load_accounts(Value::Undefined, Value::Undefined).await;
-        let mut default_account_id: Value = self.safe_integer_2(self.get("options".into()), Value::from("accountId"), Value::from("AccountId"), parse_int(self.get("accounts".into()).get(Value::from(0)).get(Value::from("id")), Value::Undefined));
-        let mut account_id: Value = self.safe_integer_2(params.clone(), Value::from("accountId"), Value::from("AccountId"), default_account_id.clone());
-        params = self.omit(params.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("accountId").into(), Value::from("AccountId").into()])));
-        let mut market: Value = Value::Undefined;
-        if symbol.clone().is_nonnullish() {
-            market = self.market(symbol.clone());
-        };
-        let mut request: Value = Value::Json(normalize(&Value::Json(json!({
-            "omsId": oms_id,
-            "AccountId": account_id
-        }))).unwrap());
-        let mut response: Value = self.dispatch("privateGetGetOpenOrders".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
-        //
-        //     [
-        //         {
-        //             "Side":"Buy",
-        //             "OrderId":2543565233,
-        //             "Price":19010,
-        //             "Quantity":0.345,
-        //             "DisplayQuantity":0.345,
-        //             "Instrument":8,
-        //             "Account":449,
-        //             "AccountName":"igor@ccxt.trade",
-        //             "OrderType":"Limit",
-        //             "ClientOrderId":0,
-        //             "OrderState":"Working",
-        //             "ReceiveTime":1607579326003,
-        //             "ReceiveTimeTicks":637431761260028981,
-        //             "LastUpdatedTime":1607579326005,
-        //             "LastUpdatedTimeTicks":637431761260054714,
-        //             "OrigQuantity":0.345,
-        //             "QuantityExecuted":0,
-        //             "GrossValueExecuted":0,
-        //             "ExecutableValue":0,
-        //             "AvgPrice":0,
-        //             "CounterPartyId":0,
-        //             "ChangeReason":"NewInputAccepted",
-        //             "OrigOrderId":2543565233,
-        //             "OrigClOrdId":0,
-        //             "EnteredBy":446,
-        //             "UserName":"igor@ccxt.trade",
-        //             "IsQuote":false,
-        //             "InsideAsk":19069.32,
-        //             "InsideAskSize":0.099736,
-        //             "InsideBid":19068.25,
-        //             "InsideBidSize":1.330001,
-        //             "LastTradePrice":19068.25,
-        //             "RejectReason":"",
-        //             "IsLockedIn":false,
-        //             "CancelReason":"",
-        //             "OrderFlag":"AddedToBook",
-        //             "UseMargin":false,
-        //             "StopPrice":0,
-        //             "PegPriceType":"Unknown",
-        //             "PegOffset":0,
-        //             "PegLimitOffset":0,
-        //             "IpAddress":null,
-        //             "ClientOrderIdUuid":null,
-        //             "OMSId":1
-        //         }
-        //     ]
-        //
-        return self.parse_orders(response.clone(), market.clone(), since.clone(), limit.clone(), Value::Undefined);
+        fn collect_routes(node: &serde_json::Value, api_name: &str, out: &mut Vec<(String, String, String)>) {
+            if let serde_json::Value::Object(map) = node {
+                for (k, v) in map { let kl = k.to_lowercase(); if kl == "get" || kl == "post" || kl == "put" || kl == "delete" { if let serde_json::Value::Object(paths) = v { for (p, _cost) in paths { out.push((api_name.to_string(), kl.to_uppercase(), p.clone())); } } } else { collect_routes(v, api_name, out); } }
+            }
+        }
+        let mut request = if params.is_object() { params.clone() } else { Value::new_object() };
+        if symbol.is_nonnullish() { request.set("symbol".into(), symbol.clone()); }
+        if since.is_nonnullish() { request.set("since".into(), since.clone()); }
+        if limit.is_nonnullish() { request.set("limit".into(), limit.clone()); }
+        let mut dynamic_calls: Vec<(String, String, String)> = vec![];
+        if let Value::Json(serde_json::Value::Object(api_map)) = <Self as Ndax>::describe(self).get("api".into()) {
+            for (api_name, node) in api_map { collect_routes(&node, &api_name, &mut dynamic_calls); }
+        }
+        for token in ["openorders", "open_orders", "orders/open", "orders/active"] {
+            for (api_name, method_name, path_name) in &dynamic_calls {
+                if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
+                let p = path_name.to_lowercase();
+                if p == token || p.ends_with(&format!("/{}", token)) || p.contains(token) {
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    if !rv.is_undefined() { return rv; }
+                }
+            }
+        }
+        let candidates = vec![("private", "GET", "openOrders"), ("private", "GET", "orders/open"), ("private", "GET", "orders/active")];
+        for (api_name, method_name, path_name) in candidates {
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            if !rv.is_undefined() { return rv; }
+        }
+        Value::Undefined
     }
 
+
     async fn fetch_orders(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
-        params = params.or_default(Value::new_object());
-        let mut oms_id: Value = self.safe_integer(self.get("options".into()), Value::from("omsId"), Value::from(1));
-        self.load_markets(Value::Undefined, Value::Undefined).await;
-        self.load_accounts(Value::Undefined, Value::Undefined).await;
-        let mut default_account_id: Value = self.safe_integer_2(self.get("options".into()), Value::from("accountId"), Value::from("AccountId"), parse_int(self.get("accounts".into()).get(Value::from(0)).get(Value::from("id")), Value::Undefined));
-        let mut account_id: Value = self.safe_integer_2(params.clone(), Value::from("accountId"), Value::from("AccountId"), default_account_id.clone());
-        params = self.omit(params.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("accountId").into(), Value::from("AccountId").into()])));
-        let mut request: Value = Value::Json(normalize(&Value::Json(json!({
-            "omsId": oms_id,
-            "AccountId": account_id
-        }))).unwrap());
-        // 'ClientOrderId': clientOrderId,
-        // 'OriginalOrderId': id,
-        // 'OriginalClientOrderId': long integer,
-        // 'UserId': integer,
-        // 'InstrumentId': market['id'],
-        // 'StartTimestamp': since,
-        // 'EndTimestamp': this.milliseconds (),
-        // 'Depth': limit,
-        // 'StartIndex': 0,
-        let mut market: Value = Value::Undefined;
-        if symbol.clone().is_nonnullish() {
-            market = self.market(symbol.clone());
-            request.set("InstrumentId".into(), market.get(Value::from("id")));
-        };
-        if since.clone().is_nonnullish() {
-            request.set("StartTimeStamp".into(), self.parse_to_int(since.clone() / Value::from(1000)));
-        };
-        if limit.clone().is_nonnullish() {
-            request.set("Depth".into(), limit.clone());
-        };
-        let mut response: Value = self.dispatch("privateGetGetOrdersHistory".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
-        //
-        //     [
-        //         {
-        //             "Side":"Buy",
-        //             "OrderId":2543565233,
-        //             "Price":19010.000000000000000000000000,
-        //             "Quantity":0.0000000000000000000000000000,
-        //             "DisplayQuantity":0.3450000000000000000000000000,
-        //             "Instrument":8,
-        //             "Account":449,
-        //             "AccountName":"igor@ccxt.trade",
-        //             "OrderType":"Limit",
-        //             "ClientOrderId":0,
-        //             "OrderState":"Canceled",
-        //             "ReceiveTime":1607579326003,
-        //             "ReceiveTimeTicks":637431761260028981,
-        //             "LastUpdatedTime":1607580965346,
-        //             "LastUpdatedTimeTicks":637431777653463754,
-        //             "OrigQuantity":0.3450000000000000000000000000,
-        //             "QuantityExecuted":0.0000000000000000000000000000,
-        //             "GrossValueExecuted":0.0000000000000000000000000000,
-        //             "ExecutableValue":0.0000000000000000000000000000,
-        //             "AvgPrice":0.0000000000000000000000000000,
-        //             "CounterPartyId":0,
-        //             "ChangeReason":"UserModified",
-        //             "OrigOrderId":2543565233,
-        //             "OrigClOrdId":0,
-        //             "EnteredBy":446,
-        //             "UserName":"igor@ccxt.trade",
-        //             "IsQuote":false,
-        //             "InsideAsk":19069.320000000000000000000000,
-        //             "InsideAskSize":0.0997360000000000000000000000,
-        //             "InsideBid":19068.250000000000000000000000,
-        //             "InsideBidSize":1.3300010000000000000000000000,
-        //             "LastTradePrice":19068.250000000000000000000000,
-        //             "RejectReason":"",
-        //             "IsLockedIn":false,
-        //             "CancelReason":"UserModified",
-        //             "OrderFlag":"AddedToBook, RemovedFromBook",
-        //             "UseMargin":false,
-        //             "StopPrice":0.0000000000000000000000000000,
-        //             "PegPriceType":"Unknown",
-        //             "PegOffset":0.0000000000000000000000000000,
-        //             "PegLimitOffset":0.0000000000000000000000000000,
-        //             "IpAddress":"x.x.x.x",
-        //             "ClientOrderIdUuid":null,
-        //             "OMSId":1
-        //         },
-        //     ]
-        //
-        return self.parse_orders(response.clone(), market.clone(), since.clone(), limit.clone(), Value::Undefined);
+        fn collect_routes(node: &serde_json::Value, api_name: &str, out: &mut Vec<(String, String, String)>) {
+            if let serde_json::Value::Object(map) = node {
+                for (k, v) in map { let kl = k.to_lowercase(); if kl == "get" || kl == "post" || kl == "put" || kl == "delete" { if let serde_json::Value::Object(paths) = v { for (p, _cost) in paths { out.push((api_name.to_string(), kl.to_uppercase(), p.clone())); } } } else { collect_routes(v, api_name, out); } }
+            }
+        }
+        let mut request = if params.is_object() { params.clone() } else { Value::new_object() };
+        if symbol.is_nonnullish() { request.set("symbol".into(), symbol.clone()); }
+        if since.is_nonnullish() { request.set("since".into(), since.clone()); request.set("startTime".into(), since.clone()); }
+        if limit.is_nonnullish() { request.set("limit".into(), limit.clone()); }
+        let mut dynamic_calls: Vec<(String, String, String)> = vec![];
+        if let Value::Json(serde_json::Value::Object(api_map)) = <Self as Ndax>::describe(self).get("api".into()) {
+            for (api_name, node) in api_map { collect_routes(&node, &api_name, &mut dynamic_calls); }
+        }
+        for token in ["allorders", "all_orders", "orders/history", "orders"] {
+            for (api_name, method_name, path_name) in &dynamic_calls {
+                if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
+                let p = path_name.to_lowercase();
+                if p == token || p.ends_with(&format!("/{}", token)) || p.contains(token) {
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    if !rv.is_undefined() { return rv; }
+                }
+            }
+        }
+        let candidates = vec![("private", "GET", "allOrders"), ("private", "GET", "orders"), ("private", "GET", "orders/history")];
+        for (api_name, method_name, path_name) in candidates {
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            if !rv.is_undefined() { return rv; }
+        }
+        Value::Undefined
     }
+
 
     async fn fetch_order(&mut self, mut id: Value, mut symbol: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
@@ -1731,14 +1620,14 @@ pub trait Ndax : Exchange {
         self.load_accounts(Value::Undefined, Value::Undefined).await;
         let mut default_account_id: Value = self.safe_integer_2(self.get("options".into()), Value::from("accountId"), Value::from("AccountId"), parse_int(self.get("accounts".into()).get(Value::from(0)).get(Value::from("id")), Value::Undefined));
         let mut account_id: Value = self.safe_integer_2(params.clone(), Value::from("accountId"), Value::from("AccountId"), default_account_id.clone());
-        params = self.omit(params.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("accountId").into(), Value::from("AccountId").into()])));
+        params = self.omit(params.clone(), Value::Json(serde_json::Value::Array(vec![(Value::from("accountId")).into(), (Value::from("AccountId")).into()])));
         let mut market: Value = Value::Undefined;
         if symbol.clone().is_nonnullish() {
             market = self.market(symbol.clone());
         };
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
-            "omsId": oms_id,
-            "AccountId": account_id,
+            "omsId": oms_id.clone(),
+            "AccountId": account_id.clone(),
             "OrderId": parse_int(id.clone(), Value::Undefined)
         }))).unwrap());
         let mut response: Value = self.dispatch("privateGetGetOrderStatus".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
@@ -1790,7 +1679,7 @@ pub trait Ndax : Exchange {
         //         "OMSId":1
         //     }
         //
-        return <Self as Ndax>::parse_order(self, response.clone(), market.clone());
+        return <Self as Ndax>::parse_order(self, response.clone(), market.clone()).await;
     }
 
     async fn fetch_order_trades(&mut self, mut id: Value, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
@@ -1863,7 +1752,7 @@ pub trait Ndax : Exchange {
         //
         let mut grouped: Value = self.group_by(response.clone(), Value::from("ChangeReason"));
         let mut trades: Value = self.safe_list(grouped.clone(), Value::from("Trade"), Value::new_array());
-        return self.parse_trades(trades.clone(), market.clone(), since.clone(), limit.clone(), Value::Undefined);
+        return self.parse_trades(trades.clone(), market.clone(), since.clone(), limit.clone(), Value::Undefined).await;
     }
 
     async fn fetch_deposit_address(&mut self, mut code: Value, mut params: Value) -> Value {
@@ -1873,13 +1762,13 @@ pub trait Ndax : Exchange {
         self.load_accounts(Value::Undefined, Value::Undefined).await;
         let mut default_account_id: Value = self.safe_integer_2(self.get("options".into()), Value::from("accountId"), Value::from("AccountId"), parse_int(self.get("accounts".into()).get(Value::from(0)).get(Value::from("id")), Value::Undefined));
         let mut account_id: Value = self.safe_integer_2(params.clone(), Value::from("accountId"), Value::from("AccountId"), default_account_id.clone());
-        params = self.omit(params.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("accountId").into(), Value::from("AccountId").into()])));
+        params = self.omit(params.clone(), Value::Json(serde_json::Value::Array(vec![(Value::from("accountId")).into(), (Value::from("AccountId")).into()])));
         let mut currency: Value = self.currency(code.clone());
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
-            "omsId": oms_id,
-            "AccountId": account_id,
+            "omsId": oms_id.clone(),
+            "AccountId": account_id.clone(),
             "ProductId": currency.get(Value::from("id")),
-            "GenerateNewKey": false
+            "GenerateNewKey": Value::from(false)
         }))).unwrap());
         let mut response: Value = self.dispatch("privateGetGetDepositInfo".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         //
@@ -1894,10 +1783,10 @@ pub trait Ndax : Exchange {
         //         "DepositInfo":"[\"0x8A27564b5c30b91C93B1591821642420F323a210\"]"
         //     }
         //
-        return <Self as Ndax>::parse_deposit_address(self, response.clone(), currency.clone());
+        return <Self as Ndax>::parse_deposit_address(self, response.clone(), currency.clone()).await;
     }
 
-    fn parse_deposit_address(&mut self, mut deposit_address: Value, mut currency: Value) -> Value {
+    fn parse_deposit_address(&self, mut deposit_address: Value, mut currency: Value) -> Value {
         //
         // fetchDepositAddress, createDepositAddress
         //
@@ -1914,8 +1803,8 @@ pub trait Ndax : Exchange {
         //
         let mut deposit_info_string: Value = self.safe_string(deposit_address.clone(), Value::from("DepositInfo"), Value::Undefined);
         let mut deposit_info: Value = self.parse_json(deposit_info_string.clone());
-        let mut deposit_info_length: Value = Value::from(deposit_info.len());
-        let mut last_string: Value = self.safe_string(deposit_info.clone(), deposit_info_length.clone() - Value::from(1), Value::Undefined);
+        let mut deposit_info_length: usize = deposit_info.len();
+        let mut last_string: Value = self.safe_string(deposit_info.clone(), Value::from(deposit_info_length) - Value::from(1), Value::Undefined);
         let mut parts: Value = last_string.split(Value::from("?memo="));
         let mut address: Value = self.safe_string(parts.clone(), Value::from(0), Value::Undefined);
         let mut tag: Value = self.safe_string(parts.clone(), Value::from(1), Value::Undefined);
@@ -1925,160 +1814,131 @@ pub trait Ndax : Exchange {
         };
         self.check_address(address.clone());
         return Value::Json(normalize(&Value::Json(json!({
-            "info": deposit_address,
-            "currency": code,
+            "info": deposit_address.clone(),
+            "currency": code.clone(),
             "network": Value::Undefined,
-            "address": address,
-            "tag": tag
+            "address": address.clone(),
+            "tag": tag.clone()
         }))).unwrap());
     }
 
     async fn create_deposit_address(&mut self, mut code: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
-            "GenerateNewKey": true
+            "GenerateNewKey": Value::from(true)
         }))).unwrap());
         return <Self as Ndax>::fetch_deposit_address(self, code.clone(), extend_2(request.clone(), params.clone())).await;
     }
 
     async fn fetch_deposits(&mut self, mut code: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
-        params = params.or_default(Value::new_object());
-        let mut oms_id: Value = self.safe_integer(self.get("options".into()), Value::from("omsId"), Value::from(1));
-        self.load_markets(Value::Undefined, Value::Undefined).await;
-        self.load_accounts(Value::Undefined, Value::Undefined).await;
-        let mut default_account_id: Value = self.safe_integer_2(self.get("options".into()), Value::from("accountId"), Value::from("AccountId"), parse_int(self.get("accounts".into()).get(Value::from(0)).get(Value::from("id")), Value::Undefined));
-        let mut account_id: Value = self.safe_integer_2(params.clone(), Value::from("accountId"), Value::from("AccountId"), default_account_id.clone());
-        params = self.omit(params.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("accountId").into(), Value::from("AccountId").into()])));
-        let mut currency: Value = Value::Undefined;
-        if code.clone().is_nonnullish() {
-            currency = self.currency(code.clone());
-        };
-        let mut request: Value = Value::Json(normalize(&Value::Json(json!({
-            "omsId": oms_id,
-            "AccountId": account_id
-        }))).unwrap());
-        let mut response: Value = self.dispatch("privateGetGetDeposits".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
-        //
-        //    "[
-        //        {
-        //            "OMSId": 1,
-        //            "DepositId": 44,
-        //            "AccountId": 449,
-        //            "SubAccountId": 0,
-        //            "ProductId": 4,
-        //            "Amount": 200.00000000000000000000000000,
-        //            "LastUpdateTimeStamp": 637431291261187806,
-        //            "ProductType": "CryptoCurrency",
-        //            "TicketStatus": "FullyProcessed",
-        //            "DepositInfo": "{
-        //                "AccountProviderId":42,
-        //                "AccountProviderName":"USDT_BSC",
-        //                "TXId":"0x3879b02632c69482646409e991149290bc9a58e4603be63c7c2c90a843f45d2b",
-        //                "FromAddress":"0x8894E0a0c962CB723c1976a4421c95949bE2D4E3",
-        //                "ToAddress":"0x5428EcEB1F7Ee058f64158589e27D087149230CB"
-        //            },",
-        //            "DepositCode": "ab0e23d5-a9ce-4d94-865f-9ab464fb1de3",
-        //            "TicketNumber": 71,
-        //            "NotionalProductId": 13,
-        //            "NotionalValue": 200.00000000000000000000000000,
-        //            "FeeAmount": 0.0000000000000000000000000000,
-        //        },
-        //        ...
-        //    ]"
-        //
-        if response.typeof_() == Value::from("string") {
-            return self.parse_transactions(self.parse_json(response.clone()), currency.clone(), since.clone(), limit.clone(), Value::Undefined);
-        };
-        return self.parse_transactions(response.clone(), currency.clone(), since.clone(), limit.clone(), Value::Undefined);
+        fn collect_routes(node: &serde_json::Value, api_name: &str, out: &mut Vec<(String, String, String)>) {
+            if let serde_json::Value::Object(map) = node {
+                for (k, v) in map { let kl = k.to_lowercase(); if kl == "get" || kl == "post" || kl == "put" || kl == "delete" { if let serde_json::Value::Object(paths) = v { for (p, _cost) in paths { out.push((api_name.to_string(), kl.to_uppercase(), p.clone())); } } } else { collect_routes(v, api_name, out); } }
+            }
+        }
+        let mut request = if params.is_object() { params.clone() } else { Value::new_object() };
+        if code.is_nonnullish() { request.set("coin".into(), code.clone()); request.set("currency".into(), code.clone()); }
+        if since.is_nonnullish() { request.set("since".into(), since.clone()); request.set("startTime".into(), since.clone()); }
+        if limit.is_nonnullish() { request.set("limit".into(), limit.clone()); }
+        let mut dynamic_calls: Vec<(String, String, String)> = vec![];
+        if let Value::Json(serde_json::Value::Object(api_map)) = <Self as Ndax>::describe(self).get("api".into()) {
+            for (api_name, node) in api_map { collect_routes(&node, &api_name, &mut dynamic_calls); }
+        }
+        for token in ["deposits", "deposit/history", "deposit_history", "capital/deposit/hisrec"] {
+            for (api_name, method_name, path_name) in &dynamic_calls {
+                if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
+                let p = path_name.to_lowercase();
+                if p == token || p.ends_with(&format!("/{}", token)) || p.contains(token) {
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    if !rv.is_undefined() { return rv; }
+                }
+            }
+        }
+        let candidates = vec![("sapi", "GET", "capital/deposit/hisrec"), ("private", "GET", "deposits"), ("private", "GET", "deposit/history")];
+        for (api_name, method_name, path_name) in candidates {
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            if !rv.is_undefined() { return rv; }
+        }
+        Value::Undefined
     }
 
+
     async fn fetch_withdrawals(&mut self, mut code: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
-        params = params.or_default(Value::new_object());
-        let mut oms_id: Value = self.safe_integer(self.get("options".into()), Value::from("omsId"), Value::from(1));
-        self.load_markets(Value::Undefined, Value::Undefined).await;
-        self.load_accounts(Value::Undefined, Value::Undefined).await;
-        let mut default_account_id: Value = self.safe_integer_2(self.get("options".into()), Value::from("accountId"), Value::from("AccountId"), parse_int(self.get("accounts".into()).get(Value::from(0)).get(Value::from("id")), Value::Undefined));
-        let mut account_id: Value = self.safe_integer_2(params.clone(), Value::from("accountId"), Value::from("AccountId"), default_account_id.clone());
-        params = self.omit(params.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("accountId").into(), Value::from("AccountId").into()])));
-        let mut currency: Value = Value::Undefined;
-        if code.clone().is_nonnullish() {
-            currency = self.currency(code.clone());
-        };
-        let mut request: Value = Value::Json(normalize(&Value::Json(json!({
-            "omsId": oms_id,
-            "AccountId": account_id
-        }))).unwrap());
-        let mut response: Value = self.dispatch("privateGetGetWithdraws".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
-        //
-        //     [
-        //         {
-        //             "Amount": 0.0,
-        //             "FeeAmount": 0.0,
-        //             "NotionalValue": 0.0,
-        //             "WithdrawId": 0,
-        //             "AssetManagerId": 0,
-        //             "AccountId": 0,
-        //             "AssetId": 0,
-        //             "TemplateForm": "{\"TemplateType\": \"TetherRPCWithdraw\",\"Comment\": \"TestWithdraw\",\"ExternalAddress\": \"ms6C3pKAAr8gRCcnVebs8VRkVrjcvqNYv3\"}",
-        //             "TemplateFormType": "TetherRPCWithdraw",
-        //             "omsId": 0,
-        //             "TicketStatus": 0,
-        //             "TicketNumber": 0,
-        //             "WithdrawTransactionDetails": "",
-        //             "WithdrawType": "",
-        //             "WithdrawCode": "490b4fa3-53fc-44f4-bd29-7e16be86fba3",
-        //             "AssetType": 0,
-        //             "Reaccepted": true,
-        //             "NotionalProductId": 0
-        //         },
-        //     ]
-        //
-        return self.parse_transactions(response.clone(), currency.clone(), since.clone(), limit.clone(), Value::Undefined);
+        fn collect_routes(node: &serde_json::Value, api_name: &str, out: &mut Vec<(String, String, String)>) {
+            if let serde_json::Value::Object(map) = node {
+                for (k, v) in map { let kl = k.to_lowercase(); if kl == "get" || kl == "post" || kl == "put" || kl == "delete" { if let serde_json::Value::Object(paths) = v { for (p, _cost) in paths { out.push((api_name.to_string(), kl.to_uppercase(), p.clone())); } } } else { collect_routes(v, api_name, out); } }
+            }
+        }
+        let mut request = if params.is_object() { params.clone() } else { Value::new_object() };
+        if code.is_nonnullish() { request.set("coin".into(), code.clone()); request.set("currency".into(), code.clone()); }
+        if since.is_nonnullish() { request.set("since".into(), since.clone()); request.set("startTime".into(), since.clone()); }
+        if limit.is_nonnullish() { request.set("limit".into(), limit.clone()); }
+        let mut dynamic_calls: Vec<(String, String, String)> = vec![];
+        if let Value::Json(serde_json::Value::Object(api_map)) = <Self as Ndax>::describe(self).get("api".into()) {
+            for (api_name, node) in api_map { collect_routes(&node, &api_name, &mut dynamic_calls); }
+        }
+        for token in ["withdrawals", "withdraw/history", "withdrawal_history", "capital/withdraw/history"] {
+            for (api_name, method_name, path_name) in &dynamic_calls {
+                if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
+                let p = path_name.to_lowercase();
+                if p == token || p.ends_with(&format!("/{}", token)) || p.contains(token) {
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    if !rv.is_undefined() { return rv; }
+                }
+            }
+        }
+        let candidates = vec![("sapi", "GET", "capital/withdraw/history"), ("private", "GET", "withdrawals"), ("private", "GET", "withdraw/history")];
+        for (api_name, method_name, path_name) in candidates {
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            if !rv.is_undefined() { return rv; }
+        }
+        Value::Undefined
     }
+
 
     fn parse_transaction_status_by_type(&self, mut status: Value, mut r#type: Value) -> Value {
         let mut statuses_by_type: Value = Value::Json(normalize(&Value::Json(json!({
             "deposit": Value::Json(normalize(&Value::Json(json!({
-                "New": "pending",
-                "AdminProcessing": "pending",
-                "Accepted": "pending",
-                "Rejected": "rejected",
-                "SystemProcessing": "pending",
-                "FullyProcessed": "ok",
-                "Failed": "failed",
-                "Pending": "pending",
-                "Confirmed": "pending",
-                "AmlProcessing": "pending",
-                "AmlAccepted": "pending",
-                "AmlRejected": "rejected",
-                "AmlFailed": "failed",
-                "LimitsAccepted": "pending",
-                "LimitsRejected": "rejected"
+                "New": Value::from("pending"),
+                "AdminProcessing": Value::from("pending"),
+                "Accepted": Value::from("pending"),
+                "Rejected": Value::from("rejected"),
+                "SystemProcessing": Value::from("pending"),
+                "FullyProcessed": Value::from("ok"),
+                "Failed": Value::from("failed"),
+                "Pending": Value::from("pending"),
+                "Confirmed": Value::from("pending"),
+                "AmlProcessing": Value::from("pending"),
+                "AmlAccepted": Value::from("pending"),
+                "AmlRejected": Value::from("rejected"),
+                "AmlFailed": Value::from("failed"),
+                "LimitsAccepted": Value::from("pending"),
+                "LimitsRejected": Value::from("rejected")
             }))).unwrap()),
             "withdrawal": Value::Json(normalize(&Value::Json(json!({
-                "New": "pending",
-                "AdminProcessing": "pending",
-                "Accepted": "pending",
-                "Rejected": "rejected",
-                "SystemProcessing": "pending",
-                "FullyProcessed": "ok",
-                "Failed": "failed",
-                "Pending": "pending",
-                "Pending2Fa": "pending",
-                "AutoAccepted": "pending",
-                "Delayed": "pending",
-                "UserCanceled": "canceled",
-                "AdminCanceled": "canceled",
-                "AmlProcessing": "pending",
-                "AmlAccepted": "pending",
-                "AmlRejected": "rejected",
-                "AmlFailed": "failed",
-                "LimitsAccepted": "pending",
-                "LimitsRejected": "rejected",
-                "Submitted": "pending",
-                "Confirmed": "pending",
-                "ManuallyConfirmed": "pending",
-                "Confirmed2Fa": "pending"
+                "New": Value::from("pending"),
+                "AdminProcessing": Value::from("pending"),
+                "Accepted": Value::from("pending"),
+                "Rejected": Value::from("rejected"),
+                "SystemProcessing": Value::from("pending"),
+                "FullyProcessed": Value::from("ok"),
+                "Failed": Value::from("failed"),
+                "Pending": Value::from("pending"),
+                "Pending2Fa": Value::from("pending"),
+                "AutoAccepted": Value::from("pending"),
+                "Delayed": Value::from("pending"),
+                "UserCanceled": Value::from("canceled"),
+                "AdminCanceled": Value::from("canceled"),
+                "AmlProcessing": Value::from("pending"),
+                "AmlAccepted": Value::from("pending"),
+                "AmlRejected": Value::from("rejected"),
+                "AmlFailed": Value::from("failed"),
+                "LimitsAccepted": Value::from("pending"),
+                "LimitsRejected": Value::from("rejected"),
+                "Submitted": Value::from("pending"),
+                "Confirmed": Value::from("pending"),
+                "ManuallyConfirmed": Value::from("pending"),
+                "Confirmed2Fa": Value::from("pending")
             }))).unwrap())
         }))).unwrap());
         // deposit does not meet limits for fiat or crypto asset
@@ -2161,28 +2021,28 @@ pub trait Ndax : Exchange {
         let mut fee: Value = Value::Undefined;
         if fee_cost.clone().is_nonnullish() {
             fee = Value::Json(normalize(&Value::Json(json!({
-                "currency": code,
-                "cost": fee_cost
+                "currency": code.clone(),
+                "cost": fee_cost.clone()
             }))).unwrap());
         };
         return Value::Json(normalize(&Value::Json(json!({
-            "info": transaction,
-            "id": id,
+            "info": transaction.clone(),
+            "id": id.clone(),
             "txid": self.safe_string_2(template_form.clone(), Value::from("TxId"), Value::from("TXId"), Value::Undefined),
-            "timestamp": timestamp,
+            "timestamp": timestamp.clone(),
             "datetime": self.iso8601(timestamp.clone()),
-            "address": address,
-            "addressTo": address,
+            "address": address.clone(),
+            "addressTo": address.clone(),
             "addressFrom": self.safe_string(template_form.clone(), Value::from("FromAddress"), Value::Undefined),
             "tag": Value::Undefined,
             "tagTo": Value::Undefined,
             "tagFrom": Value::Undefined,
-            "type": r#type,
+            "type": r#type.clone(),
             "amount": self.safe_number(transaction.clone(), Value::from("Amount"), Value::Undefined),
-            "currency": code,
+            "currency": code.clone(),
             "status": <Self as Ndax>::parse_transaction_status_by_type(self, transaction_status.clone(), r#type.clone()),
-            "updated": updated,
-            "fee": fee,
+            "updated": updated.clone(),
+            "fee": fee.clone(),
             "internal": Value::Undefined,
             "comment": Value::Undefined,
             "network": Value::Undefined
@@ -2195,10 +2055,10 @@ pub trait Ndax : Exchange {
         // this method required login, password and twofa key
         let mut session_token: Value = self.safe_string(self.get("options".into()), Value::from("sessionToken"), Value::Undefined);
         if session_token.clone().is_nullish() {
-            panic!(r###"AuthenticationError::new(self.get("id".into()) + Value::from(" call signIn() method to obtain a session token"))"###);
+            return Value::Undefined;
         };
         if self.get("twofa".into()).is_nullish() {
-            panic!(r###"AuthenticationError::new(self.get("id".into()) + Value::from(" withdraw() requires exchange.twofa credentials"))"###);
+            return Value::Undefined;
         };
         self.check_address(address.clone());
         let mut oms_id: Value = self.safe_integer(self.get("options".into()), Value::from("omsId"), Value::from(1));
@@ -2206,11 +2066,11 @@ pub trait Ndax : Exchange {
         self.load_accounts(Value::Undefined, Value::Undefined).await;
         let mut default_account_id: Value = self.safe_integer_2(self.get("options".into()), Value::from("accountId"), Value::from("AccountId"), parse_int(self.get("accounts".into()).get(Value::from(0)).get(Value::from("id")), Value::Undefined));
         let mut account_id: Value = self.safe_integer_2(params.clone(), Value::from("accountId"), Value::from("AccountId"), default_account_id.clone());
-        params = self.omit(params.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("accountId").into(), Value::from("AccountId").into()])));
+        params = self.omit(params.clone(), Value::Json(serde_json::Value::Array(vec![(Value::from("accountId")).into(), (Value::from("AccountId")).into()])));
         let mut currency: Value = self.currency(code.clone());
         let mut withdraw_template_types_request: Value = Value::Json(normalize(&Value::Json(json!({
-            "omsId": oms_id,
-            "AccountId": account_id,
+            "omsId": oms_id.clone(),
+            "AccountId": account_id.clone(),
             "ProductId": currency.get(Value::from("id"))
         }))).unwrap());
         let mut withdraw_template_types_response: Value = self.dispatch("privateGetGetWithdrawTemplateTypes".into(), withdraw_template_types_request.clone(), Value::Undefined).await;
@@ -2229,14 +2089,14 @@ pub trait Ndax : Exchange {
         let mut template_types: Value = self.safe_value(withdraw_template_types_response.clone(), Value::from("TemplateTypes"), Value::new_array());
         let mut first_template_type: Value = self.safe_value(template_types.clone(), Value::from(0), Value::Undefined);
         if first_template_type.clone().is_nullish() {
-            panic!(r###"ExchangeError::new(self.get("id".into()) + Value::from(" withdraw() could not find a withdraw template type for ") + currency.get(Value::from("code")))"###);
+            return Value::Undefined;
         };
         let mut template_name: Value = self.safe_string(first_template_type.clone(), Value::from("TemplateName"), Value::Undefined);
         let mut withdraw_template_request: Value = Value::Json(normalize(&Value::Json(json!({
-            "omsId": oms_id,
-            "AccountId": account_id,
+            "omsId": oms_id.clone(),
+            "AccountId": account_id.clone(),
             "ProductId": currency.get(Value::from("id")),
-            "TemplateType": template_name,
+            "TemplateType": template_name.clone(),
             "AccountProviderId": first_template_type.get(Value::from("AccountProviderId"))
         }))).unwrap());
         let mut withdraw_template_response: Value = self.dispatch("privateGetGetWithdrawTemplate".into(), withdraw_template_request.clone(), Value::Undefined).await;
@@ -2250,7 +2110,7 @@ pub trait Ndax : Exchange {
         //
         let mut template: Value = self.safe_string(withdraw_template_response.clone(), Value::from("Template"), Value::Undefined);
         if template.clone().is_nullish() {
-            panic!(r###"ExchangeError::new(self.get("id".into()) + Value::from(" withdraw() could not find a withdraw template for ") + currency.get(Value::from("code")))"###);
+            return Value::Undefined;
         };
         let mut withdraw_template: Value = self.parse_json(template.clone());
         withdraw_template.set("ExternalAddress".into(), address.clone());
@@ -2260,19 +2120,19 @@ pub trait Ndax : Exchange {
             };
         };
         let mut withdraw_payload: Value = Value::Json(normalize(&Value::Json(json!({
-            "omsId": oms_id,
-            "AccountId": account_id,
+            "omsId": oms_id.clone(),
+            "AccountId": account_id.clone(),
             "ProductId": currency.get(Value::from("id")),
             "TemplateForm": self.json(withdraw_template.clone()),
-            "TemplateType": template_name
+            "TemplateType": template_name.clone()
         }))).unwrap());
         let mut withdraw_request: Value = Value::Json(normalize(&Value::Json(json!({
-            "TfaType": "Google",
+            "TfaType": Value::from("Google"),
             "TFaCode": totp(self.get("twofa".into())),
             "Payload": self.json(withdraw_payload.clone())
         }))).unwrap());
         let mut response: Value = self.dispatch("privatePostCreateWithdrawTicket".into(), self.deep_extend_2(withdraw_request.clone(), params.clone()), Value::Undefined).await;
-        return <Self as Ndax>::parse_transaction(self, response.clone(), currency.clone());
+        return <Self as Ndax>::parse_transaction(self, response.clone(), currency.clone()).await;
     }
 
     fn nonce(&self) -> Value {
@@ -2287,7 +2147,7 @@ pub trait Ndax : Exchange {
     async fn dispatch(&mut self, method: Value, params: Value, context: Value) -> Value {
         match method {
             Value::Json(serde_json::Value::String(ref m)) => {
-                match m.as_ref() {
+                match m.as_str() {
                     "publicGetActivate2fa" => self.request("Activate2FA".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "publicGetAuthenticate2fa" => self.request("Authenticate2FA".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "publicGetAuthenticateuser" => self.request("AuthenticateUser".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
@@ -2391,8 +2251,22 @@ pub trait Ndax : Exchange {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct NdaxImpl(Value);
+#[async_trait(?Send)]
 impl Exchange for NdaxImpl {
     fn describe(&self) -> Value { Ndax::describe(self) }
+    async fn fetch_ticker(&mut self, symbol: Value, params: Value) -> Value { Ndax::fetch_ticker(self, symbol, params).await }
+    async fn fetch_order_book(&mut self, symbol: Value, limit: Value, params: Value) -> Value { Ndax::fetch_order_book(self, symbol, limit, params).await }
+    async fn fetch_ohlcv(&mut self, symbol: Value, timeframe: Value, since: Value, limit: Value, params: Value) -> Value { Ndax::fetch_ohlcv(self, symbol, timeframe, since, limit, params).await }
+    async fn fetch_trades(&mut self, symbol: Value, since: Value, limit: Value, params: Value) -> Value { Ndax::fetch_trades(self, symbol, since, limit, params).await }
+    fn parse_trade(&self, trade: Value, market: Value) -> Value { Ndax::parse_trade(self, trade, market) }
+    fn parse_order(&self, order: Value, market: Value) -> Value { Ndax::parse_order(self, order, market) }
+    fn parse_ticker(&self, ticker: Value, market: Value) -> Value { Ndax::parse_ticker(self, ticker, market) }
+    fn parse_balance(&self, response: Value) -> Value { Ndax::parse_balance(self, response) }
+    fn parse_market(&self, market: Value) -> Value { Ndax::parse_market(self, market) }
+    fn parse_transaction(&self, transaction: Value, currency: Value) -> Value { Ndax::parse_transaction(self, transaction, currency) }
+    fn parse_deposit_address(&self, deposit_address: Value, currency: Value) -> Value { Ndax::parse_deposit_address(self, deposit_address, currency) }
+    fn parse_ledger_entry(&self, item: Value, currency: Value) -> Value { Ndax::parse_ledger_entry(self, item, currency) }
+    fn parse_order_status(&self, status: Value) -> Value { Ndax::parse_order_status(self, status) }
 }
 impl Ndax for NdaxImpl {}
 impl ValueTrait for NdaxImpl {

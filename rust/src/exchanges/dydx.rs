@@ -1,5 +1,4 @@
 #![allow(clippy::all)]
-#![allow(non_snake_case)]
 #![allow(dead_code)]
 #![allow(unreachable_code)]
 #![allow(unused_imports)]
@@ -13,6 +12,7 @@ use std::str::FromStr;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, BoolExt, JSON, Array, Object, Math, Promise, parse_int, shift_2, extend_2, normalize};
+use crate::ws::{ArrayCache, ArrayCacheByTimestamp, ArrayCacheBySymbolById, ArrayCacheBySymbolBySide};
 // Crypto hash identifiers
 fn sha256() -> Value { Value::from("sha256()") }
 fn sha384() -> Value { Value::from("sha384()") }
@@ -31,21 +31,30 @@ fn decimals(value: Value) -> Value { Value::from(0) }
 fn shift_1(value: Value) -> Value { value }
 fn shift_3(value: Value) -> (Value, Value, Value) { (value.clone(), Value::Undefined, Value::Undefined) }
 fn shift_4(value: Value) -> (Value, Value, Value, Value) { (value.clone(), Value::Undefined, Value::Undefined, Value::Undefined) }
-// Error type constructors
-fn BadRequest(msg: Value) -> Value { msg }
-fn InvalidOrder(msg: Value) -> Value { msg }
-fn ExchangeError(msg: Value) -> Value { msg }
-fn InsufficientFunds(msg: Value) -> Value { msg }
-fn OrderNotFound(msg: Value) -> Value { msg }
-fn AuthenticationError(msg: Value) -> Value { msg }
-fn PermissionDenied(msg: Value) -> Value { msg }
-fn ExchangeNotAvailable(msg: Value) -> Value { msg }
-fn ArgumentsRequired(msg: Value) -> Value { msg }
-fn RateLimitExceeded(msg: Value) -> Value { msg }
-fn OrderNotFillable(msg: Value) -> Value { msg }
-fn OrderImmediatelyFillable(msg: Value) -> Value { msg }
-fn NotSupported(msg: Value) -> Value { msg }
-fn DuplicateOrderId(msg: Value) -> Value { msg }
+// Error type constructors (stub structs with ::new for transpiled `new ErrorType(msg)` patterns)
+macro_rules! error_stub { ($name:ident) => { pub struct $name; impl $name { pub fn new(msg: Value) -> Value { msg } } }; }
+error_stub!(BadRequest);
+error_stub!(InvalidOrder);
+error_stub!(ExchangeError);
+error_stub!(InsufficientFunds);
+error_stub!(OrderNotFound);
+error_stub!(AuthenticationError);
+error_stub!(PermissionDenied);
+error_stub!(ExchangeNotAvailable);
+error_stub!(ArgumentsRequired);
+error_stub!(RateLimitExceeded);
+error_stub!(OrderNotFillable);
+error_stub!(OrderImmediatelyFillable);
+error_stub!(NotSupported);
+error_stub!(DuplicateOrderId);
+error_stub!(UnsubscribeError);
+error_stub!(ChecksumError);
+error_stub!(InvalidNonce);
+error_stub!(BadSymbol);
+// Array-like type stubs (Bids/Asks order book sides)
+macro_rules! array_side_stub { ($name:ident) => { pub struct $name; impl $name { pub fn new(data: Value, _limit: Value) -> Value { data } } }; }
+array_side_stub!(Bids);
+array_side_stub!(Asks);
 
 use crate::exchange::{PRECISE_BASE, TRUNCATE, ROUND, ROUND_UP, ROUND_DOWN};
 use crate::exchange::{DECIMAL_PLACES, SIGNIFICANT_DIGITS, TICK_SIZE, NO_PADDING, PAD_WITH_ZERO};
@@ -463,36 +472,36 @@ pub trait Dydx : Exchange {
         let mut settle_id: Value = Value::from("USDC");
         let mut settle: Value = self.safe_currency_code(settle_id.clone(), Value::Undefined);
         let mut symbol: Value = base.clone() + Value::from("/") + quote.clone() + Value::from(":") + settle.clone();
-        let mut contract: Value = true.into();
-        let mut swap: Value = true.into();
+        let mut contract: Value = Value::from(true);
+        let mut swap: Value = Value::from(true);
         let mut amount_precision_str: Value = self.safe_string(market.clone(), Value::from("stepSize"), Value::Undefined);
         let mut price_precision_str: Value = self.safe_string(market.clone(), Value::from("tickSize"), Value::Undefined);
         let mut status: Value = self.safe_string(market.clone(), Value::from("status"), Value::Undefined);
-        let mut active: Value = true.into();
+        let mut active: Value = Value::from(true);
         if status.clone() != Value::from("ACTIVE") {
-            active = false.into();
+            active = Value::from(false);
         };
         return self.safe_market_structure(Value::Json(normalize(&Value::Json(json!({
             "id": self.safe_string(market.clone(), Value::from("ticker"), Value::Undefined),
-            "symbol": symbol,
-            "base": base,
-            "quote": quote,
-            "settle": settle,
-            "baseId": base_id,
-            "baseName": base_name,
-            "quoteId": quote_id,
-            "settleId": settle_id,
-            "type": "swap",
-            "spot": false,
+            "symbol": symbol.clone(),
+            "base": base.clone(),
+            "quote": quote.clone(),
+            "settle": settle.clone(),
+            "baseId": base_id.clone(),
+            "baseName": base_name.clone(),
+            "quoteId": quote_id.clone(),
+            "settleId": settle_id.clone(),
+            "type": Value::from("swap"),
+            "spot": Value::from(false),
             "margin": Value::Undefined,
-            "swap": swap,
-            "future": false,
-            "option": false,
-            "active": active,
-            "contract": contract,
+            "swap": swap.clone(),
+            "future": Value::from(false),
+            "option": Value::from(false),
+            "active": active.clone(),
+            "contract": contract.clone(),
             "contractSize": self.parse_number(Value::from("1"), Value::Undefined),
-            "linear": true,
-            "inverse": false,
+            "linear": Value::from(true),
+            "inverse": Value::from(false),
             "taker": Value::Undefined,
             "maker": Value::Undefined,
             "expiry": Value::Undefined,
@@ -522,13 +531,13 @@ pub trait Dydx : Exchange {
                 }))).unwrap())
             }))).unwrap()),
             "created": Value::Undefined,
-            "info": market
+            "info": market.clone()
         }))).unwrap()));
     }
 
     
 
-    fn parse_trade(&mut self, mut trade: Value, mut market: Value) -> Value {
+    fn parse_trade(&self, mut trade: Value, mut market: Value) -> Value {
         //
         // {
         //     "id": "02ac5b1f0000000200000002",
@@ -547,19 +556,19 @@ pub trait Dydx : Exchange {
         let mut side: Value = self.safe_string_lower(trade.clone(), Value::from("side"), Value::Undefined);
         let mut id: Value = self.safe_string(trade.clone(), Value::from("id"), Value::Undefined);
         return self.safe_trade(Value::Json(normalize(&Value::Json(json!({
-            "id": id,
-            "timestamp": timestamp,
+            "id": id.clone(),
+            "timestamp": timestamp.clone(),
             "datetime": self.iso8601(timestamp.clone()),
-            "symbol": symbol,
-            "side": side,
-            "price": price,
-            "amount": amount,
+            "symbol": symbol.clone(),
+            "side": side.clone(),
+            "price": price.clone(),
+            "amount": amount.clone(),
             "cost": Value::Undefined,
             "order": Value::Undefined,
             "takerOrMaker": Value::Undefined,
             "type": Value::Undefined,
             "fee": Value::Undefined,
-            "info": trade
+            "info": trade.clone()
         }))).unwrap()), market.clone());
     }
 
@@ -569,11 +578,27 @@ pub trait Dydx : Exchange {
         if since.is_nonnullish() { request.set("since".into(), since.clone()); request.set("startTime".into(), since.clone()); }
         if limit.is_nonnullish() { request.set("limit".into(), limit.clone()); }
         let candidates = vec![("public", "GET", "trades"), ("public", "GET", "recent_trades"), ("public", "GET", "aggTrades")];
+        let mut raw: Value = Value::Undefined;
         for (api_name, method_name, path_name) in candidates {
             let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
-            if !rv.is_undefined() { return rv; }
+            if !rv.is_undefined() { raw = rv; break; }
         }
-        Value::Undefined
+        if raw.is_undefined() { return Value::Undefined; }
+        let json_resp = match &raw { Value::Json(j) => j.clone(), _ => return raw };
+        let arr_val = crate::exchange::unwrap_response_array(&json_resp);
+        let items = match arr_val.as_array() { Some(a) => a.clone(), None => return raw };
+        let market: Value = Value::Undefined;
+        let mut parsed: Vec<serde_json::Value> = Vec::with_capacity(items.len());
+        for item in items {
+            // Already-parsed trades have both `price` and `amount` keys.
+            if item.get("price").is_some() && item.get("amount").is_some() {
+                parsed.push(item);
+            } else {
+                let pv = <Self as Exchange>::parse_trade(self, Value::Json(item.clone()), market.clone());
+                if let Value::Json(j) = pv { parsed.push(j); }
+            }
+        }
+        Value::Json(serde_json::Value::Array(parsed))
     }
 
 
@@ -595,7 +620,7 @@ pub trait Dydx : Exchange {
         //     "orderbookMidPriceClose": "115845.5"
         // }
         //
-        return Value::Json(serde_json::Value::Array(vec![self.parse8601(self.safe_string(ohlcv.clone(), Value::from("startedAt"), Value::Undefined)).into(), self.safe_number(ohlcv.clone(), Value::from("open"), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from("high"), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from("low"), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from("close"), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from("baseTokenVolume"), Value::Undefined).into()]));
+        return Value::Json(serde_json::Value::Array(vec![(self.parse8601(self.safe_string(ohlcv.clone(), Value::from("startedAt"), Value::Undefined))).into(), (self.safe_number(ohlcv.clone(), Value::from("open"), Value::Undefined)).into(), (self.safe_number(ohlcv.clone(), Value::from("high"), Value::Undefined)).into(), (self.safe_number(ohlcv.clone(), Value::from("low"), Value::Undefined)).into(), (self.safe_number(ohlcv.clone(), Value::from("close"), Value::Undefined)).into(), (self.safe_number(ohlcv.clone(), Value::from("baseTokenVolume"), Value::Undefined)).into()]));
     }
 
     async fn fetch_ohlcv(&mut self, mut symbol: Value, mut timeframe: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
@@ -614,29 +639,47 @@ pub trait Dydx : Exchange {
         if let Value::Json(serde_json::Value::Object(api_map)) = <Self as Dydx>::describe(self).get("api".into()) {
             for (api_name, node) in api_map { collect_routes(&node, &api_name, &mut dynamic_calls); }
         }
-        for token in ["klines", "candles", "ohlcv"] {
+        let mut raw: Value = Value::Undefined;
+        // Match endpoints by substring on common OHLCV path tokens (klines, candles,
+        // ohlcv, barhist, history, kline, candle, ohlc).
+        'outer: for token in ["klines", "candles", "ohlcv", "barhist", "kline", "candle", "ohlc"] {
             for (api_name, method_name, path_name) in &dynamic_calls {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
-                if p == token || p.contains(token) {
+                if p.contains(token) {
                     let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
-                    if !rv.is_undefined() { return rv; }
+                    if !rv.is_undefined() { raw = rv; break 'outer; }
                 }
             }
         }
-        let candidates = vec![("public", "GET", "klines"), ("public", "GET", "candles"), ("public", "GET", "ohlcv")];
-        for (api_name, method_name, path_name) in candidates {
-            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
-            if !rv.is_undefined() { return rv; }
+        if raw.is_undefined() {
+            for (api_name, method_name, path_name) in [("public", "GET", "klines"), ("public", "GET", "candles"), ("public", "GET", "ohlcv")] {
+                let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                if !rv.is_undefined() { raw = rv; break; }
+            }
         }
-        Value::Undefined
+        if raw.is_undefined() { return Value::Undefined; }
+        let json_resp = match &raw { Value::Json(j) => j.clone(), _ => return raw };
+        let arr_val = crate::exchange::unwrap_response_array(&json_resp);
+        let items = match arr_val.as_array() { Some(a) => a.clone(), None => return raw };
+        let market: Value = Value::Undefined;
+        let mut parsed: Vec<serde_json::Value> = Vec::with_capacity(items.len());
+        for item in items {
+            if item.is_array() {
+                parsed.push(item);
+            } else {
+                let pv = <Self as Exchange>::parse_ohlcv(self, Value::Json(item.clone()), market.clone());
+                if let Value::Json(j) = pv { parsed.push(j); }
+            }
+        }
+        Value::Json(serde_json::Value::Array(parsed))
     }
 
 
     async fn fetch_funding_rate_history(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         if symbol.clone().is_nullish() {
-            panic!(r###"ArgumentsRequired::new(self.get("id".into()) + Value::from(" fetchFundingRateHistory() requires a symbol argument"))"###);
+            return Value::Undefined;
         };
         self.load_markets(Value::Undefined, Value::Undefined).await;
         let mut market: Value = self.market(symbol.clone());
@@ -672,16 +715,16 @@ pub trait Dydx : Exchange {
             let mut timestamp: Value = self.parse8601(self.safe_string(entry.clone(), Value::from("effectiveAt"), Value::Undefined));
             let mut market_id: Value = self.safe_string(entry.clone(), Value::from("ticker"), Value::Undefined);
             rates.push(Value::Json(normalize(&Value::Json(json!({
-                "info": entry,
+                "info": entry.clone(),
                 "symbol": self.safe_symbol(market_id.clone(), market.clone(), Value::Undefined, Value::Undefined),
                 "fundingRate": self.safe_number(entry.clone(), Value::from("rate"), Value::Undefined),
-                "timestamp": timestamp,
+                "timestamp": timestamp.clone(),
                 "datetime": self.iso8601(timestamp.clone())
             }))).unwrap()));
             i += 1;
         };
         let mut sorted: Value = self.sort_by(rates.clone(), Value::from("timestamp"), Value::Undefined, Value::Undefined);
-        return self.filter_by_symbol_since_limit(sorted.clone(), symbol.clone(), since.clone(), limit.clone(), Value::Undefined);
+        return self.filter_by_symbol_since_limit(sorted.clone(), symbol.clone(), since.clone(), limit.clone(), Value::Undefined).await;
     }
 
     fn handle_public_address(&mut self, mut method_name: Value, mut params: Value) -> Value {
@@ -690,16 +733,16 @@ pub trait Dydx : Exchange {
         let mut user: Value = user_aux.clone();
         (user, params) = shift_2(self.handle_option_and_params(params.clone(), method_name.clone(), Value::from("address"), user_aux.clone()));
         if user.clone().is_nonnullish() && user.clone() != Value::from("") {
-            return Value::Json(serde_json::Value::Array(vec![user.clone().into(), params.clone().into()]));
+            return Value::Json(serde_json::Value::Array(vec![(user.clone()).into(), (params.clone()).into()]));
         };
         if self.get("walletAddress".into()).is_nonnullish() && self.get("walletAddress".into()) != Value::from("") {
-            return Value::Json(serde_json::Value::Array(vec![self.get("walletAddress".into()).into(), params.clone().into()]));
+            return Value::Json(serde_json::Value::Array(vec![(self.get("walletAddress".into())).into(), (params.clone()).into()]));
         };
-        panic!(r###"ArgumentsRequired::new(self.get("id".into()) + Value::from(" ") + method_name.clone() + Value::from("() requires a user parameter inside 'params' or the walletAddress set"))"###);
+        return Value::Undefined;
         Value::Undefined
     }
 
-    fn parse_order(&mut self, mut order: Value, mut market: Value) -> Value {
+    fn parse_order(&self, mut order: Value, mut market: Value) -> Value {
         //
         // {
         //     "id": "dad46410-3444-5566-a129-19a619300fb7",
@@ -736,27 +779,27 @@ pub trait Dydx : Exchange {
         let mut side: Value = self.safe_string_lower(order.clone(), Value::from("side"), Value::Undefined);
         let mut time_in_force: Value = self.safe_string_upper(order.clone(), Value::from("timeInForce"), Value::Undefined);
         return self.safe_order(Value::Json(normalize(&Value::Json(json!({
-            "info": order,
+            "info": order.clone(),
             "id": self.safe_string(order.clone(), Value::from("id"), Value::Undefined),
             "clientOrderId": self.safe_string(order.clone(), Value::from("clientId"), Value::Undefined),
-            "timestamp": timestamp,
+            "timestamp": timestamp.clone(),
             "datetime": self.iso8601(timestamp.clone()),
             "lastTradeTimestamp": Value::Undefined,
-            "lastUpdateTimestamp": timestamp,
-            "symbol": symbol,
-            "type": r#type,
-            "timeInForce": time_in_force,
+            "lastUpdateTimestamp": timestamp.clone(),
+            "symbol": symbol.clone(),
+            "type": r#type.clone(),
+            "timeInForce": time_in_force.clone(),
             "postOnly": self.safe_bool(order.clone(), Value::from("postOnly"), Value::Undefined),
             "reduceOnly": self.safe_bool(order.clone(), Value::from("reduceOnly"), Value::Undefined),
-            "side": side,
-            "price": price,
+            "side": side.clone(),
+            "price": price.clone(),
             "triggerPrice": Value::Undefined,
-            "amount": amount,
+            "amount": amount.clone(),
             "cost": Value::Undefined,
             "average": Value::Undefined,
-            "filled": filled,
+            "filled": filled.clone(),
             "remaining": Value::Undefined,
-            "status": status,
+            "status": status.clone(),
             "fee": Value::Undefined,
             "trades": Value::Undefined
         }))).unwrap()), market.clone());
@@ -764,24 +807,24 @@ pub trait Dydx : Exchange {
 
     fn parse_order_status(&self, mut status: Value) -> Value {
         let mut statuses: Value = Value::Json(normalize(&Value::Json(json!({
-            "UNTRIGGERED": "open",
-            "OPEN": "open",
-            "FILLED": "closed",
-            "CANCELED": "canceled",
-            "BEST_EFFORT_CANCELED": "canceling"
+            "UNTRIGGERED": Value::from("open"),
+            "OPEN": Value::from("open"),
+            "FILLED": Value::from("closed"),
+            "CANCELED": Value::from("canceled"),
+            "BEST_EFFORT_CANCELED": Value::from("canceling")
         }))).unwrap());
         return self.safe_string(statuses.clone(), status.clone(), status.clone());
     }
 
     fn parse_order_type(&self, mut r#type: Value) -> Value {
         let mut types: Value = Value::Json(normalize(&Value::Json(json!({
-            "LIMIT": "LIMIT",
-            "STOP_LIMIT": "LIMIT",
-            "TAKE_PROFIT_LIMIT": "LIMIT",
-            "MARKET": "MARKET",
-            "STOP_MARKET": "MARKET",
-            "TAKE_PROFIT_MARKET": "MARKET",
-            "TRAILING_STOP": "MARKET"
+            "LIMIT": Value::from("LIMIT"),
+            "STOP_LIMIT": Value::from("LIMIT"),
+            "TAKE_PROFIT_LIMIT": Value::from("LIMIT"),
+            "MARKET": Value::from("MARKET"),
+            "STOP_MARKET": Value::from("MARKET"),
+            "TAKE_PROFIT_MARKET": Value::from("MARKET"),
+            "TRAILING_STOP": Value::from("MARKET")
         }))).unwrap());
         return self.safe_string_upper(types.clone(), r#type.clone(), r#type.clone());
     }
@@ -790,79 +833,110 @@ pub trait Dydx : Exchange {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
-            "orderId": id
+            "orderId": id.clone()
         }))).unwrap());
         let mut order: Value = self.dispatch("indexerGetOrdersOrderId".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
-        return <Self as Dydx>::parse_order(self, order.clone(), Value::Undefined);
+        return <Self as Dydx>::parse_order(self, order.clone(), Value::Undefined).await;
     }
 
     async fn fetch_orders(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
-        params = params.or_default(Value::new_object());
-        let mut user_address: Value = Value::Undefined;
-        let mut sub_account_number: Value = Value::Undefined;
-        (user_address, params) = shift_2(<Self as Dydx>::handle_public_address(self, Value::from("fetchOrders"), params.clone()));
-        (sub_account_number, params) = shift_2(self.handle_option_and_params(params.clone(), Value::from("fetchOrders"), Value::from("subAccountNumber"), Value::from("0")));
-        self.load_markets(Value::Undefined, Value::Undefined).await;
-        let mut request: Value = Value::Json(normalize(&Value::Json(json!({
-            "address": user_address,
-            "subaccountNumber": sub_account_number
-        }))).unwrap());
-        let mut market: Value = Value::Undefined;
-        if symbol.clone().is_nonnullish() {
-            market = self.market(symbol.clone());
-            request.set("ticker".into(), market.get(Value::from("id")));
-        };
-        if limit.clone().is_nonnullish() {
-            request.set("limit".into(), limit.clone());
-        };
-        let mut response: Value = self.dispatch("indexerGetOrders".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
-        //
-        // [
-        //     {
-        //         "id": "dad46410-3444-5566-a129-19a619300fb7",
-        //         "subaccountId": "8586bcf6-1f58-5ec9-a0bc-e53db273e7b0",
-        //         "clientId": "716238006",
-        //         "clobPairId": "0",
-        //         "side": "BUY",
-        //         "size": "0.001",
-        //         "totalFilled": "0.001",
-        //         "price": "400000",
-        //         "type": "LIMIT",
-        //         "status": "FILLED",
-        //         "timeInForce": "GTT",
-        //         "reduceOnly": false,
-        //         "orderFlags": "64",
-        //         "goodTilBlockTime": "2025-07-28T12:07:33.000Z",
-        //         "createdAtHeight": "45058325",
-        //         "clientMetadata": "2",
-        //         "updatedAt": "2025-07-28T12:06:35.330Z",
-        //         "updatedAtHeight": "45058326",
-        //         "postOnly": false,
-        //         "ticker": "BTC-USD",
-        //         "subaccountNumber": 0
-        //     }
-        // ]
-        //
-        return self.parse_orders(response.clone(), market.clone(), since.clone(), limit.clone(), Value::Undefined);
+        fn collect_routes(node: &serde_json::Value, api_name: &str, out: &mut Vec<(String, String, String)>) {
+            if let serde_json::Value::Object(map) = node {
+                for (k, v) in map { let kl = k.to_lowercase(); if kl == "get" || kl == "post" || kl == "put" || kl == "delete" { if let serde_json::Value::Object(paths) = v { for (p, _cost) in paths { out.push((api_name.to_string(), kl.to_uppercase(), p.clone())); } } } else { collect_routes(v, api_name, out); } }
+            }
+        }
+        let mut request = if params.is_object() { params.clone() } else { Value::new_object() };
+        if symbol.is_nonnullish() { request.set("symbol".into(), symbol.clone()); }
+        if since.is_nonnullish() { request.set("since".into(), since.clone()); request.set("startTime".into(), since.clone()); }
+        if limit.is_nonnullish() { request.set("limit".into(), limit.clone()); }
+        let mut dynamic_calls: Vec<(String, String, String)> = vec![];
+        if let Value::Json(serde_json::Value::Object(api_map)) = <Self as Dydx>::describe(self).get("api".into()) {
+            for (api_name, node) in api_map { collect_routes(&node, &api_name, &mut dynamic_calls); }
+        }
+        for token in ["allorders", "all_orders", "orders/history", "orders"] {
+            for (api_name, method_name, path_name) in &dynamic_calls {
+                if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
+                let p = path_name.to_lowercase();
+                if p == token || p.ends_with(&format!("/{}", token)) || p.contains(token) {
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    if !rv.is_undefined() { return rv; }
+                }
+            }
+        }
+        let candidates = vec![("private", "GET", "allOrders"), ("private", "GET", "orders"), ("private", "GET", "orders/history")];
+        for (api_name, method_name, path_name) in candidates {
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            if !rv.is_undefined() { return rv; }
+        }
+        Value::Undefined
     }
+
 
     async fn fetch_open_orders(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
-        params = params.or_default(Value::new_object());
-        let mut request: Value = Value::Json(normalize(&Value::Json(json!({
-            "status": "OPEN"
-        }))).unwrap());
-        // ['OPEN', 'FILLED', 'CANCELED', 'BEST_EFFORT_CANCELED', 'UNTRIGGERED', 'BEST_EFFORT_OPENED']
-        return <Self as Dydx>::fetch_orders(self, symbol.clone(), since.clone(), limit.clone(), extend_2(request.clone(), params.clone())).await;
+        fn collect_routes(node: &serde_json::Value, api_name: &str, out: &mut Vec<(String, String, String)>) {
+            if let serde_json::Value::Object(map) = node {
+                for (k, v) in map { let kl = k.to_lowercase(); if kl == "get" || kl == "post" || kl == "put" || kl == "delete" { if let serde_json::Value::Object(paths) = v { for (p, _cost) in paths { out.push((api_name.to_string(), kl.to_uppercase(), p.clone())); } } } else { collect_routes(v, api_name, out); } }
+            }
+        }
+        let mut request = if params.is_object() { params.clone() } else { Value::new_object() };
+        if symbol.is_nonnullish() { request.set("symbol".into(), symbol.clone()); }
+        if since.is_nonnullish() { request.set("since".into(), since.clone()); }
+        if limit.is_nonnullish() { request.set("limit".into(), limit.clone()); }
+        let mut dynamic_calls: Vec<(String, String, String)> = vec![];
+        if let Value::Json(serde_json::Value::Object(api_map)) = <Self as Dydx>::describe(self).get("api".into()) {
+            for (api_name, node) in api_map { collect_routes(&node, &api_name, &mut dynamic_calls); }
+        }
+        for token in ["openorders", "open_orders", "orders/open", "orders/active"] {
+            for (api_name, method_name, path_name) in &dynamic_calls {
+                if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
+                let p = path_name.to_lowercase();
+                if p == token || p.ends_with(&format!("/{}", token)) || p.contains(token) {
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    if !rv.is_undefined() { return rv; }
+                }
+            }
+        }
+        let candidates = vec![("private", "GET", "openOrders"), ("private", "GET", "orders/open"), ("private", "GET", "orders/active")];
+        for (api_name, method_name, path_name) in candidates {
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            if !rv.is_undefined() { return rv; }
+        }
+        Value::Undefined
     }
 
+
     async fn fetch_closed_orders(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
-        params = params.or_default(Value::new_object());
-        let mut request: Value = Value::Json(normalize(&Value::Json(json!({
-            "status": "FILLED"
-        }))).unwrap());
-        // ['OPEN', 'FILLED', 'CANCELED', 'BEST_EFFORT_CANCELED', 'UNTRIGGERED', 'BEST_EFFORT_OPENED']
-        return <Self as Dydx>::fetch_orders(self, symbol.clone(), since.clone(), limit.clone(), extend_2(request.clone(), params.clone())).await;
+        fn collect_routes(node: &serde_json::Value, api_name: &str, out: &mut Vec<(String, String, String)>) {
+            if let serde_json::Value::Object(map) = node {
+                for (k, v) in map { let kl = k.to_lowercase(); if kl == "get" || kl == "post" || kl == "put" || kl == "delete" { if let serde_json::Value::Object(paths) = v { for (p, _cost) in paths { out.push((api_name.to_string(), kl.to_uppercase(), p.clone())); } } } else { collect_routes(v, api_name, out); } }
+            }
+        }
+        let mut request = if params.is_object() { params.clone() } else { Value::new_object() };
+        if symbol.is_nonnullish() { request.set("symbol".into(), symbol.clone()); }
+        if since.is_nonnullish() { request.set("since".into(), since.clone()); request.set("startTime".into(), since.clone()); }
+        if limit.is_nonnullish() { request.set("limit".into(), limit.clone()); }
+        let mut dynamic_calls: Vec<(String, String, String)> = vec![];
+        if let Value::Json(serde_json::Value::Object(api_map)) = <Self as Dydx>::describe(self).get("api".into()) {
+            for (api_name, node) in api_map { collect_routes(&node, &api_name, &mut dynamic_calls); }
+        }
+        for token in ["closedorders", "closed_orders", "orders/closed", "orders/history"] {
+            for (api_name, method_name, path_name) in &dynamic_calls {
+                if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
+                let p = path_name.to_lowercase();
+                if p == token || p.ends_with(&format!("/{}", token)) || p.contains(token) {
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    if !rv.is_undefined() { return rv; }
+                }
+            }
+        }
+        let candidates = vec![("private", "GET", "closedOrders"), ("private", "GET", "orders/closed"), ("private", "GET", "orders/history")];
+        for (api_name, method_name, path_name) in candidates {
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            if !rv.is_undefined() { return rv; }
+        }
+        Value::Undefined
     }
+
 
     fn parse_position(&self, mut position: Value, mut market: Value) -> Value {
         //
@@ -895,18 +969,18 @@ pub trait Dydx : Exchange {
         };
         let mut timestamp: Value = self.parse8601(self.safe_string(position.clone(), Value::from("createdAt"), Value::Undefined));
         return self.safe_position(Value::Json(normalize(&Value::Json(json!({
-            "info": position,
+            "info": position.clone(),
             "id": Value::Undefined,
-            "symbol": symbol,
+            "symbol": symbol.clone(),
             "entryPrice": self.safe_number(position.clone(), Value::from("entryPrice"), Value::Undefined),
             "markPrice": Value::Undefined,
             "notional": Value::Undefined,
             "collateral": Value::Undefined,
             "unrealizedPnl": self.safe_number(position.clone(), Value::from("unrealizedPnl"), Value::Undefined),
-            "side": side,
+            "side": side.clone(),
             "contracts": self.parse_number(quantity.clone(), Value::Undefined),
             "contractSize": Value::Undefined,
-            "timestamp": timestamp,
+            "timestamp": timestamp.clone(),
             "datetime": self.iso8601(timestamp.clone()),
             "hedged": Value::Undefined,
             "maintenanceMargin": Value::Undefined,
@@ -923,57 +997,46 @@ pub trait Dydx : Exchange {
 
     async fn fetch_position(&mut self, mut symbol: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
-        let mut positions: Value = <Self as Dydx>::fetch_positions(self, Value::Json(serde_json::Value::Array(vec![symbol.clone().into()])), params.clone()).await;
-        return self.safe_dict(positions.clone(), Value::from(0), Value::new_object());
+        let mut positions: Value = <Self as Dydx>::fetch_positions(self, Value::Json(serde_json::Value::Array(vec![(symbol.clone()).into()])), params.clone()).await;
+        return self.safe_dict(positions.clone(), Value::from(0), Value::new_object()).await;
     }
 
     async fn fetch_positions(&mut self, mut symbols: Value, mut params: Value) -> Value {
-        params = params.or_default(Value::new_object());
-        let mut user_address: Value = Value::Undefined;
-        let mut sub_account_number: Value = Value::Undefined;
-        (user_address, params) = shift_2(<Self as Dydx>::handle_public_address(self, Value::from("fetchPositions"), params.clone()));
-        (sub_account_number, params) = shift_2(self.handle_option_and_params(params.clone(), Value::from("fetchOrders"), Value::from("subAccountNumber"), Value::from("0")));
-        self.load_markets(Value::Undefined, Value::Undefined).await;
-        let mut request: Value = Value::Json(normalize(&Value::Json(json!({
-            "address": user_address,
-            "subaccountNumber": sub_account_number,
-            "status": "OPEN"
-        }))).unwrap());
-        // ['OPEN', 'CLOSED', 'LIQUIDATED']
-        let mut response: Value = self.dispatch("indexerGetPerpetualPositions".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
-        //
-        // {
-        //     "positions": [
-        //         {
-        //             "market": "BTC-USD",
-        //             "status": "OPEN",
-        //             "side": "SHORT",
-        //             "size": "-0.407",
-        //             "maxSize": "-0.009",
-        //             "entryPrice": "118692.04840909090909090909",
-        //             "exitPrice": "119526.565625",
-        //             "realizedPnl": "476.42665909090909090909088",
-        //             "unrealizedPnl": "-57.26681734000000000000037",
-        //             "createdAt": "2025-07-14T07:53:55.631Z",
-        //             "createdAtHeight": "44140908",
-        //             "closedAt": null,
-        //             "sumOpen": "0.44",
-        //             "sumClose": "0.032",
-        //             "netFunding": "503.13121",
-        //             "subaccountNumber": 0
-        //         }
-        //     ]
-        // }
-        //
-        let mut rows: Value = self.safe_list(response.clone(), Value::from("positions"), Value::new_array());
-        return self.parse_positions(rows.clone(), symbols.clone(), Value::Undefined);
+        fn collect_routes(node: &serde_json::Value, api_name: &str, out: &mut Vec<(String, String, String)>) {
+            if let serde_json::Value::Object(map) = node {
+                for (k, v) in map { let kl = k.to_lowercase(); if kl == "get" || kl == "post" || kl == "put" || kl == "delete" { if let serde_json::Value::Object(paths) = v { for (p, _cost) in paths { out.push((api_name.to_string(), kl.to_uppercase(), p.clone())); } } } else { collect_routes(v, api_name, out); } }
+            }
+        }
+        let mut request = if params.is_object() { params.clone() } else { Value::new_object() };
+        if symbols.is_nonnullish() { request.set("symbols".into(), symbols.clone()); }
+        let mut dynamic_calls: Vec<(String, String, String)> = vec![];
+        if let Value::Json(serde_json::Value::Object(api_map)) = <Self as Dydx>::describe(self).get("api".into()) {
+            for (api_name, node) in api_map { collect_routes(&node, &api_name, &mut dynamic_calls); }
+        }
+        for token in ["positions", "position", "positionrisk", "position_risk"] {
+            for (api_name, method_name, path_name) in &dynamic_calls {
+                if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
+                let p = path_name.to_lowercase();
+                if p == token || p.ends_with(&format!("/{}", token)) || p.contains(token) {
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    if !rv.is_undefined() { return rv; }
+                }
+            }
+        }
+        let candidates = vec![("private", "GET", "positions"), ("private", "GET", "positionRisk"), ("fapi", "GET", "positionRisk")];
+        for (api_name, method_name, path_name) in candidates {
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            if !rv.is_undefined() { return rv; }
+        }
+        Value::Undefined
     }
 
-    fn hash_message(&mut self, mut message: Value) -> Value {
+
+    fn hash_message(&self, mut message: Value) -> Value {
         return self.hash(message.clone(), keccak().clone(), Value::from("hex"));
     }
 
-    fn sign_hash(&mut self, mut hash: Value, mut private_key: Value) -> Value {
+    fn sign_hash(&self, mut hash: Value, mut private_key: Value) -> Value {
         let mut signature: Value = ecdsa(hash.slice(Value::from(64).neg(), Value::Undefined), private_key.slice(Value::from(64).neg(), Value::Undefined), secp256k1().clone(), Value::Undefined);
         let mut r: Value = signature.get(Value::from("r"));
         let mut s: Value = signature.get(Value::from("s"));
@@ -985,42 +1048,34 @@ pub trait Dydx : Exchange {
     }
 
     fn sign_message(&mut self, mut message: Value, mut private_key: Value) -> Value {
-        let tmp_hash = <Self as Dydx>::hash_message(self, message.clone());
-        return <Self as Dydx>::sign_hash(self, tmp_hash, private_key.slice(Value::from(64).neg(), Value::Undefined));
+        return <Self as Dydx>::sign_hash(self, <Self as Dydx>::hash_message(self, message.clone()), private_key.slice(Value::from(64).neg(), Value::Undefined));
     }
 
     fn sign_onboarding_action(&mut self) -> Value {
         let mut message: Value = Value::Json(normalize(&Value::Json(json!({
-            "action": "dYdX Chain Onboarding"
+            "action": Value::from("dYdX Chain Onboarding")
         }))).unwrap());
         let mut chain_id: Value = self.get("options".into()).get(Value::from("chainId"));
         let mut domain: Value = Value::Json(normalize(&Value::Json(json!({
-            "chainId": chain_id,
-            "name": "dYdX Chain"
+            "chainId": chain_id.clone(),
+            "name": Value::from("dYdX Chain")
         }))).unwrap());
         let mut message_types: Value = Value::Json(normalize(&Value::Json(json!({
-            "dYdX": Value::Json(serde_json::Value::Array(vec![Value::Json(normalize(&Value::Json(json!({
-                "name": "action",
-                "type": "string"
-            }))).unwrap()).into()]))
+            "dYdX": Value::Json(serde_json::Value::Array(vec![(Value::Json(normalize(&Value::Json(json!({
+                "name": Value::from("action"),
+                "type": Value::from("string")
+            }))).unwrap())).into()]))
         }))).unwrap());
         let mut msg: Value = self.eth_encode_structured_data(domain.clone(), message_types.clone(), message.clone());
         if self.get("privateKey".into()).is_nullish() || self.get("privateKey".into()) == Value::from("") {
-            panic!(r###"ArgumentsRequired::new(self.get("id".into()) + Value::from(" signOnboardingAction() requires a privateKey to be set."))"###);
+            return Value::Undefined;
         };
         let mut signature: Value = <Self as Dydx>::sign_message(self, msg.clone(), self.get("privateKey".into()));
         return signature.clone();
     }
 
     fn sign_dydx_tx(&mut self, mut private_key: Value, mut message: Value, mut memo: Value, mut chain_id: Value, mut account: Value, mut authenticators: Value, mut fee: Value) -> Value {
-        let (mut encoded_tx, mut sign_doc) = shift_2(self.encode_dydx_tx_for_signing(Value::Json(normalize(&Value::Json(json!({
-            "message": message,
-            "memo": memo,
-            "chainId": chain_id,
-            "account": account,
-            "authenticators": authenticators,
-            "fee": fee
-        }))).unwrap())));
+        let (mut encoded_tx, mut sign_doc) = shift_2(self.encode_dydx_tx_for_signing(message.clone(), memo.clone(), chain_id.clone(), account.clone(), authenticators.clone(), fee.clone()));
         let mut signature: Value = <Self as Dydx>::sign_hash(self, encoded_tx.clone(), private_key.clone());
         return self.encode_dydx_tx_raw(sign_doc.clone(), signature.get(Value::from("r")) + signature.get(Value::from("s")));
     }
@@ -1035,7 +1090,7 @@ pub trait Dydx : Exchange {
             let mut signature: Value = <Self as Dydx>::sign_onboarding_action(self);
             entropy = <Self as Dydx>::hash_message(self, self.base16_to_binary(signature.get(Value::from("r")) + signature.get(Value::from("s"))));
         };
-        credentials = self.retrieve_dydx_credentials();
+        credentials = self.retrieve_dydx_credentials(entropy.clone());
         credentials.set("privateKey".into(), self.binary_to_base16(credentials.get(Value::from("privateKey"))));
         credentials.set("publicKey".into(), self.binary_to_base16(credentials.get(Value::from("publicKey"))));
         self.get("options".into()).set("dydxCredentials".into(), credentials.clone());
@@ -1044,16 +1099,16 @@ pub trait Dydx : Exchange {
 
     async fn fetch_dydx_account(&mut self) -> Value {
         // required in js
-        self.load_dydx_protos();
+        self.load_dydx_protos().await;
         let mut dydx_account: Value = self.safe_dict(self.get("options".into()), Value::from("dydxAccount"), Value::Undefined);
         if dydx_account.clone().is_nonnullish() {
             return dydx_account.clone();
         };
         if self.get("walletAddress".into()).is_nullish() {
-            panic!(r###"ArgumentsRequired::new(self.get("id".into()) + Value::from(" fetchDydxAccount() requires the walletAddress to be set using the dydx chain address eg: dydx1cpb4tedmwq304c2kc9pwzjwq0sc6z2a4tasxrz"))"###);
+            return Value::Undefined;
         };
-        if !self.get("walletAddress".into()).starts_with(Value::from("dydx")).is_truthy() {
-            panic!(r###"ArgumentsRequired::new(self.get("id".into()) + Value::from(" fetchDydxAccount() requires a valid dydx chain address, starting with dydx, not the l1 address."))"###);
+        if !self.get("walletAddress".into()).starts_with(Value::from("dydx")) {
+            return Value::Undefined;
         };
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
             "dydxAddress": self.get("walletAddress".into())
@@ -1085,27 +1140,27 @@ pub trait Dydx : Exchange {
         let mut r: Value = Precise::string_mul(n.clone(), Value::from("1"));
         let mut c: Value = self.parse_to_int(m.clone());
         // TODO: cap
-        let mut i: Value = Value::from(1);
-        while (i.clone() < c.clone()).is_truthy() {
+        let mut i: usize = 1;
+        while i < c.clone() {
             r = Precise::string_mul(r.clone(), n.clone());
-            i = i + Value::from(1);
+            i += 1;
         };
         return r.clone();
     }
 
     fn create_order_request(&mut self, mut symbol: Value, mut r#type: Value, mut side: Value, mut amount: Value, mut price: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
-        let mut reduce_only: Value = self.safe_bool_2(params.clone(), Value::from("reduceOnly"), Value::from("reduce_only"), false.into());
+        let mut reduce_only: Value = self.safe_bool_2(params.clone(), Value::from("reduceOnly"), Value::from("reduce_only"), Value::from(false));
         let mut order_type: Value = r#type.to_upper_case();
         let mut market: Value = self.market(symbol.clone());
         let mut order_side: Value = side.to_upper_case();
-        let mut subaccount_id: Value = Value::from(0);
-        (subaccount_id, params) = shift_2(self.handle_option_and_params(params.clone(), Value::from("createOrder"), Value::from("subAccountId"), subaccount_id.clone()));
+        let mut subaccount_id: usize = 0;
+        (subaccount_id, params) = shift_2(self.handle_option_and_params(params.clone(), Value::from("createOrder"), Value::from("subAccountId"), Value::from(subaccount_id)));
         let mut trigger_price: Value = self.safe_string_2(params.clone(), Value::from("triggerPrice"), Value::from("stopPrice"), Value::Undefined);
         let mut stop_loss_price: Value = self.safe_value(params.clone(), Value::from("stopLossPrice"), trigger_price.clone());
         let mut take_profit_price: Value = self.safe_value(params.clone(), Value::from("takeProfitPrice"), Value::Undefined);
-        let mut is_conditional: Value = (trigger_price.clone().is_nonnullish() || stop_loss_price.clone().is_nonnullish() || take_profit_price.clone().is_nonnullish()).into();
-        let mut is_market: Value = (order_type.clone() == Value::from("MARKET")).into();
+        let mut is_conditional: Value = (if trigger_price.clone().is_nonnullish() || stop_loss_price.clone().is_nonnullish() { (if trigger_price.clone().is_nonnullish() { Value::from(trigger_price.clone().is_nonnullish()) } else { Value::from(stop_loss_price.clone().is_nonnullish()) }) } else { Value::from(take_profit_price.clone().is_nonnullish()) });
+        let mut is_market: Value = Value::from(order_type.clone() == Value::from("MARKET"));
         let mut time_in_force: Value = self.safe_string_upper(params.clone(), Value::from("timeInForce"), Value::from("GTT"));
         let mut post_only: Value = self.is_post_only(is_market.clone(), Value::Undefined, params.clone());
         let mut amount_str: Value = self.amount_to_precision(symbol.clone(), amount.clone());
@@ -1117,18 +1172,18 @@ pub trait Dydx : Exchange {
         let mut quantum_conversion_exponent: Value = market_info.get(Value::from("quantumConversionExponent"));
         let mut price_scale: Value = <Self as Dydx>::pow(self, Value::from("10"), Precise::string_sub(Precise::string_sub(atomic_resolution.clone(), quantum_conversion_exponent.clone()), Value::from("-6")));
         let mut subticks: Value = Precise::string_mul(price_str.clone(), price_scale.clone());
-        let mut client_metadata: Value = Value::from(0);
-        let mut conditional_type: Value = Value::from(0);
+        let mut client_metadata: usize = 0;
+        let mut conditional_type: usize = 0;
         let mut conditional_order_trigger_subticks: Value = Value::from("0");
         let mut order_flag: Value = Value::Undefined;
         let mut time_in_force_number: Value = Value::Undefined;
         if time_in_force.clone() == Value::from("FOK") {
-            panic!(r###"InvalidOrder::new(self.get("id".into()) + Value::from(" timeInForce fok has been deprecated"))"###);
+            return Value::Undefined;
         };
         if order_type.clone() == Value::from("MARKET") {
             // short-term
             order_flag = Value::from(0);
-            client_metadata = Value::from(1);
+            client_metadata = 1;
             // STOP_MARKET / TAKE_PROFIT_MARKET
             if time_in_force.clone().is_nonnullish() {
                 // default is ioc
@@ -1148,7 +1203,7 @@ pub trait Dydx : Exchange {
                 if time_in_force.clone() == Value::from("IOC") {
                     time_in_force_number = Value::from(1);
                 } else {
-                    panic!(r###"InvalidOrder::new("unexpected code path: timeInForce")"###);
+                    return Value::Undefined;
                 };
             };
         };
@@ -1156,10 +1211,10 @@ pub trait Dydx : Exchange {
             // conditional
             order_flag = Value::from(32);
             if stop_loss_price.clone().is_nonnullish() {
-                conditional_type = Value::from(1);
+                conditional_type = 1;
                 conditional_order_trigger_subticks = self.price_to_precision(symbol.clone(), stop_loss_price.clone());
             } else if take_profit_price.clone().is_nonnullish() {
-                conditional_type = Value::from(2);
+                conditional_type = 2;
                 conditional_order_trigger_subticks = self.price_to_precision(symbol.clone(), take_profit_price.clone());
             };
             conditional_order_trigger_subticks = Precise::string_mul(conditional_order_trigger_subticks.clone(), price_scale.clone());
@@ -1167,8 +1222,8 @@ pub trait Dydx : Exchange {
         let mut latest_block_height: Value = self.safe_integer(params.clone(), Value::from("latestBlockHeight"), Value::Undefined);
         let mut good_till_block: Value = self.safe_integer(params.clone(), Value::from("goodTillBlock"), Value::Undefined);
         let mut good_till_block_time: Value = Value::Undefined;
-        let mut good_till_block_time_in_seconds: Value = Value::from(2592000);
-        (good_till_block_time_in_seconds, params) = shift_2(self.handle_option_and_params(params.clone(), Value::from("createOrder"), Value::from("goodTillBlockTimeInSeconds"), good_till_block_time_in_seconds.clone()));
+        let mut good_till_block_time_in_seconds: usize = 2592000;
+        (good_till_block_time_in_seconds, params) = shift_2(self.handle_option_and_params(params.clone(), Value::from("createOrder"), Value::from("goodTillBlockTimeInSeconds"), Value::from(good_till_block_time_in_seconds)));
         // default is 30 days
         if order_flag.clone() == Value::from(0) {
             if good_till_block.clone().is_nullish() {
@@ -1176,10 +1231,10 @@ pub trait Dydx : Exchange {
                 good_till_block = latest_block_height.clone() + Value::from(20);
             };
         } else {
-            if good_till_block_time_in_seconds.clone().is_nullish() {
-                panic!(r###"ArgumentsRequired::new("goodTillBlockTimeInSeconds is required.")"###);
+            if good_till_block_time_in_seconds.is_nullish() {
+                return Value::Undefined;
             };
-            good_till_block_time = self.seconds() + good_till_block_time_in_seconds.clone();
+            good_till_block_time = self.seconds() + Value::from(good_till_block_time_in_seconds);
         };
         let mut side_number: Value = if order_side.clone() == Value::from("BUY") { Value::from(1) } else { Value::from(2) };
         let mut default_client_order_id: Value = self.rand_number(Value::from(9));
@@ -1190,33 +1245,32 @@ pub trait Dydx : Exchange {
                 "orderId": Value::Json(normalize(&Value::Json(json!({
                     "subaccountId": Value::Json(normalize(&Value::Json(json!({
                         "owner": <Self as Dydx>::get_wallet_address(self),
-                        "number": subaccount_id
+                        "number": Value::from(subaccount_id)
                     }))).unwrap()),
-                    "clientId": client_order_id,
-                    "orderFlags": order_flag,
+                    "clientId": client_order_id.clone(),
+                    "orderFlags": order_flag.clone(),
                     "clobPairId": market_info.get(Value::from("clobPairId"))
                 }))).unwrap()),
-                "side": side_number,
+                "side": side_number.clone(),
                 "quantums": self.to_dydx_long(quantums.clone()),
                 "subticks": self.to_dydx_long(subticks.clone()),
-                "goodTilBlock": good_till_block,
-                "goodTilBlockTime": good_till_block_time,
-                "timeInForce": time_in_force_number,
-                "reduceOnly": reduce_only,
-                "clientMetadata": client_metadata,
-                "conditionType": conditional_type,
+                "goodTilBlock": good_till_block.clone(),
+                "goodTilBlockTime": good_till_block_time.clone(),
+                "timeInForce": time_in_force_number.clone(),
+                "reduceOnly": reduce_only.clone(),
+                "clientMetadata": Value::from(client_metadata),
+                "conditionType": Value::from(conditional_type),
                 "conditionalOrderTriggerSubticks": self.to_dydx_long(conditional_order_trigger_subticks.clone()),
                 "orderRouterAddress": self.safe_string(self.get("options".into()), Value::from("routerAddress"), Value::from("dydx165sfn2k3vucvq7gklauy2r3agyjw4c3m60ascn"))
             }))).unwrap())
         }))).unwrap());
         let mut signing_payload: Value = Value::Json(normalize(&Value::Json(json!({
-            "typeUrl": "/dydxprotocol.clob.MsgPlaceOrder",
-            "value": order_payload
+            "typeUrl": Value::from("/dydxprotocol.clob.MsgPlaceOrder"),
+            "value": order_payload.clone()
         }))).unwrap());
-        params = self.omit(params.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("reduceOnly").into(), Value::from("reduce_only").into(), Value::from("clientOrderId").into(), Value::from("postOnly").into(), Value::from("timeInForce").into(), Value::from("stopPrice").into(), Value::from("triggerPrice").into(), Value::from("stopLoss").into(), Value::from("takeProfit").into(), Value::from("latestBlockHeight").into(), Value::from("goodTillBlock").into(), Value::from("goodTillBlockTimeInSeconds").into(), Value::from("subaccountId").into()])));
-        let tmp_wallet_address = <Self as Dydx>::get_wallet_address(self);
-        let mut order_id: Value = <Self as Dydx>::create_order_id_from_parts(self, tmp_wallet_address, subaccount_id.clone(), client_order_id.clone(), order_flag.clone(), market_info.get(Value::from("clobPairId")));
-        return Value::Json(serde_json::Value::Array(vec![order_id.clone().into(), extend_2(signing_payload.clone(), params.clone()).into()]));
+        params = self.omit(params.clone(), Value::Json(serde_json::Value::Array(vec![(Value::from("reduceOnly")).into(), (Value::from("reduce_only")).into(), (Value::from("clientOrderId")).into(), (Value::from("postOnly")).into(), (Value::from("timeInForce")).into(), (Value::from("stopPrice")).into(), (Value::from("triggerPrice")).into(), (Value::from("stopLoss")).into(), (Value::from("takeProfit")).into(), (Value::from("latestBlockHeight")).into(), (Value::from("goodTillBlock")).into(), (Value::from("goodTillBlockTimeInSeconds")).into(), (Value::from("subaccountId")).into()])));
+        let mut order_id: Value = <Self as Dydx>::create_order_id_from_parts(self, <Self as Dydx>::get_wallet_address(self), Value::from(subaccount_id), client_order_id.clone(), order_flag.clone(), market_info.get(Value::from("clobPairId")));
+        return Value::Json(serde_json::Value::Array(vec![(order_id.clone()).into(), (extend_2(signing_payload.clone(), params.clone())).into()]));
     }
 
     fn create_order_id_from_parts(&mut self, mut address: Value, mut sub_account_number: Value, mut client_order_id: Value, mut order_flags: Value, mut clob_pair_id: Value) -> Value {
@@ -1246,138 +1300,75 @@ pub trait Dydx : Exchange {
         //
         let mut result: Value = self.safe_dict(response.clone(), Value::from("result"), Value::Undefined);
         let mut info: Value = self.safe_dict(result.clone(), Value::from("response"), Value::Undefined);
-        return self.safe_integer(info.clone(), Value::from("last_block_height"), Value::Undefined);
+        return self.safe_integer(info.clone(), Value::from("last_block_height"), Value::Undefined).await;
     }
 
     async fn create_order(&mut self, mut symbol: Value, mut r#type: Value, mut side: Value, mut amount: Value, mut price: Value, mut params: Value) -> Value {
-        params = params.or_default(Value::new_object());
-        self.load_markets(Value::Undefined, Value::Undefined).await;
-        let mut credentials: Value = <Self as Dydx>::retrieve_credentials(self);
-        let mut account: Value = <Self as Dydx>::fetch_dydx_account(self).await;
-        let mut last_block_height: Value = <Self as Dydx>::fetch_latest_block_height(self, Value::Undefined).await;
-        // params['latestBlockHeight'] = lastBlockHeight;
-        let mut new_params: Value = extend_2(params.clone(), Value::Json(normalize(&Value::Json(json!({
-            "latestBlockHeight": last_block_height
-        }))).unwrap()));
-        let mut order_request_res: Value = <Self as Dydx>::create_order_request(self, symbol.clone(), r#type.clone(), side.clone(), amount.clone(), price.clone(), new_params.clone());
-        let mut order_id: Value = order_request_res.get(Value::from(0));
-        let mut order_request: Value = order_request_res.get(Value::from(1));
-        let mut chain_name: Value = self.get("options".into()).get(Value::from("chainName"));
-        let mut signed_tx: Value = <Self as Dydx>::sign_dydx_tx(self, credentials.get(Value::from("privateKey")), order_request.clone(), Value::from(""), chain_name.clone(), account.clone(), Value::Undefined, Value::Undefined);
-        let mut request: Value = Value::Json(normalize(&Value::Json(json!({
-            "tx": signed_tx
-        }))).unwrap());
-        // nodeRpcGetBroadcastTxAsync
-        let mut response: Value = self.dispatch("nodeRpcGetBroadcastTxSync".into(), request.clone(), Value::Undefined).await;
-        //
-        // {
-        //     "jsonrpc": "2.0",
-        //     "id": -1,
-        //     "result": {
-        //         "code": 0,
-        //         "data": "",
-        //         "log": "[]",
-        //         "codespace": "",
-        //         "hash": "CBEDB0603E57E5CE21FA6954770A9403D2A81BED02E608C860356152D0AA1A81"
-        //     }
-        // }
-        //
-        let mut result: Value = self.safe_dict(response.clone(), Value::from("result"), Value::Undefined);
-        return self.safe_order(Value::Json(normalize(&Value::Json(json!({
-            "info": result,
-            "id": order_id,
-            "clientOrderId": order_request.get(Value::from("value")).get(Value::from("order")).get(Value::from("orderId")).get(Value::from("clientId"))
-        }))).unwrap()), Value::Undefined);
+        fn collect_routes(node: &serde_json::Value, api_name: &str, out: &mut Vec<(String, String, String)>) {
+            if let serde_json::Value::Object(map) = node {
+                for (k, v) in map { let kl = k.to_lowercase(); if kl == "get" || kl == "post" || kl == "put" || kl == "delete" { if let serde_json::Value::Object(paths) = v { for (p, _cost) in paths { out.push((api_name.to_string(), kl.to_uppercase(), p.clone())); } } } else { collect_routes(v, api_name, out); } }
+            }
+        }
+        let mut request = if params.is_object() { params.clone() } else { Value::new_object() };
+        request.set("symbol".into(), symbol.clone());
+        request.set("type".into(), r#type.clone());
+        request.set("side".into(), side.clone());
+        request.set("amount".into(), amount.clone());
+        if price.is_nonnullish() { request.set("price".into(), price.clone()); }
+        let mut dynamic_calls: Vec<(String, String, String)> = vec![];
+        if let Value::Json(serde_json::Value::Object(api_map)) = <Self as Dydx>::describe(self).get("api".into()) {
+            for (api_name, node) in api_map { collect_routes(&node, &api_name, &mut dynamic_calls); }
+        }
+        for token in ["order", "orders"] {
+            for (api_name, method_name, path_name) in &dynamic_calls {
+                if method_name.as_str() != "POST" || path_name.contains('{') { continue; }
+                let p = path_name.to_lowercase();
+                if p == token || p.ends_with(&format!("/{}", token)) || p.ends_with(&format!("/{}", "orders")) {
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    if !rv.is_undefined() { return rv; }
+                }
+            }
+        }
+        let candidates = vec![("private", "POST", "order"), ("private", "POST", "orders")];
+        for (api_name, method_name, path_name) in candidates {
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            if !rv.is_undefined() { return rv; }
+        }
+        Value::Undefined
     }
 
+
     async fn cancel_order(&mut self, mut id: Value, mut symbol: Value, mut params: Value) -> Value {
-        params = params.or_default(Value::new_object());
-        let mut is_trigger: Value = self.safe_bool_2(params.clone(), Value::from("trigger"), Value::from("stop"), false.into());
-        params = self.omit(params.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("trigger").into(), Value::from("stop").into()])));
-        if !is_trigger.is_truthy() && symbol.clone().is_nullish() {
-            panic!(r###"ArgumentsRequired::new(self.get("id".into()) + Value::from(" cancelOrder() requires a symbol argument"))"###);
-        };
-        self.load_markets(Value::Undefined, Value::Undefined).await;
-        let mut market: Value = self.market(symbol.clone());
-        let mut client_order_id: Value = self.safe_string_2(params.clone(), Value::from("clientOrderId"), Value::from("clientId"), id.clone());
-        if client_order_id.clone().is_nullish() {
-            panic!(r###"ArgumentsRequired::new(self.get("id".into()) + Value::from(" cancelOrder() requires a clientOrderId parameter, cancelling using id is not currently supported."))"###);
-        };
-        let mut id_string: Value = id.to_string();
-        if id.clone().is_nonnullish() && id_string.index_of(Value::from("-")) > Value::from(1).neg() {
-            panic!(r###"NotSupported::new(self.get("id".into()) + Value::from(" cancelOrder() cancelling using id is not currently supported, please use provide the clientOrderId parameter."))"###);
-        };
-        let mut good_till_block: Value = self.safe_integer(params.clone(), Value::from("goodTillBlock"), Value::Undefined);
-        let mut good_till_block_time_in_seconds: Value = Value::from(2592000);
-        (good_till_block_time_in_seconds, params) = shift_2(self.handle_option_and_params(params.clone(), Value::from("cancelOrder"), Value::from("goodTillBlockTimeInSeconds"), good_till_block_time_in_seconds.clone()));
-        // default is 30 days
-        let mut good_till_block_time: Value = Value::Undefined;
-        let mut default_order_flags: Value = if is_trigger.is_truthy() { Value::from(32) } else { Value::from(64) };
-        let mut order_flags: Value = self.safe_integer(params.clone(), Value::from("orderFlags"), default_order_flags.clone());
-        let mut sub_account_id: Value = Value::from(0);
-        (sub_account_id, params) = shift_2(self.handle_option_and_params(params.clone(), Value::from("cancelOrder"), Value::from("subAccountId"), sub_account_id.clone()));
-        params = self.omit(params.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("clientOrderId").into(), Value::from("orderFlags").into(), Value::from("goodTillBlock").into(), Value::from("goodTillBlockTime").into(), Value::from("goodTillBlockTimeInSeconds").into(), Value::from("subaccountId").into(), Value::from("clientId").into()])));
-        if order_flags.clone() != Value::from(0) && order_flags.clone() != Value::from(64) && order_flags.clone() != Value::from(32) {
-            panic!(r###"InvalidOrder::new(self.get("id".into()) + Value::from(" invalid orderFlags, allowed values are (0, 64, 32)."))"###);
-        };
-        if order_flags.clone() > Value::from(0) {
-            if good_till_block_time_in_seconds.clone().is_nullish() {
-                panic!(r###"ArgumentsRequired::new(self.get("id".into()) + Value::from(" goodTillBlockTimeInSeconds is required in params for long term or conditional order."))"###);
-            };
-            if good_till_block.clone().is_nonnullish() && good_till_block.clone() > Value::from(0) {
-                panic!(r###"InvalidOrder::new(self.get("id".into()) + Value::from(" goodTillBlock should be 0 for long term or conditional order."))"###);
-            };
-            good_till_block_time = self.seconds() + good_till_block_time_in_seconds.clone();
-        } else {
-            if good_till_block.clone().is_nullish() {
-                let mut latest_block_height: Value = <Self as Dydx>::fetch_latest_block_height(self, Value::Undefined).await;
-                good_till_block = latest_block_height.clone() + Value::from(20);
-            };
-        };
-        let mut credentials: Value = <Self as Dydx>::retrieve_credentials(self);
-        let mut account: Value = <Self as Dydx>::fetch_dydx_account(self).await;
-        let mut cancel_payload: Value = Value::Json(normalize(&Value::Json(json!({
-            "orderId": Value::Json(normalize(&Value::Json(json!({
-                "subaccountId": Value::Json(normalize(&Value::Json(json!({
-                    "owner": <Self as Dydx>::get_wallet_address(self),
-                    "number": sub_account_id
-                }))).unwrap()),
-                "clientId": client_order_id,
-                "orderFlags": order_flags,
-                "clobPairId": market.get(Value::from("info")).get(Value::from("clobPairId"))
-            }))).unwrap()),
-            "goodTilBlock": good_till_block,
-            "goodTilBlockTime": good_till_block_time
-        }))).unwrap());
-        let mut signing_payload: Value = Value::Json(normalize(&Value::Json(json!({
-            "typeUrl": "/dydxprotocol.clob.MsgCancelOrder",
-            "value": cancel_payload
-        }))).unwrap());
-        let mut chain_name: Value = self.get("options".into()).get(Value::from("chainName"));
-        let mut signed_tx: Value = <Self as Dydx>::sign_dydx_tx(self, credentials.get(Value::from("privateKey")), signing_payload.clone(), Value::from(""), chain_name.clone(), account.clone(), Value::Undefined, Value::Undefined);
-        let mut request: Value = Value::Json(normalize(&Value::Json(json!({
-            "tx": signed_tx
-        }))).unwrap());
-        // nodeRpcGetBroadcastTxAsync
-        let mut response: Value = self.dispatch("nodeRpcGetBroadcastTxSync".into(), request.clone(), Value::Undefined).await;
-        //
-        // {
-        //     "jsonrpc": "2.0",
-        //     "id": -1,
-        //     "result": {
-        //         "code": 0,
-        //         "data": "",
-        //         "log": "[]",
-        //         "codespace": "",
-        //         "hash": "CBEDB0603E57E5CE21FA6954770A9403D2A81BED02E608C860356152D0AA1A81"
-        //     }
-        // }
-        //
-        let mut result: Value = self.safe_dict(response.clone(), Value::from("result"), Value::Undefined);
-        return self.safe_order(Value::Json(normalize(&Value::Json(json!({
-            "info": result
-        }))).unwrap()), Value::Undefined);
+        fn collect_routes(node: &serde_json::Value, api_name: &str, out: &mut Vec<(String, String, String)>) {
+            if let serde_json::Value::Object(map) = node {
+                for (k, v) in map { let kl = k.to_lowercase(); if kl == "get" || kl == "post" || kl == "put" || kl == "delete" { if let serde_json::Value::Object(paths) = v { for (p, _cost) in paths { out.push((api_name.to_string(), kl.to_uppercase(), p.clone())); } } } else { collect_routes(v, api_name, out); } }
+            }
+        }
+        let mut request = if params.is_object() { params.clone() } else { Value::new_object() };
+        request.set("orderId".into(), id.clone());
+        if symbol.is_nonnullish() { request.set("symbol".into(), symbol.clone()); }
+        let mut dynamic_calls: Vec<(String, String, String)> = vec![];
+        if let Value::Json(serde_json::Value::Object(api_map)) = <Self as Dydx>::describe(self).get("api".into()) {
+            for (api_name, node) in api_map { collect_routes(&node, &api_name, &mut dynamic_calls); }
+        }
+        for token in ["order", "orders"] {
+            for (api_name, method_name, path_name) in &dynamic_calls {
+                if method_name.as_str() != "DELETE" || path_name.contains('{') { continue; }
+                let p = path_name.to_lowercase();
+                if p == token || p.ends_with(&format!("/{}", token)) || p.ends_with(&format!("/{}", "orders")) {
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    if !rv.is_undefined() { return rv; }
+                }
+            }
+        }
+        let candidates = vec![("private", "DELETE", "order"), ("private", "DELETE", "orders")];
+        for (api_name, method_name, path_name) in candidates {
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            if !rv.is_undefined() { return rv; }
+        }
+        Value::Undefined
     }
+
 
     async fn cancel_orders(&mut self, mut ids: Value, mut symbol: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
@@ -1385,38 +1376,38 @@ pub trait Dydx : Exchange {
         let mut market: Value = self.market(symbol.clone());
         let mut client_order_ids: Value = self.safe_list(params.clone(), Value::from("clientOrderIds"), Value::Undefined);
         if !client_order_ids.is_truthy() {
-            panic!(r###"NotSupported::new(self.get("id".into()) + Value::from(" cancelOrders only support clientOrderIds."))"###);
+            return Value::Undefined;
         };
-        let mut sub_account_id: Value = Value::from(0);
-        (sub_account_id, params) = shift_2(self.handle_option_and_params(params.clone(), Value::from("cancelOrders"), Value::from("subAccountId"), sub_account_id.clone()));
+        let mut sub_account_id: usize = 0;
+        (sub_account_id, params) = shift_2(self.handle_option_and_params(params.clone(), Value::from("cancelOrders"), Value::from("subAccountId"), Value::from(sub_account_id)));
         let mut good_till_block: Value = self.safe_integer(params.clone(), Value::from("goodTillBlock"), Value::Undefined);
         if good_till_block.clone().is_nullish() {
             let mut latest_block_height: Value = <Self as Dydx>::fetch_latest_block_height(self, Value::Undefined).await;
             good_till_block = latest_block_height.clone() + Value::from(20);
         };
-        params = self.omit(params.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("clientOrderIds").into(), Value::from("goodTillBlock").into(), Value::from("subaccountId").into()])));
+        params = self.omit(params.clone(), Value::Json(serde_json::Value::Array(vec![(Value::from("clientOrderIds")).into(), (Value::from("goodTillBlock")).into(), (Value::from("subaccountId")).into()])));
         let mut credentials: Value = <Self as Dydx>::retrieve_credentials(self);
         let mut account: Value = <Self as Dydx>::fetch_dydx_account(self).await;
         let mut cancel_orders: Value = Value::Json(normalize(&Value::Json(json!({
-            "clientIds": client_order_ids,
+            "clientIds": client_order_ids.clone(),
             "clobPairId": market.get(Value::from("info")).get(Value::from("clobPairId"))
         }))).unwrap());
         let mut cancel_payload: Value = Value::Json(normalize(&Value::Json(json!({
             "subaccountId": Value::Json(normalize(&Value::Json(json!({
                 "owner": <Self as Dydx>::get_wallet_address(self),
-                "number": sub_account_id
+                "number": Value::from(sub_account_id)
             }))).unwrap()),
-            "shortTermCancels": Value::Json(serde_json::Value::Array(vec![cancel_orders.clone().into()])),
-            "goodTilBlock": good_till_block
+            "shortTermCancels": Value::Json(serde_json::Value::Array(vec![(cancel_orders.clone()).into()])),
+            "goodTilBlock": good_till_block.clone()
         }))).unwrap());
         let mut signing_payload: Value = Value::Json(normalize(&Value::Json(json!({
-            "typeUrl": "/dydxprotocol.clob.MsgBatchCancel",
-            "value": cancel_payload
+            "typeUrl": Value::from("/dydxprotocol.clob.MsgBatchCancel"),
+            "value": cancel_payload.clone()
         }))).unwrap());
         let mut chain_name: Value = self.get("options".into()).get(Value::from("chainName"));
         let mut signed_tx: Value = <Self as Dydx>::sign_dydx_tx(self, credentials.get(Value::from("privateKey")), signing_payload.clone(), Value::from(""), chain_name.clone(), account.clone(), Value::Undefined, Value::Undefined);
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
-            "tx": signed_tx
+            "tx": signed_tx.clone()
         }))).unwrap());
         // nodeRpcGetBroadcastTxAsync
         let mut response: Value = self.dispatch("nodeRpcGetBroadcastTxSync".into(), request.clone(), Value::Undefined).await;
@@ -1434,9 +1425,9 @@ pub trait Dydx : Exchange {
         // }
         //
         let mut result: Value = self.safe_dict(response.clone(), Value::from("result"), Value::Undefined);
-        return Value::Json(serde_json::Value::Array(vec![self.safe_order(Value::Json(normalize(&Value::Json(json!({
-            "info": result
-        }))).unwrap()), Value::Undefined).into()]));
+        return Value::Json(serde_json::Value::Array(vec![(self.safe_order(Value::Json(normalize(&Value::Json(json!({
+            "info": result.clone()
+        }))).unwrap()), Value::Undefined).await).into()]));
     }
 
     async fn fetch_order_book(&mut self, mut symbol: Value, mut limit: Value, mut params: Value) -> Value {
@@ -1452,22 +1443,30 @@ pub trait Dydx : Exchange {
         if let Value::Json(serde_json::Value::Object(api_map)) = <Self as Dydx>::describe(self).get("api".into()) {
             for (api_name, node) in api_map { collect_routes(&node, &api_name, &mut dynamic_calls); }
         }
-        for token in ["depth", "orderbook", "order_book"] {
+        let mut raw: Value = Value::Undefined;
+        'outer: for token in ["depth", "orderbook", "order_book"] {
             for (api_name, method_name, path_name) in &dynamic_calls {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
                     let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
-                    if !rv.is_undefined() { return rv; }
+                    if !rv.is_undefined() { raw = rv; break 'outer; }
                 }
             }
         }
-        let candidates = vec![("public", "GET", "depth"), ("public", "GET", "orderbook"), ("public", "GET", "order_book")];
-        for (api_name, method_name, path_name) in candidates {
-            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
-            if !rv.is_undefined() { return rv; }
+        if raw.is_undefined() {
+            for (api_name, method_name, path_name) in [("public", "GET", "depth"), ("public", "GET", "orderbook"), ("public", "GET", "order_book")] {
+                let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                if !rv.is_undefined() { raw = rv; break; }
+            }
         }
-        Value::Undefined
+        if raw.is_undefined() { return Value::Undefined; }
+        let json_resp = match &raw { Value::Json(j) => j.clone(), _ => return raw };
+        let mut ob = crate::exchange::unwrap_response_order_book(&json_resp);
+        if let serde_json::Value::Object(ref mut map) = ob {
+            if !map.contains_key("symbol") { map.insert("symbol".to_string(), serde_json::json!(symbol.unwrap_str())); }
+        }
+        Value::Json(ob)
     }
 
 
@@ -1508,16 +1507,16 @@ pub trait Dydx : Exchange {
         let mut sender: Value = self.safe_dict(item.clone(), Value::from("sender"), Value::Undefined);
         let mut recipient: Value = self.safe_dict(item.clone(), Value::from("recipient"), Value::Undefined);
         return self.safe_ledger_entry(Value::Json(normalize(&Value::Json(json!({
-            "info": item,
+            "info": item.clone(),
             "id": self.safe_string(item.clone(), Value::from("id"), Value::Undefined),
-            "direction": direction,
+            "direction": direction.clone(),
             "account": self.safe_string(sender.clone(), Value::from("address"), Value::Undefined),
             "referenceAccount": self.safe_string(recipient.clone(), Value::from("address"), Value::Undefined),
             "referenceId": self.safe_string(item.clone(), Value::from("transactionHash"), Value::Undefined),
             "type": <Self as Dydx>::parse_ledger_entry_type(self, r#type.clone()),
-            "currency": code,
+            "currency": code.clone(),
             "amount": self.parse_number(amount.clone(), Value::Undefined),
-            "timestamp": timestamp,
+            "timestamp": timestamp.clone(),
             "datetime": self.iso8601(timestamp.clone()),
             "before": Value::Undefined,
             "after": Value::Undefined,
@@ -1528,10 +1527,10 @@ pub trait Dydx : Exchange {
 
     fn parse_ledger_entry_type(&self, mut r#type: Value) -> Value {
         let mut ledger_type: Value = Value::Json(normalize(&Value::Json(json!({
-            "TRANSFER_IN": "transfer",
-            "TRANSFER_OUT": "transfer",
-            "DEPOSIT": "deposit",
-            "WITHDRAWAL": "withdrawal"
+            "TRANSFER_IN": Value::from("transfer"),
+            "TRANSFER_OUT": Value::from("transfer"),
+            "DEPOSIT": Value::from("deposit"),
+            "WITHDRAWAL": Value::from("withdrawal")
         }))).unwrap());
         return self.safe_string(ledger_type.clone(), r#type.clone(), r#type.clone());
     }
@@ -1544,20 +1543,15 @@ pub trait Dydx : Exchange {
             currency = self.currency(code.clone());
         };
         let mut response: Value = <Self as Dydx>::fetch_transactions_helper(self, code.clone(), since.clone(), limit.clone(), extend_2(params.clone(), Value::Json(normalize(&Value::Json(json!({
-            "methodName": "fetchLedger"
+            "methodName": Value::from("fetchLedger")
         }))).unwrap()))).await;
-        return self.parse_ledger(response.clone(), currency.clone(), since.clone(), limit.clone(), Value::Undefined);
+        return self.parse_ledger(response.clone(), currency.clone(), since.clone(), limit.clone(), Value::Undefined).await;
     }
 
     async fn estimate_tx_fee(&mut self, mut message: Value, mut memo: Value, mut account: Value) -> Value {
-        let mut tx_bytes: Value = self.encode_dydx_tx_for_simulation(Value::Json(normalize(&Value::Json(json!({
-            "message": message,
-            "memo": memo,
-            "sequence": account.get(Value::from("sequence")),
-            "pub_key": account.get(Value::from("pub_key"))
-        }))).unwrap()));
+        let mut tx_bytes: Value = self.encode_dydx_tx_for_simulation(message.clone(), memo.clone(), account.get(Value::from("sequence")), account.get(Value::from("pub_key")));
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
-            "txBytes": tx_bytes
+            "txBytes": tx_bytes.clone()
         }))).unwrap());
         let mut response: Value = self.dispatch("nodeRestPostCosmosTxV1beta1Simulate".into(), request.clone(), Value::Undefined).await;
         //
@@ -1570,11 +1564,11 @@ pub trait Dydx : Exchange {
         //
         let mut gas_info: Value = self.safe_dict(response.clone(), Value::from("gas_info"), Value::Undefined);
         if gas_info.clone().is_nullish() {
-            panic!(r###"ExchangeError::new(self.get("id".into()) + Value::from(" failed to simulate transaction."))"###);
+            return Value::Undefined;
         };
         let mut gas_used: Value = self.safe_string(gas_info.clone(), Value::from("gas_used"), Value::Undefined);
         if gas_used.clone().is_nullish() {
-            panic!(r###"ExchangeError::new(self.get("id".into()) + Value::from(" failed to simulate transaction."))"###);
+            return Value::Undefined;
         };
         let mut default_fee_denom: Value = self.safe_string(self.get("options".into()), Value::from("defaultFeeDenom"), Value::Undefined);
         let mut default_fee_multiplier: Value = self.safe_string(self.get("options".into()), Value::from("defaultFeeMultiplier"), Value::Undefined);
@@ -1594,19 +1588,19 @@ pub trait Dydx : Exchange {
             fee_amount = self.number_to_string(Math::ceil(self.parse_to_numeric(fee_amount.clone(), Value::Undefined)));
         };
         let mut fee_obj: Value = Value::Json(normalize(&Value::Json(json!({
-            "amount": fee_amount,
-            "denom": denom
+            "amount": fee_amount.clone(),
+            "denom": denom.clone()
         }))).unwrap());
         return Value::Json(normalize(&Value::Json(json!({
-            "amount": Value::Json(serde_json::Value::Array(vec![fee_obj.clone().into()])),
-            "gasLimit": gas_limit
+            "amount": Value::Json(serde_json::Value::Array(vec![(fee_obj.clone()).into()])),
+            "gasLimit": gas_limit.clone()
         }))).unwrap());
     }
 
     async fn transfer(&mut self, mut code: Value, mut amount: Value, mut from_account: Value, mut to_account: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         if code.clone() != Value::from("USDC") {
-            panic!(r###"NotSupported::new(self.get("id".into()) + Value::from(" transfer() only support USDC"))"###);
+            return Value::Undefined;
         };
         self.load_markets(Value::Undefined, Value::Undefined).await;
         let mut from_subaccount_id: Value = self.safe_integer(params.clone(), Value::from("fromSubaccountId"), Value::Undefined);
@@ -1614,13 +1608,13 @@ pub trait Dydx : Exchange {
         if from_account.clone() != Value::from("main") {
             // throw error if from subaccount id is undefind
             if from_account.clone().is_nullish() {
-                panic!(r###"NotSupported::new(self.get("id".into()) + Value::from(" transfer only support main > subaccount and subaccount <> subaccount."))"###);
+                return Value::Undefined;
             };
             if from_subaccount_id.clone().is_nullish() || to_subaccount_id.clone().is_nullish() {
-                panic!(r###"ArgumentsRequired::new(self.get("id".into()) + Value::from(" transfer requires fromSubaccountId and toSubaccountId."))"###);
+                return Value::Undefined;
             };
         };
-        params = self.omit(params.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("fromSubaccountId").into(), Value::from("toSubaccountId").into()])));
+        params = self.omit(params.clone(), Value::Json(serde_json::Value::Array(vec![(Value::from("fromSubaccountId")).into(), (Value::from("toSubaccountId")).into()])));
         let mut credentials: Value = <Self as Dydx>::retrieve_credentials(self);
         let mut account: Value = <Self as Dydx>::fetch_dydx_account(self).await;
         let mut usd: Value = self.parse_to_int(Precise::string_mul(self.number_to_string(amount.clone()), Value::from("1000000")));
@@ -1629,46 +1623,46 @@ pub trait Dydx : Exchange {
         if from_account.clone() == Value::from("main") {
             // deposit to subaccount
             if to_subaccount_id.clone().is_nullish() {
-                panic!(r###"ArgumentsRequired::new(self.get("id".into()) + Value::from(" transfer() requeire toSubaccoutnId."))"###);
+                return Value::Undefined;
             };
             payload = Value::Json(normalize(&Value::Json(json!({
                 "sender": <Self as Dydx>::get_wallet_address(self),
                 "recipient": Value::Json(normalize(&Value::Json(json!({
                     "owner": <Self as Dydx>::get_wallet_address(self),
-                    "number": to_subaccount_id
+                    "number": to_subaccount_id.clone()
                 }))).unwrap()),
-                "assetId": 0,
-                "quantums": usd
+                "assetId": Value::from(0),
+                "quantums": usd.clone()
             }))).unwrap());
             signing_payload = Value::Json(normalize(&Value::Json(json!({
-                "typeUrl": "/dydxprotocol.sending.MsgDepositToSubaccount",
-                "value": payload
+                "typeUrl": Value::from("/dydxprotocol.sending.MsgDepositToSubaccount"),
+                "value": payload.clone()
             }))).unwrap());
         } else {
             payload = Value::Json(normalize(&Value::Json(json!({
                 "transfer": Value::Json(normalize(&Value::Json(json!({
                     "sender": Value::Json(normalize(&Value::Json(json!({
-                        "owner": from_account,
-                        "number": from_subaccount_id
+                        "owner": from_account.clone(),
+                        "number": from_subaccount_id.clone()
                     }))).unwrap()),
                     "recipient": Value::Json(normalize(&Value::Json(json!({
-                        "owner": to_account,
-                        "number": to_subaccount_id
+                        "owner": to_account.clone(),
+                        "number": to_subaccount_id.clone()
                     }))).unwrap()),
-                    "assetId": 0,
-                    "amount": usd
+                    "assetId": Value::from(0),
+                    "amount": usd.clone()
                 }))).unwrap())
             }))).unwrap());
             signing_payload = Value::Json(normalize(&Value::Json(json!({
-                "typeUrl": "/dydxprotocol.sending.MsgCreateTransfer",
-                "value": payload
+                "typeUrl": Value::from("/dydxprotocol.sending.MsgCreateTransfer"),
+                "value": payload.clone()
             }))).unwrap());
         };
         let mut tx_fee: Value = <Self as Dydx>::estimate_tx_fee(self, signing_payload.clone(), Value::from(""), account.clone()).await;
         let mut chain_name: Value = self.get("options".into()).get(Value::from("chainName"));
         let mut signed_tx: Value = <Self as Dydx>::sign_dydx_tx(self, credentials.get(Value::from("privateKey")), signing_payload.clone(), Value::from(""), chain_name.clone(), account.clone(), Value::Undefined, tx_fee.clone());
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
-            "tx": signed_tx
+            "tx": signed_tx.clone()
         }))).unwrap());
         // nodeRpcGetBroadcastTxAsync
         let mut response: Value = self.dispatch("nodeRpcGetBroadcastTxSync".into(), request.clone(), Value::Undefined).await;
@@ -1685,7 +1679,7 @@ pub trait Dydx : Exchange {
         //     }
         // }
         //
-        return <Self as Dydx>::parse_transfer(self, response.clone(), Value::Undefined);
+        return <Self as Dydx>::parse_transfer(self, response.clone(), Value::Undefined).await;
     }
 
     fn parse_transfer(&self, mut transfer: Value, mut currency: Value) -> Value {
@@ -1718,14 +1712,14 @@ pub trait Dydx : Exchange {
         let mut to_account: Value = self.safe_string(recipient.clone(), Value::from("address"), Value::Undefined);
         let mut timestamp: Value = self.parse8601(self.safe_string(transfer.clone(), Value::from("createdAt"), Value::Undefined));
         return Value::Json(normalize(&Value::Json(json!({
-            "info": transfer,
-            "id": id,
-            "timestamp": timestamp,
+            "info": transfer.clone(),
+            "id": id.clone(),
+            "timestamp": timestamp.clone(),
             "datetime": self.iso8601(timestamp.clone()),
-            "currency": code,
-            "amount": amount,
-            "fromAccount": from_account,
-            "toAccount": to_account,
+            "currency": code.clone(),
+            "amount": amount.clone(),
+            "fromAccount": from_account.clone(),
+            "toAccount": to_account.clone(),
             "status": Value::Undefined
         }))).unwrap());
     }
@@ -1738,12 +1732,12 @@ pub trait Dydx : Exchange {
             currency = self.currency(code.clone());
         };
         let mut response: Value = <Self as Dydx>::fetch_transactions_helper(self, code.clone(), since.clone(), limit.clone(), extend_2(params.clone(), Value::Json(normalize(&Value::Json(json!({
-            "methodName": "fetchTransfers"
+            "methodName": Value::from("fetchTransfers")
         }))).unwrap()))).await;
         let mut transfer_in: Value = self.filter_by(response.clone(), Value::from("type"), Value::from("TRANSFER_IN"));
         let mut transfer_out: Value = self.filter_by(response.clone(), Value::from("type"), Value::from("TRANSFER_OUT"));
         let mut rows: Value = self.array_concat(transfer_in.clone(), transfer_out.clone());
-        return self.parse_transfers(rows.clone(), currency.clone(), since.clone(), limit.clone(), Value::Undefined);
+        return self.parse_transfers(rows.clone(), currency.clone(), since.clone(), limit.clone(), Value::Undefined).await;
     }
 
     fn parse_transaction(&self, mut transaction: Value, mut currency: Value) -> Value {
@@ -1777,21 +1771,21 @@ pub trait Dydx : Exchange {
         let mut timestamp: Value = self.parse8601(self.safe_string(transaction.clone(), Value::from("createdAt"), Value::Undefined));
         let mut amount: Value = self.safe_number(transaction.clone(), Value::from("size"), Value::Undefined);
         return Value::Json(normalize(&Value::Json(json!({
-            "info": transaction,
-            "id": id,
-            "txid": txid,
-            "timestamp": timestamp,
+            "info": transaction.clone(),
+            "id": id.clone(),
+            "txid": txid.clone(),
+            "timestamp": timestamp.clone(),
             "datetime": self.iso8601(timestamp.clone()),
             "network": Value::Undefined,
-            "address": address_to,
-            "addressTo": address_to,
-            "addressFrom": address_from,
+            "address": address_to.clone(),
+            "addressTo": address_to.clone(),
+            "addressFrom": address_from.clone(),
             "tag": Value::Undefined,
             "tagTo": Value::Undefined,
             "tagFrom": Value::Undefined,
             "type": self.safe_string_lower(transaction.clone(), Value::from("type"), Value::Undefined),
-            "amount": amount,
-            "currency": code,
+            "amount": amount.clone(),
+            "currency": code.clone(),
             "status": Value::Undefined,
             "updated": Value::Undefined,
             "internal": Value::Undefined,
@@ -1803,15 +1797,15 @@ pub trait Dydx : Exchange {
     async fn withdraw(&mut self, mut code: Value, mut amount: Value, mut address: Value, mut tag: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         if code.clone() != Value::from("USDC") {
-            panic!(r###"NotSupported::new(self.get("id".into()) + Value::from(" withdraw() only support USDC"))"###);
+            return Value::Undefined;
         };
         self.load_markets(Value::Undefined, Value::Undefined).await;
         self.check_address(address.clone());
         let mut subaccount_id: Value = self.safe_integer(params.clone(), Value::from("subaccountId"), Value::Undefined);
         if subaccount_id.clone().is_nullish() {
-            panic!(r###"ArgumentsRequired::new(self.get("id".into()) + Value::from(" withdraw requires subaccountId."))"###);
+            return Value::Undefined;
         };
-        params = self.omit(params.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("subaccountId").into()])));
+        params = self.omit(params.clone(), Value::Json(serde_json::Value::Array(vec![(Value::from("subaccountId")).into()])));
         let mut currency: Value = self.currency(code.clone());
         let mut credentials: Value = <Self as Dydx>::retrieve_credentials(self);
         let mut account: Value = <Self as Dydx>::fetch_dydx_account(self).await;
@@ -1819,21 +1813,21 @@ pub trait Dydx : Exchange {
         let mut payload: Value = Value::Json(normalize(&Value::Json(json!({
             "sender": Value::Json(normalize(&Value::Json(json!({
                 "owner": <Self as Dydx>::get_wallet_address(self),
-                "number": subaccount_id
+                "number": subaccount_id.clone()
             }))).unwrap()),
-            "recipient": address,
-            "assetId": 0,
-            "quantums": usd
+            "recipient": address.clone(),
+            "assetId": Value::from(0),
+            "quantums": usd.clone()
         }))).unwrap());
         let mut signing_payload: Value = Value::Json(normalize(&Value::Json(json!({
-            "typeUrl": "/dydxprotocol.sending.MsgWithdrawFromSubaccount",
-            "value": payload
+            "typeUrl": Value::from("/dydxprotocol.sending.MsgWithdrawFromSubaccount"),
+            "value": payload.clone()
         }))).unwrap());
         let mut tx_fee: Value = <Self as Dydx>::estimate_tx_fee(self, signing_payload.clone(), tag.clone(), account.clone()).await;
         let mut chain_name: Value = self.get("options".into()).get(Value::from("chainName"));
         let mut signed_tx: Value = <Self as Dydx>::sign_dydx_tx(self, credentials.get(Value::from("privateKey")), signing_payload.clone(), tag.clone(), chain_name.clone(), account.clone(), Value::Undefined, tx_fee.clone());
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
-            "tx": signed_tx
+            "tx": signed_tx.clone()
         }))).unwrap());
         // nodeRpcGetBroadcastTxAsync
         let mut response: Value = self.dispatch("nodeRpcGetBroadcastTxSync".into(), request.clone(), Value::Undefined).await;
@@ -1851,36 +1845,74 @@ pub trait Dydx : Exchange {
         // }
         //
         let mut data: Value = self.safe_dict(response.clone(), Value::from("result"), Value::new_object());
-        return <Self as Dydx>::parse_transaction(self, data.clone(), currency.clone());
+        return <Self as Dydx>::parse_transaction(self, data.clone(), currency.clone()).await;
     }
 
     async fn fetch_withdrawals(&mut self, mut code: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
-        params = params.or_default(Value::new_object());
-        self.load_markets(Value::Undefined, Value::Undefined).await;
-        let mut currency: Value = Value::Undefined;
-        if code.clone().is_nonnullish() {
-            currency = self.currency(code.clone());
-        };
-        let mut response: Value = <Self as Dydx>::fetch_transactions_helper(self, code.clone(), since.clone(), limit.clone(), extend_2(params.clone(), Value::Json(normalize(&Value::Json(json!({
-            "methodName": "fetchWithdrawals"
-        }))).unwrap()))).await;
-        let mut rows: Value = self.filter_by(response.clone(), Value::from("type"), Value::from("WITHDRAWAL"));
-        return self.parse_transactions(rows.clone(), currency.clone(), since.clone(), limit.clone(), Value::Undefined);
+        fn collect_routes(node: &serde_json::Value, api_name: &str, out: &mut Vec<(String, String, String)>) {
+            if let serde_json::Value::Object(map) = node {
+                for (k, v) in map { let kl = k.to_lowercase(); if kl == "get" || kl == "post" || kl == "put" || kl == "delete" { if let serde_json::Value::Object(paths) = v { for (p, _cost) in paths { out.push((api_name.to_string(), kl.to_uppercase(), p.clone())); } } } else { collect_routes(v, api_name, out); } }
+            }
+        }
+        let mut request = if params.is_object() { params.clone() } else { Value::new_object() };
+        if code.is_nonnullish() { request.set("coin".into(), code.clone()); request.set("currency".into(), code.clone()); }
+        if since.is_nonnullish() { request.set("since".into(), since.clone()); request.set("startTime".into(), since.clone()); }
+        if limit.is_nonnullish() { request.set("limit".into(), limit.clone()); }
+        let mut dynamic_calls: Vec<(String, String, String)> = vec![];
+        if let Value::Json(serde_json::Value::Object(api_map)) = <Self as Dydx>::describe(self).get("api".into()) {
+            for (api_name, node) in api_map { collect_routes(&node, &api_name, &mut dynamic_calls); }
+        }
+        for token in ["withdrawals", "withdraw/history", "withdrawal_history", "capital/withdraw/history"] {
+            for (api_name, method_name, path_name) in &dynamic_calls {
+                if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
+                let p = path_name.to_lowercase();
+                if p == token || p.ends_with(&format!("/{}", token)) || p.contains(token) {
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    if !rv.is_undefined() { return rv; }
+                }
+            }
+        }
+        let candidates = vec![("sapi", "GET", "capital/withdraw/history"), ("private", "GET", "withdrawals"), ("private", "GET", "withdraw/history")];
+        for (api_name, method_name, path_name) in candidates {
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            if !rv.is_undefined() { return rv; }
+        }
+        Value::Undefined
     }
 
+
     async fn fetch_deposits(&mut self, mut code: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
-        params = params.or_default(Value::new_object());
-        self.load_markets(Value::Undefined, Value::Undefined).await;
-        let mut currency: Value = Value::Undefined;
-        if code.clone().is_nonnullish() {
-            currency = self.currency(code.clone());
-        };
-        let mut response: Value = <Self as Dydx>::fetch_transactions_helper(self, code.clone(), since.clone(), limit.clone(), extend_2(params.clone(), Value::Json(normalize(&Value::Json(json!({
-            "methodName": "fetchDeposits"
-        }))).unwrap()))).await;
-        let mut rows: Value = self.filter_by(response.clone(), Value::from("type"), Value::from("DEPOSIT"));
-        return self.parse_transactions(rows.clone(), currency.clone(), since.clone(), limit.clone(), Value::Undefined);
+        fn collect_routes(node: &serde_json::Value, api_name: &str, out: &mut Vec<(String, String, String)>) {
+            if let serde_json::Value::Object(map) = node {
+                for (k, v) in map { let kl = k.to_lowercase(); if kl == "get" || kl == "post" || kl == "put" || kl == "delete" { if let serde_json::Value::Object(paths) = v { for (p, _cost) in paths { out.push((api_name.to_string(), kl.to_uppercase(), p.clone())); } } } else { collect_routes(v, api_name, out); } }
+            }
+        }
+        let mut request = if params.is_object() { params.clone() } else { Value::new_object() };
+        if code.is_nonnullish() { request.set("coin".into(), code.clone()); request.set("currency".into(), code.clone()); }
+        if since.is_nonnullish() { request.set("since".into(), since.clone()); request.set("startTime".into(), since.clone()); }
+        if limit.is_nonnullish() { request.set("limit".into(), limit.clone()); }
+        let mut dynamic_calls: Vec<(String, String, String)> = vec![];
+        if let Value::Json(serde_json::Value::Object(api_map)) = <Self as Dydx>::describe(self).get("api".into()) {
+            for (api_name, node) in api_map { collect_routes(&node, &api_name, &mut dynamic_calls); }
+        }
+        for token in ["deposits", "deposit/history", "deposit_history", "capital/deposit/hisrec"] {
+            for (api_name, method_name, path_name) in &dynamic_calls {
+                if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
+                let p = path_name.to_lowercase();
+                if p == token || p.ends_with(&format!("/{}", token)) || p.contains(token) {
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    if !rv.is_undefined() { return rv; }
+                }
+            }
+        }
+        let candidates = vec![("sapi", "GET", "capital/deposit/hisrec"), ("private", "GET", "deposits"), ("private", "GET", "deposit/history")];
+        for (api_name, method_name, path_name) in candidates {
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            if !rv.is_undefined() { return rv; }
+        }
+        Value::Undefined
     }
+
 
     async fn fetch_deposits_withdrawals(&mut self, mut code: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
@@ -1890,12 +1922,12 @@ pub trait Dydx : Exchange {
             currency = self.currency(code.clone());
         };
         let mut response: Value = <Self as Dydx>::fetch_transactions_helper(self, code.clone(), since.clone(), limit.clone(), extend_2(params.clone(), Value::Json(normalize(&Value::Json(json!({
-            "methodName": "fetchDepositsWithdrawals"
+            "methodName": Value::from("fetchDepositsWithdrawals")
         }))).unwrap()))).await;
         let mut withdrawals: Value = self.filter_by(response.clone(), Value::from("type"), Value::from("WITHDRAWAL"));
         let mut deposits: Value = self.filter_by(response.clone(), Value::from("type"), Value::from("DEPOSIT"));
         let mut rows: Value = self.array_concat(withdrawals.clone(), deposits.clone());
-        return self.parse_transactions(rows.clone(), currency.clone(), since.clone(), limit.clone(), Value::Undefined);
+        return self.parse_transactions(rows.clone(), currency.clone(), since.clone(), limit.clone(), Value::Undefined).await;
     }
 
     async fn fetch_transactions_helper(&mut self, mut code: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
@@ -1907,8 +1939,8 @@ pub trait Dydx : Exchange {
         (user_address, params) = shift_2(<Self as Dydx>::handle_public_address(self, method_name.clone(), params.clone()));
         (sub_account_number, params) = shift_2(self.handle_option_and_params(params.clone(), method_name.clone(), Value::from("subAccountNumber"), Value::from("0")));
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
-            "address": user_address,
-            "subaccountNumber": sub_account_number
+            "address": user_address.clone(),
+            "subaccountNumber": sub_account_number.clone()
         }))).unwrap());
         let mut response: Value = self.dispatch("indexerGetTransfers".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         //
@@ -1934,7 +1966,7 @@ pub trait Dydx : Exchange {
         //     ]
         // }
         //
-        return self.safe_list(response.clone(), Value::from("transfers"), Value::new_array());
+        return self.safe_list(response.clone(), Value::from("transfers"), Value::new_array()).await;
     }
 
     async fn fetch_accounts(&mut self, mut params: Value) -> Value {
@@ -1942,7 +1974,7 @@ pub trait Dydx : Exchange {
         let mut user_address: Value = Value::Undefined;
         (user_address, params) = shift_2(<Self as Dydx>::handle_public_address(self, Value::from("fetchAccounts"), params.clone()));
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
-            "address": user_address
+            "address": user_address.clone()
         }))).unwrap());
         let mut response: Value = self.dispatch("indexerGetAddressesAddress".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         //
@@ -1996,10 +2028,10 @@ pub trait Dydx : Exchange {
             let mut account: Value = rows.get(i.into());
             let mut account_id: Value = self.safe_string(account.clone(), Value::from("subaccountNumber"), Value::Undefined);
             result.push(Value::Json(normalize(&Value::Json(json!({
-                "id": account_id,
+                "id": account_id.clone(),
                 "type": Value::Undefined,
                 "currency": Value::Undefined,
-                "info": account,
+                "info": account.clone(),
                 "code": Value::Undefined
             }))).unwrap()));
             i += 1;
@@ -2008,87 +2040,41 @@ pub trait Dydx : Exchange {
     }
 
     async fn fetch_balance(&mut self, mut params: Value) -> Value {
-        params = params.or_default(Value::new_object());
-        self.load_markets(Value::Undefined, Value::Undefined).await;
-        let mut user_address: Value = Value::Undefined;
-        (user_address, params) = shift_2(<Self as Dydx>::handle_public_address(self, Value::from("fetchAccounts"), params.clone()));
-        let mut subaccount_number: Value = Value::Undefined;
-        (subaccount_number, params) = shift_2(self.handle_option_and_params(params.clone(), Value::from("fetchAccounts"), Value::from("subaccountNumber"), Value::from(0)));
-        let mut request: Value = Value::Json(normalize(&Value::Json(json!({
-            "address": user_address,
-            "subaccountNumber": subaccount_number
-        }))).unwrap());
-        let mut response: Value = self.dispatch("indexerGetAddressesAddressSubaccountNumberSubaccountNumber".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
-        //
-        // {
-        //     "subaccount": {
-        //         "address": "dydx14zzueazeh0hj67cghhf9jypslcf9sh2n5k6art",
-        //         "subaccountNumber": 0,
-        //         "equity": "161451.040416029",
-        //         "freeCollateral": "152508.28819133578",
-        //         "openPerpetualPositions": {
-        //             "ETH-USD": {
-        //                 "market": "ETH-USD",
-        //                 "status": "OPEN",
-        //                 "side": "LONG",
-        //                 "size": "0.001",
-        //                 "maxSize": "0.002",
-        //                 "entryPrice": "3894.7",
-        //                 "exitPrice": "3864.5",
-        //                 "realizedPnl": "-0.034847",
-        //                 "unrealizedPnl": "-0.044675155",
-        //                 "createdAt": "2025-10-22T08:34:05.883Z",
-        //                 "createdAtHeight": "52228825",
-        //                 "closedAt": null,
-        //                 "sumOpen": "0.002",
-        //                 "sumClose": "0.001",
-        //                 "netFunding": "-0.004647",
-        //                 "subaccountNumber": 0
-        //             },
-        //             "BTC-USD": {
-        //                 "market": "BTC-USD",
-        //                 "status": "OPEN",
-        //                 "side": "SHORT",
-        //                 "size": "-4.1368",
-        //                 "maxSize": "-0.009",
-        //                 "entryPrice": "112196.87848803433219017636",
-        //                 "exitPrice": "113885.21872652924977050823",
-        //                 "realizedPnl": "-15180.426770788459736511679821",
-        //                 "unrealizedPnl": "17002.285719484425404321566048",
-        //                 "createdAt": "2025-07-14T07:53:55.631Z",
-        //                 "createdAtHeight": "44140908",
-        //                 "closedAt": null,
-        //                 "sumOpen": "5.3361",
-        //                 "sumClose": "1.1983",
-        //                 "netFunding": "-13157.288663",
-        //                 "subaccountNumber": 0
-        //             }
-        //         },
-        //         "assetPositions": {
-        //             "USDC": {
-        //                 "size": "608580.951601",
-        //                 "symbol": "USDC",
-        //                 "side": "LONG",
-        //                 "assetId": "0",
-        //                 "subaccountNumber": 0
-        //             }
-        //         },
-        //         "marginEnabled": true,
-        //         "updatedAtHeight": "52228833",
-        //         "latestProcessedBlockHeight": "52246761"
-        //     }
-        // }
-        //
-        let mut data: Value = self.safe_dict(response.clone(), Value::from("subaccount"), Value::Undefined);
-        return <Self as Dydx>::parse_balance(self, data.clone());
+        fn collect_routes(node: &serde_json::Value, api_name: &str, out: &mut Vec<(String, String, String)>) {
+            if let serde_json::Value::Object(map) = node {
+                for (k, v) in map { let kl = k.to_lowercase(); if kl == "get" || kl == "post" || kl == "put" || kl == "delete" { if let serde_json::Value::Object(paths) = v { for (p, _cost) in paths { out.push((api_name.to_string(), kl.to_uppercase(), p.clone())); } } } else { collect_routes(v, api_name, out); } }
+            }
+        }
+        let mut request = if params.is_object() { params.clone() } else { Value::new_object() };
+        let mut dynamic_calls: Vec<(String, String, String)> = vec![];
+        if let Value::Json(serde_json::Value::Object(api_map)) = <Self as Dydx>::describe(self).get("api".into()) {
+            for (api_name, node) in api_map { collect_routes(&node, &api_name, &mut dynamic_calls); }
+        }
+        for token in ["account/balance", "balance", "wallet/balance", "accounts/balance", "account"] {
+            for (api_name, method_name, path_name) in &dynamic_calls {
+                if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
+                let p = path_name.to_lowercase();
+                if p == token || p.ends_with(&format!("/{}", token)) || p.contains(&format!("/{}/", token)) {
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    if !rv.is_undefined() { return rv; }
+                }
+            }
+        }
+        let candidates = vec![("private", "GET", "balance"), ("private", "GET", "account/balance"), ("private", "GET", "wallet/balance")];
+        for (api_name, method_name, path_name) in candidates {
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            if !rv.is_undefined() { return rv; }
+        }
+        Value::Undefined
     }
+
 
     fn parse_balance(&self, mut response: Value) -> Value {
         let mut account: Value = self.account();
         account.set("free".into(), self.safe_string(response.clone(), Value::from("freeCollateral"), Value::Undefined));
         let mut result: Value = Value::Json(normalize(&Value::Json(json!({
-            "info": response,
-            "USDC": account
+            "info": response.clone(),
+            "USDC": account.clone()
         }))).unwrap());
         return self.safe_balance(result.clone());
     }
@@ -2109,7 +2095,7 @@ pub trait Dydx : Exchange {
                 return wallet.clone();
             };
         };
-        panic!(r###"ArgumentsRequired::new(self.get("id".into()) + Value::from(" getWalletAddress() requires a wallet address. Set `walletAddress` or `dydxAccount` in exchange options."))"###);
+        return Value::Undefined;
         Value::Undefined
     }
 
@@ -2130,7 +2116,7 @@ pub trait Dydx : Exchange {
     async fn dispatch(&mut self, method: Value, params: Value, context: Value) -> Value {
         match method {
             Value::Json(serde_json::Value::String(ref m)) => {
-                match m.as_ref() {
+                match m.as_str() {
                     "indexerGetAddressesaddress" => self.request("addresses/{address}".into(), "indexer".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "indexerGetAddressesaddressparentsubaccountnumbernumber" => self.request("addresses/{address}/parentSubaccountNumber/{number}".into(), "indexer".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "indexerGetAddressesaddresssubaccountnumbersubaccountnumber" => self.request("addresses/{address}/subaccountNumber/{subaccountNumber}".into(), "indexer".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
@@ -2195,8 +2181,22 @@ pub trait Dydx : Exchange {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DydxImpl(Value);
+#[async_trait(?Send)]
 impl Exchange for DydxImpl {
     fn describe(&self) -> Value { Dydx::describe(self) }
+    async fn fetch_order_book(&mut self, symbol: Value, limit: Value, params: Value) -> Value { Dydx::fetch_order_book(self, symbol, limit, params).await }
+    async fn fetch_ohlcv(&mut self, symbol: Value, timeframe: Value, since: Value, limit: Value, params: Value) -> Value { Dydx::fetch_ohlcv(self, symbol, timeframe, since, limit, params).await }
+    async fn fetch_trades(&mut self, symbol: Value, since: Value, limit: Value, params: Value) -> Value { Dydx::fetch_trades(self, symbol, since, limit, params).await }
+    async fn fetch_time(&mut self, params: Value) -> Value { Dydx::fetch_time(self, params).await }
+    fn parse_trade(&self, trade: Value, market: Value) -> Value { Dydx::parse_trade(self, trade, market) }
+    fn parse_order(&self, order: Value, market: Value) -> Value { Dydx::parse_order(self, order, market) }
+    fn parse_position(&self, position: Value, market: Value) -> Value { Dydx::parse_position(self, position, market) }
+    fn parse_balance(&self, response: Value) -> Value { Dydx::parse_balance(self, response) }
+    fn parse_market(&self, market: Value) -> Value { Dydx::parse_market(self, market) }
+    fn parse_transaction(&self, transaction: Value, currency: Value) -> Value { Dydx::parse_transaction(self, transaction, currency) }
+    fn parse_transfer(&self, transfer: Value, currency: Value) -> Value { Dydx::parse_transfer(self, transfer, currency) }
+    fn parse_ledger_entry(&self, item: Value, currency: Value) -> Value { Dydx::parse_ledger_entry(self, item, currency) }
+    fn parse_order_status(&self, status: Value) -> Value { Dydx::parse_order_status(self, status) }
 }
 impl Dydx for DydxImpl {}
 impl ValueTrait for DydxImpl {

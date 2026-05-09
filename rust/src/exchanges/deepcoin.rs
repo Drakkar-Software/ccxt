@@ -1,5 +1,4 @@
 #![allow(clippy::all)]
-#![allow(non_snake_case)]
 #![allow(dead_code)]
 #![allow(unreachable_code)]
 #![allow(unused_imports)]
@@ -13,6 +12,7 @@ use std::str::FromStr;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, BoolExt, JSON, Array, Object, Math, Promise, parse_int, shift_2, extend_2, normalize};
+use crate::ws::{ArrayCache, ArrayCacheByTimestamp, ArrayCacheBySymbolById, ArrayCacheBySymbolBySide};
 // Crypto hash identifiers
 fn sha256() -> Value { Value::from("sha256()") }
 fn sha384() -> Value { Value::from("sha384()") }
@@ -31,21 +31,30 @@ fn decimals(value: Value) -> Value { Value::from(0) }
 fn shift_1(value: Value) -> Value { value }
 fn shift_3(value: Value) -> (Value, Value, Value) { (value.clone(), Value::Undefined, Value::Undefined) }
 fn shift_4(value: Value) -> (Value, Value, Value, Value) { (value.clone(), Value::Undefined, Value::Undefined, Value::Undefined) }
-// Error type constructors
-fn BadRequest(msg: Value) -> Value { msg }
-fn InvalidOrder(msg: Value) -> Value { msg }
-fn ExchangeError(msg: Value) -> Value { msg }
-fn InsufficientFunds(msg: Value) -> Value { msg }
-fn OrderNotFound(msg: Value) -> Value { msg }
-fn AuthenticationError(msg: Value) -> Value { msg }
-fn PermissionDenied(msg: Value) -> Value { msg }
-fn ExchangeNotAvailable(msg: Value) -> Value { msg }
-fn ArgumentsRequired(msg: Value) -> Value { msg }
-fn RateLimitExceeded(msg: Value) -> Value { msg }
-fn OrderNotFillable(msg: Value) -> Value { msg }
-fn OrderImmediatelyFillable(msg: Value) -> Value { msg }
-fn NotSupported(msg: Value) -> Value { msg }
-fn DuplicateOrderId(msg: Value) -> Value { msg }
+// Error type constructors (stub structs with ::new for transpiled `new ErrorType(msg)` patterns)
+macro_rules! error_stub { ($name:ident) => { pub struct $name; impl $name { pub fn new(msg: Value) -> Value { msg } } }; }
+error_stub!(BadRequest);
+error_stub!(InvalidOrder);
+error_stub!(ExchangeError);
+error_stub!(InsufficientFunds);
+error_stub!(OrderNotFound);
+error_stub!(AuthenticationError);
+error_stub!(PermissionDenied);
+error_stub!(ExchangeNotAvailable);
+error_stub!(ArgumentsRequired);
+error_stub!(RateLimitExceeded);
+error_stub!(OrderNotFillable);
+error_stub!(OrderImmediatelyFillable);
+error_stub!(NotSupported);
+error_stub!(DuplicateOrderId);
+error_stub!(UnsubscribeError);
+error_stub!(ChecksumError);
+error_stub!(InvalidNonce);
+error_stub!(BadSymbol);
+// Array-like type stubs (Bids/Asks order book sides)
+macro_rules! array_side_stub { ($name:ident) => { pub struct $name; impl $name { pub fn new(data: Value, _limit: Value) -> Value { data } } }; }
+array_side_stub!(Bids);
+array_side_stub!(Asks);
 
 use crate::exchange::{PRECISE_BASE, TRUNCATE, ROUND, ROUND_UP, ROUND_DOWN};
 use crate::exchange::{DECIMAL_PLACES, SIGNIFICANT_DIGITS, TICK_SIZE, NO_PADDING, PAD_WITH_ZERO};
@@ -56,202 +65,202 @@ use crate::exchange::{DECIMAL_PLACES, SIGNIFICANT_DIGITS, TICK_SIZE, NO_PADDING,
 #[async_trait(?Send)]
 pub trait Deepcoin : Exchange {
     fn describe(&self) -> Value {
-        return self.deep_extend_2(Value::Undefined, Value::Json(normalize(&Value::Json(json!({
-            "id": "deepcoin",
-            "name": "DeepCoin",
-            "countries": Value::Json(serde_json::Value::Array(vec![Value::from("SG").into()])),
-            "rateLimit": 200,
-            "version": "v1",
-            "certified": false,
-            "pro": true,
+        return self.deep_extend_2(Exchange::describe(self), Value::Json(normalize(&Value::Json(json!({
+            "id": Value::from("deepcoin"),
+            "name": Value::from("DeepCoin"),
+            "countries": Value::Json(serde_json::Value::Array(vec![(Value::from("SG")).into()])),
+            "rateLimit": Value::from(200),
+            "version": Value::from("v1"),
+            "certified": Value::from(false),
+            "pro": Value::from(true),
             "has": Value::Json(normalize(&Value::Json(json!({
                 "CORS": Value::Undefined,
-                "spot": true,
-                "margin": true,
-                "swap": true,
-                "future": false,
-                "option": false,
-                "addMargin": false,
-                "cancelAllOrders": true,
-                "cancelAllOrdersAfter": false,
-                "cancelOrder": true,
-                "cancelOrders": true,
-                "cancelWithdraw": false,
-                "closePosition": true,
-                "createConvertTrade": false,
-                "createDepositAddress": false,
-                "createLimitBuyOrder": true,
-                "createLimitOrder": true,
-                "createLimitSellOrder": true,
-                "createMarketBuyOrder": true,
-                "createMarketBuyOrderWithCost": true,
-                "createMarketOrder": true,
-                "createMarketOrderWithCost": true,
-                "createMarketSellOrder": true,
-                "createMarketSellOrderWithCost": true,
-                "createOrder": true,
-                "createOrders": false,
-                "createOrderWithTakeProfitAndStopLoss": true,
-                "createPostOnlyOrder": true,
-                "createReduceOnlyOrder": true,
-                "createStopLossOrder": false,
-                "createTakeProfitOrder": false,
-                "createTrailingAmountOrder": false,
-                "createTrailingPercentOrder": false,
-                "createTriggerOrder": true,
-                "editOrder": true,
-                "fetchAccounts": false,
-                "fetchBalance": true,
-                "fetchCanceledAndClosedOrders": true,
-                "fetchCanceledOrders": true,
-                "fetchClosedOrder": true,
-                "fetchClosedOrders": true,
-                "fetchConvertCurrencies": false,
-                "fetchConvertQuote": false,
-                "fetchConvertTrade": false,
-                "fetchConvertTradeHistory": false,
-                "fetchCurrencies": false,
-                "fetchDepositAddress": true,
-                "fetchDepositAddresses": true,
-                "fetchDeposits": true,
-                "fetchDepositsWithdrawals": false,
-                "fetchDepositWithdrawFees": false,
-                "fetchFundingHistory": false,
-                "fetchFundingRate": true,
-                "fetchFundingRateHistory": true,
-                "fetchFundingRates": true,
-                "fetchIndexOHLCV": true,
-                "fetchLedger": true,
-                "fetchLeverage": false,
-                "fetchLeverageTiers": false,
-                "fetchMarginAdjustmentHistory": false,
-                "fetchMarginMode": false,
-                "fetchMarkets": true,
-                "fetchMarkOHLCV": true,
-                "fetchMyTrades": true,
-                "fetchOHLCV": true,
-                "fetchOpenInterest": false,
-                "fetchOpenInterestHistory": false,
-                "fetchOpenOrder": true,
-                "fetchOpenOrders": true,
-                "fetchOrder": false,
-                "fetchOrderBook": true,
-                "fetchOrders": false,
-                "fetchOrderTrades": true,
-                "fetchPosition": true,
-                "fetchPositionHistory": false,
-                "fetchPositionMode": false,
-                "fetchPositions": true,
-                "fetchPositionsForSymbol": true,
-                "fetchPositionsHistory": true,
-                "fetchPremiumIndexOHLCV": false,
-                "fetchStatus": false,
-                "fetchTicker": false,
-                "fetchTickers": true,
-                "fetchTime": false,
-                "fetchTrades": true,
-                "fetchTradingFee": false,
-                "fetchTradingFees": false,
-                "fetchTransactions": false,
-                "fetchTransfers": false,
-                "fetchWithdrawals": true,
-                "reduceMargin": false,
-                "sandbox": false,
-                "setLeverage": true,
-                "setMargin": false,
-                "setMarginMode": false,
-                "setPositionMode": false,
-                "transfer": true,
-                "withdraw": false
+                "spot": Value::from(true),
+                "margin": Value::from(true),
+                "swap": Value::from(true),
+                "future": Value::from(false),
+                "option": Value::from(false),
+                "addMargin": Value::from(false),
+                "cancelAllOrders": Value::from(true),
+                "cancelAllOrdersAfter": Value::from(false),
+                "cancelOrder": Value::from(true),
+                "cancelOrders": Value::from(true),
+                "cancelWithdraw": Value::from(false),
+                "closePosition": Value::from(true),
+                "createConvertTrade": Value::from(false),
+                "createDepositAddress": Value::from(false),
+                "createLimitBuyOrder": Value::from(true),
+                "createLimitOrder": Value::from(true),
+                "createLimitSellOrder": Value::from(true),
+                "createMarketBuyOrder": Value::from(true),
+                "createMarketBuyOrderWithCost": Value::from(true),
+                "createMarketOrder": Value::from(true),
+                "createMarketOrderWithCost": Value::from(true),
+                "createMarketSellOrder": Value::from(true),
+                "createMarketSellOrderWithCost": Value::from(true),
+                "createOrder": Value::from(true),
+                "createOrders": Value::from(false),
+                "createOrderWithTakeProfitAndStopLoss": Value::from(true),
+                "createPostOnlyOrder": Value::from(true),
+                "createReduceOnlyOrder": Value::from(true),
+                "createStopLossOrder": Value::from(false),
+                "createTakeProfitOrder": Value::from(false),
+                "createTrailingAmountOrder": Value::from(false),
+                "createTrailingPercentOrder": Value::from(false),
+                "createTriggerOrder": Value::from(true),
+                "editOrder": Value::from(true),
+                "fetchAccounts": Value::from(false),
+                "fetchBalance": Value::from(true),
+                "fetchCanceledAndClosedOrders": Value::from(true),
+                "fetchCanceledOrders": Value::from(true),
+                "fetchClosedOrder": Value::from(true),
+                "fetchClosedOrders": Value::from(true),
+                "fetchConvertCurrencies": Value::from(false),
+                "fetchConvertQuote": Value::from(false),
+                "fetchConvertTrade": Value::from(false),
+                "fetchConvertTradeHistory": Value::from(false),
+                "fetchCurrencies": Value::from(false),
+                "fetchDepositAddress": Value::from(true),
+                "fetchDepositAddresses": Value::from(true),
+                "fetchDeposits": Value::from(true),
+                "fetchDepositsWithdrawals": Value::from(false),
+                "fetchDepositWithdrawFees": Value::from(false),
+                "fetchFundingHistory": Value::from(false),
+                "fetchFundingRate": Value::from(true),
+                "fetchFundingRateHistory": Value::from(true),
+                "fetchFundingRates": Value::from(true),
+                "fetchIndexOHLCV": Value::from(true),
+                "fetchLedger": Value::from(true),
+                "fetchLeverage": Value::from(false),
+                "fetchLeverageTiers": Value::from(false),
+                "fetchMarginAdjustmentHistory": Value::from(false),
+                "fetchMarginMode": Value::from(false),
+                "fetchMarkets": Value::from(true),
+                "fetchMarkOHLCV": Value::from(true),
+                "fetchMyTrades": Value::from(true),
+                "fetchOHLCV": Value::from(true),
+                "fetchOpenInterest": Value::from(false),
+                "fetchOpenInterestHistory": Value::from(false),
+                "fetchOpenOrder": Value::from(true),
+                "fetchOpenOrders": Value::from(true),
+                "fetchOrder": Value::from(false),
+                "fetchOrderBook": Value::from(true),
+                "fetchOrders": Value::from(false),
+                "fetchOrderTrades": Value::from(true),
+                "fetchPosition": Value::from(true),
+                "fetchPositionHistory": Value::from(false),
+                "fetchPositionMode": Value::from(false),
+                "fetchPositions": Value::from(true),
+                "fetchPositionsForSymbol": Value::from(true),
+                "fetchPositionsHistory": Value::from(true),
+                "fetchPremiumIndexOHLCV": Value::from(false),
+                "fetchStatus": Value::from(false),
+                "fetchTicker": Value::from(false),
+                "fetchTickers": Value::from(true),
+                "fetchTime": Value::from(false),
+                "fetchTrades": Value::from(true),
+                "fetchTradingFee": Value::from(false),
+                "fetchTradingFees": Value::from(false),
+                "fetchTransactions": Value::from(false),
+                "fetchTransfers": Value::from(false),
+                "fetchWithdrawals": Value::from(true),
+                "reduceMargin": Value::from(false),
+                "sandbox": Value::from(false),
+                "setLeverage": Value::from(true),
+                "setMargin": Value::from(false),
+                "setMarginMode": Value::from(false),
+                "setPositionMode": Value::from(false),
+                "transfer": Value::from(true),
+                "withdraw": Value::from(false)
             }))).unwrap()),
             "timeframes": Value::Json(normalize(&Value::Json(json!({
-                "1m": "1m",
-                "5m": "5m",
-                "15m": "15m",
-                "30m": "30m",
-                "1h": "1H",
-                "4h": "4H",
-                "12h": "12H",
-                "1d": "1D",
-                "1w": "1W",
-                "1M": "1M",
-                "1y": "1Y"
+                "1m": Value::from("1m"),
+                "5m": Value::from("5m"),
+                "15m": Value::from("15m"),
+                "30m": Value::from("30m"),
+                "1h": Value::from("1H"),
+                "4h": Value::from("4H"),
+                "12h": Value::from("12H"),
+                "1d": Value::from("1D"),
+                "1w": Value::from("1W"),
+                "1M": Value::from("1M"),
+                "1y": Value::from("1Y")
             }))).unwrap()),
             "urls": Value::Json(normalize(&Value::Json(json!({
-                "logo": "https://github.com/user-attachments/assets/ddf3e178-c3b6-409d-8f9f-af8b7cf80454",
+                "logo": Value::from("https://github.com/user-attachments/assets/ddf3e178-c3b6-409d-8f9f-af8b7cf80454"),
                 "api": Value::Json(normalize(&Value::Json(json!({
-                    "public": "https://api.deepcoin.com",
-                    "private": "https://api.deepcoin.com"
+                    "public": Value::from("https://api.deepcoin.com"),
+                    "private": Value::from("https://api.deepcoin.com")
                 }))).unwrap()),
-                "www": "https://www.deepcoin.com/",
-                "doc": "https://www.deepcoin.com/docs",
+                "www": Value::from("https://www.deepcoin.com/"),
+                "doc": Value::from("https://www.deepcoin.com/docs"),
                 "referral": Value::Json(normalize(&Value::Json(json!({
-                    "url": "https://s.deepcoin.com/UzkyODgy",
-                    "discount": 0.1
+                    "url": Value::from("https://s.deepcoin.com/UzkyODgy"),
+                    "discount": Value::from(0.1)
                 }))).unwrap())
             }))).unwrap()),
             "api": Value::Json(normalize(&Value::Json(json!({
                 "public": Value::Json(normalize(&Value::Json(json!({
                     "get": Value::Json(normalize(&Value::Json(json!({
-                        "deepcoin/market/books": 1,
-                        "deepcoin/market/candles": 1,
-                        "deepcoin/market/instruments": 1,
-                        "deepcoin/market/tickers": 1,
-                        "deepcoin/market/index-candles": 1,
-                        "deepcoin/market/trades": 1,
-                        "deepcoin/market/mark-price-candles": 1,
-                        "deepcoin/market/step-margin": 5,
-                        "deepcoin/trade/funding-rate": 5,
-                        "deepcoin/trade/fund-rate/current-funding-rate": 5,
-                        "deepcoin/trade/fund-rate/history": 5
+                        "deepcoin/market/books": Value::from(1),
+                        "deepcoin/market/candles": Value::from(1),
+                        "deepcoin/market/instruments": Value::from(1),
+                        "deepcoin/market/tickers": Value::from(1),
+                        "deepcoin/market/index-candles": Value::from(1),
+                        "deepcoin/market/trades": Value::from(1),
+                        "deepcoin/market/mark-price-candles": Value::from(1),
+                        "deepcoin/market/step-margin": Value::from(5),
+                        "deepcoin/trade/funding-rate": Value::from(5),
+                        "deepcoin/trade/fund-rate/current-funding-rate": Value::from(5),
+                        "deepcoin/trade/fund-rate/history": Value::from(5)
                     }))).unwrap())
                 }))).unwrap()),
                 "private": Value::Json(normalize(&Value::Json(json!({
                     "get": Value::Json(normalize(&Value::Json(json!({
-                        "deepcoin/account/balances": 5,
-                        "deepcoin/account/bills": 5,
-                        "deepcoin/account/positions": 5,
-                        "deepcoin/trade/fills": 5,
-                        "deepcoin/trade/orderByID": 5,
-                        "deepcoin/trade/finishOrderByID": 5,
-                        "deepcoin/trade/orders-history": 5,
-                        "deepcoin/trade/v2/orders-pending": 5,
-                        "deepcoin/trade/trigger-orders-pending": 5,
-                        "deepcoin/trade/trigger-orders-history": 5,
-                        "deepcoin/copytrading/support-contracts": 5,
-                        "deepcoin/copytrading/leader-position": 5,
-                        "deepcoin/copytrading/estimate-profit": 5,
-                        "deepcoin/copytrading/history-profit": 5,
-                        "deepcoin/copytrading/follower-rank": 5,
-                        "deepcoin/internal-transfer/support": 5,
-                        "deepcoin/internal-transfer/history-order": 5,
-                        "deepcoin/rebate/config": 5,
-                        "deepcoin/agents/users": 5,
-                        "deepcoin/agents/users/rebate-list": 5,
-                        "deepcoin/agents/users/rebates": 5,
-                        "deepcoin/asset/deposit-list": 5,
-                        "deepcoin/asset/withdraw-list": 5,
-                        "deepcoin/asset/recharge-chain-list": 5,
-                        "deepcoin/listenkey/acquire": 5,
-                        "deepcoin/listenkey/extend": 5
+                        "deepcoin/account/balances": Value::from(5),
+                        "deepcoin/account/bills": Value::from(5),
+                        "deepcoin/account/positions": Value::from(5),
+                        "deepcoin/trade/fills": Value::from(5),
+                        "deepcoin/trade/orderByID": Value::from(5),
+                        "deepcoin/trade/finishOrderByID": Value::from(5),
+                        "deepcoin/trade/orders-history": Value::from(5),
+                        "deepcoin/trade/v2/orders-pending": Value::from(5),
+                        "deepcoin/trade/trigger-orders-pending": Value::from(5),
+                        "deepcoin/trade/trigger-orders-history": Value::from(5),
+                        "deepcoin/copytrading/support-contracts": Value::from(5),
+                        "deepcoin/copytrading/leader-position": Value::from(5),
+                        "deepcoin/copytrading/estimate-profit": Value::from(5),
+                        "deepcoin/copytrading/history-profit": Value::from(5),
+                        "deepcoin/copytrading/follower-rank": Value::from(5),
+                        "deepcoin/internal-transfer/support": Value::from(5),
+                        "deepcoin/internal-transfer/history-order": Value::from(5),
+                        "deepcoin/rebate/config": Value::from(5),
+                        "deepcoin/agents/users": Value::from(5),
+                        "deepcoin/agents/users/rebate-list": Value::from(5),
+                        "deepcoin/agents/users/rebates": Value::from(5),
+                        "deepcoin/asset/deposit-list": Value::from(5),
+                        "deepcoin/asset/withdraw-list": Value::from(5),
+                        "deepcoin/asset/recharge-chain-list": Value::from(5),
+                        "deepcoin/listenkey/acquire": Value::from(5),
+                        "deepcoin/listenkey/extend": Value::from(5)
                     }))).unwrap()),
                     "post": Value::Json(normalize(&Value::Json(json!({
-                        "deepcoin/account/set-leverage": 5,
-                        "deepcoin/trade/order": 5,
-                        "deepcoin/trade/replace-order": 5,
-                        "deepcoin/trade/cancel-order": 5,
-                        "deepcoin/trade/batch-cancel-order": 5,
+                        "deepcoin/account/set-leverage": Value::from(5),
+                        "deepcoin/trade/order": Value::from(5),
+                        "deepcoin/trade/replace-order": Value::from(5),
+                        "deepcoin/trade/cancel-order": Value::from(5),
+                        "deepcoin/trade/batch-cancel-order": Value::from(5),
                         "deepcoin/trade/cancel-trigger-order": Value::from(1) / Value::from(6),
-                        "deepcoin/trade/swap/cancel-all": 5,
-                        "deepcoin/trade/trigger-order": 5,
-                        "deepcoin/trade/batch-close-position": 5,
-                        "deepcoin/trade/replace-order-sltp": 5,
-                        "deepcoin/trade/close-position-by-ids": 5,
-                        "deepcoin/copytrading/leader-settings": 5,
-                        "deepcoin/copytrading/set-contracts": 5,
-                        "deepcoin/internal-transfer": 5,
-                        "deepcoin/rebate/config": 5,
-                        "deepcoin/asset/transfer": 5
+                        "deepcoin/trade/swap/cancel-all": Value::from(5),
+                        "deepcoin/trade/trigger-order": Value::from(5),
+                        "deepcoin/trade/batch-close-position": Value::from(5),
+                        "deepcoin/trade/replace-order-sltp": Value::from(5),
+                        "deepcoin/trade/close-position-by-ids": Value::from(5),
+                        "deepcoin/copytrading/leader-settings": Value::from(5),
+                        "deepcoin/copytrading/set-contracts": Value::from(5),
+                        "deepcoin/internal-transfer": Value::from(5),
+                        "deepcoin/rebate/config": Value::from(5),
+                        "deepcoin/asset/transfer": Value::from(5)
                     }))).unwrap())
                 }))).unwrap())
             }))).unwrap()),
@@ -263,143 +272,143 @@ pub trait Deepcoin : Exchange {
             }))).unwrap()),
             "features": Value::Json(normalize(&Value::Json(json!({
                 "spot": Value::Json(normalize(&Value::Json(json!({
-                    "sandbox": false,
+                    "sandbox": Value::from(false),
                     "createOrder": Value::Json(normalize(&Value::Json(json!({
-                        "marginMode": true,
-                        "triggerPrice": true,
+                        "marginMode": Value::from(true),
+                        "triggerPrice": Value::from(true),
                         "triggerPriceType": Value::Json(normalize(&Value::Json(json!({
-                            "last": true,
-                            "mark": false,
-                            "index": false
+                            "last": Value::from(true),
+                            "mark": Value::from(false),
+                            "index": Value::from(false)
                         }))).unwrap()),
-                        "triggerDirection": false,
-                        "stopLossPrice": true,
-                        "takeProfitPrice": true,
+                        "triggerDirection": Value::from(false),
+                        "stopLossPrice": Value::from(true),
+                        "takeProfitPrice": Value::from(true),
                         "attachedStopLossTakeProfit": Value::Json(normalize(&Value::Json(json!({
                             "triggerPriceType": Value::Json(normalize(&Value::Json(json!({
-                                "last": false,
-                                "mark": false,
-                                "index": false
+                                "last": Value::from(false),
+                                "mark": Value::from(false),
+                                "index": Value::from(false)
                             }))).unwrap()),
-                            "price": true
+                            "price": Value::from(true)
                         }))).unwrap()),
                         "timeInForce": Value::Json(normalize(&Value::Json(json!({
-                            "IOC": true,
-                            "FOK": true,
-                            "PO": true,
-                            "GTD": false
+                            "IOC": Value::from(true),
+                            "FOK": Value::from(true),
+                            "PO": Value::from(true),
+                            "GTD": Value::from(false)
                         }))).unwrap()),
-                        "hedged": true,
-                        "trailing": false,
-                        "marketBuyRequiresPrice": false
+                        "hedged": Value::from(true),
+                        "trailing": Value::from(false),
+                        "marketBuyRequiresPrice": Value::from(false)
                     }))).unwrap()),
                     "createOrders": Value::Undefined,
                     "fetchMyTrades": Value::Json(normalize(&Value::Json(json!({
-                        "marginMode": false,
-                        "limit": 100,
-                        "daysBack": 60,
+                        "marginMode": Value::from(false),
+                        "limit": Value::from(100),
+                        "daysBack": Value::from(60),
                         "untilDays": Value::Undefined,
-                        "symbolRequired": true
+                        "symbolRequired": Value::from(true)
                     }))).unwrap()),
                     "fetchOrder": Value::Undefined,
                     "fetchOpenOrders": Value::Json(normalize(&Value::Json(json!({
-                        "marginMode": false,
-                        "limit": 100,
-                        "trigger": true,
-                        "trailing": false,
-                        "symbolRequired": true
+                        "marginMode": Value::from(false),
+                        "limit": Value::from(100),
+                        "trigger": Value::from(true),
+                        "trailing": Value::from(false),
+                        "symbolRequired": Value::from(true)
                     }))).unwrap()),
                     "fetchOrders": Value::Undefined,
                     "fetchClosedOrders": Value::Json(normalize(&Value::Json(json!({
-                        "marginMode": false,
-                        "limit": 100,
+                        "marginMode": Value::from(false),
+                        "limit": Value::from(100),
                         "daysBack": Value::Undefined,
                         "daysBackCanceled": Value::Undefined,
                         "untilDays": Value::Undefined,
-                        "trigger": true,
-                        "trailing": false,
-                        "symbolRequired": true
+                        "trigger": Value::from(true),
+                        "trailing": Value::from(false),
+                        "symbolRequired": Value::from(true)
                     }))).unwrap()),
                     "fetchOHLCV": Value::Json(normalize(&Value::Json(json!({
-                        "limit": 300
+                        "limit": Value::from(300)
                     }))).unwrap())
                 }))).unwrap()),
                 "swap": Value::Json(normalize(&Value::Json(json!({
                     "linear": Value::Json(normalize(&Value::Json(json!({
-                        "extends": "spot"
+                        "extends": Value::from("spot")
                     }))).unwrap()),
                     "inverse": Value::Json(normalize(&Value::Json(json!({
-                        "extends": "spot"
+                        "extends": Value::from("spot")
                     }))).unwrap())
                 }))).unwrap())
             }))).unwrap()),
             "requiredCredentials": Value::Json(normalize(&Value::Json(json!({
-                "apiKey": true,
-                "secret": true,
-                "password": true
+                "apiKey": Value::from(true),
+                "secret": Value::from(true),
+                "password": Value::from(true)
             }))).unwrap()),
-            "precisionMode": Value::from(TICK_SIZE),
+            "precisionMode": TICK_SIZE.into(),
             "options": Value::Json(normalize(&Value::Json(json!({
-                "recvWindow": 5000,
+                "recvWindow": Value::from(5000),
                 "defaultNetworks": Value::Json(normalize(&Value::Json(json!({
-                    "ETH": "ERC20",
-                    "USDT": "TRC20",
-                    "USDC": "ERC20"
+                    "ETH": Value::from("ERC20"),
+                    "USDT": Value::from("TRC20"),
+                    "USDC": Value::from("ERC20")
                 }))).unwrap()),
                 "networks": Value::Json(normalize(&Value::Json(json!({
-                    "ERC20": "ERC20",
-                    "TRC20": "TRC20",
-                    "ARB": "ARBITRUM",
-                    "BSC": "BSC(BEP20)",
-                    "SOL": "SOL",
-                    "BTC": "Bitcoin",
-                    "ADA": "Cardano"
+                    "ERC20": Value::from("ERC20"),
+                    "TRC20": Value::from("TRC20"),
+                    "ARB": Value::from("ARBITRUM"),
+                    "BSC": Value::from("BSC(BEP20)"),
+                    "SOL": Value::from("SOL"),
+                    "BTC": Value::from("Bitcoin"),
+                    "ADA": Value::from("Cardano")
                 }))).unwrap()),
                 "networksById": Value::new_object(),
                 "fetchMarkets": Value::Json(normalize(&Value::Json(json!({
-                    "types": Value::Json(serde_json::Value::Array(vec![Value::from("spot").into(), Value::from("swap").into()]))
+                    "types": Value::Json(serde_json::Value::Array(vec![(Value::from("spot")).into(), (Value::from("swap")).into()]))
                 }))).unwrap()),
                 "timeInForce": Value::Json(normalize(&Value::Json(json!({
-                    "GTC": "GTC",
-                    "IOC": "IOC",
-                    "PO": "PO"
+                    "GTC": Value::from("GTC"),
+                    "IOC": Value::from("IOC"),
+                    "PO": Value::from("PO")
                 }))).unwrap()),
                 "exchangeType": Value::Json(normalize(&Value::Json(json!({
-                    "spot": "SPOT",
-                    "swap": "SWAP",
-                    "SPOT": "SPOT",
-                    "SWAP": "SWAP"
+                    "spot": Value::from("SPOT"),
+                    "swap": Value::from("SWAP"),
+                    "SPOT": Value::from("SPOT"),
+                    "SWAP": Value::from("SWAP")
                 }))).unwrap()),
                 "accountsByType": Value::Json(normalize(&Value::Json(json!({
-                    "spot": 1,
-                    "fund": 2,
-                    "rebate": 3,
-                    "inverse": 5,
-                    "linear": 7,
-                    "demo": 10
+                    "spot": Value::from(1),
+                    "fund": Value::from(2),
+                    "rebate": Value::from(3),
+                    "inverse": Value::from(5),
+                    "linear": Value::from(7),
+                    "demo": Value::from(10)
                 }))).unwrap())
             }))).unwrap()),
             "commonCurrencies": Value::new_object(),
             "exceptions": Value::Json(normalize(&Value::Json(json!({
                 "exact": Value::Json(normalize(&Value::Json(json!({
-                    "24": "OrderNotFound",
-                    "31": "InsufficientFunds",
-                    "36": "InsufficientFunds",
-                    "44": "BadRequest",
-                    "49": "InvalidOrder",
-                    "194": "InvalidOrder",
-                    "195": "InvalidOrder",
-                    "199": "BadRequest",
-                    "100010": "InsufficientFunds",
-                    "unsupportedAction": "BadRequest",
-                    "localIDNotExist": "BadRequest"
+                    "24": "OrderNotFound".clone(),
+                    "31": "InsufficientFunds".clone(),
+                    "36": "InsufficientFunds".clone(),
+                    "44": "BadRequest".clone(),
+                    "49": "InvalidOrder".clone(),
+                    "194": "InvalidOrder".clone(),
+                    "195": "InvalidOrder".clone(),
+                    "199": "BadRequest".clone(),
+                    "100010": "InsufficientFunds".clone(),
+                    "unsupportedAction": "BadRequest".clone(),
+                    "localIDNotExist": "BadRequest".clone()
                 }))).unwrap()),
                 "broad": Value::Json(normalize(&Value::Json(json!({
-                    "no available": "NotSupported",
-                    "field is required": "ArgumentsRequired",
-                    "not in acceptable range": "BadRequest",
-                    "subscription cluster does not exist": "BadRequest",
-                    "must be equal or lesser than": "BadRequest"
+                    "no available": "NotSupported".clone(),
+                    "field is required": "ArgumentsRequired".clone(),
+                    "not in acceptable range": "BadRequest".clone(),
+                    "subscription cluster does not \"exist\"": "BadRequest".clone(),
+                    "must be equal or lesser than": "BadRequest".clone()
                 }))).unwrap())
             }))).unwrap())
         }))).unwrap()));
@@ -412,7 +421,7 @@ pub trait Deepcoin : Exchange {
         let mut r#type: Value = self.safe_string(params.clone(), Value::from("type"), Value::Undefined);
         if r#type.clone().is_nullish() && inst_type.clone().is_nonnullish() {
             params = extend_2(params.clone(), Value::Json(normalize(&Value::Json(json!({
-                "type": inst_type
+                "type": inst_type.clone()
             }))).unwrap()));
         };
         return Exchange::handle_market_type_and_params(self, method_name.clone(), market.clone(), params.clone(), default_value.clone());
@@ -461,7 +470,7 @@ pub trait Deepcoin : Exchange {
         //     }
         //
         let mut data_response: Value = self.safe_list(response.clone(), Value::from("data"), Value::new_array());
-        return self.parse_markets(data_response.clone());
+        return self.parse_markets(data_response.clone()).await;
     }
 
     fn parse_market(&self, mut market: Value) -> Value {
@@ -512,8 +521,8 @@ pub trait Deepcoin : Exchange {
         //
         let mut id: Value = self.safe_string(market.clone(), Value::from("instId"), Value::Undefined);
         let mut r#type: Value = self.safe_string_lower(market.clone(), Value::from("instType"), Value::Undefined);
-        let mut spot: Value = (r#type.clone() == Value::from("spot")).into();
-        let mut swap: Value = (r#type.clone() == Value::from("swap")).into();
+        let mut spot: Value = Value::from(r#type.clone() == Value::from("spot"));
+        let mut swap: Value = Value::from(r#type.clone() == Value::from("swap"));
         let mut base_id: Value = self.safe_string(market.clone(), Value::from("baseCcy"), Value::Undefined);
         let mut quote_id: Value = self.safe_string(market.clone(), Value::from("quoteCcy"), Value::from(""));
         let mut settle_id: Value = Value::Undefined;
@@ -523,7 +532,7 @@ pub trait Deepcoin : Exchange {
         let mut symbol: Value = base.clone() + Value::from("/") + quote.clone();
         let mut is_linear: Value = Value::Undefined;
         if swap.is_truthy() {
-            is_linear = (quote_id.clone() != Value::from("USD")).into();
+            is_linear = Value::from(quote_id.clone() != Value::from("USD"));
             settle_id = if is_linear.is_truthy() { quote_id.clone() } else { base_id.clone() };
             settle = self.safe_currency_code(settle_id.clone(), Value::Undefined);
             symbol = symbol.clone() + Value::from(":") + settle.clone();
@@ -536,24 +545,24 @@ pub trait Deepcoin : Exchange {
         let mut max_amount: Value = self.parse_number(Precise::string_max(max_market_size.clone(), max_limit_size.clone()), Value::Undefined);
         let mut state: Value = self.safe_string(market.clone(), Value::from("state"), Value::Undefined);
         return extend_2(fees.clone(), Value::Json(normalize(&Value::Json(json!({
-            "id": id,
-            "symbol": symbol,
-            "base": base,
-            "quote": quote,
-            "settle": settle,
-            "baseId": base_id,
-            "quoteId": quote_id,
-            "settleId": settle_id,
-            "type": r#type,
-            "spot": spot,
-            "margin": spot.is_truthy() && Precise::string_gt(max_leverage.clone(), Value::from("1")),
-            "swap": swap,
-            "future": false,
-            "option": false,
-            "active": state.clone() == Value::from("live"),
-            "contract": swap,
-            "linear": is_linear,
-            "inverse": if swap.is_truthy() { (!is_linear.is_truthy()).into() } else { Value::Undefined },
+            "id": id.clone(),
+            "symbol": symbol.clone(),
+            "base": base.clone(),
+            "quote": quote.clone(),
+            "settle": settle.clone(),
+            "baseId": base_id.clone(),
+            "quoteId": quote_id.clone(),
+            "settleId": settle_id.clone(),
+            "type": r#type.clone(),
+            "spot": spot.clone(),
+            "margin": (if spot.is_truthy() { Precise::string_gt(max_leverage.clone(), Value::from("1")).into() } else { spot.clone() }),
+            "swap": swap.clone(),
+            "future": Value::from(false),
+            "option": Value::from(false),
+            "active": Value::from(state.clone() == Value::from("live")),
+            "contract": swap.clone(),
+            "linear": is_linear.clone(),
+            "inverse": if swap.is_truthy() { Value::from(!is_linear.is_truthy()) } else { Value::Undefined },
             "contractSize": if swap.is_truthy() { self.safe_number(market.clone(), Value::from("ctVal"), Value::Undefined) } else { Value::Undefined },
             "expiry": Value::Undefined,
             "expiryDatetime": Value::Undefined,
@@ -571,7 +580,7 @@ pub trait Deepcoin : Exchange {
                 }))).unwrap()),
                 "amount": Value::Json(normalize(&Value::Json(json!({
                     "min": self.safe_number(market.clone(), Value::from("minSz"), Value::Undefined),
-                    "max": max_amount
+                    "max": max_amount.clone()
                 }))).unwrap()),
                 "price": Value::Json(normalize(&Value::Json(json!({
                     "min": Value::Undefined,
@@ -582,7 +591,7 @@ pub trait Deepcoin : Exchange {
                     "max": Value::Undefined
                 }))).unwrap())
             }))).unwrap()),
-            "info": market
+            "info": market.clone()
         }))).unwrap()));
     }
 
@@ -592,10 +601,10 @@ pub trait Deepcoin : Exchange {
         let mut i: usize = 0;
         while i < symbols.len() {
             let mut symbol: Value = symbols.get(i.into());
-            let mut market: Value = markets.get(symbol.clone());
+            let mut market: Value = markets.get(symbol.clone().clone());
             if market.get(Value::from("swap")).is_truthy() {
                 let mut additional_id: Value = market.get(Value::from("baseId")) + market.get(Value::from("quoteId"));
-                self.get("markets_by_id".into()).set(additional_id.clone(), Value::Json(serde_json::Value::Array(vec![market.clone().into()])));
+                self.get("markets_by_id".into()).set(additional_id.clone(), Value::Json(serde_json::Value::Array(vec![(market.clone()).into()])));
             };
             i += 1;
         };
@@ -616,22 +625,30 @@ pub trait Deepcoin : Exchange {
         if let Value::Json(serde_json::Value::Object(api_map)) = <Self as Deepcoin>::describe(self).get("api".into()) {
             for (api_name, node) in api_map { collect_routes(&node, &api_name, &mut dynamic_calls); }
         }
-        for token in ["depth", "orderbook", "order_book"] {
+        let mut raw: Value = Value::Undefined;
+        'outer: for token in ["depth", "orderbook", "order_book"] {
             for (api_name, method_name, path_name) in &dynamic_calls {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
                     let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
-                    if !rv.is_undefined() { return rv; }
+                    if !rv.is_undefined() { raw = rv; break 'outer; }
                 }
             }
         }
-        let candidates = vec![("public", "GET", "depth"), ("public", "GET", "orderbook"), ("public", "GET", "order_book")];
-        for (api_name, method_name, path_name) in candidates {
-            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
-            if !rv.is_undefined() { return rv; }
+        if raw.is_undefined() {
+            for (api_name, method_name, path_name) in [("public", "GET", "depth"), ("public", "GET", "orderbook"), ("public", "GET", "order_book")] {
+                let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                if !rv.is_undefined() { raw = rv; break; }
+            }
         }
-        Value::Undefined
+        if raw.is_undefined() { return Value::Undefined; }
+        let json_resp = match &raw { Value::Json(j) => j.clone(), _ => return raw };
+        let mut ob = crate::exchange::unwrap_response_order_book(&json_resp);
+        if let serde_json::Value::Object(ref mut map) = ob {
+            if !map.contains_key("symbol") { map.insert("symbol".to_string(), serde_json::json!(symbol.unwrap_str())); }
+        }
+        Value::Json(ob)
     }
 
 
@@ -651,22 +668,40 @@ pub trait Deepcoin : Exchange {
         if let Value::Json(serde_json::Value::Object(api_map)) = <Self as Deepcoin>::describe(self).get("api".into()) {
             for (api_name, node) in api_map { collect_routes(&node, &api_name, &mut dynamic_calls); }
         }
-        for token in ["klines", "candles", "ohlcv"] {
+        let mut raw: Value = Value::Undefined;
+        // Match endpoints by substring on common OHLCV path tokens (klines, candles,
+        // ohlcv, barhist, history, kline, candle, ohlc).
+        'outer: for token in ["klines", "candles", "ohlcv", "barhist", "kline", "candle", "ohlc"] {
             for (api_name, method_name, path_name) in &dynamic_calls {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
-                if p == token || p.contains(token) {
+                if p.contains(token) {
                     let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
-                    if !rv.is_undefined() { return rv; }
+                    if !rv.is_undefined() { raw = rv; break 'outer; }
                 }
             }
         }
-        let candidates = vec![("public", "GET", "klines"), ("public", "GET", "candles"), ("public", "GET", "ohlcv")];
-        for (api_name, method_name, path_name) in candidates {
-            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
-            if !rv.is_undefined() { return rv; }
+        if raw.is_undefined() {
+            for (api_name, method_name, path_name) in [("public", "GET", "klines"), ("public", "GET", "candles"), ("public", "GET", "ohlcv")] {
+                let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                if !rv.is_undefined() { raw = rv; break; }
+            }
         }
-        Value::Undefined
+        if raw.is_undefined() { return Value::Undefined; }
+        let json_resp = match &raw { Value::Json(j) => j.clone(), _ => return raw };
+        let arr_val = crate::exchange::unwrap_response_array(&json_resp);
+        let items = match arr_val.as_array() { Some(a) => a.clone(), None => return raw };
+        let market: Value = Value::Undefined;
+        let mut parsed: Vec<serde_json::Value> = Vec::with_capacity(items.len());
+        for item in items {
+            if item.is_array() {
+                parsed.push(item);
+            } else {
+                let pv = <Self as Exchange>::parse_ohlcv(self, Value::Json(item.clone()), market.clone());
+                if let Value::Json(j) = pv { parsed.push(j); }
+            }
+        }
+        Value::Json(serde_json::Value::Array(parsed))
     }
 
 
@@ -736,28 +771,28 @@ pub trait Deepcoin : Exchange {
         let mut high: Value = self.safe_string(ticker.clone(), Value::from("high24h"), Value::Undefined);
         let mut low: Value = self.safe_string(ticker.clone(), Value::from("low24h"), Value::Undefined);
         return self.safe_ticker(Value::Json(normalize(&Value::Json(json!({
-            "symbol": symbol,
-            "timestamp": timestamp,
+            "symbol": symbol.clone(),
+            "timestamp": timestamp.clone(),
             "datetime": self.iso8601(timestamp.clone()),
-            "high": high,
-            "low": low,
+            "high": high.clone(),
+            "low": low.clone(),
             "bid": self.safe_string(ticker.clone(), Value::from("bidPx"), Value::Undefined),
             "bidVolume": self.safe_string(ticker.clone(), Value::from("bidSz"), Value::Undefined),
             "ask": self.safe_string(ticker.clone(), Value::from("askPx"), Value::Undefined),
             "askVolume": self.safe_string(ticker.clone(), Value::from("askSz"), Value::Undefined),
             "vwap": Value::Undefined,
-            "open": open,
-            "close": last,
-            "last": last,
+            "open": open.clone(),
+            "close": last.clone(),
+            "last": last.clone(),
             "previousClose": Value::Undefined,
             "change": Value::Undefined,
             "percentage": Value::Undefined,
             "average": Value::Undefined,
-            "baseVolume": base_volume,
-            "quoteVolume": quote_volume,
+            "baseVolume": base_volume.clone(),
+            "quoteVolume": quote_volume.clone(),
             "markPrice": Value::Undefined,
             "indexPrice": Value::Undefined,
-            "info": ticker
+            "info": ticker.clone()
         }))).unwrap()), market.clone());
     }
 
@@ -767,11 +802,27 @@ pub trait Deepcoin : Exchange {
         if since.is_nonnullish() { request.set("since".into(), since.clone()); request.set("startTime".into(), since.clone()); }
         if limit.is_nonnullish() { request.set("limit".into(), limit.clone()); }
         let candidates = vec![("public", "GET", "trades"), ("public", "GET", "recent_trades"), ("public", "GET", "aggTrades")];
+        let mut raw: Value = Value::Undefined;
         for (api_name, method_name, path_name) in candidates {
             let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
-            if !rv.is_undefined() { return rv; }
+            if !rv.is_undefined() { raw = rv; break; }
         }
-        Value::Undefined
+        if raw.is_undefined() { return Value::Undefined; }
+        let json_resp = match &raw { Value::Json(j) => j.clone(), _ => return raw };
+        let arr_val = crate::exchange::unwrap_response_array(&json_resp);
+        let items = match arr_val.as_array() { Some(a) => a.clone(), None => return raw };
+        let market: Value = Value::Undefined;
+        let mut parsed: Vec<serde_json::Value> = Vec::with_capacity(items.len());
+        for item in items {
+            // Already-parsed trades have both `price` and `amount` keys.
+            if item.get("price").is_some() && item.get("amount").is_some() {
+                parsed.push(item);
+            } else {
+                let pv = <Self as Exchange>::parse_trade(self, Value::Json(item.clone()), market.clone());
+                if let Value::Json(j) = pv { parsed.push(j); }
+            }
+        }
+        Value::Json(serde_json::Value::Array(parsed))
     }
 
 
@@ -787,7 +838,7 @@ pub trait Deepcoin : Exchange {
         return product_group.clone();
     }
 
-    fn parse_trade(&mut self, mut trade: Value, mut market: Value) -> Value {
+    fn parse_trade(&self, mut trade: Value, mut market: Value) -> Value {
         //
         // public fetchTrades
         //
@@ -830,46 +881,64 @@ pub trait Deepcoin : Exchange {
             let mut fee_currency_id: Value = self.safe_string(trade.clone(), Value::from("feeCcy"), Value::Undefined);
             let mut fee_currency_code: Value = self.safe_currency_code(fee_currency_id.clone(), Value::Undefined);
             fee = Value::Json(normalize(&Value::Json(json!({
-                "cost": fee_cost,
-                "currency": fee_currency_code
+                "cost": fee_cost.clone(),
+                "currency": fee_currency_code.clone()
             }))).unwrap());
         };
         return self.safe_trade(Value::Json(normalize(&Value::Json(json!({
-            "info": trade,
-            "timestamp": timestamp,
+            "info": trade.clone(),
+            "timestamp": timestamp.clone(),
             "datetime": self.iso8601(timestamp.clone()),
             "symbol": market.get(Value::from("symbol")),
             "id": self.safe_string(trade.clone(), Value::from("tradeId"), Value::Undefined),
             "order": self.safe_string(trade.clone(), Value::from("ordId"), Value::Undefined),
             "type": Value::Undefined,
             "takerOrMaker": <Self as Deepcoin>::parse_taker_or_maker(self, exec_type.clone()),
-            "side": side,
+            "side": side.clone(),
             "price": self.safe_string_2(trade.clone(), Value::from("fillPx"), Value::from("px"), Value::Undefined),
             "amount": self.safe_string_2(trade.clone(), Value::from("fillSz"), Value::from("sz"), Value::Undefined),
             "cost": Value::Undefined,
-            "fee": fee
+            "fee": fee.clone()
         }))).unwrap()), market.clone());
     }
 
     fn parse_taker_or_maker(&self, mut exec_type: Value) -> Value {
         let mut types: Value = Value::Json(normalize(&Value::Json(json!({
-            "T": "taker",
-            "M": "maker"
+            "T": Value::from("taker"),
+            "M": Value::from("maker")
         }))).unwrap());
         return self.safe_string(types.clone(), exec_type.clone(), exec_type.clone());
     }
 
     async fn fetch_balance(&mut self, mut params: Value) -> Value {
-        params = params.or_default(Value::new_object());
-        self.load_markets(Value::Undefined, Value::Undefined).await;
-        let mut market_type: Value = Value::from("spot");
-        (market_type, params) = shift_2(<Self as Deepcoin>::handle_market_type_and_params(self, Value::from("fetchBalance"), Value::Undefined, params.clone(), market_type.clone()));
-        let mut request: Value = Value::Json(normalize(&Value::Json(json!({
-            "instType": <Self as Deepcoin>::convert_to_instrument_type(self, market_type.clone())
-        }))).unwrap());
-        let mut response: Value = self.dispatch("privateGetDeepcoinAccountBalances".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
-        return <Self as Deepcoin>::parse_balance(self, response.clone());
+        fn collect_routes(node: &serde_json::Value, api_name: &str, out: &mut Vec<(String, String, String)>) {
+            if let serde_json::Value::Object(map) = node {
+                for (k, v) in map { let kl = k.to_lowercase(); if kl == "get" || kl == "post" || kl == "put" || kl == "delete" { if let serde_json::Value::Object(paths) = v { for (p, _cost) in paths { out.push((api_name.to_string(), kl.to_uppercase(), p.clone())); } } } else { collect_routes(v, api_name, out); } }
+            }
+        }
+        let mut request = if params.is_object() { params.clone() } else { Value::new_object() };
+        let mut dynamic_calls: Vec<(String, String, String)> = vec![];
+        if let Value::Json(serde_json::Value::Object(api_map)) = <Self as Deepcoin>::describe(self).get("api".into()) {
+            for (api_name, node) in api_map { collect_routes(&node, &api_name, &mut dynamic_calls); }
+        }
+        for token in ["account/balance", "balance", "wallet/balance", "accounts/balance", "account"] {
+            for (api_name, method_name, path_name) in &dynamic_calls {
+                if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
+                let p = path_name.to_lowercase();
+                if p == token || p.ends_with(&format!("/{}", token)) || p.contains(&format!("/{}/", token)) {
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    if !rv.is_undefined() { return rv; }
+                }
+            }
+        }
+        let candidates = vec![("private", "GET", "balance"), ("private", "GET", "account/balance"), ("private", "GET", "wallet/balance")];
+        for (api_name, method_name, path_name) in candidates {
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            if !rv.is_undefined() { return rv; }
+        }
+        Value::Undefined
     }
+
 
     fn parse_balance(&self, mut response: Value) -> Value {
         //
@@ -887,7 +956,7 @@ pub trait Deepcoin : Exchange {
         //     }
         //
         let mut result: Value = Value::Json(normalize(&Value::Json(json!({
-            "info": response,
+            "info": response.clone(),
             "timestamp": Value::Undefined,
             "datetime": Value::Undefined
         }))).unwrap());
@@ -908,72 +977,70 @@ pub trait Deepcoin : Exchange {
     }
 
     async fn fetch_deposits(&mut self, mut code: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
-        params = params.or_default(Value::new_object());
-        self.load_markets(Value::Undefined, Value::Undefined).await;
-        let mut paginate: Value = false.into();
-        (paginate, params) = shift_2(self.handle_option_and_params(params.clone(), Value::from("fetchDeposits"), Value::from("paginate"), false.into()));
-        if paginate.is_truthy() {
-            return self.fetch_paginated_call_cursor(Value::from("fetchDeposits"), code.clone(), since.clone(), limit.clone(), params.clone(), Value::from("code"), Value::Undefined, Value::from(1), Value::from(50)).await;
-        };
-        let mut request: Value = Value::new_object();
-        let mut currency: Value = Value::Undefined;
-        if code.clone().is_nonnullish() {
-            currency = self.currency(code.clone());
-            request.set("coin".into(), currency.get(Value::from("id")));
-        };
-        if since.clone().is_nonnullish() {
-            request.set("startTime".into(), since.clone());
-        };
-        if limit.clone().is_nonnullish() {
-            request.set("size".into(), limit.clone());
-        };
-        let mut until: Value = self.safe_integer(params.clone(), Value::from("until"), Value::Undefined);
-        if until.clone().is_nonnullish() {
-            request.set("endTime".into(), until.clone());
-            params = self.omit(params.clone(), Value::from("until"));
-        };
-        let mut response: Value = self.dispatch("privateGetDeepcoinAssetDepositList".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
-        let mut data: Value = self.safe_dict(response.clone(), Value::from("data"), Value::new_object());
-        let mut items: Value = self.safe_list(data.clone(), Value::from("data"), Value::new_array());
-        let mut transaction_params: Value = Value::Json(normalize(&Value::Json(json!({
-            "type": "deposit"
-        }))).unwrap());
-        return self.parse_transactions(items.clone(), currency.clone(), since.clone(), limit.clone(), transaction_params.clone());
+        fn collect_routes(node: &serde_json::Value, api_name: &str, out: &mut Vec<(String, String, String)>) {
+            if let serde_json::Value::Object(map) = node {
+                for (k, v) in map { let kl = k.to_lowercase(); if kl == "get" || kl == "post" || kl == "put" || kl == "delete" { if let serde_json::Value::Object(paths) = v { for (p, _cost) in paths { out.push((api_name.to_string(), kl.to_uppercase(), p.clone())); } } } else { collect_routes(v, api_name, out); } }
+            }
+        }
+        let mut request = if params.is_object() { params.clone() } else { Value::new_object() };
+        if code.is_nonnullish() { request.set("coin".into(), code.clone()); request.set("currency".into(), code.clone()); }
+        if since.is_nonnullish() { request.set("since".into(), since.clone()); request.set("startTime".into(), since.clone()); }
+        if limit.is_nonnullish() { request.set("limit".into(), limit.clone()); }
+        let mut dynamic_calls: Vec<(String, String, String)> = vec![];
+        if let Value::Json(serde_json::Value::Object(api_map)) = <Self as Deepcoin>::describe(self).get("api".into()) {
+            for (api_name, node) in api_map { collect_routes(&node, &api_name, &mut dynamic_calls); }
+        }
+        for token in ["deposits", "deposit/history", "deposit_history", "capital/deposit/hisrec"] {
+            for (api_name, method_name, path_name) in &dynamic_calls {
+                if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
+                let p = path_name.to_lowercase();
+                if p == token || p.ends_with(&format!("/{}", token)) || p.contains(token) {
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    if !rv.is_undefined() { return rv; }
+                }
+            }
+        }
+        let candidates = vec![("sapi", "GET", "capital/deposit/hisrec"), ("private", "GET", "deposits"), ("private", "GET", "deposit/history")];
+        for (api_name, method_name, path_name) in candidates {
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            if !rv.is_undefined() { return rv; }
+        }
+        Value::Undefined
     }
 
+
     async fn fetch_withdrawals(&mut self, mut code: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
-        params = params.or_default(Value::new_object());
-        self.load_markets(Value::Undefined, Value::Undefined).await;
-        let mut paginate: Value = false.into();
-        (paginate, params) = shift_2(self.handle_option_and_params(params.clone(), Value::from("fetchDeposits"), Value::from("paginate"), false.into()));
-        if paginate.is_truthy() {
-            return self.fetch_paginated_call_cursor(Value::from("fetchDeposits"), code.clone(), since.clone(), limit.clone(), params.clone(), Value::from("code"), Value::Undefined, Value::from(1), Value::from(50)).await;
-        };
-        let mut request: Value = Value::new_object();
-        let mut currency: Value = Value::Undefined;
-        if code.clone().is_nonnullish() {
-            currency = self.currency(code.clone());
-            request.set("coin".into(), currency.get(Value::from("id")));
-        };
-        if since.clone().is_nonnullish() {
-            request.set("startTime".into(), since.clone());
-        };
-        if limit.clone().is_nonnullish() {
-            request.set("size".into(), limit.clone());
-        };
-        let mut until: Value = self.safe_integer(params.clone(), Value::from("until"), Value::Undefined);
-        if until.clone().is_nonnullish() {
-            request.set("endTime".into(), until.clone());
-            params = self.omit(params.clone(), Value::from("until"));
-        };
-        let mut response: Value = self.dispatch("privateGetDeepcoinAssetWithdrawList".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
-        let mut data: Value = self.safe_dict(response.clone(), Value::from("data"), Value::new_object());
-        let mut items: Value = self.safe_list(data.clone(), Value::from("data"), Value::new_array());
-        let mut transaction_params: Value = Value::Json(normalize(&Value::Json(json!({
-            "type": "withdrawal"
-        }))).unwrap());
-        return self.parse_transactions(items.clone(), currency.clone(), since.clone(), limit.clone(), transaction_params.clone());
+        fn collect_routes(node: &serde_json::Value, api_name: &str, out: &mut Vec<(String, String, String)>) {
+            if let serde_json::Value::Object(map) = node {
+                for (k, v) in map { let kl = k.to_lowercase(); if kl == "get" || kl == "post" || kl == "put" || kl == "delete" { if let serde_json::Value::Object(paths) = v { for (p, _cost) in paths { out.push((api_name.to_string(), kl.to_uppercase(), p.clone())); } } } else { collect_routes(v, api_name, out); } }
+            }
+        }
+        let mut request = if params.is_object() { params.clone() } else { Value::new_object() };
+        if code.is_nonnullish() { request.set("coin".into(), code.clone()); request.set("currency".into(), code.clone()); }
+        if since.is_nonnullish() { request.set("since".into(), since.clone()); request.set("startTime".into(), since.clone()); }
+        if limit.is_nonnullish() { request.set("limit".into(), limit.clone()); }
+        let mut dynamic_calls: Vec<(String, String, String)> = vec![];
+        if let Value::Json(serde_json::Value::Object(api_map)) = <Self as Deepcoin>::describe(self).get("api".into()) {
+            for (api_name, node) in api_map { collect_routes(&node, &api_name, &mut dynamic_calls); }
+        }
+        for token in ["withdrawals", "withdraw/history", "withdrawal_history", "capital/withdraw/history"] {
+            for (api_name, method_name, path_name) in &dynamic_calls {
+                if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
+                let p = path_name.to_lowercase();
+                if p == token || p.ends_with(&format!("/{}", token)) || p.contains(token) {
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    if !rv.is_undefined() { return rv; }
+                }
+            }
+        }
+        let candidates = vec![("sapi", "GET", "capital/withdraw/history"), ("private", "GET", "withdrawals"), ("private", "GET", "withdraw/history")];
+        for (api_name, method_name, path_name) in candidates {
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            if !rv.is_undefined() { return rv; }
+        }
+        Value::Undefined
     }
+
 
     fn parse_transaction(&self, mut transaction: Value, mut currency: Value) -> Value {
         //
@@ -996,22 +1063,22 @@ pub trait Deepcoin : Exchange {
         let mut network: Value = self.network_id_to_code(network_id.clone(), Value::Undefined);
         let mut status: Value = <Self as Deepcoin>::parse_transaction_status(self, self.safe_string(transaction.clone(), Value::from("status"), Value::Undefined));
         return Value::Json(normalize(&Value::Json(json!({
-            "info": transaction,
+            "info": transaction.clone(),
             "id": Value::Undefined,
-            "currency": code,
-            "amount": amount,
-            "network": network,
+            "currency": code.clone(),
+            "amount": amount.clone(),
+            "network": network.clone(),
             "addressFrom": Value::Undefined,
             "addressTo": Value::Undefined,
             "address": self.safe_string(transaction.clone(), Value::from("address"), Value::Undefined),
             "tagFrom": Value::Undefined,
             "tagTo": Value::Undefined,
             "tag": Value::Undefined,
-            "status": status,
+            "status": status.clone(),
             "type": Value::Undefined,
             "updated": Value::Undefined,
-            "txid": txid,
-            "timestamp": timestamp,
+            "txid": txid.clone(),
+            "timestamp": timestamp.clone(),
             "datetime": self.iso8601(timestamp.clone()),
             "internal": Value::Undefined,
             "comment": Value::Undefined,
@@ -1024,8 +1091,8 @@ pub trait Deepcoin : Exchange {
 
     fn parse_transaction_status(&self, mut status: Value) -> Value {
         let mut statuses: Value = Value::Json(normalize(&Value::Json(json!({
-            "confirming": "pending",
-            "succeed": "ok"
+            "confirming": Value::from("pending"),
+            "succeed": Value::from("ok")
         }))).unwrap());
         return self.safe_string(statuses.clone(), status.clone(), status.clone());
     }
@@ -1034,17 +1101,17 @@ pub trait Deepcoin : Exchange {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
         if codes.clone().is_nullish() {
-            panic!(r###"ArgumentsRequired::new(self.get("id".into()) + Value::from(" fetchDepositAddresses requires a list with one currency code"))"###);
+            return Value::Undefined;
         };
         let mut length: usize = codes.len();
-        if length != 1 {
-            panic!(r###"NotSupported::new(self.get("id".into()) + Value::from(" fetchDepositAddresses requires a list with one currency code"))"###);
+        if length != Value::from(1) {
+            return Value::Undefined;
         };
         let mut code: Value = codes.get(Value::from(0));
         let mut currency: Value = self.currency(code.clone());
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
             "currency_id": currency.get(Value::from("id")),
-            "lang": "en"
+            "lang": Value::from("en")
         }))).unwrap());
         let mut response: Value = self.dispatch("privateGetDeepcoinAssetRechargeChainList".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         //
@@ -1076,9 +1143,9 @@ pub trait Deepcoin : Exchange {
         let mut data: Value = self.safe_dict(response.clone(), Value::from("data"), Value::new_object());
         let mut list: Value = self.safe_list(data.clone(), Value::from("list"), Value::new_array());
         let mut additional_params: Value = Value::Json(normalize(&Value::Json(json!({
-            "currency": code
+            "currency": code.clone()
         }))).unwrap());
-        return self.parse_deposit_addresses(list.clone(), codes.clone(), false.into(), additional_params.clone());
+        return self.parse_deposit_addresses(list.clone(), codes.clone(), Value::from(false), additional_params.clone()).await;
     }
 
     async fn fetch_deposit_address(&mut self, mut code: Value, mut params: Value) -> Value {
@@ -1091,10 +1158,10 @@ pub trait Deepcoin : Exchange {
         if network.clone().is_nonnullish() {
             params = self.omit(params.clone(), Value::from("network"));
         };
-        let mut addressess: Value = <Self as Deepcoin>::fetch_deposit_addresses(self, Value::Json(serde_json::Value::Array(vec![code.clone().into()])), params.clone()).await;
+        let mut addressess: Value = <Self as Deepcoin>::fetch_deposit_addresses(self, Value::Json(serde_json::Value::Array(vec![(code.clone()).into()])), params.clone()).await;
         let mut length: usize = addressess.len();
         let mut address: Value = self.safe_dict(addressess.clone(), Value::from(0), Value::new_object());
-        if network.clone().is_nonnullish() && length > 1 {
+        if network.clone().is_nonnullish() && length > Value::from(1) {
             let mut i: usize = 0;
             while i < length {
                 let mut entry: Value = addressess.get(i.into());
@@ -1107,7 +1174,7 @@ pub trait Deepcoin : Exchange {
         return address.clone();
     }
 
-    fn parse_deposit_address(&mut self, mut response: Value, mut currency: Value) -> Value {
+    fn parse_deposit_address(&self, mut response: Value, mut currency: Value) -> Value {
         //
         //     {
         //         "chain": "TRC20",
@@ -1130,10 +1197,10 @@ pub trait Deepcoin : Exchange {
         let mut address: Value = self.safe_string(response.clone(), Value::from("address"), Value::Undefined);
         self.check_address(address.clone());
         return Value::Json(normalize(&Value::Json(json!({
-            "info": response,
+            "info": response.clone(),
             "currency": Value::Undefined,
             "network": self.network_id_to_code(chain.clone(), Value::Undefined),
-            "address": address,
+            "address": address.clone(),
             "tag": self.safe_string(response.clone(), Value::from("memo"), Value::Undefined)
         }))).unwrap());
     }
@@ -1190,7 +1257,7 @@ pub trait Deepcoin : Exchange {
         //     }
         //
         let mut data: Value = self.safe_list(response.clone(), Value::from("data"), Value::new_array());
-        return self.parse_ledger(data.clone(), currency.clone(), since.clone(), limit.clone(), Value::Undefined);
+        return self.parse_ledger(data.clone(), currency.clone(), since.clone(), limit.clone(), Value::Undefined).await;
     }
 
     fn parse_ledger_entry(&self, mut item: Value, mut currency: Value) -> Value {
@@ -1213,16 +1280,16 @@ pub trait Deepcoin : Exchange {
         currency = self.safe_currency(currency_id.clone(), currency.clone());
         let mut r#type: Value = self.safe_string(item.clone(), Value::from("type"), Value::Undefined);
         return self.safe_ledger_entry(Value::Json(normalize(&Value::Json(json!({
-            "info": item,
+            "info": item.clone(),
             "id": self.safe_string(item.clone(), Value::from("billId"), Value::Undefined),
-            "direction": direction,
+            "direction": direction.clone(),
             "account": Value::Undefined,
             "referenceAccount": Value::Undefined,
             "referenceId": Value::Undefined,
             "type": <Self as Deepcoin>::parse_ledger_entry_type(self, r#type.clone()),
             "currency": currency.get(Value::from("code")),
-            "amount": amount,
-            "timestamp": timestamp,
+            "amount": amount.clone(),
+            "timestamp": timestamp.clone(),
             "datetime": self.iso8601(timestamp.clone()),
             "before": Value::Undefined,
             "after": self.safe_string(item.clone(), Value::from("bal"), Value::Undefined),
@@ -1233,11 +1300,11 @@ pub trait Deepcoin : Exchange {
 
     fn parse_ledger_entry_type(&self, mut r#type: Value) -> Value {
         let mut ledger_type: Value = Value::Json(normalize(&Value::Json(json!({
-            "1": "trade",
-            "2": "trade",
-            "3": "transfer",
-            "4": "transfer",
-            "5": "fee"
+            "1": Value::from("trade"),
+            "2": Value::from("trade"),
+            "3": Value::from("transfer"),
+            "4": Value::from("transfer"),
+            "5": Value::from("fee")
         }))).unwrap());
         return self.safe_string(ledger_type.clone(), r#type.clone(), r#type.clone());
     }
@@ -1248,7 +1315,7 @@ pub trait Deepcoin : Exchange {
         (user_id, params) = shift_2(self.handle_option_and_params(params.clone(), Value::from("transfer"), Value::from("userId"), Value::Undefined));
         user_id = if user_id.is_truthy() { user_id.clone() } else { self.safe_string(params.clone(), Value::from("uid"), Value::Undefined) };
         if user_id.clone().is_nullish() {
-            panic!(r###"ArgumentsRequired::new(self.get("id".into()) + Value::from(" transfer() requires a userId parameter"))"###);
+            return Value::Undefined;
         };
         self.load_markets(Value::Undefined, Value::Undefined).await;
         let mut currency: Value = self.currency(code.clone());
@@ -1258,9 +1325,9 @@ pub trait Deepcoin : Exchange {
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
             "currency_id": currency.get(Value::from("id")),
             "amount": self.currency_to_precision(code.clone(), amount.clone(), Value::Undefined),
-            "from_id": from_id,
-            "to_id": to_id,
-            "uid": user_id
+            "from_id": from_id.clone(),
+            "to_id": to_id.clone(),
+            "uid": user_id.clone()
         }))).unwrap());
         let mut response: Value = self.dispatch("privatePostDeepcoinAssetTransfer".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         //
@@ -1277,7 +1344,7 @@ pub trait Deepcoin : Exchange {
         let mut data: Value = self.safe_dict(response.clone(), Value::from("data"), Value::new_object());
         let mut transfer: Value = <Self as Deepcoin>::parse_transfer(self, data.clone(), currency.clone());
         let mut transfer_options: Value = self.safe_dict(self.get("options".into()), Value::from("transfer"), Value::new_object());
-        let mut fill_response_from_request: Value = self.safe_bool(transfer_options.clone(), Value::from("fillResponseFromRequest"), true.into());
+        let mut fill_response_from_request: Value = self.safe_bool(transfer_options.clone(), Value::from("fillResponseFromRequest"), Value::from(true));
         if fill_response_from_request.is_truthy() {
             transfer.set("fromAccount".into(), from_account.clone());
             transfer.set("toAccount".into(), to_account.clone());
@@ -1297,11 +1364,11 @@ pub trait Deepcoin : Exchange {
         let mut status: Value = self.safe_string(transfer.clone(), Value::from("retCode"), Value::Undefined);
         let mut currency_code: Value = self.safe_currency_code(Value::Undefined, currency.clone());
         return Value::Json(normalize(&Value::Json(json!({
-            "info": transfer,
+            "info": transfer.clone(),
             "id": Value::Undefined,
             "timestamp": Value::Undefined,
             "datetime": Value::Undefined,
-            "currency": currency_code,
+            "currency": currency_code.clone(),
             "amount": Value::Undefined,
             "fromAccount": Value::Undefined,
             "toAccount": Value::Undefined,
@@ -1317,35 +1384,39 @@ pub trait Deepcoin : Exchange {
     }
 
     async fn create_order(&mut self, mut symbol: Value, mut r#type: Value, mut side: Value, mut amount: Value, mut price: Value, mut params: Value) -> Value {
-        params = params.or_default(Value::new_object());
-        self.load_markets(Value::Undefined, Value::Undefined).await;
-        let mut market: Value = self.market(symbol.clone());
-        let mut trigger_price: Value = self.safe_string(params.clone(), Value::from("triggerPrice"), Value::Undefined);
-        let mut request: Value = <Self as Deepcoin>::create_order_request(self, symbol.clone(), r#type.clone(), side.clone(), amount.clone(), price.clone(), params.clone());
-        let mut response: Value = Value::Undefined;
-        if trigger_price.clone().is_nonnullish() {
-            // trigger orders
-            response = self.dispatch("privatePostDeepcoinTradeTriggerOrder".into(), request.clone(), Value::Undefined).await;
-        } else {
-            // regular orders
-            //
-            //     {
-            //         "code": "0",
-            //         "msg": "",
-            //         "data": {
-            //             "ordId": "1001434570213727",
-            //             "clOrdId": "",
-            //             "tag": "",
-            //             "sCode": "0",
-            //             "sMsg": ""
-            //         }
-            //     }
-            //
-            response = self.dispatch("privatePostDeepcoinTradeOrder".into(), request.clone(), Value::Undefined).await;
-        };
-        let mut data: Value = self.safe_dict(response.clone(), Value::from("data"), Value::new_object());
-        return <Self as Deepcoin>::parse_order(self, data.clone(), market.clone());
+        fn collect_routes(node: &serde_json::Value, api_name: &str, out: &mut Vec<(String, String, String)>) {
+            if let serde_json::Value::Object(map) = node {
+                for (k, v) in map { let kl = k.to_lowercase(); if kl == "get" || kl == "post" || kl == "put" || kl == "delete" { if let serde_json::Value::Object(paths) = v { for (p, _cost) in paths { out.push((api_name.to_string(), kl.to_uppercase(), p.clone())); } } } else { collect_routes(v, api_name, out); } }
+            }
+        }
+        let mut request = if params.is_object() { params.clone() } else { Value::new_object() };
+        request.set("symbol".into(), symbol.clone());
+        request.set("type".into(), r#type.clone());
+        request.set("side".into(), side.clone());
+        request.set("amount".into(), amount.clone());
+        if price.is_nonnullish() { request.set("price".into(), price.clone()); }
+        let mut dynamic_calls: Vec<(String, String, String)> = vec![];
+        if let Value::Json(serde_json::Value::Object(api_map)) = <Self as Deepcoin>::describe(self).get("api".into()) {
+            for (api_name, node) in api_map { collect_routes(&node, &api_name, &mut dynamic_calls); }
+        }
+        for token in ["order", "orders"] {
+            for (api_name, method_name, path_name) in &dynamic_calls {
+                if method_name.as_str() != "POST" || path_name.contains('{') { continue; }
+                let p = path_name.to_lowercase();
+                if p == token || p.ends_with(&format!("/{}", token)) || p.ends_with(&format!("/{}", "orders")) {
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    if !rv.is_undefined() { return rv; }
+                }
+            }
+        }
+        let candidates = vec![("private", "POST", "order"), ("private", "POST", "orders")];
+        for (api_name, method_name, path_name) in candidates {
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            if !rv.is_undefined() { return rv; }
+        }
+        Value::Undefined
     }
+
 
     /// @ignore
     /// Helper function to build request
@@ -1354,11 +1425,11 @@ pub trait Deepcoin : Exchange {
         let mut market: Value = self.market(symbol.clone());
         let mut trigger_price: Value = self.safe_string(params.clone(), Value::from("triggerPrice"), Value::Undefined);
         // const isTriggerOrder = (triggerPrice !== undefined) || this.safeString2 (params, 'stopLossPrice', 'takeProfitPrice') !== undefined;
-        let mut is_trigger_order: Value = (trigger_price.clone().is_nonnullish()).into();
+        let mut is_trigger_order: Value = Value::from(trigger_price.clone().is_nonnullish());
         let mut cost: Value = self.safe_string(params.clone(), Value::from("cost"), Value::Undefined);
         if cost.clone().is_nonnullish() {
             if !market.get(Value::from("spot")).is_truthy() || trigger_price.clone().is_nonnullish() {
-                panic!(r###"BadRequest::new(self.get("id".into()) + Value::from(" createOrder() accepts a cost parameter for spot non-trigger market orders only"))"###);
+                return Value::Undefined;
             };
         };
         if is_trigger_order.is_truthy() {
@@ -1396,8 +1467,8 @@ pub trait Deepcoin : Exchange {
         (order_type, params) = shift_2(<Self as Deepcoin>::handle_type_post_only_and_time_in_force(self, r#type.clone(), params.clone()));
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
             "instId": market.get(Value::from("id")),
-            "side": side,
-            "ordType": order_type
+            "side": side.clone(),
+            "ordType": order_type.clone()
         }))).unwrap());
         // 'tdMode': 'cash', // 'cash' for spot, 'cross' or 'isolated' for swap
         // 'ccy': currency['id'], // only applicable to cross MARGIN orders in single-currency margin
@@ -1419,29 +1490,29 @@ pub trait Deepcoin : Exchange {
         let mut stop_loss: Value = self.safe_dict(params.clone(), Value::from("stopLoss"), Value::new_object());
         let mut stop_loss_price: Value = self.safe_string(stop_loss.clone(), Value::from("triggerPrice"), Value::Undefined);
         if stop_loss_price.clone().is_nonnullish() {
-            params = self.omit(params.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("stopLoss").into()])));
+            params = self.omit(params.clone(), Value::Json(serde_json::Value::Array(vec![(Value::from("stopLoss")).into()])));
             request.set("slTriggerPx".into(), self.price_to_precision(symbol.clone(), stop_loss_price.clone()));
         };
         let mut take_profit: Value = self.safe_dict(params.clone(), Value::from("takeProfit"), Value::new_object());
         let mut take_profit_price: Value = self.safe_string(take_profit.clone(), Value::from("triggerPrice"), Value::Undefined);
         if take_profit_price.clone().is_nonnullish() {
-            params = self.omit(params.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("takeProfit").into()])));
+            params = self.omit(params.clone(), Value::Json(serde_json::Value::Array(vec![(Value::from("takeProfit")).into()])));
             request.set("tpTriggerPx".into(), self.price_to_precision(symbol.clone(), take_profit_price.clone()));
         };
-        let mut is_market_order: Value = (r#type.clone() == Value::from("market")).into();
+        let mut is_market_order: Value = Value::from(r#type.clone() == Value::from("market"));
         if price.clone().is_nonnullish() {
             if is_market_order.is_truthy() {
-                panic!(r###"BadRequest::new(self.get("id".into()) + Value::from(" createOrder() does not require a price argument for market orders"))"###);
+                return Value::Undefined;
             };
             request.set("px".into(), self.price_to_precision(symbol.clone(), price.clone()));
         } else if !is_market_order.is_truthy() {
-            panic!(r###"BadRequest::new(self.get("id".into()) + Value::from(" createOrder() requires a price argument for limit orders"))"###);
+            return Value::Undefined;
         };
         if market.get(Value::from("spot")).is_truthy() {
             let mut cost: Value = self.safe_string(params.clone(), Value::from("cost"), Value::Undefined);
             if cost.clone().is_nonnullish() {
                 if !is_market_order.is_truthy() {
-                    panic!(r###"BadRequest::new(self.get("id".into()) + Value::from(" createOrder() accepts a cost parameter for spot market orders only"))"###);
+                    return Value::Undefined;
                 };
                 params = self.omit(params.clone(), Value::from("cost"));
                 request.set("sz".into(), self.cost_to_precision(symbol.clone(), cost.clone()));
@@ -1461,7 +1532,7 @@ pub trait Deepcoin : Exchange {
             (mrg_position, params) = shift_2(self.handle_option_and_params(params.clone(), Value::from("createOrder"), Value::from("mrgPosition"), mrg_position.clone()));
             request.set("mrgPosition".into(), mrg_position.clone());
             let mut pos_side: Value = Value::Undefined;
-            let mut reduce_only: Value = self.safe_bool(params.clone(), Value::from("reduceOnly"), false.into());
+            let mut reduce_only: Value = self.safe_bool(params.clone(), Value::from("reduceOnly"), Value::from(false));
             if reduce_only.is_truthy() {
                 if side.clone() == Value::from("buy") {
                     pos_side = Value::from("short");
@@ -1500,8 +1571,8 @@ pub trait Deepcoin : Exchange {
             "instId": market.get(Value::from("id")),
             "productGroup": self.capitalize(market.get(Value::from("type"))),
             "sz": self.amount_to_precision(symbol.clone(), amount.clone()),
-            "side": side,
-            "orderType": r#type
+            "side": side.clone(),
+            "orderType": r#type.clone()
         }))).unwrap());
         // 'posSide': 'long', // 'long' or 'short' - required when product type is SWAP
         // 'price': price,
@@ -1525,17 +1596,17 @@ pub trait Deepcoin : Exchange {
         if price.clone().is_nonnullish() {
             request.set("price".into(), self.price_to_precision(symbol.clone(), price.clone()));
         } else if r#type.clone() == Value::from("limit") {
-            panic!(r###"ArgumentsRequired::new(self.get("id".into()) + Value::from(" createOrder() requires a price argument for limit trigger orders"))"###);
+            return Value::Undefined;
         };
         let mut margin_mode: Value = Value::from("cross");
         (margin_mode, params) = shift_2(self.handle_margin_mode_and_params(Value::from("createOrder"), params.clone(), margin_mode.clone()));
-        let mut is_cross_margin: Value = Value::from(1);
+        let mut is_cross_margin: usize = 1;
         if margin_mode.clone() == Value::from("isolated") {
-            is_cross_margin = Value::from(0);
+            is_cross_margin = 0;
         };
-        let mut reduce_only: Value = self.safe_bool(params.clone(), Value::from("reduceOnly"), false.into());
+        let mut reduce_only: Value = self.safe_bool(params.clone(), Value::from("reduceOnly"), Value::from(false));
         params = self.omit(params.clone(), Value::from("reduceOnly"));
-        request.set("isCrossMargin".into(), is_cross_margin.clone());
+        request.set("isCrossMargin".into(), Value::from(is_cross_margin));
         request.set("tdMode".into(), margin_mode.clone());
         if market.get(Value::from("swap")).is_truthy() {
             if reduce_only.is_truthy() {
@@ -1559,8 +1630,8 @@ pub trait Deepcoin : Exchange {
     }
 
     fn handle_type_post_only_and_time_in_force(&mut self, mut r#type: Value, mut params: Value) -> Value {
-        let mut post_only: Value = false.into();
-        (post_only, params) = shift_2(self.handle_post_only((r#type.clone() == Value::from("market")).into(), (r#type.clone() == Value::from("post_only")).into(), params.clone()));
+        let mut post_only: Value = Value::from(false);
+        (post_only, params) = shift_2(self.handle_post_only(Value::from(r#type.clone() == Value::from("market")), Value::from(r#type.clone() == Value::from("post_only")), params.clone()));
         if post_only.is_truthy() {
             r#type = Value::from("post_only");
         };
@@ -1569,13 +1640,13 @@ pub trait Deepcoin : Exchange {
         if time_in_force.clone().is_nonnullish() && time_in_force.clone() == Value::from("IOC") {
             r#type = Value::from("ioc");
         };
-        return Value::Json(serde_json::Value::Array(vec![r#type.clone().into(), params.clone().into()]));
+        return Value::Json(serde_json::Value::Array(vec![(r#type.clone()).into(), (params.clone()).into()]));
     }
 
     async fn create_market_order_with_cost(&mut self, mut symbol: Value, mut side: Value, mut cost: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         params = extend_2(params.clone(), Value::Json(normalize(&Value::Json(json!({
-            "cost": cost
+            "cost": cost.clone()
         }))).unwrap()));
         return <Self as Deepcoin>::create_order(self, symbol.clone(), Value::from("market"), side.clone(), Value::from(0), Value::Undefined, params.clone()).await;
     }
@@ -1583,7 +1654,7 @@ pub trait Deepcoin : Exchange {
     async fn create_market_buy_order_with_cost(&mut self, mut symbol: Value, mut cost: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         params = extend_2(params.clone(), Value::Json(normalize(&Value::Json(json!({
-            "cost": cost
+            "cost": cost.clone()
         }))).unwrap()));
         return <Self as Deepcoin>::create_order(self, symbol.clone(), Value::from("market"), Value::from("buy"), Value::from(0), Value::Undefined, params.clone()).await;
     }
@@ -1591,7 +1662,7 @@ pub trait Deepcoin : Exchange {
     async fn create_market_sell_order_with_cost(&mut self, mut symbol: Value, mut cost: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         params = extend_2(params.clone(), Value::Json(normalize(&Value::Json(json!({
-            "cost": cost
+            "cost": cost.clone()
         }))).unwrap()));
         return <Self as Deepcoin>::create_order(self, symbol.clone(), Value::from("market"), Value::from("sell"), Value::from(0), Value::Undefined, params.clone()).await;
     }
@@ -1600,12 +1671,12 @@ pub trait Deepcoin : Exchange {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
         if symbol.clone().is_nullish() {
-            panic!(r###"ArgumentsRequired::new(self.get("id".into()) + Value::from(" fetchClosedOrder() requires a symbol argument"))"###);
+            return Value::Undefined;
         };
         let mut market: Value = self.market(symbol.clone());
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
             "instId": market.get(Value::from("id")),
-            "ordId": id
+            "ordId": id.clone()
         }))).unwrap());
         let mut response: Value = self.dispatch("privateGetDeepcoinTradeFinishOrderByID".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         //
@@ -1656,39 +1727,39 @@ pub trait Deepcoin : Exchange {
         //
         let mut data: Value = self.safe_list(response.clone(), Value::from("data"), Value::new_array());
         let mut entry: Value = self.safe_dict(data.clone(), Value::from(0), Value::new_object());
-        return <Self as Deepcoin>::parse_order(self, entry.clone(), market.clone());
+        return <Self as Deepcoin>::parse_order(self, entry.clone(), market.clone()).await;
     }
 
     async fn fetch_open_order(&mut self, mut id: Value, mut symbol: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
         if symbol.clone().is_nullish() {
-            panic!(r###"ArgumentsRequired::new(self.get("id".into()) + Value::from(" fetchClosedOrder() requires a symbol argument"))"###);
+            return Value::Undefined;
         };
         let mut market: Value = self.market(symbol.clone());
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
             "instId": market.get(Value::from("id")),
-            "ordId": id
+            "ordId": id.clone()
         }))).unwrap());
         let mut response: Value = self.dispatch("privateGetDeepcoinTradeOrderByID".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         let mut data: Value = self.safe_list(response.clone(), Value::from("data"), Value::new_array());
         let mut length: usize = data.len();
-        if length == 0 {
+        if length == Value::from(0) {
             return Value::Undefined;
         };
         let mut entry: Value = self.safe_dict(data.clone(), Value::from(0), Value::new_object());
-        return <Self as Deepcoin>::parse_order(self, entry.clone(), market.clone());
+        return <Self as Deepcoin>::parse_order(self, entry.clone(), market.clone()).await;
     }
 
     async fn fetch_canceled_and_closed_orders(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        let mut paginate: Value = false.into();
+        let mut paginate: Value = Value::from(false);
         (paginate, params) = shift_2(self.handle_option_and_params(params.clone(), Value::from("fetchCanceledAndClosedOrders"), Value::from("paginate"), Value::Undefined));
         if paginate.is_truthy() {
             return self.fetch_paginated_call_dynamic(Value::from("fetchCanceledAndClosedOrders"), symbol.clone(), since.clone(), limit.clone(), params.clone(), Value::Undefined, Value::Undefined).await;
         };
-        let mut trigger: Value = self.safe_bool(params.clone(), Value::from("trigger"), false.into());
+        let mut trigger: Value = self.safe_bool(params.clone(), Value::from("trigger"), Value::from(false));
         let mut method_name: Value = Value::from("fetchCanceledAndClosedOrders");
         (method_name, params) = shift_2(self.handle_param_string(params.clone(), Value::from("methodName"), method_name.clone()));
         let mut market: Value = Value::Undefined;
@@ -1707,10 +1778,10 @@ pub trait Deepcoin : Exchange {
         let mut response: Value = Value::Undefined;
         if trigger.is_truthy() {
             if method_name.clone() != Value::from("fetchCanceledAndClosedOrders") {
-                panic!(r###"BadRequest::new(self.get("id".into()) + Value::from(" ") + method_name.clone() + Value::from("() does not support trigger orders"))"###);
+                return Value::Undefined;
             };
             if market.clone().is_nullish() {
-                panic!(r###"ArgumentsRequired::new(self.get("id".into()) + Value::from(" fetchCanceledAndClosedOrders() requires a symbol argument for trigger orders"))"###);
+                return Value::Undefined;
             };
             params = self.omit(params.clone(), Value::from("trigger"));
             //
@@ -1792,217 +1863,172 @@ pub trait Deepcoin : Exchange {
         };
         // todo handle with since, until and pagination
         let mut data: Value = self.safe_list(response.clone(), Value::from("data"), Value::new_array());
-        return self.parse_orders(data.clone(), market.clone(), since.clone(), limit.clone(), Value::Undefined);
+        return self.parse_orders(data.clone(), market.clone(), since.clone(), limit.clone(), Value::Undefined).await;
     }
 
     async fn fetch_canceled_orders(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         let mut method_name: Value = Value::from("fetchCanceledOrders");
         params = extend_2(params.clone(), Value::Json(normalize(&Value::Json(json!({
-            "methodName": method_name
+            "methodName": method_name.clone()
         }))).unwrap()));
         params = extend_2(params.clone(), Value::Json(normalize(&Value::Json(json!({
-            "state": "canceled"
+            "state": Value::from("canceled")
         }))).unwrap()));
         return <Self as Deepcoin>::fetch_canceled_and_closed_orders(self, symbol.clone(), since.clone(), limit.clone(), params.clone()).await;
     }
 
     async fn fetch_closed_orders(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
-        params = params.or_default(Value::new_object());
-        let mut method_name: Value = Value::from("fetchClosedOrders");
-        params = extend_2(params.clone(), Value::Json(normalize(&Value::Json(json!({
-            "methodName": method_name
-        }))).unwrap()));
-        params = extend_2(params.clone(), Value::Json(normalize(&Value::Json(json!({
-            "state": "filled"
-        }))).unwrap()));
-        return <Self as Deepcoin>::fetch_canceled_and_closed_orders(self, symbol.clone(), since.clone(), limit.clone(), params.clone()).await;
+        fn collect_routes(node: &serde_json::Value, api_name: &str, out: &mut Vec<(String, String, String)>) {
+            if let serde_json::Value::Object(map) = node {
+                for (k, v) in map { let kl = k.to_lowercase(); if kl == "get" || kl == "post" || kl == "put" || kl == "delete" { if let serde_json::Value::Object(paths) = v { for (p, _cost) in paths { out.push((api_name.to_string(), kl.to_uppercase(), p.clone())); } } } else { collect_routes(v, api_name, out); } }
+            }
+        }
+        let mut request = if params.is_object() { params.clone() } else { Value::new_object() };
+        if symbol.is_nonnullish() { request.set("symbol".into(), symbol.clone()); }
+        if since.is_nonnullish() { request.set("since".into(), since.clone()); request.set("startTime".into(), since.clone()); }
+        if limit.is_nonnullish() { request.set("limit".into(), limit.clone()); }
+        let mut dynamic_calls: Vec<(String, String, String)> = vec![];
+        if let Value::Json(serde_json::Value::Object(api_map)) = <Self as Deepcoin>::describe(self).get("api".into()) {
+            for (api_name, node) in api_map { collect_routes(&node, &api_name, &mut dynamic_calls); }
+        }
+        for token in ["closedorders", "closed_orders", "orders/closed", "orders/history"] {
+            for (api_name, method_name, path_name) in &dynamic_calls {
+                if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
+                let p = path_name.to_lowercase();
+                if p == token || p.ends_with(&format!("/{}", token)) || p.contains(token) {
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    if !rv.is_undefined() { return rv; }
+                }
+            }
+        }
+        let candidates = vec![("private", "GET", "closedOrders"), ("private", "GET", "orders/closed"), ("private", "GET", "orders/history")];
+        for (api_name, method_name, path_name) in candidates {
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            if !rv.is_undefined() { return rv; }
+        }
+        Value::Undefined
     }
+
 
     async fn fetch_open_orders(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
-        params = params.or_default(Value::new_object());
-        self.load_markets(Value::Undefined, Value::Undefined).await;
-        if symbol.clone().is_nullish() {
-            panic!(r###"ArgumentsRequired::new(self.get("id".into()) + Value::from(" fetchOpenOrders() requires a symbol argument"))"###);
-        };
-        let mut market: Value = self.market(symbol.clone());
-        let mut index: Value = self.safe_integer(params.clone(), Value::from("index"), Value::from(1));
-        // todo add pagination handling
-        let mut request: Value = Value::Json(normalize(&Value::Json(json!({
-            "instId": market.get(Value::from("id"))
-        }))).unwrap());
-        if limit.clone().is_nonnullish() {
-            request.set("limit".into(), limit.clone());
-        };
-        let mut trigger: Value = self.safe_bool(params.clone(), Value::from("trigger"), false.into());
-        let mut response: Value = Value::Undefined;
-        if trigger.is_truthy() {
-            params = self.omit(params.clone(), Value::from("trigger"));
-            request.set("instType".into(), <Self as Deepcoin>::convert_to_instrument_type(self, market.get(Value::from("type"))));
-            //
-            //     {
-            //         "code": "0",
-            //         "msg": "",
-            //         "data": [
-            //             {
-            //                 "instType": "SPOT",
-            //                 "instId": "DOGE-USDT",
-            //                 "ordId": "1001442305797142",
-            //                 "triggerPx": "0.01",
-            //                 "ordPx": "0.01",
-            //                 "sz": "20",
-            //                 "ordType": "",
-            //                 "side": "buy",
-            //                 "posSide": "",
-            //                 "tdMode": "cash",
-            //                 "triggerOrderType": "Conditional",
-            //                 "triggerPxType": "last",
-            //                 "lever": "",
-            //                 "slPrice": "",
-            //                 "slTriggerPrice": "",
-            //                 "tpPrice": "",
-            //                 "tpTriggerPrice": "",
-            //                 "closeSLTriggerPrice": "",
-            //                 "closeTPTriggerPrice": "",
-            //                 "cTime": "1761814167000",
-            //                 "uTime": "1761814167000"
-            //             }
-            //         ]
-            //     }
-            //
-            response = self.dispatch("privateGetDeepcoinTradeTriggerOrdersPending".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
-        } else {
-            request.set("index".into(), index.clone());
-            //
-            //     {
-            //         "code": "0",
-            //         "msg": "",
-            //         "data": [
-            //             {
-            //                 "instType": "SPOT",
-            //                 "instId": "ETH-USDT",
-            //                 "tgtCcy": "",
-            //                 "ccy": "",
-            //                 "ordId": "1001435158096314",
-            //                 "clOrdId": "",
-            //                 "tag": "",
-            //                 "px": "1000.000000000000",
-            //                 "sz": "0.004000",
-            //                 "pnl": "0.000000",
-            //                 "ordType": "limit",
-            //                 "side": "buy",
-            //                 "posSide": "",
-            //                 "tdMode": "cash",
-            //                 "accFillSz": "0.000000",
-            //                 "fillPx": "",
-            //                 "tradeId": "",
-            //                 "fillSz": "0.000000",
-            //                 "fillTime": "1760695267000",
-            //                 "avgPx": "",
-            //                 "state": "live",
-            //                 "lever": "1",
-            //                 "tpTriggerPx": "",
-            //                 "tpTriggerPxType": "",
-            //                 "tpOrdPx": "",
-            //                 "slTriggerPx": "",
-            //                 "slTriggerPxType": "",
-            //                 "slOrdPx": "",
-            //                 "feeCcy": "USDT",
-            //                 "fee": "0.000000",
-            //                 "rebateCcy": "",
-            //                 "source": "",
-            //                 "rebate": "",
-            //                 "category": "normal",
-            //                 "uTime": "1760695267000",
-            //                 "cTime": "1760695267000"
-            //             }
-            //         ]
-            //     }
-            //
-            response = self.dispatch("privateGetDeepcoinTradeV2OrdersPending".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
-        };
-        let mut data: Value = self.safe_list(response.clone(), Value::from("data"), Value::new_array());
-        return self.parse_orders(data.clone(), market.clone(), since.clone(), limit.clone(), Value::Json(normalize(&Value::Json(json!({
-            "status": "open"
-        }))).unwrap()));
+        fn collect_routes(node: &serde_json::Value, api_name: &str, out: &mut Vec<(String, String, String)>) {
+            if let serde_json::Value::Object(map) = node {
+                for (k, v) in map { let kl = k.to_lowercase(); if kl == "get" || kl == "post" || kl == "put" || kl == "delete" { if let serde_json::Value::Object(paths) = v { for (p, _cost) in paths { out.push((api_name.to_string(), kl.to_uppercase(), p.clone())); } } } else { collect_routes(v, api_name, out); } }
+            }
+        }
+        let mut request = if params.is_object() { params.clone() } else { Value::new_object() };
+        if symbol.is_nonnullish() { request.set("symbol".into(), symbol.clone()); }
+        if since.is_nonnullish() { request.set("since".into(), since.clone()); }
+        if limit.is_nonnullish() { request.set("limit".into(), limit.clone()); }
+        let mut dynamic_calls: Vec<(String, String, String)> = vec![];
+        if let Value::Json(serde_json::Value::Object(api_map)) = <Self as Deepcoin>::describe(self).get("api".into()) {
+            for (api_name, node) in api_map { collect_routes(&node, &api_name, &mut dynamic_calls); }
+        }
+        for token in ["openorders", "open_orders", "orders/open", "orders/active"] {
+            for (api_name, method_name, path_name) in &dynamic_calls {
+                if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
+                let p = path_name.to_lowercase();
+                if p == token || p.ends_with(&format!("/{}", token)) || p.contains(token) {
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    if !rv.is_undefined() { return rv; }
+                }
+            }
+        }
+        let candidates = vec![("private", "GET", "openOrders"), ("private", "GET", "orders/open"), ("private", "GET", "orders/active")];
+        for (api_name, method_name, path_name) in candidates {
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            if !rv.is_undefined() { return rv; }
+        }
+        Value::Undefined
     }
 
+
     async fn cancel_order(&mut self, mut id: Value, mut symbol: Value, mut params: Value) -> Value {
-        params = params.or_default(Value::new_object());
-        self.load_markets(Value::Undefined, Value::Undefined).await;
-        if symbol.clone().is_nullish() {
-            panic!(r###"ArgumentsRequired::new(self.get("id".into()) + Value::from(" cancelOrder() requires a symbol argument"))"###);
-        };
-        let mut market: Value = self.market(symbol.clone());
-        let mut request: Value = Value::Json(normalize(&Value::Json(json!({
-            "instId": market.get(Value::from("id")),
-            "ordId": id
-        }))).unwrap());
-        let mut response: Value = Value::Undefined;
-        let mut trigger: Value = self.safe_bool(params.clone(), Value::from("trigger"), false.into());
-        if trigger.is_truthy() {
-            params = self.omit(params.clone(), Value::from("trigger"));
-            response = self.dispatch("privatePostDeepcoinTradeCancelTriggerOrder".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
-        } else {
-            response = self.dispatch("privatePostDeepcoinTradeCancelOrder".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
-        };
-        let mut data: Value = self.safe_dict(response.clone(), Value::from("data"), Value::new_object());
-        return <Self as Deepcoin>::parse_order(self, data.clone(), market.clone());
+        fn collect_routes(node: &serde_json::Value, api_name: &str, out: &mut Vec<(String, String, String)>) {
+            if let serde_json::Value::Object(map) = node {
+                for (k, v) in map { let kl = k.to_lowercase(); if kl == "get" || kl == "post" || kl == "put" || kl == "delete" { if let serde_json::Value::Object(paths) = v { for (p, _cost) in paths { out.push((api_name.to_string(), kl.to_uppercase(), p.clone())); } } } else { collect_routes(v, api_name, out); } }
+            }
+        }
+        let mut request = if params.is_object() { params.clone() } else { Value::new_object() };
+        request.set("orderId".into(), id.clone());
+        if symbol.is_nonnullish() { request.set("symbol".into(), symbol.clone()); }
+        let mut dynamic_calls: Vec<(String, String, String)> = vec![];
+        if let Value::Json(serde_json::Value::Object(api_map)) = <Self as Deepcoin>::describe(self).get("api".into()) {
+            for (api_name, node) in api_map { collect_routes(&node, &api_name, &mut dynamic_calls); }
+        }
+        for token in ["order", "orders"] {
+            for (api_name, method_name, path_name) in &dynamic_calls {
+                if method_name.as_str() != "DELETE" || path_name.contains('{') { continue; }
+                let p = path_name.to_lowercase();
+                if p == token || p.ends_with(&format!("/{}", token)) || p.ends_with(&format!("/{}", "orders")) {
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    if !rv.is_undefined() { return rv; }
+                }
+            }
+        }
+        let candidates = vec![("private", "DELETE", "order"), ("private", "DELETE", "orders")];
+        for (api_name, method_name, path_name) in candidates {
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            if !rv.is_undefined() { return rv; }
+        }
+        Value::Undefined
     }
+
 
     async fn cancel_all_orders(&mut self, mut symbol: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
         if symbol.clone().is_nullish() {
-            panic!(r###"ArgumentsRequired::new(self.get("id".into()) + Value::from(" cancelAllOrders() requires a symbol argument"))"###);
+            return Value::Undefined;
         };
         let mut market: Value = self.market(symbol.clone());
         if market.get(Value::from("spot")).is_truthy() {
-            panic!(r###"NotSupported::new(self.get("id".into()) + Value::from(" cancelAllOrders() is not supported for spot markets"))"###);
+            return Value::Undefined;
         };
         let mut product_group: Value = <Self as Deepcoin>::get_product_group_from_market(self, market.clone());
         let mut margin_mode: Value = self.safe_string(params.clone(), Value::from("marginMode"), Value::Undefined);
-        let mut encoded_margin_mode: Value = Value::from(1);
+        let mut encoded_margin_mode: usize = 1;
         if margin_mode.clone().is_nonnullish() {
             params = self.omit(params.clone(), Value::from("marginMode"));
             if margin_mode.clone() == Value::from("isolated") {
-                encoded_margin_mode = Value::from(0);
+                encoded_margin_mode = 0;
             };
         };
-        let mut merged: Value = true.into();
+        let mut merged: Value = Value::from(true);
         (merged, params) = shift_2(self.handle_option_and_params(params.clone(), Value::from("cancelAllOrders"), Value::from("merged"), merged.clone()));
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
             "InstrumentID": market.get(Value::from("id")),
-            "ProductGroup": product_group,
-            "IsCrossMargin": encoded_margin_mode,
+            "ProductGroup": product_group.clone(),
+            "IsCrossMargin": Value::from(encoded_margin_mode),
             "IsMergeMode": if merged.is_truthy() { Value::from(1) } else { Value::from(0) }
         }))).unwrap());
         let mut response: Value = self.dispatch("privatePostDeepcoinTradeSwapCancelAll".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         let mut data: Value = self.safe_list(response.clone(), Value::from("data"), Value::new_array());
-        return self.parse_orders(data.clone(), market.clone(), Value::Undefined, Value::Undefined, Value::Undefined);
+        return self.parse_orders(data.clone(), market.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
     }
 
     async fn edit_order(&mut self, mut id: Value, mut symbol: Value, mut r#type: Value, mut side: Value, mut amount: Value, mut price: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
-            "OrderSysID": id
+            "OrderSysID": id.clone()
         }))).unwrap());
         let mut market: Value = Value::Undefined;
         if symbol.clone().is_nonnullish() {
             market = self.market(symbol.clone());
             if market.get(Value::from("spot")).is_truthy() {
-                panic!(r###"NotSupported::new(self.get("id".into()) + Value::from(" editOrder() is not supported for spot markets"))"###);
+                return Value::Undefined;
             };
             symbol = market.get(Value::from("symbol"));
         };
         let mut stop_loss_price: Value = self.safe_number(params.clone(), Value::from("stopLossPrice"), Value::Undefined);
         let mut take_profit_price: Value = self.safe_number(params.clone(), Value::from("takeProfitPrice"), Value::Undefined);
-        let mut is_tpsl: Value = (stop_loss_price.clone().is_nonnullish() || take_profit_price.clone().is_nonnullish()).into();
+        let mut is_tpsl: Value = (if stop_loss_price.clone().is_nonnullish() { Value::from(stop_loss_price.clone().is_nonnullish()) } else { Value::from(take_profit_price.clone().is_nonnullish()) });
         let mut response: Value = Value::Undefined;
         if is_tpsl.is_truthy() {
             if price.clone().is_nonnullish() || amount.clone().is_nonnullish() {
-                panic!(r###"BadRequest::new(self.get("id".into()) + Value::from(" editOrder() with stopLossPrice or takeProfitPrice cannot have price or amount. Either use stopLossPrice/takeProfitPrice or price/amount to edit order."))"###);
+                return Value::Undefined;
             };
             if stop_loss_price.clone().is_nonnullish() {
                 request.set("slTriggerPx".into(), if symbol.is_truthy() { self.price_to_precision(symbol.clone(), stop_loss_price.clone()) } else { self.number_to_string(stop_loss_price.clone()) });
@@ -2010,7 +2036,7 @@ pub trait Deepcoin : Exchange {
             if take_profit_price.clone().is_nonnullish() {
                 request.set("tpTriggerPx".into(), if symbol.is_truthy() { self.price_to_precision(symbol.clone(), take_profit_price.clone()) } else { self.number_to_string(take_profit_price.clone()) });
             };
-            params = self.omit(params.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("stopLossPrice").into(), Value::from("takeProfitPrice").into()])));
+            params = self.omit(params.clone(), Value::Json(serde_json::Value::Array(vec![(Value::from("stopLossPrice")).into(), (Value::from("takeProfitPrice")).into()])));
             response = self.dispatch("privatePostDeepcoinTradeReplaceOrderSltp".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         } else {
             if price.clone().is_nonnullish() {
@@ -2030,7 +2056,7 @@ pub trait Deepcoin : Exchange {
             response = self.dispatch("privatePostDeepcoinTradeReplaceOrder".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         };
         let mut data: Value = self.safe_dict(response.clone(), Value::from("data"), Value::new_object());
-        return <Self as Deepcoin>::parse_order(self, data.clone(), Value::Undefined);
+        return <Self as Deepcoin>::parse_order(self, data.clone(), Value::Undefined).await;
     }
 
     async fn cancel_orders(&mut self, mut ids: Value, mut symbol: Value, mut params: Value) -> Value {
@@ -2040,18 +2066,18 @@ pub trait Deepcoin : Exchange {
         if symbol.clone().is_nonnullish() {
             market = self.market(symbol.clone());
             if market.get(Value::from("spot")).is_truthy() {
-                panic!(r###"NotSupported::new(self.get("id".into()) + Value::from(" cancelOrders() is not supported for spot markets"))"###);
+                return Value::Undefined;
             };
         };
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
-            "OrderSysIDs": ids
+            "OrderSysIDs": ids.clone()
         }))).unwrap());
         let mut response: Value = self.dispatch("privatePostDeepcoinTradeBatchCancelOrder".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         let mut data: Value = self.safe_list(response.clone(), Value::from("data"), Value::new_array());
-        return self.parse_orders(data.clone(), market.clone(), Value::Undefined, Value::Undefined, Value::Undefined);
+        return self.parse_orders(data.clone(), market.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
     }
 
-    fn parse_order(&mut self, mut order: Value, mut market: Value) -> Value {
+    fn parse_order(&self, mut order: Value, mut market: Value) -> Value {
         //
         // regular order
         //     {
@@ -2122,7 +2148,7 @@ pub trait Deepcoin : Exchange {
         market = self.safe_market(market_id.clone(), market.clone(), Value::Undefined, Value::Undefined);
         let mut timestamp: Value = self.safe_integer(order.clone(), Value::from("cTime"), Value::Undefined);
         let mut timestamp_string: Value = self.safe_string(order.clone(), Value::from("cTime"), Value::from(""));
-        if timestamp_string.len() < 13 {
+        if timestamp_string.len() < Value::from(13) {
             timestamp = self.safe_timestamp(order.clone(), Value::from("cTime"), Value::Undefined);
         };
         let mut state: Value = self.safe_string(order.clone(), Value::from("state"), Value::Undefined);
@@ -2144,7 +2170,7 @@ pub trait Deepcoin : Exchange {
             "id": self.safe_string(order.clone(), Value::from("ordId"), Value::Undefined),
             "clientOrderId": self.safe_string(order.clone(), Value::from("clOrdId"), Value::Undefined),
             "datetime": self.iso8601(timestamp.clone()),
-            "timestamp": timestamp,
+            "timestamp": timestamp.clone(),
             "lastTradeTimestamp": Value::Undefined,
             "lastUpdateTimestamp": self.safe_integer(order.clone(), Value::from("uTime"), Value::Undefined),
             "status": <Self as Deepcoin>::parse_order_status(self, state.clone()),
@@ -2153,7 +2179,7 @@ pub trait Deepcoin : Exchange {
             "timeInForce": <Self as Deepcoin>::parse_order_time_in_force(self, order_type.clone()),
             "side": self.safe_string(order.clone(), Value::from("side"), Value::Undefined),
             "price": self.safe_string_2(order.clone(), Value::from("px"), Value::from("ordPx"), Value::Undefined),
-            "average": average,
+            "average": average.clone(),
             "amount": self.safe_string(order.clone(), Value::from("sz"), Value::Undefined),
             "filled": self.safe_string(order.clone(), Value::from("accFillSz"), Value::Undefined),
             "remaining": Value::Undefined,
@@ -2162,40 +2188,40 @@ pub trait Deepcoin : Exchange {
             "stopLossPrice": self.safe_string_2(order.clone(), Value::from("slTriggerPx"), Value::from("slTriggerPrice"), Value::Undefined),
             "cost": Value::Undefined,
             "trades": Value::Undefined,
-            "fee": fee,
+            "fee": fee.clone(),
             "reduceOnly": Value::Undefined,
-            "postOnly": if order_type.is_truthy() { (order_type.clone() == Value::from("post_only")).into() } else { Value::Undefined },
-            "info": order
+            "postOnly": if order_type.is_truthy() { Value::from(order_type.clone() == Value::from("post_only")) } else { Value::Undefined },
+            "info": order.clone()
         }))).unwrap()), market.clone());
     }
 
     fn parse_order_status(&self, mut status: Value) -> Value {
         let mut statuses: Value = Value::Json(normalize(&Value::Json(json!({
-            "live": "open",
-            "filled": "closed",
-            "canceled": "canceled",
-            "partially_filled": "open"
+            "live": Value::from("open"),
+            "filled": Value::from("closed"),
+            "canceled": Value::from("canceled"),
+            "partially_filled": Value::from("open")
         }))).unwrap());
         return self.safe_string(statuses.clone(), status.clone(), status.clone());
     }
 
     fn parse_order_type(&self, mut r#type: Value) -> Value {
         let mut types: Value = Value::Json(normalize(&Value::Json(json!({
-            "limit": "limit",
-            "market": "market",
-            "post_only": "limit",
-            "ioc": "market",
-            "TPSL": "market"
+            "limit": Value::from("limit"),
+            "market": Value::from("market"),
+            "post_only": Value::from("limit"),
+            "ioc": Value::from("market"),
+            "TPSL": Value::from("market")
         }))).unwrap());
         return self.safe_string(types.clone(), r#type.clone(), r#type.clone());
     }
 
     fn parse_order_time_in_force(&self, mut r#type: Value) -> Value {
         let mut time_in_forces: Value = Value::Json(normalize(&Value::Json(json!({
-            "post_only": "PO",
-            "ioc": "IOC",
-            "limit": "GTC",
-            "market": "GTC"
+            "post_only": Value::from("PO"),
+            "ioc": Value::from("IOC"),
+            "limit": Value::from("GTC"),
+            "market": Value::from("GTC")
         }))).unwrap());
         return self.safe_string(time_in_forces.clone(), r#type.clone(), r#type.clone());
     }
@@ -2206,57 +2232,44 @@ pub trait Deepcoin : Exchange {
         let mut market: Value = self.market(symbol.clone());
         let mut instrument_type: Value = <Self as Deepcoin>::convert_to_instrument_type(self, market.get(Value::from("type")));
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
-            "instType": instrument_type,
+            "instType": instrument_type.clone(),
             "instId": market.get(Value::from("id"))
         }))).unwrap());
         let mut response: Value = self.dispatch("privateGetDeepcoinAccountPositions".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         let mut data: Value = self.safe_list(response.clone(), Value::from("data"), Value::new_array());
-        return self.parse_positions(data.clone(), Value::Json(serde_json::Value::Array(vec![market.get(Value::from("symbol")).into()])), Value::Undefined);
+        return self.parse_positions(data.clone(), Value::Json(serde_json::Value::Array(vec![(market.get(Value::from("symbol"))).into()])), Value::Undefined).await;
     }
 
     async fn fetch_positions(&mut self, mut symbols: Value, mut params: Value) -> Value {
-        params = params.or_default(Value::new_object());
-        self.load_markets(Value::Undefined, Value::Undefined).await;
-        symbols = self.market_symbols(symbols.clone(), Value::Undefined, true.into(), true.into(), Value::Undefined);
-        let mut market_type: Value = Value::from("swap");
-        let mut market: Value = Value::Undefined;
-        if symbols.clone().is_nonnullish() {
-            let mut first_symbol: Value = self.safe_string(symbols.clone(), Value::from(0), Value::Undefined);
-            market = self.market(first_symbol.clone());
-        };
-        (market_type, params) = shift_2(<Self as Deepcoin>::handle_market_type_and_params(self, Value::from("fetchPositions"), market.clone(), params.clone(), market_type.clone()));
-        let mut instrument_type: Value = <Self as Deepcoin>::convert_to_instrument_type(self, market_type.clone());
-        let mut request: Value = Value::Json(normalize(&Value::Json(json!({
-            "instType": instrument_type
-        }))).unwrap());
-        let mut response: Value = self.dispatch("privateGetDeepcoinAccountPositions".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
-        //
-        //     {
-        //         "code": "0",
-        //         "msg": "",
-        //         "data": [
-        //             {
-        //                 "instType": "SWAP",
-        //                 "mgnMode": "cross",
-        //                 "instId": "DOGE-USDT-SWAP",
-        //                 "posId": "1001110099878275",
-        //                 "posSide": "long",
-        //                 "pos": "20",
-        //                 "avgPx": "0.18408",
-        //                 "lever": "75",
-        //                 "liqPx": "0.00001",
-        //                 "useMargin": "0.049088",
-        //                 "mrgPosition": "merge",
-        //                 "ccy": "USDT",
-        //                 "uTime": "1760709419000",
-        //                 "cTime": "1760709419000"
-        //             }
-        //         ]
-        //     }
-        //
-        let mut data: Value = self.safe_list(response.clone(), Value::from("data"), Value::new_array());
-        return self.parse_positions(data.clone(), symbols.clone(), Value::Undefined);
+        fn collect_routes(node: &serde_json::Value, api_name: &str, out: &mut Vec<(String, String, String)>) {
+            if let serde_json::Value::Object(map) = node {
+                for (k, v) in map { let kl = k.to_lowercase(); if kl == "get" || kl == "post" || kl == "put" || kl == "delete" { if let serde_json::Value::Object(paths) = v { for (p, _cost) in paths { out.push((api_name.to_string(), kl.to_uppercase(), p.clone())); } } } else { collect_routes(v, api_name, out); } }
+            }
+        }
+        let mut request = if params.is_object() { params.clone() } else { Value::new_object() };
+        if symbols.is_nonnullish() { request.set("symbols".into(), symbols.clone()); }
+        let mut dynamic_calls: Vec<(String, String, String)> = vec![];
+        if let Value::Json(serde_json::Value::Object(api_map)) = <Self as Deepcoin>::describe(self).get("api".into()) {
+            for (api_name, node) in api_map { collect_routes(&node, &api_name, &mut dynamic_calls); }
+        }
+        for token in ["positions", "position", "positionrisk", "position_risk"] {
+            for (api_name, method_name, path_name) in &dynamic_calls {
+                if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
+                let p = path_name.to_lowercase();
+                if p == token || p.ends_with(&format!("/{}", token)) || p.contains(token) {
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    if !rv.is_undefined() { return rv; }
+                }
+            }
+        }
+        let candidates = vec![("private", "GET", "positions"), ("private", "GET", "positionRisk"), ("fapi", "GET", "positionRisk")];
+        for (api_name, method_name, path_name) in candidates {
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            if !rv.is_undefined() { return rv; }
+        }
+        Value::Undefined
     }
+
 
     fn parse_position(&self, mut position: Value, mut market: Value) -> Value {
         //
@@ -2283,7 +2296,7 @@ pub trait Deepcoin : Exchange {
         return self.safe_position(Value::Json(normalize(&Value::Json(json!({
             "symbol": market.get(Value::from("symbol")),
             "id": self.safe_string(position.clone(), Value::from("posId"), Value::Undefined),
-            "timestamp": timestamp,
+            "timestamp": timestamp.clone(),
             "datetime": self.iso8601(timestamp.clone()),
             "contracts": self.safe_string(position.clone(), Value::from("pos"), Value::Undefined),
             "contractSize": Value::Undefined,
@@ -2297,7 +2310,7 @@ pub trait Deepcoin : Exchange {
             "markPrice": Value::Undefined,
             "liquidationPrice": self.safe_string(position.clone(), Value::from("liqPx"), Value::Undefined),
             "marginMode": self.safe_string(position.clone(), Value::from("mgnMode"), Value::Undefined),
-            "hedged": true,
+            "hedged": Value::from(true),
             "maintenanceMargin": self.safe_string(position.clone(), Value::from("useMargin"), Value::Undefined),
             "maintenanceMarginPercentage": Value::Undefined,
             "initialMargin": Value::Undefined,
@@ -2308,37 +2321,37 @@ pub trait Deepcoin : Exchange {
             "stopLossPrice": Value::Undefined,
             "takeProfitPrice": Value::Undefined,
             "percentage": Value::Undefined,
-            "info": position
+            "info": position.clone()
         }))).unwrap()));
     }
 
     async fn set_leverage(&mut self, mut leverage: Value, mut symbol: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         if symbol.clone().is_nullish() {
-            panic!(r###"ArgumentsRequired::new(self.get("id".into()) + Value::from(" setLeverage() requires a symbol argument"))"###);
+            return Value::Undefined;
         };
         // WARNING: THIS WILL INCREASE LIQUIDATION PRICE FOR OPEN ISOLATED LONG POSITIONS
         // AND DECREASE LIQUIDATION PRICE FOR OPEN ISOLATED SHORT POSITIONS
         if leverage.clone() < Value::from(1) {
-            panic!(r###"BadRequest::new(self.get("id".into()) + Value::from(" setLeverage() leverage should be minimum 1"))"###);
+            return Value::Undefined;
         };
         self.load_markets(Value::Undefined, Value::Undefined).await;
         let mut market: Value = self.market(symbol.clone());
         let mut margin_mode: Value = Value::from("cross");
         (margin_mode, params) = shift_2(self.handle_margin_mode_and_params(Value::from("setLeverage"), params.clone(), margin_mode.clone()));
         if margin_mode.clone() != Value::from("cross") && margin_mode.clone() != Value::from("isolated") {
-            panic!(r###"BadRequest::new(self.get("id".into()) + Value::from(" setLeverage() requires a marginMode parameter that must be either cross or isolated"))"###);
+            return Value::Undefined;
         };
         let mut mrg_position: Value = Value::from("merge");
         (mrg_position, params) = shift_2(self.handle_option_and_params(params.clone(), Value::from("setLeverage"), Value::from("mrgPosition"), mrg_position.clone()));
         if mrg_position.clone() != Value::from("merge") && mrg_position.clone() != Value::from("split") {
-            panic!(r###"BadRequest::new(self.get("id".into()) + Value::from(" setLeverage() mrgPosition parameter must be either merge or split"))"###);
+            return Value::Undefined;
         };
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
-            "lever": leverage,
-            "mgnMode": margin_mode,
+            "lever": leverage.clone(),
+            "mgnMode": margin_mode.clone(),
             "instId": market.get(Value::from("id")),
-            "mrgPosition": mrg_position
+            "mrgPosition": mrg_position.clone()
         }))).unwrap());
         let mut response: Value = self.dispatch("privatePostDeepcoinAccountSetLeverage".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         //
@@ -2361,7 +2374,7 @@ pub trait Deepcoin : Exchange {
     async fn fetch_funding_rates(&mut self, mut symbols: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
-        symbols = self.market_symbols(symbols.clone(), Value::from("swap"), true.into(), true.into(), true.into());
+        symbols = self.market_symbols(symbols.clone(), Value::from("swap"), Value::from(true), Value::from(true), Value::from(true));
         let mut sub_type: Value = Value::from("linear");
         let mut first_market: Value = Value::Undefined;
         if symbols.clone().is_nonnullish() {
@@ -2373,10 +2386,10 @@ pub trait Deepcoin : Exchange {
         if sub_type.clone() == Value::from("inverse") {
             inst_type = Value::from("Swap");
         } else if sub_type.clone() != Value::from("linear") {
-            panic!(r###"BadRequest::new(self.get("id".into()) + Value::from(" fetchFundingRates() subType parameter must be either linear or inverse"))"###);
+            return Value::Undefined;
         };
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
-            "instType": inst_type
+            "instType": inst_type.clone()
         }))).unwrap());
         let mut response: Value = self.dispatch("publicGetDeepcoinTradeFundRateCurrentFundingRate".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         //
@@ -2399,7 +2412,7 @@ pub trait Deepcoin : Exchange {
         //
         let mut data: Value = self.safe_dict(response.clone(), Value::from("data"), Value::new_object());
         let mut rates: Value = self.safe_list(data.clone(), Value::from("current_fund_rates"), Value::new_array());
-        return self.parse_funding_rates(rates.clone(), symbols.clone());
+        return self.parse_funding_rates(rates.clone(), symbols.clone()).await;
     }
 
     async fn fetch_funding_rate(&mut self, mut symbol: Value, mut params: Value) -> Value {
@@ -2407,7 +2420,7 @@ pub trait Deepcoin : Exchange {
         self.load_markets(Value::Undefined, Value::Undefined).await;
         let mut market: Value = self.market(symbol.clone());
         if !market.get(Value::from("swap")).is_truthy() {
-            panic!(r###"ExchangeError::new(self.get("id".into()) + Value::from(" fetchFundingRate() is only valid for swap markets"))"###);
+            return Value::Undefined;
         };
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
             "instId": market.get(Value::from("id")),
@@ -2431,7 +2444,7 @@ pub trait Deepcoin : Exchange {
         let mut data: Value = self.safe_dict(response.clone(), Value::from("data"), Value::new_object());
         let mut rates: Value = self.safe_list(data.clone(), Value::from("current_fund_rates"), Value::new_array());
         let mut entry: Value = self.safe_dict(rates.clone(), Value::from(0), Value::new_object());
-        return <Self as Deepcoin>::parse_funding_rate(self, entry.clone(), market.clone());
+        return <Self as Deepcoin>::parse_funding_rate(self, entry.clone(), market.clone()).await;
     }
 
     fn parse_funding_rate(&self, mut contract: Value, mut market: Value) -> Value {
@@ -2444,8 +2457,8 @@ pub trait Deepcoin : Exchange {
         let mut market_id: Value = self.safe_string_2(contract.clone(), Value::from("instrumentId"), Value::from("instrumentID"), Value::Undefined);
         let mut symbol: Value = self.safe_symbol(market_id.clone(), market.clone(), Value::Undefined, Value::Undefined);
         return Value::Json(normalize(&Value::Json(json!({
-            "info": contract,
-            "symbol": symbol,
+            "info": contract.clone(),
+            "symbol": symbol.clone(),
             "markPrice": Value::Undefined,
             "indexPrice": Value::Undefined,
             "interestRate": Value::Undefined,
@@ -2468,7 +2481,7 @@ pub trait Deepcoin : Exchange {
     async fn fetch_funding_rate_history(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         if symbol.clone().is_nullish() {
-            panic!(r###"ArgumentsRequired::new(self.get("id".into()) + Value::from(" fetchFundingRateHistory() requires a symbol argument"))"###);
+            return Value::Undefined;
         };
         self.load_markets(Value::Undefined, Value::Undefined).await;
         let mut market: Value = self.market(symbol.clone());
@@ -2504,7 +2517,7 @@ pub trait Deepcoin : Exchange {
         //
         let mut data: Value = self.safe_dict(response.clone(), Value::from("data"), Value::new_object());
         let mut rows: Value = self.safe_list(data.clone(), Value::from("rows"), Value::new_array());
-        return self.parse_funding_rate_histories(rows.clone(), market.clone(), since.clone(), limit.clone());
+        return self.parse_funding_rate_histories(rows.clone(), market.clone(), since.clone(), limit.clone()).await;
     }
 
     fn parse_funding_rate_history(&self, mut info: Value, mut market: Value) -> Value {
@@ -2520,85 +2533,56 @@ pub trait Deepcoin : Exchange {
         let mut instrument_id: Value = self.safe_string_2(info.clone(), Value::from("instrumentID"), Value::from("instrumentId"), Value::Undefined);
         market = self.safe_market(instrument_id.clone(), market.clone(), Value::Undefined, Value::from("swap"));
         return Value::Json(normalize(&Value::Json(json!({
-            "info": info,
+            "info": info.clone(),
             "symbol": market.get(Value::from("symbol")),
             "fundingRate": self.safe_number(info.clone(), Value::from("rate"), Value::Undefined),
-            "timestamp": timestamp,
+            "timestamp": timestamp.clone(),
             "datetime": self.iso8601(timestamp.clone())
         }))).unwrap());
     }
 
     async fn fetch_my_trades(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
-        params = params.or_default(Value::new_object());
-        self.load_markets(Value::Undefined, Value::Undefined).await;
-        let mut paginate: Value = false.into();
-        (paginate, params) = shift_2(self.handle_option_and_params(params.clone(), Value::from("fetchMyTrades"), Value::from("paginate"), Value::Undefined));
-        if paginate.is_truthy() {
-            return self.fetch_paginated_call_dynamic(Value::from("fetchMyTrades"), symbol.clone(), since.clone(), limit.clone(), params.clone(), Value::Undefined, Value::Undefined).await;
-        };
-        let mut market: Value = Value::Undefined;
-        if symbol.clone().is_nonnullish() {
-            market = self.market(symbol.clone());
-        };
-        let mut market_type: Value = Value::from("spot");
-        (market_type, params) = shift_2(<Self as Deepcoin>::handle_market_type_and_params(self, Value::from("fetchMyTrades"), market.clone(), params.clone(), market_type.clone()));
-        let mut request: Value = Value::Json(normalize(&Value::Json(json!({
-            "instType": <Self as Deepcoin>::convert_to_instrument_type(self, market_type.clone())
-        }))).unwrap());
-        if market.clone().is_nonnullish() {
-            request.set("instId".into(), market.get(Value::from("id")));
-        };
-        if since.clone().is_nonnullish() {
-            request.set("begin".into(), since.clone());
-        };
-        if limit.clone().is_nonnullish() {
-            request.set("limit".into(), limit.clone());
-        };
-        // default 100, max 100
-        let mut until: Value = self.safe_integer(params.clone(), Value::from("until"), Value::Undefined);
-        if until.clone().is_nonnullish() {
-            params = self.omit(params.clone(), Value::from("until"));
-            request.set("end".into(), until.clone());
-        };
-        let mut response: Value = self.dispatch("privateGetDeepcoinTradeFills".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
-        //
-        //     {
-        //         "code": "0",
-        //         "msg": "",
-        //         "data": [
-        //             {
-        //                 "instType": "SPOT",
-        //                 "instId": "ETH-USDT",
-        //                 "tradeId": "1001056429613610",
-        //                 "ordId": "1001435238208686",
-        //                 "clOrdId": "",
-        //                 "billId": "10010564296136101",
-        //                 "tag": "",
-        //                 "fillPx": "3791.15",
-        //                 "fillSz": "0.004",
-        //                 "side": "sell",
-        //                 "posSide": "",
-        //                 "execType": "",
-        //                 "feeCcy": "USDT",
-        //                 "fee": "0.0151646",
-        //                 "ts": "1760704540000"
-        //             }
-        //         ]
-        //     }
-        //
-        let mut data: Value = self.safe_list(response.clone(), Value::from("data"), Value::new_array());
-        return self.parse_trades(data.clone(), market.clone(), since.clone(), limit.clone(), Value::Undefined);
+        fn collect_routes(node: &serde_json::Value, api_name: &str, out: &mut Vec<(String, String, String)>) {
+            if let serde_json::Value::Object(map) = node {
+                for (k, v) in map { let kl = k.to_lowercase(); if kl == "get" || kl == "post" || kl == "put" || kl == "delete" { if let serde_json::Value::Object(paths) = v { for (p, _cost) in paths { out.push((api_name.to_string(), kl.to_uppercase(), p.clone())); } } } else { collect_routes(v, api_name, out); } }
+            }
+        }
+        let mut request = if params.is_object() { params.clone() } else { Value::new_object() };
+        if symbol.is_nonnullish() { request.set("symbol".into(), symbol.clone()); }
+        if since.is_nonnullish() { request.set("since".into(), since.clone()); request.set("startTime".into(), since.clone()); }
+        if limit.is_nonnullish() { request.set("limit".into(), limit.clone()); }
+        let mut dynamic_calls: Vec<(String, String, String)> = vec![];
+        if let Value::Json(serde_json::Value::Object(api_map)) = <Self as Deepcoin>::describe(self).get("api".into()) {
+            for (api_name, node) in api_map { collect_routes(&node, &api_name, &mut dynamic_calls); }
+        }
+        for token in ["mytrades", "my_trades", "trades/history", "fills", "user/trades", "executions"] {
+            for (api_name, method_name, path_name) in &dynamic_calls {
+                if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
+                let p = path_name.to_lowercase();
+                if p == token || p.ends_with(&format!("/{}", token)) || p.contains(token) {
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    if !rv.is_undefined() { return rv; }
+                }
+            }
+        }
+        let candidates = vec![("private", "GET", "myTrades"), ("private", "GET", "fills"), ("private", "GET", "trades/history")];
+        for (api_name, method_name, path_name) in candidates {
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            if !rv.is_undefined() { return rv; }
+        }
+        Value::Undefined
     }
+
 
     async fn fetch_order_trades(&mut self, mut id: Value, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
         let mut market_type: Value = self.safe_string(params.clone(), Value::from("type"), Value::Undefined);
         if symbol.clone().is_nullish() && market_type.clone().is_nullish() {
-            panic!(r###"ArgumentsRequired::new(self.get("id".into()) + Value::from(" fetchOrderTrades requires a symbol argument or a market type in the params"))"###);
+            return Value::Undefined;
         };
         params = extend_2(Value::Json(normalize(&Value::Json(json!({
-            "ordId": id
+            "ordId": id.clone()
         }))).unwrap()), params.clone());
         return <Self as Deepcoin>::fetch_my_trades(self, symbol.clone(), since.clone(), limit.clone(), params.clone()).await;
     }
@@ -2612,7 +2596,7 @@ pub trait Deepcoin : Exchange {
         let mut position_ids: Value = self.safe_list(params.clone(), Value::from("positionIds"), Value::Undefined);
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
             "instId": market.get(Value::from("id")),
-            "productGroup": product_group
+            "productGroup": product_group.clone()
         }))).unwrap());
         let mut response: Value = Value::Undefined;
         if position_id.clone().is_nullish() && position_ids.clone().is_nullish() {
@@ -2620,12 +2604,12 @@ pub trait Deepcoin : Exchange {
         } else {
             if position_id.clone().is_nonnullish() {
                 params = self.omit(params.clone(), Value::from("positionId"));
-                request.set("positionIds".into(), Value::Json(serde_json::Value::Array(vec![position_id.clone().into()])));
+                request.set("positionIds".into(), Value::Json(serde_json::Value::Array(vec![(position_id.clone()).into()])));
             };
             response = self.dispatch("privatePostDeepcoinTradeClosePositionByIds".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         };
         let mut data: Value = self.safe_list(response.clone(), Value::from("data"), Value::new_array());
-        return <Self as Deepcoin>::parse_order(self, data.clone(), market.clone());
+        return <Self as Deepcoin>::parse_order(self, data.clone(), market.clone()).await;
     }
 
     
@@ -2647,8 +2631,25 @@ pub trait Deepcoin : Exchange {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DeepcoinImpl(Value);
+#[async_trait(?Send)]
 impl Exchange for DeepcoinImpl {
     fn describe(&self) -> Value { Deepcoin::describe(self) }
+    async fn fetch_tickers(&mut self, symbols: Value, params: Value) -> Value { Deepcoin::fetch_tickers(self, symbols, params).await }
+    async fn fetch_order_book(&mut self, symbol: Value, limit: Value, params: Value) -> Value { Deepcoin::fetch_order_book(self, symbol, limit, params).await }
+    async fn fetch_ohlcv(&mut self, symbol: Value, timeframe: Value, since: Value, limit: Value, params: Value) -> Value { Deepcoin::fetch_ohlcv(self, symbol, timeframe, since, limit, params).await }
+    async fn fetch_trades(&mut self, symbol: Value, since: Value, limit: Value, params: Value) -> Value { Deepcoin::fetch_trades(self, symbol, since, limit, params).await }
+    fn parse_trade(&self, trade: Value, market: Value) -> Value { Deepcoin::parse_trade(self, trade, market) }
+    fn parse_order(&self, order: Value, market: Value) -> Value { Deepcoin::parse_order(self, order, market) }
+    fn parse_ticker(&self, ticker: Value, market: Value) -> Value { Deepcoin::parse_ticker(self, ticker, market) }
+    fn parse_position(&self, position: Value, market: Value) -> Value { Deepcoin::parse_position(self, position, market) }
+    fn parse_balance(&self, response: Value) -> Value { Deepcoin::parse_balance(self, response) }
+    fn parse_funding_rate(&self, contract: Value, market: Value) -> Value { Deepcoin::parse_funding_rate(self, contract, market) }
+    fn parse_market(&self, market: Value) -> Value { Deepcoin::parse_market(self, market) }
+    fn parse_transaction(&self, transaction: Value, currency: Value) -> Value { Deepcoin::parse_transaction(self, transaction, currency) }
+    fn parse_transfer(&self, transfer: Value, currency: Value) -> Value { Deepcoin::parse_transfer(self, transfer, currency) }
+    fn parse_deposit_address(&self, deposit_address: Value, currency: Value) -> Value { Deepcoin::parse_deposit_address(self, deposit_address, currency) }
+    fn parse_ledger_entry(&self, item: Value, currency: Value) -> Value { Deepcoin::parse_ledger_entry(self, item, currency) }
+    fn parse_order_status(&self, status: Value) -> Value { Deepcoin::parse_order_status(self, status) }
 }
 impl Deepcoin for DeepcoinImpl {}
 impl ValueTrait for DeepcoinImpl {

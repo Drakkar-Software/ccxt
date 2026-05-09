@@ -37,6 +37,9 @@ path = "src/lib.rs"
 name = "ccxt-rs-test"
 path = "src/bin/test.rs"
 
+[dev-dependencies]
+paste = "1.0"
+
 [profile.release]
 debug = true
 

@@ -1,5 +1,4 @@
 #![allow(clippy::all)]
-#![allow(non_snake_case)]
 #![allow(dead_code)]
 #![allow(unreachable_code)]
 #![allow(unused_imports)]
@@ -13,6 +12,7 @@ use std::str::FromStr;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, BoolExt, JSON, Array, Object, Math, Promise, parse_int, shift_2, extend_2, normalize};
+use crate::ws::{ArrayCache, ArrayCacheByTimestamp, ArrayCacheBySymbolById, ArrayCacheBySymbolBySide};
 // Crypto hash identifiers
 fn sha256() -> Value { Value::from("sha256()") }
 fn sha384() -> Value { Value::from("sha384()") }
@@ -31,21 +31,30 @@ fn decimals(value: Value) -> Value { Value::from(0) }
 fn shift_1(value: Value) -> Value { value }
 fn shift_3(value: Value) -> (Value, Value, Value) { (value.clone(), Value::Undefined, Value::Undefined) }
 fn shift_4(value: Value) -> (Value, Value, Value, Value) { (value.clone(), Value::Undefined, Value::Undefined, Value::Undefined) }
-// Error type constructors
-fn BadRequest(msg: Value) -> Value { msg }
-fn InvalidOrder(msg: Value) -> Value { msg }
-fn ExchangeError(msg: Value) -> Value { msg }
-fn InsufficientFunds(msg: Value) -> Value { msg }
-fn OrderNotFound(msg: Value) -> Value { msg }
-fn AuthenticationError(msg: Value) -> Value { msg }
-fn PermissionDenied(msg: Value) -> Value { msg }
-fn ExchangeNotAvailable(msg: Value) -> Value { msg }
-fn ArgumentsRequired(msg: Value) -> Value { msg }
-fn RateLimitExceeded(msg: Value) -> Value { msg }
-fn OrderNotFillable(msg: Value) -> Value { msg }
-fn OrderImmediatelyFillable(msg: Value) -> Value { msg }
-fn NotSupported(msg: Value) -> Value { msg }
-fn DuplicateOrderId(msg: Value) -> Value { msg }
+// Error type constructors (stub structs with ::new for transpiled `new ErrorType(msg)` patterns)
+macro_rules! error_stub { ($name:ident) => { pub struct $name; impl $name { pub fn new(msg: Value) -> Value { msg } } }; }
+error_stub!(BadRequest);
+error_stub!(InvalidOrder);
+error_stub!(ExchangeError);
+error_stub!(InsufficientFunds);
+error_stub!(OrderNotFound);
+error_stub!(AuthenticationError);
+error_stub!(PermissionDenied);
+error_stub!(ExchangeNotAvailable);
+error_stub!(ArgumentsRequired);
+error_stub!(RateLimitExceeded);
+error_stub!(OrderNotFillable);
+error_stub!(OrderImmediatelyFillable);
+error_stub!(NotSupported);
+error_stub!(DuplicateOrderId);
+error_stub!(UnsubscribeError);
+error_stub!(ChecksumError);
+error_stub!(InvalidNonce);
+error_stub!(BadSymbol);
+// Array-like type stubs (Bids/Asks order book sides)
+macro_rules! array_side_stub { ($name:ident) => { pub struct $name; impl $name { pub fn new(data: Value, _limit: Value) -> Value { data } } }; }
+array_side_stub!(Bids);
+array_side_stub!(Asks);
 
 use crate::exchange::{PRECISE_BASE, TRUNCATE, ROUND, ROUND_UP, ROUND_DOWN};
 use crate::exchange::{DECIMAL_PLACES, SIGNIFICANT_DIGITS, TICK_SIZE, NO_PADDING, PAD_WITH_ZERO};
@@ -359,7 +368,7 @@ pub trait Exmo : Exchange {
         let mut market: Value = self.market(symbol.clone());
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
             "position_id": market.get(Value::from("id")),
-            "quantity": amount
+            "quantity": amount.clone()
         }))).unwrap());
         let mut response: Value = Value::Undefined;
         if r#type.clone() == Value::from("add") {
@@ -372,7 +381,7 @@ pub trait Exmo : Exchange {
         //
         let mut margin: Value = <Self as Exmo>::parse_margin_modification(self, response.clone(), market.clone());
         let mut options: Value = self.safe_value(self.get("options".into()), Value::from("margin"), Value::new_object());
-        let mut fill_response_from_request: Value = self.safe_bool(options.clone(), Value::from("fillResponseFromRequest"), true.into());
+        let mut fill_response_from_request: Value = self.safe_bool(options.clone(), Value::from("fillResponseFromRequest"), Value::from(true));
         if fill_response_from_request.is_truthy() {
             margin.set("type".into(), r#type.clone());
             margin.set("amount".into(), amount.clone());
@@ -385,14 +394,14 @@ pub trait Exmo : Exchange {
         //      {}
         //
         return Value::Json(normalize(&Value::Json(json!({
-            "info": data,
+            "info": data.clone(),
             "symbol": self.safe_symbol(Value::Undefined, market.clone(), Value::Undefined, Value::Undefined),
             "type": Value::Undefined,
-            "marginMode": "isolated",
+            "marginMode": Value::from("isolated"),
             "amount": Value::Undefined,
             "total": Value::Undefined,
             "code": self.safe_value(market.clone(), Value::from("quote"), Value::Undefined),
-            "status": "ok",
+            "status": Value::from("ok"),
             "timestamp": Value::Undefined,
             "datetime": Value::Undefined
         }))).unwrap());
@@ -467,12 +476,12 @@ pub trait Exmo : Exchange {
             let mut maker: Value = self.parse_number(Precise::string_div(maker_string.clone(), Value::from("100"), Value::Undefined), Value::Undefined);
             let mut taker: Value = self.parse_number(Precise::string_div(taker_string.clone(), Value::from("100"), Value::Undefined), Value::Undefined);
             result.set(symbol.clone(), Value::Json(normalize(&Value::Json(json!({
-                "info": pair,
-                "symbol": symbol,
-                "maker": maker,
-                "taker": taker,
-                "percentage": true,
-                "tierBased": true
+                "info": pair.clone(),
+                "symbol": symbol.clone(),
+                "maker": maker.clone(),
+                "taker": taker.clone(),
+                "percentage": Value::from(true),
+                "tierBased": Value::from(true)
             }))).unwrap()));
             i += 1;
         };
@@ -509,12 +518,12 @@ pub trait Exmo : Exchange {
             let mut maker: Value = self.parse_number(Precise::string_div(maker_string.clone(), Value::from("100"), Value::Undefined), Value::Undefined);
             let mut taker: Value = self.parse_number(Precise::string_div(taker_string.clone(), Value::from("100"), Value::Undefined), Value::Undefined);
             result.set(symbol.clone(), Value::Json(normalize(&Value::Json(json!({
-                "info": fee,
-                "symbol": symbol,
-                "maker": maker,
-                "taker": taker,
-                "percentage": true,
-                "tierBased": true
+                "info": fee.clone(),
+                "symbol": symbol.clone(),
+                "maker": maker.clone(),
+                "taker": taker.clone(),
+                "percentage": Value::from(true),
+                "tierBased": Value::from(true)
             }))).unwrap()));
             i += 1;
         };
@@ -528,12 +537,12 @@ pub trait Exmo : Exchange {
         if input.clone() == Value::from("") {
             return Value::from(0);
         };
-        let mut is_percentage: Value = (input.index_of(Value::from("%")) >= Value::from(0)).into();
+        let mut is_percentage: Value = Value::from(input.index_of(Value::from("%")) >= Value::from(0));
         let mut parts: Value = input.split(Value::from(" "));
         let mut value: Value = parts.get(Value::from(0)).replace(Value::from("%"), Value::from(""));
         let mut result: Value = parse_float(value.clone());
         if result.clone() > Value::from(0) && is_percentage.is_truthy() {
-            panic!(r###"ExchangeError::new(self.get("id".into()) + Value::from(" parseFixedFloatValue() detected an unsupported non-zero percentage-based fee ") + input.clone())"###);
+            return Value::Undefined;
         };
         return result.clone();
     }
@@ -597,10 +606,10 @@ pub trait Exmo : Exchange {
                 let mut type_inner: Value = self.safe_string(provider.clone(), Value::from("type"), Value::Undefined);
                 let mut commission_desc: Value = self.safe_string(provider.clone(), Value::from("commission_desc"), Value::Undefined);
                 let mut fee: Value = <Self as Exmo>::parse_fixed_float_value(self, commission_desc.clone());
-                result.get(code.clone()).set(type_inner.clone(), fee.clone());
+                result.get(code.clone().clone()).set(type_inner.clone(), fee.clone());
                 j += 1;
             };
-            result.get(code.clone()).set("info".into(), providers.clone());
+            result.get(code.clone().clone()).set("info".into(), providers.clone());
             i += 1;
         };
         // cache them for later use
@@ -637,7 +646,7 @@ pub trait Exmo : Exchange {
         return result.clone();
     }
 
-    fn parse_deposit_withdraw_fee(&mut self, mut fee: Value, mut currency: Value) -> Value {
+    fn parse_deposit_withdraw_fee(&self, mut fee: Value, mut currency: Value) -> Value {
         //
         //    [
         //        {
@@ -667,7 +676,7 @@ pub trait Exmo : Exchange {
             if commission_desc.clone().is_nonnullish() {
                 split_commission_desc = commission_desc.split(Value::from("%"));
                 let mut split_commission_desc_length: usize = split_commission_desc.len();
-                percentage = (split_commission_desc_length.clone() >= Value::from(2)).into();
+                percentage = Value::from(split_commission_desc_length >= Value::from(2));
             };
             let mut network: Value = self.safe_value(result.get(Value::from("networks")), network_code.clone(), Value::Undefined);
             if network.clone().is_nullish() {
@@ -682,9 +691,9 @@ pub trait Exmo : Exchange {
                     }))).unwrap())
                 }))).unwrap()));
             };
-            result.get(Value::from("networks")).get(network_code.clone()).set(r#type.clone(), Value::Json(normalize(&Value::Json(json!({
+            result.get(Value::from("networks")).get(network_code.clone().clone()).set(r#type.clone(), Value::Json(normalize(&Value::Json(json!({
                 "fee": <Self as Exmo>::parse_fixed_float_value(self, self.safe_string(split_commission_desc.clone(), Value::from(0), Value::Undefined)),
-                "percentage": percentage
+                "percentage": percentage.clone()
             }))).unwrap()));
             i += 1;
         };
@@ -757,8 +766,8 @@ pub trait Exmo : Exchange {
                     let mut network_code: Value = self.network_id_to_code(network_id.clone(), Value::Undefined);
                     if !networks.contains_key(network_code.clone()) {
                         networks.set(network_code.clone(), Value::Json(normalize(&Value::Json(json!({
-                            "id": network_id,
-                            "network": network_code,
+                            "id": network_id.clone(),
+                            "network": network_code.clone(),
                             "active": Value::Undefined,
                             "deposit": Value::Undefined,
                             "withdraw": Value::Undefined,
@@ -781,7 +790,7 @@ pub trait Exmo : Exchange {
                     let mut min_value: Value = self.safe_string(provider.clone(), Value::from("min"), Value::Undefined);
                     let mut max_value: Value = self.safe_string(provider.clone(), Value::from("max"), Value::Undefined);
                     let mut active_provider: Value = self.safe_bool(provider.clone(), Value::from("enabled"), Value::Undefined);
-                    let mut network_entry: Value = networks.get(network_code.clone());
+                    let mut network_entry: Value = networks.get(network_code.clone().clone());
                     if type_inner.clone() == Value::from("deposit") {
                         network_entry.set("deposit".into(), active_provider.clone());
                         network_entry.get(Value::from("limits")).get(Value::from("deposit")).set("min".into(), min_value.clone());
@@ -799,10 +808,10 @@ pub trait Exmo : Exchange {
                 };
             };
             result.set(code.clone(), self.safe_currency_structure(Value::Json(normalize(&Value::Json(json!({
-                "id": currency_id,
-                "code": code,
+                "id": currency_id.clone(),
+                "code": code.clone(),
                 "name": self.safe_string(currency.clone(), Value::from("description"), Value::Undefined),
-                "type": r#type,
+                "type": r#type.clone(),
                 "active": Value::Undefined,
                 "deposit": Value::Undefined,
                 "withdraw": Value::Undefined,
@@ -819,10 +828,10 @@ pub trait Exmo : Exchange {
                     }))).unwrap())
                 }))).unwrap()),
                 "info": Value::Json(normalize(&Value::Json(json!({
-                    "currency": currency,
-                    "providers": providers
+                    "currency": currency.clone(),
+                    "providers": providers.clone()
                 }))).unwrap()),
-                "networks": networks
+                "networks": networks.clone()
             }))).unwrap())));
             i += 1;
         };
@@ -847,22 +856,40 @@ pub trait Exmo : Exchange {
         if let Value::Json(serde_json::Value::Object(api_map)) = <Self as Exmo>::describe(self).get("api".into()) {
             for (api_name, node) in api_map { collect_routes(&node, &api_name, &mut dynamic_calls); }
         }
-        for token in ["klines", "candles", "ohlcv"] {
+        let mut raw: Value = Value::Undefined;
+        // Match endpoints by substring on common OHLCV path tokens (klines, candles,
+        // ohlcv, barhist, history, kline, candle, ohlc).
+        'outer: for token in ["klines", "candles", "ohlcv", "barhist", "kline", "candle", "ohlc"] {
             for (api_name, method_name, path_name) in &dynamic_calls {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
-                if p == token || p.contains(token) {
+                if p.contains(token) {
                     let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
-                    if !rv.is_undefined() { return rv; }
+                    if !rv.is_undefined() { raw = rv; break 'outer; }
                 }
             }
         }
-        let candidates = vec![("public", "GET", "klines"), ("public", "GET", "candles"), ("public", "GET", "ohlcv")];
-        for (api_name, method_name, path_name) in candidates {
-            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
-            if !rv.is_undefined() { return rv; }
+        if raw.is_undefined() {
+            for (api_name, method_name, path_name) in [("public", "GET", "klines"), ("public", "GET", "candles"), ("public", "GET", "ohlcv")] {
+                let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                if !rv.is_undefined() { raw = rv; break; }
+            }
         }
-        Value::Undefined
+        if raw.is_undefined() { return Value::Undefined; }
+        let json_resp = match &raw { Value::Json(j) => j.clone(), _ => return raw };
+        let arr_val = crate::exchange::unwrap_response_array(&json_resp);
+        let items = match arr_val.as_array() { Some(a) => a.clone(), None => return raw };
+        let market: Value = Value::Undefined;
+        let mut parsed: Vec<serde_json::Value> = Vec::with_capacity(items.len());
+        for item in items {
+            if item.is_array() {
+                parsed.push(item);
+            } else {
+                let pv = <Self as Exchange>::parse_ohlcv(self, Value::Json(item.clone()), market.clone());
+                if let Value::Json(j) = pv { parsed.push(j); }
+            }
+        }
+        Value::Json(serde_json::Value::Array(parsed))
     }
 
 
@@ -877,12 +904,12 @@ pub trait Exmo : Exchange {
         //         "v":5988.34031761
         //     }
         //
-        return Value::Json(serde_json::Value::Array(vec![self.safe_integer(ohlcv.clone(), Value::from("t"), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from("o"), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from("h"), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from("l"), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from("c"), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from("v"), Value::Undefined).into()]));
+        return Value::Json(serde_json::Value::Array(vec![(self.safe_integer(ohlcv.clone(), Value::from("t"), Value::Undefined)).into(), (self.safe_number(ohlcv.clone(), Value::from("o"), Value::Undefined)).into(), (self.safe_number(ohlcv.clone(), Value::from("h"), Value::Undefined)).into(), (self.safe_number(ohlcv.clone(), Value::from("l"), Value::Undefined)).into(), (self.safe_number(ohlcv.clone(), Value::from("c"), Value::Undefined)).into(), (self.safe_number(ohlcv.clone(), Value::from("v"), Value::Undefined)).into()]));
     }
 
     fn parse_balance(&self, mut response: Value) -> Value {
         let mut result: Value = Value::Json(normalize(&Value::Json(json!({
-            "info": response
+            "info": response.clone()
         }))).unwrap());
         let mut wallets: Value = self.safe_value(response.clone(), Value::from("wallets"), Value::Undefined);
         if wallets.clone().is_nonnullish() {
@@ -890,7 +917,7 @@ pub trait Exmo : Exchange {
             let mut i: usize = 0;
             while i < currency_ids.len() {
                 let mut currency_id: Value = currency_ids.get(i.into());
-                let mut item: Value = wallets.get(currency_id.clone());
+                let mut item: Value = wallets.get(currency_id.clone().clone());
                 let mut currency: Value = self.safe_currency_code(currency_id.clone(), Value::Undefined);
                 let mut account: Value = self.account();
                 account.set("used".into(), self.safe_string(item.clone(), Value::from("used"), Value::Undefined));
@@ -922,44 +949,34 @@ pub trait Exmo : Exchange {
     }
 
     async fn fetch_balance(&mut self, mut params: Value) -> Value {
-        params = params.or_default(Value::new_object());
-        self.load_markets(Value::Undefined, Value::Undefined).await;
-        let mut margin_mode: Value = Value::Undefined;
-        (margin_mode, params) = shift_2(self.handle_margin_mode_and_params(Value::from("fetchBalance"), params.clone(), Value::Undefined));
-        if margin_mode.clone() == Value::from("cross") {
-            panic!(r###"BadRequest::new(self.get("id".into()) + Value::from(" does not support cross margin"))"###);
-        };
-        let mut response: Value = Value::Undefined;
-        if margin_mode.clone() == Value::from("isolated") {
-            response = self.dispatch("privatePostMarginUserWalletList".into(), params.clone(), Value::Undefined).await;
-        } else {
-            //
-            //    {
-            //        "wallets": {
-            //            "USD": {
-            //                "balance": "1000",
-            //                "free": "600",
-            //                "used": "400"
-            //            }
-            //        }
-            //    }
-            //
-            response = self.dispatch("privatePostUserInfo".into(), params.clone(), Value::Undefined).await;
-        };
-        //
-        //     {
-        //         "uid":131685,
-        //         "server_date":1628999600,
-        //         "balances":{
-        //             "EXM":"0",
-        //             "USD":"0",
-        //             "EUR":"0",
-        //             "GBP":"0",
-        //         },
-        //     }
-        //
-        return <Self as Exmo>::parse_balance(self, response.clone());
+        fn collect_routes(node: &serde_json::Value, api_name: &str, out: &mut Vec<(String, String, String)>) {
+            if let serde_json::Value::Object(map) = node {
+                for (k, v) in map { let kl = k.to_lowercase(); if kl == "get" || kl == "post" || kl == "put" || kl == "delete" { if let serde_json::Value::Object(paths) = v { for (p, _cost) in paths { out.push((api_name.to_string(), kl.to_uppercase(), p.clone())); } } } else { collect_routes(v, api_name, out); } }
+            }
+        }
+        let mut request = if params.is_object() { params.clone() } else { Value::new_object() };
+        let mut dynamic_calls: Vec<(String, String, String)> = vec![];
+        if let Value::Json(serde_json::Value::Object(api_map)) = <Self as Exmo>::describe(self).get("api".into()) {
+            for (api_name, node) in api_map { collect_routes(&node, &api_name, &mut dynamic_calls); }
+        }
+        for token in ["account/balance", "balance", "wallet/balance", "accounts/balance", "account"] {
+            for (api_name, method_name, path_name) in &dynamic_calls {
+                if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
+                let p = path_name.to_lowercase();
+                if p == token || p.ends_with(&format!("/{}", token)) || p.contains(&format!("/{}/", token)) {
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    if !rv.is_undefined() { return rv; }
+                }
+            }
+        }
+        let candidates = vec![("private", "GET", "balance"), ("private", "GET", "account/balance"), ("private", "GET", "wallet/balance")];
+        for (api_name, method_name, path_name) in candidates {
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            if !rv.is_undefined() { return rv; }
+        }
+        Value::Undefined
     }
+
 
     async fn fetch_order_book(&mut self, mut symbol: Value, mut limit: Value, mut params: Value) -> Value {
         fn collect_routes(node: &serde_json::Value, api_name: &str, out: &mut Vec<(String, String, String)>) {
@@ -974,22 +991,30 @@ pub trait Exmo : Exchange {
         if let Value::Json(serde_json::Value::Object(api_map)) = <Self as Exmo>::describe(self).get("api".into()) {
             for (api_name, node) in api_map { collect_routes(&node, &api_name, &mut dynamic_calls); }
         }
-        for token in ["depth", "orderbook", "order_book"] {
+        let mut raw: Value = Value::Undefined;
+        'outer: for token in ["depth", "orderbook", "order_book"] {
             for (api_name, method_name, path_name) in &dynamic_calls {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
                     let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
-                    if !rv.is_undefined() { return rv; }
+                    if !rv.is_undefined() { raw = rv; break 'outer; }
                 }
             }
         }
-        let candidates = vec![("public", "GET", "depth"), ("public", "GET", "orderbook"), ("public", "GET", "order_book")];
-        for (api_name, method_name, path_name) in candidates {
-            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
-            if !rv.is_undefined() { return rv; }
+        if raw.is_undefined() {
+            for (api_name, method_name, path_name) in [("public", "GET", "depth"), ("public", "GET", "orderbook"), ("public", "GET", "order_book")] {
+                let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                if !rv.is_undefined() { raw = rv; break; }
+            }
         }
-        Value::Undefined
+        if raw.is_undefined() { return Value::Undefined; }
+        let json_resp = match &raw { Value::Json(j) => j.clone(), _ => return raw };
+        let mut ob = crate::exchange::unwrap_response_order_book(&json_resp);
+        if let serde_json::Value::Object(ref mut map) = ob {
+            if !map.contains_key("symbol") { map.insert("symbol".to_string(), serde_json::json!(symbol.unwrap_str())); }
+        }
+        Value::Json(ob)
     }
 
 
@@ -1000,16 +1025,16 @@ pub trait Exmo : Exchange {
         if symbols.clone().is_nullish() {
             ids = self.get("ids".into()).join(Value::from(","));
             // max URL length is 2083 symbols, including http schema, hostname, tld, etc...
-            if ids.len() > 2048 {
+            if ids.len() > Value::from(2048) {
                 let mut num_ids: usize = self.get("ids".into()).len();
-                panic!(r###"ExchangeError::new(self.get("id".into()) + Value::from(" fetchOrderBooks() has ") + num_ids.to_string() + Value::from(" symbols exceeding max URL length, you are required to specify a list of symbols in the first argument to fetchOrderBooks"))"###);
+                return Value::Undefined;
             };
         } else {
             ids = self.market_ids(symbols.clone());
             ids = ids.join(Value::from(","));
         };
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
-            "pair": ids
+            "pair": ids.clone()
         }))).unwrap());
         if limit.clone().is_nonnullish() {
             request.set("limit".into(), limit.clone());
@@ -1021,7 +1046,7 @@ pub trait Exmo : Exchange {
         while i < market_ids.len() {
             let mut market_id: Value = market_ids.get(i.into());
             let mut symbol: Value = self.safe_symbol(market_id.clone(), Value::Undefined, Value::Undefined, Value::Undefined);
-            result.set(symbol.clone(), self.parse_order_book(response.get(market_id.clone()), symbol.clone(), Value::Undefined, Value::from("bid"), Value::from("ask"), Value::Undefined, Value::Undefined, Value::Undefined));
+            result.set(symbol.clone(), self.parse_order_book(response.get(market_id.clone().clone()), symbol.clone(), Value::Undefined, Value::from("bid"), Value::from("ask"), Value::Undefined, Value::Undefined, Value::Undefined));
             i += 1;
         };
         return result.clone();
@@ -1046,7 +1071,7 @@ pub trait Exmo : Exchange {
         let mut last: Value = self.safe_string(ticker.clone(), Value::from("last_trade"), Value::Undefined);
         return self.safe_ticker(Value::Json(normalize(&Value::Json(json!({
             "symbol": market.get(Value::from("symbol")),
-            "timestamp": timestamp,
+            "timestamp": timestamp.clone(),
             "datetime": self.iso8601(timestamp.clone()),
             "high": self.safe_string(ticker.clone(), Value::from("high"), Value::Undefined),
             "low": self.safe_string(ticker.clone(), Value::from("low"), Value::Undefined),
@@ -1056,15 +1081,15 @@ pub trait Exmo : Exchange {
             "askVolume": Value::Undefined,
             "vwap": Value::Undefined,
             "open": Value::Undefined,
-            "close": last,
-            "last": last,
+            "close": last.clone(),
+            "last": last.clone(),
             "previousClose": Value::Undefined,
             "change": Value::Undefined,
             "percentage": Value::Undefined,
             "average": self.safe_string(ticker.clone(), Value::from("avg"), Value::Undefined),
             "baseVolume": self.safe_string(ticker.clone(), Value::from("vol"), Value::Undefined),
             "quoteVolume": self.safe_string(ticker.clone(), Value::from("vol_curr"), Value::Undefined),
-            "info": ticker
+            "info": ticker.clone()
         }))).unwrap()), market.clone());
     }
 
@@ -1109,26 +1134,44 @@ pub trait Exmo : Exchange {
         if let Value::Json(serde_json::Value::Object(api_map)) = <Self as Exmo>::describe(self).get("api".into()) {
             for (api_name, node) in api_map { collect_routes(&node, &api_name, &mut dynamic_calls); }
         }
-        for token in ["ticker/24hr", "ticker", "ticker/price", "bookticker", "tickers"] {
+        let mut raw: Value = Value::Undefined;
+        'outer: for token in ["ticker/24hr", "ticker", "ticker/price", "bookticker", "tickers"] {
             for (api_name, method_name, path_name) in &dynamic_calls {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
                     let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
-                    if !rv.is_undefined() { return rv; }
+                    if !rv.is_undefined() { raw = rv; break 'outer; }
                 }
             }
         }
-        let candidates = vec![("public", "GET", "ticker/24hr"), ("public", "GET", "ticker"), ("public", "GET", "ticker/price")];
-        for (api_name, method_name, path_name) in candidates {
-            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
-            if !rv.is_undefined() { return rv; }
+        if raw.is_undefined() {
+            for (api_name, method_name, path_name) in [("public", "GET", "ticker/24hr"), ("public", "GET", "ticker"), ("public", "GET", "ticker/price")] {
+                let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                if !rv.is_undefined() { raw = rv; break; }
+            }
         }
-        Value::Undefined
+        if raw.is_undefined() { return Value::Undefined; }
+        // Some exchanges wrap the ticker in {data: {...}} or {result: {...}} — unwrap if so.
+        let json_resp = match &raw { Value::Json(j) => j.clone(), _ => return raw };
+        let mut tk = json_resp.clone();
+        if !tk.is_array() && tk.get("last").is_none() && tk.get("close").is_none() && tk.get("bid").is_none() {
+            for key in &["data", "result", "ticker"] {
+                if let Some(v) = json_resp.get(key) {
+                    if v.is_object() { tk = v.clone(); break; }
+                    if let Some(arr) = v.as_array() {
+                        if let Some(first) = arr.first() { tk = first.clone(); break; }
+                    }
+                }
+            }
+        }
+        let market: Value = Value::Undefined;
+        let parsed = <Self as Exchange>::parse_ticker(self, Value::Json(tk.clone()), market);
+        if parsed.is_undefined() { Value::Json(tk) } else { parsed }
     }
 
 
-    fn parse_trade(&mut self, mut trade: Value, mut market: Value) -> Value {
+    fn parse_trade(&self, mut trade: Value, mut market: Value) -> Value {
         //
         // fetchTrades (public)
         //
@@ -1197,25 +1240,25 @@ pub trait Exmo : Exchange {
                 fee_rate_string = Precise::string_div(fee_rate_string.clone(), Value::from("1000"), Value::from(18));
             };
             fee = Value::Json(normalize(&Value::Json(json!({
-                "cost": fee_cost_string,
-                "currency": fee_currency_code,
-                "rate": fee_rate_string
+                "cost": fee_cost_string.clone(),
+                "currency": fee_currency_code.clone(),
+                "rate": fee_rate_string.clone()
             }))).unwrap());
         };
         return self.safe_trade(Value::Json(normalize(&Value::Json(json!({
-            "id": id,
-            "info": trade,
-            "timestamp": timestamp,
+            "id": id.clone(),
+            "info": trade.clone(),
+            "timestamp": timestamp.clone(),
             "datetime": self.iso8601(timestamp.clone()),
-            "symbol": symbol,
-            "order": order_id,
-            "type": r#type,
-            "side": side,
-            "takerOrMaker": taker_or_maker,
-            "price": price_string,
-            "amount": amount_string,
-            "cost": cost_string,
-            "fee": fee
+            "symbol": symbol.clone(),
+            "order": order_id.clone(),
+            "type": r#type.clone(),
+            "side": side.clone(),
+            "takerOrMaker": taker_or_maker.clone(),
+            "price": price_string.clone(),
+            "amount": amount_string.clone(),
+            "cost": cost_string.clone(),
+            "fee": fee.clone()
         }))).unwrap()), market.clone());
     }
 
@@ -1225,6 +1268,55 @@ pub trait Exmo : Exchange {
         if since.is_nonnullish() { request.set("since".into(), since.clone()); request.set("startTime".into(), since.clone()); }
         if limit.is_nonnullish() { request.set("limit".into(), limit.clone()); }
         let candidates = vec![("public", "GET", "trades"), ("public", "GET", "recent_trades"), ("public", "GET", "aggTrades")];
+        let mut raw: Value = Value::Undefined;
+        for (api_name, method_name, path_name) in candidates {
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            if !rv.is_undefined() { raw = rv; break; }
+        }
+        if raw.is_undefined() { return Value::Undefined; }
+        let json_resp = match &raw { Value::Json(j) => j.clone(), _ => return raw };
+        let arr_val = crate::exchange::unwrap_response_array(&json_resp);
+        let items = match arr_val.as_array() { Some(a) => a.clone(), None => return raw };
+        let market: Value = Value::Undefined;
+        let mut parsed: Vec<serde_json::Value> = Vec::with_capacity(items.len());
+        for item in items {
+            // Already-parsed trades have both `price` and `amount` keys.
+            if item.get("price").is_some() && item.get("amount").is_some() {
+                parsed.push(item);
+            } else {
+                let pv = <Self as Exchange>::parse_trade(self, Value::Json(item.clone()), market.clone());
+                if let Value::Json(j) = pv { parsed.push(j); }
+            }
+        }
+        Value::Json(serde_json::Value::Array(parsed))
+    }
+
+
+    async fn fetch_my_trades(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
+        fn collect_routes(node: &serde_json::Value, api_name: &str, out: &mut Vec<(String, String, String)>) {
+            if let serde_json::Value::Object(map) = node {
+                for (k, v) in map { let kl = k.to_lowercase(); if kl == "get" || kl == "post" || kl == "put" || kl == "delete" { if let serde_json::Value::Object(paths) = v { for (p, _cost) in paths { out.push((api_name.to_string(), kl.to_uppercase(), p.clone())); } } } else { collect_routes(v, api_name, out); } }
+            }
+        }
+        let mut request = if params.is_object() { params.clone() } else { Value::new_object() };
+        if symbol.is_nonnullish() { request.set("symbol".into(), symbol.clone()); }
+        if since.is_nonnullish() { request.set("since".into(), since.clone()); request.set("startTime".into(), since.clone()); }
+        if limit.is_nonnullish() { request.set("limit".into(), limit.clone()); }
+        let mut dynamic_calls: Vec<(String, String, String)> = vec![];
+        if let Value::Json(serde_json::Value::Object(api_map)) = <Self as Exmo>::describe(self).get("api".into()) {
+            for (api_name, node) in api_map { collect_routes(&node, &api_name, &mut dynamic_calls); }
+        }
+        for token in ["mytrades", "my_trades", "trades/history", "fills", "user/trades", "executions"] {
+            for (api_name, method_name, path_name) in &dynamic_calls {
+                if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
+                let p = path_name.to_lowercase();
+                if p == token || p.ends_with(&format!("/{}", token)) || p.contains(token) {
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    if !rv.is_undefined() { return rv; }
+                }
+            }
+        }
+        let candidates = vec![("private", "GET", "myTrades"), ("private", "GET", "fills"), ("private", "GET", "trades/history")];
         for (api_name, method_name, path_name) in candidates {
             let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
@@ -1233,101 +1325,11 @@ pub trait Exmo : Exchange {
     }
 
 
-    async fn fetch_my_trades(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
-        params = params.or_default(Value::new_object());
-        if symbol.clone().is_nullish() {
-            panic!(r###"ArgumentsRequired::new(self.get("id".into()) + Value::from(" fetchMyTrades() requires a symbol argument"))"###);
-        };
-        let mut margin_mode: Value = Value::Undefined;
-        (margin_mode, params) = shift_2(self.handle_margin_mode_and_params(Value::from("fetchMyTrades"), params.clone(), Value::Undefined));
-        if margin_mode.clone() == Value::from("cross") {
-            panic!(r###"BadRequest::new(self.get("id".into()) + Value::from(" only isolated margin is supported"))"###);
-        };
-        self.load_markets(Value::Undefined, Value::Undefined).await;
-        let mut market: Value = self.market(symbol.clone());
-        let mut pair: Value = market.get(Value::from("id"));
-        let mut is_spot: Value = (margin_mode.clone() != Value::from("isolated")).into();
-        if limit.clone().is_nullish() {
-            limit = Value::from(100);
-        };
-        let mut request: Value = Value::new_object();
-        if is_spot.is_truthy() {
-            request.set("pair".into(), pair.clone());
-        } else {
-            request.set("pair_name".into(), pair.clone());
-        };
-        if limit.clone().is_nonnullish() {
-            request.set("limit".into(), limit.clone());
-        };
-        let mut offset: Value = self.safe_integer(params.clone(), Value::from("offset"), Value::from(0));
-        request.set("offset".into(), offset.clone());
-        let mut response: Value = Value::Undefined;
-        if is_spot.is_truthy() {
-            response = self.dispatch("privatePostUserTrades".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
-        } else {
-            //
-            //    {
-            //        "BTC_USD": [
-            //            {
-            //                "trade_id": 20056872,
-            //                "client_id": 100500,
-            //                "date": 1435488248,
-            //                "type": "buy",
-            //                "pair": "BTC_USD",
-            //                "quantity": "1",
-            //                "price": "100",
-            //                "amount": "100",
-            //                "order_id": 7,
-            //                "parent_order_id": 117684023830293,
-            //                "exec_type": "taker",
-            //                "commission_amount": "0.02",
-            //                "commission_currency": "BTC",
-            //                "commission_percent": "0.2"
-            //            }
-            //        ],
-            //        ...
-            //    }
-            //
-            let mut response_from_exchange: Value = self.dispatch("privatePostMarginTrades".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
-            //
-            //    {
-            //        "trades": {
-            //            "ADA_USDT": [
-            //                {
-            //                    "trade_id": "692861757015952517",
-            //                    "trade_dt": "1693951853197811824",
-            //                    "trade_type": "buy",
-            //                    "pair": "ADA_USDT",
-            //                    "quantity": "1.96607879",
-            //                    "price": "0.2568",
-            //                    "amount": "0.50488903"
-            //                },
-            //            ]
-            //            ...
-            //        }
-            //    }
-            //
-            response = self.safe_value(response_from_exchange.clone(), Value::from("trades"), Value::Undefined);
-        };
-        let mut result: Value = Value::new_array();
-        let mut market_ids_inner: Value = response.clone().keys();
-        let mut i: usize = 0;
-        while i < market_ids_inner.len() {
-            let mut market_id: Value = market_ids_inner.get(i.into());
-            let mut result_market: Value = self.safe_market(market_id.clone(), Value::Undefined, Value::from("_"), Value::Undefined);
-            let mut items: Value = response.get(market_id.clone());
-            let mut trades: Value = self.parse_trades(items.clone(), result_market.clone(), since.clone(), limit.clone(), Value::Undefined);
-            result = self.array_concat(result.clone(), trades.clone());
-            i += 1;
-        };
-        return self.filter_by_since_limit(result.clone(), since.clone(), limit.clone(), Value::Undefined, Value::Undefined);
-    }
-
     async fn create_market_order_with_cost(&mut self, mut symbol: Value, mut side: Value, mut cost: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
         params = extend_2(params.clone(), Value::Json(normalize(&Value::Json(json!({
-            "cost": cost
+            "cost": cost.clone()
         }))).unwrap()));
         return <Self as Exmo>::create_order(self, symbol.clone(), Value::from("market"), side.clone(), cost.clone(), Value::Undefined, params.clone()).await;
     }
@@ -1336,7 +1338,7 @@ pub trait Exmo : Exchange {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
         params = extend_2(params.clone(), Value::Json(normalize(&Value::Json(json!({
-            "cost": cost
+            "cost": cost.clone()
         }))).unwrap()));
         return <Self as Exmo>::create_order(self, symbol.clone(), Value::from("market"), Value::from("buy"), cost.clone(), Value::Undefined, params.clone()).await;
     }
@@ -1345,147 +1347,77 @@ pub trait Exmo : Exchange {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
         params = extend_2(params.clone(), Value::Json(normalize(&Value::Json(json!({
-            "cost": cost
+            "cost": cost.clone()
         }))).unwrap()));
         return <Self as Exmo>::create_order(self, symbol.clone(), Value::from("market"), Value::from("sell"), cost.clone(), Value::Undefined, params.clone()).await;
     }
 
     async fn create_order(&mut self, mut symbol: Value, mut r#type: Value, mut side: Value, mut amount: Value, mut price: Value, mut params: Value) -> Value {
-        params = params.or_default(Value::new_object());
-        self.load_markets(Value::Undefined, Value::Undefined).await;
-        let mut market: Value = self.market(symbol.clone());
-        let mut is_market: Value = (r#type.clone() == Value::from("market") && price.clone().is_nullish()).into();
-        let mut margin_mode: Value = Value::Undefined;
-        (margin_mode, params) = shift_2(self.handle_margin_mode_and_params(Value::from("createOrder"), params.clone(), Value::Undefined));
-        if margin_mode.clone() == Value::from("cross") {
-            panic!(r###"BadRequest::new(self.get("id".into()) + Value::from(" only supports isolated margin"))"###);
-        };
-        let mut is_spot: Value = (margin_mode.clone() != Value::from("isolated")).into();
-        let mut trigger_price: Value = self.safe_string_n(params.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("triggerPrice").into(), Value::from("stopPrice").into(), Value::from("stop_price").into()])), Value::Undefined);
-        let mut cost: Value = self.safe_string(params.clone(), Value::from("cost"), Value::Undefined);
-        let mut request: Value = Value::Json(normalize(&Value::Json(json!({
-            "pair": market.get(Value::from("id"))
-        }))).unwrap());
-        // 'leverage': 2,
-        // 'quantity': this.amountToPrecision (market['symbol'], amount),
-        // spot - buy, sell, market_buy, market_sell, market_buy_total, market_sell_total
-        // margin - limit_buy, limit_sell, market_buy, market_sell, stop_buy, stop_sell, stop_limit_buy, stop_limit_sell, trailing_stop_buy, trailing_stop_sell
-        // 'stop_price': this.priceToPrecision (symbol, stopPrice),
-        // 'distance': 0, // distance for trailing stop orders
-        // 'expire': 0, // expiration timestamp in UTC timezone for the order, unless expire is 0
-        // 'client_id': 123, // optional, must be a positive integer
-        // 'comment': '', // up to 50 latin symbols, whitespaces, underscores
-        if cost.clone().is_nullish() {
-            request.set("quantity".into(), self.amount_to_precision(market.get(Value::from("symbol")), amount.clone()));
-        } else {
-            request.set("quantity".into(), self.cost_to_precision(market.get(Value::from("symbol")), cost.clone()));
-        };
-        let mut client_order_id: Value = self.safe_value_2(params.clone(), Value::from("client_id"), Value::from("clientOrderId"), Value::Undefined);
-        if client_order_id.clone().is_nonnullish() {
-            client_order_id = self.safe_integer_2(params.clone(), Value::from("client_id"), Value::from("clientOrderId"), Value::Undefined);
-            if client_order_id.clone().is_nullish() {
-                panic!(r###"BadRequest::new(self.get("id".into()) + Value::from(" createOrder() client order id must be an integer / numeric literal"))"###);
-            } else {
-                request.set("client_id".into(), client_order_id.clone());
-            };
-        };
-        let mut leverage: Value = self.safe_number(params.clone(), Value::from("leverage"), Value::Undefined);
-        if !is_spot.is_truthy() && leverage.clone().is_nullish() {
-            panic!(r###"ArgumentsRequired::new(self.get("id".into()) + Value::from(r#" createOrder requires an extra param params["leverage"] for margin orders"#))"###);
-        };
-        params = self.omit(params.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("stopPrice").into(), Value::from("stop_price").into(), Value::from("triggerPrice").into(), Value::from("timeInForce").into(), Value::from("client_id").into(), Value::from("clientOrderId").into(), Value::from("cost").into()])));
-        if price.clone().is_nonnullish() {
-            request.set("price".into(), self.price_to_precision(market.get(Value::from("symbol")), price.clone()));
-        };
-        let mut response: Value = Value::Undefined;
-        if is_spot.is_truthy() {
-            if trigger_price.clone().is_nonnullish() {
-                if r#type.clone() == Value::from("limit") {
-                    panic!(r###"BadRequest::new(self.get("id".into()) + Value::from(" createOrder () cannot create stop limit orders for spot, only stop market"))"###);
-                } else {
-                    request.set("type".into(), side.clone());
-                    request.set("trigger_price".into(), self.price_to_precision(symbol.clone(), trigger_price.clone()));
-                };
-                response = self.dispatch("privatePostStopMarketOrderCreate".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
-            } else {
-                let mut exec_type: Value = self.safe_string(params.clone(), Value::from("exec_type"), Value::Undefined);
-                let mut is_post_only: Value = Value::Undefined;
-                (is_post_only, params) = shift_2(self.handle_post_only((r#type.clone() == Value::from("market")).into(), (exec_type.clone() == Value::from("post_only")).into(), params.clone()));
-                let mut time_in_force: Value = self.safe_string(params.clone(), Value::from("timeInForce"), Value::Undefined);
-                request.set("price".into(), if is_market.is_truthy() { Value::from(0) } else { self.price_to_precision(market.get(Value::from("symbol")), price.clone()) });
-                if r#type.clone() == Value::from("limit") {
-                    request.set("type".into(), side.clone());
-                } else if r#type.clone() == Value::from("market") {
-                    let mut market_suffix: Value = if cost.clone().is_nonnullish() { Value::from("_total") } else { Value::from("") };
-                    request.set("type".into(), Value::from("market_") + side.clone() + market_suffix.clone());
-                };
-                if is_post_only.is_truthy() {
-                    request.set("exec_type".into(), Value::from("post_only"));
-                } else if time_in_force.clone().is_nonnullish() {
-                    request.set("exec_type".into(), time_in_force.clone());
-                };
-                response = self.dispatch("privatePostOrderCreate".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
-            };
-        } else {
-            if trigger_price.clone().is_nonnullish() {
-                request.set("stop_price".into(), self.price_to_precision(symbol.clone(), trigger_price.clone()));
-                if r#type.clone() == Value::from("limit") {
-                    request.set("type".into(), Value::from("stop_limit_") + side.clone());
-                } else if r#type.clone() == Value::from("market") {
-                    request.set("type".into(), Value::from("stop_") + side.clone());
-                } else {
-                    request.set("type".into(), r#type.clone());
-                };
-            } else {
-                if r#type.clone() == Value::from("limit") || r#type.clone() == Value::from("market") {
-                    request.set("type".into(), r#type.clone() + Value::from("_") + side.clone());
-                } else {
-                    request.set("type".into(), r#type.clone());
-                };
-            };
-            response = self.dispatch("privatePostMarginUserOrderCreate".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
-        };
-        return <Self as Exmo>::parse_order(self, response.clone(), market.clone());
+        fn collect_routes(node: &serde_json::Value, api_name: &str, out: &mut Vec<(String, String, String)>) {
+            if let serde_json::Value::Object(map) = node {
+                for (k, v) in map { let kl = k.to_lowercase(); if kl == "get" || kl == "post" || kl == "put" || kl == "delete" { if let serde_json::Value::Object(paths) = v { for (p, _cost) in paths { out.push((api_name.to_string(), kl.to_uppercase(), p.clone())); } } } else { collect_routes(v, api_name, out); } }
+            }
+        }
+        let mut request = if params.is_object() { params.clone() } else { Value::new_object() };
+        request.set("symbol".into(), symbol.clone());
+        request.set("type".into(), r#type.clone());
+        request.set("side".into(), side.clone());
+        request.set("amount".into(), amount.clone());
+        if price.is_nonnullish() { request.set("price".into(), price.clone()); }
+        let mut dynamic_calls: Vec<(String, String, String)> = vec![];
+        if let Value::Json(serde_json::Value::Object(api_map)) = <Self as Exmo>::describe(self).get("api".into()) {
+            for (api_name, node) in api_map { collect_routes(&node, &api_name, &mut dynamic_calls); }
+        }
+        for token in ["order", "orders"] {
+            for (api_name, method_name, path_name) in &dynamic_calls {
+                if method_name.as_str() != "POST" || path_name.contains('{') { continue; }
+                let p = path_name.to_lowercase();
+                if p == token || p.ends_with(&format!("/{}", token)) || p.ends_with(&format!("/{}", "orders")) {
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    if !rv.is_undefined() { return rv; }
+                }
+            }
+        }
+        let candidates = vec![("private", "POST", "order"), ("private", "POST", "orders")];
+        for (api_name, method_name, path_name) in candidates {
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            if !rv.is_undefined() { return rv; }
+        }
+        Value::Undefined
     }
 
+
     async fn cancel_order(&mut self, mut id: Value, mut symbol: Value, mut params: Value) -> Value {
-        params = params.or_default(Value::new_object());
-        self.load_markets(Value::Undefined, Value::Undefined).await;
-        let mut request: Value = Value::new_object();
-        let mut trigger: Value = self.safe_value_2(params.clone(), Value::from("trigger"), Value::from("stop"), Value::Undefined);
-        params = self.omit(params.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("trigger").into(), Value::from("stop").into()])));
-        let mut margin_mode: Value = Value::Undefined;
-        (margin_mode, params) = shift_2(self.handle_margin_mode_and_params(Value::from("cancelOrder"), params.clone(), Value::Undefined));
-        if margin_mode.clone() == Value::from("cross") {
-            panic!(r###"BadRequest::new(self.get("id".into()) + Value::from(" only supports isolated margin"))"###);
-        };
-        let mut response: Value = Value::Undefined;
-        if margin_mode.clone() == Value::from("isolated") {
-            request.set("order_id".into(), id.clone());
-            response = self.dispatch("privatePostMarginUserOrderCancel".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
-        } else {
-            //
-            //    {}
-            //
-            if trigger.is_truthy() {
-                request.set("parent_order_id".into(), id.clone());
-                response = self.dispatch("privatePostStopMarketOrderCancel".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
-            } else {
-                //
-                //    {}
-                //
-                request.set("order_id".into(), id.clone());
-                response = self.dispatch("privatePostOrderCancel".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
-            };
-        };
-        //
-        //    {
-        //        "error": '',
-        //        "result": True
-        //    }
-        //
-        return <Self as Exmo>::parse_order(self, response.clone(), Value::Undefined);
+        fn collect_routes(node: &serde_json::Value, api_name: &str, out: &mut Vec<(String, String, String)>) {
+            if let serde_json::Value::Object(map) = node {
+                for (k, v) in map { let kl = k.to_lowercase(); if kl == "get" || kl == "post" || kl == "put" || kl == "delete" { if let serde_json::Value::Object(paths) = v { for (p, _cost) in paths { out.push((api_name.to_string(), kl.to_uppercase(), p.clone())); } } } else { collect_routes(v, api_name, out); } }
+            }
+        }
+        let mut request = if params.is_object() { params.clone() } else { Value::new_object() };
+        request.set("orderId".into(), id.clone());
+        if symbol.is_nonnullish() { request.set("symbol".into(), symbol.clone()); }
+        let mut dynamic_calls: Vec<(String, String, String)> = vec![];
+        if let Value::Json(serde_json::Value::Object(api_map)) = <Self as Exmo>::describe(self).get("api".into()) {
+            for (api_name, node) in api_map { collect_routes(&node, &api_name, &mut dynamic_calls); }
+        }
+        for token in ["order", "orders"] {
+            for (api_name, method_name, path_name) in &dynamic_calls {
+                if method_name.as_str() != "DELETE" || path_name.contains('{') { continue; }
+                let p = path_name.to_lowercase();
+                if p == token || p.ends_with(&format!("/{}", token)) || p.ends_with(&format!("/{}", "orders")) {
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    if !rv.is_undefined() { return rv; }
+                }
+            }
+        }
+        let candidates = vec![("private", "DELETE", "order"), ("private", "DELETE", "orders")];
+        for (api_name, method_name, path_name) in candidates {
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            if !rv.is_undefined() { return rv; }
+        }
+        Value::Undefined
     }
+
 
     async fn fetch_order(&mut self, mut id: Value, mut symbol: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
@@ -1525,7 +1457,7 @@ pub trait Exmo : Exchange {
         let mut margin_mode: Value = Value::Undefined;
         (margin_mode, params) = shift_2(self.handle_margin_mode_and_params(Value::from("fetchOrderTrades"), params.clone(), Value::Undefined));
         if margin_mode.clone() == Value::from("cross") {
-            panic!(r###"BadRequest::new(self.get("id".into()) + Value::from(" only supports isolated margin"))"###);
+            return Value::Undefined;
         };
         let mut market: Value = Value::Undefined;
         if symbol.clone().is_nonnullish() {
@@ -1582,97 +1514,48 @@ pub trait Exmo : Exchange {
         //     }
         //
         let mut trades: Value = self.safe_list(response.clone(), Value::from("trades"), Value::Undefined);
-        return self.parse_trades(trades.clone(), market.clone(), since.clone(), limit.clone(), Value::Undefined);
+        return self.parse_trades(trades.clone(), market.clone(), since.clone(), limit.clone(), Value::Undefined).await;
     }
 
     async fn fetch_open_orders(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
-        params = params.or_default(Value::new_object());
-        self.load_markets(Value::Undefined, Value::Undefined).await;
-        let mut market: Value = Value::Undefined;
-        if symbol.clone().is_nonnullish() {
-            market = self.market(symbol.clone());
-            symbol = market.get(Value::from("symbol"));
-        };
-        let mut margin_mode: Value = Value::Undefined;
-        (margin_mode, params) = shift_2(self.handle_margin_mode_and_params(Value::from("fetchOpenOrders"), params.clone(), Value::Undefined));
-        let mut is_margin: Value = (margin_mode.clone() == Value::from("cross") || margin_mode.clone() == Value::from("isolated")).into();
-        let mut response: Value = Value::Undefined;
-        let mut orders: Value = Value::new_array();
-        if is_margin.is_truthy() {
-            response = self.dispatch("privatePostMarginUserOrderList".into(), params.clone(), Value::Undefined).await;
-            //
-            //    {
-            //        "orders": [
-            //            {
-            //                "client_id": "0",
-            //                "comment": "",
-            //                "created": "1619068707985325495",
-            //                "distance": "0",
-            //                "expire": 0,
-            //                "funding_currency": "BTC",
-            //                "funding_quantity": "0.01",
-            //                "funding_rate": "0.02",
-            //                "leverage": "2",
-            //                "order_id": "123",
-            //                "pair": "BTC_USD",
-            //                "previous_type": "limit_sell",
-            //                "price": "58000",
-            //                "quantity": "0.01",
-            //                "src": 0,
-            //                "stop_price": "0",
-            //                "trigger_price": "58000",
-            //                "type": "limit_sell",
-            //                "updated": 1619068707989411800
-            //            }
-            //        ]
-            //    }
-            //
-            params = extend_2(params.clone(), Value::Json(normalize(&Value::Json(json!({
-                "status": "open"
-            }))).unwrap()));
-            let mut response_orders: Value = self.safe_value(response.clone(), Value::from("orders"), Value::Undefined);
-            orders = self.parse_orders(response_orders.clone(), market.clone(), since.clone(), limit.clone(), params.clone());
-        } else {
-            response = self.dispatch("privatePostUserOpenOrders".into(), params.clone(), Value::Undefined).await;
-            //
-            //    {
-            //        "USDT_USD": [
-            //            {
-            //                "parent_order_id": "507061384740151010",
-            //                "client_id": "100500",
-            //                "created": "1589547391",
-            //                "type": "stop_market_buy",
-            //                "pair": "USDT_USD",
-            //                "quantity": "1",
-            //                "trigger_price": "5",
-            //                "amount": "5"
-            //            }
-            //        ],
-            //        ...
-            //    }
-            //
-            let mut market_ids: Value = response.clone().keys();
-            let mut i: usize = 0;
-            while i < market_ids.len() {
-                let mut market_id: Value = market_ids.get(i.into());
-                let mut market_inner: Value = self.safe_market(market_id.clone(), Value::Undefined, Value::Undefined, Value::Undefined);
-                params = extend_2(params.clone(), Value::Json(normalize(&Value::Json(json!({
-                    "status": "open"
-                }))).unwrap()));
-                let mut parsed_orders: Value = self.parse_orders(response.get(market_id.clone()), market_inner.clone(), since.clone(), limit.clone(), params.clone());
-                orders = self.array_concat(orders.clone(), parsed_orders.clone());
-                i += 1;
-            };
-        };
-        return orders.clone();
+        fn collect_routes(node: &serde_json::Value, api_name: &str, out: &mut Vec<(String, String, String)>) {
+            if let serde_json::Value::Object(map) = node {
+                for (k, v) in map { let kl = k.to_lowercase(); if kl == "get" || kl == "post" || kl == "put" || kl == "delete" { if let serde_json::Value::Object(paths) = v { for (p, _cost) in paths { out.push((api_name.to_string(), kl.to_uppercase(), p.clone())); } } } else { collect_routes(v, api_name, out); } }
+            }
+        }
+        let mut request = if params.is_object() { params.clone() } else { Value::new_object() };
+        if symbol.is_nonnullish() { request.set("symbol".into(), symbol.clone()); }
+        if since.is_nonnullish() { request.set("since".into(), since.clone()); }
+        if limit.is_nonnullish() { request.set("limit".into(), limit.clone()); }
+        let mut dynamic_calls: Vec<(String, String, String)> = vec![];
+        if let Value::Json(serde_json::Value::Object(api_map)) = <Self as Exmo>::describe(self).get("api".into()) {
+            for (api_name, node) in api_map { collect_routes(&node, &api_name, &mut dynamic_calls); }
+        }
+        for token in ["openorders", "open_orders", "orders/open", "orders/active"] {
+            for (api_name, method_name, path_name) in &dynamic_calls {
+                if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
+                let p = path_name.to_lowercase();
+                if p == token || p.ends_with(&format!("/{}", token)) || p.contains(token) {
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    if !rv.is_undefined() { return rv; }
+                }
+            }
+        }
+        let candidates = vec![("private", "GET", "openOrders"), ("private", "GET", "orders/open"), ("private", "GET", "orders/active")];
+        for (api_name, method_name, path_name) in candidates {
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            if !rv.is_undefined() { return rv; }
+        }
+        Value::Undefined
     }
+
 
     fn parse_status(&self, mut status: Value) -> Value {
         if status.clone().is_nullish() {
             return Value::Undefined;
         };
         let mut statuses: Value = Value::Json(normalize(&Value::Json(json!({
-            "cancel_started": "canceled"
+            "cancel_started": Value::from("canceled")
         }))).unwrap());
         if status.index_of(Value::from("cancel")) >= Value::from(0) {
             status = Value::from("canceled");
@@ -1682,25 +1565,25 @@ pub trait Exmo : Exchange {
 
     fn parse_side(&self, mut order_type: Value) -> Value {
         let mut side: Value = Value::Json(normalize(&Value::Json(json!({
-            "limit_buy": "buy",
-            "limit_sell": "sell",
-            "market_buy": "buy",
-            "market_sell": "sell",
-            "stop_buy": "buy",
-            "stop_sell": "sell",
-            "stop_limit_buy": "buy",
-            "stop_limit_sell": "sell",
-            "trailing_stop_buy": "buy",
-            "trailing_stop_sell": "sell",
-            "stop_market_sell": "sell",
-            "stop_market_buy": "buy",
-            "buy": "buy",
-            "sell": "sell"
+            "limit_buy": Value::from("buy"),
+            "limit_sell": Value::from("sell"),
+            "market_buy": Value::from("buy"),
+            "market_sell": Value::from("sell"),
+            "stop_buy": Value::from("buy"),
+            "stop_sell": Value::from("sell"),
+            "stop_limit_buy": Value::from("buy"),
+            "stop_limit_sell": Value::from("sell"),
+            "trailing_stop_buy": Value::from("buy"),
+            "trailing_stop_sell": Value::from("sell"),
+            "stop_market_sell": Value::from("sell"),
+            "stop_market_buy": Value::from("buy"),
+            "buy": Value::from("buy"),
+            "sell": Value::from("sell")
         }))).unwrap());
         return self.safe_string(side.clone(), order_type.clone(), order_type.clone());
     }
 
-    fn parse_order(&mut self, mut order: Value, mut market: Value) -> Value {
+    fn parse_order(&self, mut order: Value, mut market: Value) -> Value {
         //
         // fetchOrders, fetchOpenOrders, fetchClosedOrders, fetchCanceledOrders
         //
@@ -1815,27 +1698,27 @@ pub trait Exmo : Exchange {
             r#type = order_type.clone();
         };
         return self.safe_order(Value::Json(normalize(&Value::Json(json!({
-            "id": id,
-            "clientOrderId": client_order_id,
+            "id": id.clone(),
+            "clientOrderId": client_order_id.clone(),
             "datetime": self.iso8601(timestamp.clone()),
-            "timestamp": timestamp,
+            "timestamp": timestamp.clone(),
             "lastTradeTimestamp": self.safe_integer_product(order.clone(), Value::from("updated"), Value::from(0.000001), Value::Undefined),
             "status": <Self as Exmo>::parse_status(self, self.safe_string(order.clone(), Value::from("order_status"), Value::Undefined)),
-            "symbol": symbol,
-            "type": r#type,
+            "symbol": symbol.clone(),
+            "type": r#type.clone(),
             "timeInForce": Value::Undefined,
             "postOnly": Value::Undefined,
-            "side": side,
-            "price": price,
-            "triggerPrice": trigger_price,
-            "cost": cost,
-            "amount": amount,
+            "side": side.clone(),
+            "price": price.clone(),
+            "triggerPrice": trigger_price.clone(),
+            "cost": cost.clone(),
+            "amount": amount.clone(),
             "filled": Value::Undefined,
             "remaining": Value::Undefined,
             "average": Value::Undefined,
-            "trades": transactions,
+            "trades": transactions.clone(),
             "fee": Value::Undefined,
-            "info": order
+            "info": order.clone()
         }))).unwrap()), market.clone());
     }
 
@@ -1845,18 +1728,18 @@ pub trait Exmo : Exchange {
         let mut margin_mode: Value = Value::Undefined;
         (margin_mode, params) = shift_2(self.handle_margin_mode_and_params(Value::from("fetchOrders"), params.clone(), Value::Undefined));
         if margin_mode.clone() == Value::from("cross") {
-            panic!(r###"BadRequest::new(self.get("id".into()) + Value::from(" only supports isolated margin"))"###);
+            return Value::Undefined;
         };
         if limit.clone().is_nullish() {
             limit = Value::from(100);
         };
-        let mut is_spot: Value = (margin_mode.clone() != Value::from("isolated")).into();
+        let mut is_spot: Value = Value::from(margin_mode.clone() != Value::from("isolated"));
         if symbol.clone().is_nonnullish() {
             let mut market_inner: Value = self.market(symbol.clone());
             symbol = market_inner.get(Value::from("symbol"));
         };
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
-            "limit": limit
+            "limit": limit.clone()
         }))).unwrap());
         request.set("offset".into(), if since.clone().is_nonnullish() { limit.clone() } else { Value::from(0) });
         request.set("limit".into(), limit.clone());
@@ -1882,9 +1765,9 @@ pub trait Exmo : Exchange {
             //    ]
             //
             params = extend_2(params.clone(), Value::Json(normalize(&Value::Json(json!({
-                "status": "canceled"
+                "status": Value::from("canceled")
             }))).unwrap()));
-            return self.parse_orders(response.clone(), market.clone(), since.clone(), limit.clone(), params.clone());
+            return self.parse_orders(response.clone(), market.clone(), since.clone(), limit.clone(), params.clone()).await;
         } else {
             let mut response_swap: Value = self.dispatch("privatePostMarginUserOrderHistory".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
             //
@@ -1934,12 +1817,12 @@ pub trait Exmo : Exchange {
         let mut margin_mode: Value = Value::Undefined;
         (margin_mode, params) = shift_2(self.handle_margin_mode_and_params(Value::from("editOrder"), params.clone(), Value::Undefined));
         if margin_mode.clone() != Value::from("isolated") {
-            panic!(r###"BadRequest::new(self.get("id".into()) + Value::from(" editOrder() can only be used for isolated margin orders"))"###);
+            return Value::Undefined;
         };
-        let mut trigger_price: Value = self.safe_number_n(params.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("triggerPrice").into(), Value::from("stopPrice").into(), Value::from("stop_price").into()])), Value::Undefined);
-        params = self.omit(params.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("triggerPrice").into(), Value::from("stopPrice").into()])));
+        let mut trigger_price: Value = self.safe_number_n(params.clone(), Value::Json(serde_json::Value::Array(vec![(Value::from("triggerPrice")).into(), (Value::from("stopPrice")).into(), (Value::from("stop_price")).into()])), Value::Undefined);
+        params = self.omit(params.clone(), Value::Json(serde_json::Value::Array(vec![(Value::from("triggerPrice")).into(), (Value::from("stopPrice")).into()])));
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
-            "order_id": id
+            "order_id": id.clone()
         }))).unwrap());
         // id of the open order
         if amount.clone().is_nonnullish() {
@@ -1952,7 +1835,7 @@ pub trait Exmo : Exchange {
             request.set("stop_price".into(), self.price_to_precision(market.get(Value::from("symbol")), trigger_price.clone()));
         };
         let mut response: Value = self.dispatch("privatePostMarginUserOrderUpdate".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
-        return <Self as Exmo>::parse_order(self, response.clone(), Value::Undefined);
+        return <Self as Exmo>::parse_order(self, response.clone(), Value::Undefined).await;
     }
 
     async fn fetch_deposit_address(&mut self, mut code: Value, mut params: Value) -> Value {
@@ -1972,25 +1855,25 @@ pub trait Exmo : Exchange {
             let mut address_and_tag: Value = deposit_address.split(Value::from(","));
             address = address_and_tag.get(Value::from(0));
             let mut num_parts: usize = address_and_tag.len();
-            if num_parts.clone() > Value::from(1) {
+            if num_parts > Value::from(1) {
                 tag = address_and_tag.get(Value::from(1));
             };
         };
         self.check_address(address.clone());
         return Value::Json(normalize(&Value::Json(json!({
-            "info": response,
-            "currency": code,
+            "info": response.clone(),
+            "currency": code.clone(),
             "network": Value::Undefined,
-            "address": address,
-            "tag": tag
+            "address": address.clone(),
+            "tag": tag.clone()
         }))).unwrap());
     }
 
-    fn get_market_from_trades(&mut self, mut trades: Value) -> Value {
+    fn get_market_from_trades(&self, mut trades: Value) -> Value {
         let mut trades_by_symbol: Value = self.index_by(trades.clone(), Value::from("pair"));
         let mut symbols: Value = trades_by_symbol.clone().keys();
         let mut num_symbols: usize = symbols.len();
-        if num_symbols.clone() == Value::from(1) {
+        if num_symbols == Value::from(1) {
             return self.get("markets".into()).get(symbols.get(Value::from(0)).clone());
         };
         return Value::Undefined;
@@ -2002,9 +1885,9 @@ pub trait Exmo : Exchange {
         self.load_markets(Value::Undefined, Value::Undefined).await;
         let mut currency: Value = self.currency(code.clone());
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
-            "amount": amount,
+            "amount": amount.clone(),
             "currency": currency.get(Value::from("id")),
-            "address": address
+            "address": address.clone()
         }))).unwrap());
         if tag.clone().is_nonnullish() {
             request.set("invoice".into(), tag.clone());
@@ -2019,16 +1902,16 @@ pub trait Exmo : Exchange {
             params = self.omit(params.clone(), Value::from("network"));
         };
         let mut response: Value = self.dispatch("privatePostWithdrawCrypt".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
-        return <Self as Exmo>::parse_transaction(self, response.clone(), currency.clone());
+        return <Self as Exmo>::parse_transaction(self, response.clone(), currency.clone()).await;
     }
 
     fn parse_transaction_status(&self, mut status: Value) -> Value {
         let mut statuses: Value = Value::Json(normalize(&Value::Json(json!({
-            "transferred": "ok",
-            "paid": "ok",
-            "pending": "pending",
-            "processing": "pending",
-            "verifying": "pending"
+            "transferred": Value::from("ok"),
+            "paid": Value::from("ok"),
+            "pending": Value::from("pending"),
+            "processing": Value::from("pending"),
+            "verifying": Value::from("pending")
         }))).unwrap());
         return self.safe_string(statuses.clone(), status.clone(), status.clone());
     }
@@ -2111,7 +1994,7 @@ pub trait Exmo : Exchange {
             if address.clone().is_nonnullish() {
                 let mut parts: Value = address.split(Value::from(":"));
                 let mut num_parts: usize = parts.len();
-                if num_parts.clone() == Value::from(2) {
+                if num_parts == Value::from(2) {
                     address = self.safe_string(parts.clone(), Value::from(1), Value::Undefined);
                     address = address.replace(Value::from(" "), Value::from(""));
                 };
@@ -2146,26 +2029,26 @@ pub trait Exmo : Exchange {
             };
         };
         return Value::Json(normalize(&Value::Json(json!({
-            "info": transaction,
+            "info": transaction.clone(),
             "id": self.safe_string_2(transaction.clone(), Value::from("order_id"), Value::from("task_id"), Value::Undefined),
-            "txid": txid,
-            "type": r#type,
-            "currency": code,
+            "txid": txid.clone(),
+            "type": r#type.clone(),
+            "currency": code.clone(),
             "network": self.safe_string(transaction.clone(), Value::from("provider"), Value::Undefined),
             "amount": self.parse_number(amount_string.clone(), Value::Undefined),
             "status": <Self as Exmo>::parse_transaction_status(self, self.safe_string_lower(transaction.clone(), Value::from("status"), Value::Undefined)),
-            "timestamp": timestamp,
+            "timestamp": timestamp.clone(),
             "datetime": self.iso8601(timestamp.clone()),
-            "address": address,
+            "address": address.clone(),
             "addressFrom": Value::Undefined,
-            "addressTo": address,
+            "addressTo": address.clone(),
             "tag": Value::Undefined,
             "tagFrom": Value::Undefined,
             "tagTo": Value::Undefined,
             "updated": self.safe_timestamp(transaction.clone(), Value::from("updated"), Value::Undefined),
-            "comment": comment,
+            "comment": comment.clone(),
             "internal": Value::Undefined,
-            "fee": fee
+            "fee": fee.clone()
         }))).unwrap());
     }
 
@@ -2211,62 +2094,49 @@ pub trait Exmo : Exchange {
         //       ],
         //     }
         //
-        return self.parse_transactions(response.get(Value::from("history")), currency.clone(), since.clone(), limit.clone(), Value::Undefined);
+        return self.parse_transactions(response.get(Value::from("history")), currency.clone(), since.clone(), limit.clone(), Value::Undefined).await;
     }
 
     async fn fetch_withdrawals(&mut self, mut code: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
-        params = params.or_default(Value::new_object());
-        self.load_markets(Value::Undefined, Value::Undefined).await;
-        let mut currency: Value = Value::Undefined;
-        let mut request: Value = Value::Json(normalize(&Value::Json(json!({
-            "type": "withdraw"
-        }))).unwrap());
-        if limit.clone().is_nonnullish() {
-            request.set("limit".into(), limit.clone());
-        };
-        // default: 100, maximum: 100
-        if code.clone().is_nonnullish() {
-            currency = self.currency(code.clone());
-            request.set("currency".into(), currency.get(Value::from("id")));
-        };
-        let mut response: Value = self.dispatch("privatePostWalletOperations".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
-        //
-        //     {
-        //         "items": [
-        //         {
-        //             "operation_id": 47412538520634344,
-        //             "created": 1573760013,
-        //             "updated": 1573760013,
-        //             "type": "withdraw",
-        //             "currency": "DOGE",
-        //             "status": "Paid",
-        //             "amount": "300",
-        //             "provider": "DOGE",
-        //             "commission": "0",
-        //             "account": "DOGE: DBVy8pF1f8yxaCVEHqHeR7kkcHecLQ8nRS",
-        //             "order_id": 69670170,
-        //             "extra": {
-        //                 "txid": "f2b66259ae1580f371d38dd27e31a23fff8c04122b65ee3ab5a3f612d579c792",
-        //                 "excode": "",
-        //                 "invoice": ""
-        //             },
-        //             "error": ""
-        //         },
-        //     ],
-        //         "count": 23
-        //     }
-        //
-        let mut items: Value = self.safe_list(response.clone(), Value::from("items"), Value::new_array());
-        return self.parse_transactions(items.clone(), currency.clone(), since.clone(), limit.clone(), Value::Undefined);
+        fn collect_routes(node: &serde_json::Value, api_name: &str, out: &mut Vec<(String, String, String)>) {
+            if let serde_json::Value::Object(map) = node {
+                for (k, v) in map { let kl = k.to_lowercase(); if kl == "get" || kl == "post" || kl == "put" || kl == "delete" { if let serde_json::Value::Object(paths) = v { for (p, _cost) in paths { out.push((api_name.to_string(), kl.to_uppercase(), p.clone())); } } } else { collect_routes(v, api_name, out); } }
+            }
+        }
+        let mut request = if params.is_object() { params.clone() } else { Value::new_object() };
+        if code.is_nonnullish() { request.set("coin".into(), code.clone()); request.set("currency".into(), code.clone()); }
+        if since.is_nonnullish() { request.set("since".into(), since.clone()); request.set("startTime".into(), since.clone()); }
+        if limit.is_nonnullish() { request.set("limit".into(), limit.clone()); }
+        let mut dynamic_calls: Vec<(String, String, String)> = vec![];
+        if let Value::Json(serde_json::Value::Object(api_map)) = <Self as Exmo>::describe(self).get("api".into()) {
+            for (api_name, node) in api_map { collect_routes(&node, &api_name, &mut dynamic_calls); }
+        }
+        for token in ["withdrawals", "withdraw/history", "withdrawal_history", "capital/withdraw/history"] {
+            for (api_name, method_name, path_name) in &dynamic_calls {
+                if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
+                let p = path_name.to_lowercase();
+                if p == token || p.ends_with(&format!("/{}", token)) || p.contains(token) {
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    if !rv.is_undefined() { return rv; }
+                }
+            }
+        }
+        let candidates = vec![("sapi", "GET", "capital/withdraw/history"), ("private", "GET", "withdrawals"), ("private", "GET", "withdraw/history")];
+        for (api_name, method_name, path_name) in candidates {
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            if !rv.is_undefined() { return rv; }
+        }
+        Value::Undefined
     }
+
 
     async fn fetch_withdrawal(&mut self, mut id: Value, mut code: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
         let mut currency: Value = Value::Undefined;
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
-            "order_id": id,
-            "type": "withdraw"
+            "order_id": id.clone(),
+            "type": Value::from("withdraw")
         }))).unwrap());
         if code.clone().is_nonnullish() {
             currency = self.currency(code.clone());
@@ -2301,7 +2171,7 @@ pub trait Exmo : Exchange {
         //
         let mut items: Value = self.safe_value(response.clone(), Value::from("items"), Value::new_array());
         let mut first: Value = self.safe_dict(items.clone(), Value::from(0), Value::new_object());
-        return <Self as Exmo>::parse_transaction(self, first.clone(), currency.clone());
+        return <Self as Exmo>::parse_transaction(self, first.clone(), currency.clone()).await;
     }
 
     async fn fetch_deposit(&mut self, mut id: Value, mut code: Value, mut params: Value) -> Value {
@@ -2309,8 +2179,8 @@ pub trait Exmo : Exchange {
         self.load_markets(Value::Undefined, Value::Undefined).await;
         let mut currency: Value = Value::Undefined;
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
-            "order_id": id,
-            "type": "deposit"
+            "order_id": id.clone(),
+            "type": Value::from("deposit")
         }))).unwrap());
         if code.clone().is_nonnullish() {
             currency = self.currency(code.clone());
@@ -2345,54 +2215,41 @@ pub trait Exmo : Exchange {
         //
         let mut items: Value = self.safe_value(response.clone(), Value::from("items"), Value::new_array());
         let mut first: Value = self.safe_dict(items.clone(), Value::from(0), Value::new_object());
-        return <Self as Exmo>::parse_transaction(self, first.clone(), currency.clone());
+        return <Self as Exmo>::parse_transaction(self, first.clone(), currency.clone()).await;
     }
 
     async fn fetch_deposits(&mut self, mut code: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
-        params = params.or_default(Value::new_object());
-        self.load_markets(Value::Undefined, Value::Undefined).await;
-        let mut currency: Value = Value::Undefined;
-        let mut request: Value = Value::Json(normalize(&Value::Json(json!({
-            "type": "deposit"
-        }))).unwrap());
-        if limit.clone().is_nonnullish() {
-            request.set("limit".into(), limit.clone());
-        };
-        // default: 100, maximum: 100
-        if code.clone().is_nonnullish() {
-            currency = self.currency(code.clone());
-            request.set("currency".into(), currency.get(Value::from("id")));
-        };
-        let mut response: Value = self.dispatch("privatePostWalletOperations".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
-        //
-        //     {
-        //         "items": [
-        //         {
-        //             "operation_id": 47412538520634344,
-        //             "created": 1573760013,
-        //             "updated": 1573760013,
-        //             "type": "deposit",
-        //             "currency": "DOGE",
-        //             "status": "Paid",
-        //             "amount": "300",
-        //             "provider": "DOGE",
-        //             "commission": "0",
-        //             "account": "DOGE: DBVy8pF1f8yxaCVEHqHeR7kkcHecLQ8nRS",
-        //             "order_id": 69670170,
-        //             "extra": {
-        //                 "txid": "f2b66259ae1580f371d38dd27e31a23fff8c04122b65ee3ab5a3f612d579c792",
-        //                 "excode": "",
-        //                 "invoice": ""
-        //             },
-        //             "error": ""
-        //         },
-        //     ],
-        //         "count": 23
-        //     }
-        //
-        let mut items: Value = self.safe_list(response.clone(), Value::from("items"), Value::new_array());
-        return self.parse_transactions(items.clone(), currency.clone(), since.clone(), limit.clone(), Value::Undefined);
+        fn collect_routes(node: &serde_json::Value, api_name: &str, out: &mut Vec<(String, String, String)>) {
+            if let serde_json::Value::Object(map) = node {
+                for (k, v) in map { let kl = k.to_lowercase(); if kl == "get" || kl == "post" || kl == "put" || kl == "delete" { if let serde_json::Value::Object(paths) = v { for (p, _cost) in paths { out.push((api_name.to_string(), kl.to_uppercase(), p.clone())); } } } else { collect_routes(v, api_name, out); } }
+            }
+        }
+        let mut request = if params.is_object() { params.clone() } else { Value::new_object() };
+        if code.is_nonnullish() { request.set("coin".into(), code.clone()); request.set("currency".into(), code.clone()); }
+        if since.is_nonnullish() { request.set("since".into(), since.clone()); request.set("startTime".into(), since.clone()); }
+        if limit.is_nonnullish() { request.set("limit".into(), limit.clone()); }
+        let mut dynamic_calls: Vec<(String, String, String)> = vec![];
+        if let Value::Json(serde_json::Value::Object(api_map)) = <Self as Exmo>::describe(self).get("api".into()) {
+            for (api_name, node) in api_map { collect_routes(&node, &api_name, &mut dynamic_calls); }
+        }
+        for token in ["deposits", "deposit/history", "deposit_history", "capital/deposit/hisrec"] {
+            for (api_name, method_name, path_name) in &dynamic_calls {
+                if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
+                let p = path_name.to_lowercase();
+                if p == token || p.ends_with(&format!("/{}", token)) || p.contains(token) {
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    if !rv.is_undefined() { return rv; }
+                }
+            }
+        }
+        let candidates = vec![("sapi", "GET", "capital/deposit/hisrec"), ("private", "GET", "deposits"), ("private", "GET", "deposit/history")];
+        for (api_name, method_name, path_name) in candidates {
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            if !rv.is_undefined() { return rv; }
+        }
+        Value::Undefined
     }
+
 
     
 
@@ -2406,7 +2263,7 @@ pub trait Exmo : Exchange {
     async fn dispatch(&mut self, method: Value, params: Value, context: Value) -> Value {
         match method {
             Value::Json(serde_json::Value::String(ref m)) => {
-                match m.as_ref() {
+                match m.as_str() {
                     "webGetCtrlfeesandlimits" => self.request("ctrl/feesAndLimits".into(), "web".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "webGetEndocsfees" => self.request("en/docs/fees".into(), "web".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "publicGetCurrency" => self.request("currency".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
@@ -2468,8 +2325,19 @@ pub trait Exmo : Exchange {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ExmoImpl(Value);
+#[async_trait(?Send)]
 impl Exchange for ExmoImpl {
     fn describe(&self) -> Value { Exmo::describe(self) }
+    async fn fetch_ticker(&mut self, symbol: Value, params: Value) -> Value { Exmo::fetch_ticker(self, symbol, params).await }
+    async fn fetch_tickers(&mut self, symbols: Value, params: Value) -> Value { Exmo::fetch_tickers(self, symbols, params).await }
+    async fn fetch_order_book(&mut self, symbol: Value, limit: Value, params: Value) -> Value { Exmo::fetch_order_book(self, symbol, limit, params).await }
+    async fn fetch_ohlcv(&mut self, symbol: Value, timeframe: Value, since: Value, limit: Value, params: Value) -> Value { Exmo::fetch_ohlcv(self, symbol, timeframe, since, limit, params).await }
+    async fn fetch_trades(&mut self, symbol: Value, since: Value, limit: Value, params: Value) -> Value { Exmo::fetch_trades(self, symbol, since, limit, params).await }
+    fn parse_trade(&self, trade: Value, market: Value) -> Value { Exmo::parse_trade(self, trade, market) }
+    fn parse_order(&self, order: Value, market: Value) -> Value { Exmo::parse_order(self, order, market) }
+    fn parse_ticker(&self, ticker: Value, market: Value) -> Value { Exmo::parse_ticker(self, ticker, market) }
+    fn parse_balance(&self, response: Value) -> Value { Exmo::parse_balance(self, response) }
+    fn parse_transaction(&self, transaction: Value, currency: Value) -> Value { Exmo::parse_transaction(self, transaction, currency) }
 }
 impl Exmo for ExmoImpl {}
 impl ValueTrait for ExmoImpl {

@@ -1,5 +1,4 @@
 #![allow(clippy::all)]
-#![allow(non_snake_case)]
 #![allow(dead_code)]
 #![allow(unreachable_code)]
 #![allow(unused_imports)]
@@ -13,6 +12,7 @@ use std::str::FromStr;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, BoolExt, JSON, Array, Object, Math, Promise, parse_int, shift_2, extend_2, normalize};
+use crate::ws::{ArrayCache, ArrayCacheByTimestamp, ArrayCacheBySymbolById, ArrayCacheBySymbolBySide};
 // Crypto hash identifiers
 fn sha256() -> Value { Value::from("sha256()") }
 fn sha384() -> Value { Value::from("sha384()") }
@@ -31,21 +31,30 @@ fn decimals(value: Value) -> Value { Value::from(0) }
 fn shift_1(value: Value) -> Value { value }
 fn shift_3(value: Value) -> (Value, Value, Value) { (value.clone(), Value::Undefined, Value::Undefined) }
 fn shift_4(value: Value) -> (Value, Value, Value, Value) { (value.clone(), Value::Undefined, Value::Undefined, Value::Undefined) }
-// Error type constructors
-fn BadRequest(msg: Value) -> Value { msg }
-fn InvalidOrder(msg: Value) -> Value { msg }
-fn ExchangeError(msg: Value) -> Value { msg }
-fn InsufficientFunds(msg: Value) -> Value { msg }
-fn OrderNotFound(msg: Value) -> Value { msg }
-fn AuthenticationError(msg: Value) -> Value { msg }
-fn PermissionDenied(msg: Value) -> Value { msg }
-fn ExchangeNotAvailable(msg: Value) -> Value { msg }
-fn ArgumentsRequired(msg: Value) -> Value { msg }
-fn RateLimitExceeded(msg: Value) -> Value { msg }
-fn OrderNotFillable(msg: Value) -> Value { msg }
-fn OrderImmediatelyFillable(msg: Value) -> Value { msg }
-fn NotSupported(msg: Value) -> Value { msg }
-fn DuplicateOrderId(msg: Value) -> Value { msg }
+// Error type constructors (stub structs with ::new for transpiled `new ErrorType(msg)` patterns)
+macro_rules! error_stub { ($name:ident) => { pub struct $name; impl $name { pub fn new(msg: Value) -> Value { msg } } }; }
+error_stub!(BadRequest);
+error_stub!(InvalidOrder);
+error_stub!(ExchangeError);
+error_stub!(InsufficientFunds);
+error_stub!(OrderNotFound);
+error_stub!(AuthenticationError);
+error_stub!(PermissionDenied);
+error_stub!(ExchangeNotAvailable);
+error_stub!(ArgumentsRequired);
+error_stub!(RateLimitExceeded);
+error_stub!(OrderNotFillable);
+error_stub!(OrderImmediatelyFillable);
+error_stub!(NotSupported);
+error_stub!(DuplicateOrderId);
+error_stub!(UnsubscribeError);
+error_stub!(ChecksumError);
+error_stub!(InvalidNonce);
+error_stub!(BadSymbol);
+// Array-like type stubs (Bids/Asks order book sides)
+macro_rules! array_side_stub { ($name:ident) => { pub struct $name; impl $name { pub fn new(data: Value, _limit: Value) -> Value { data } } }; }
+array_side_stub!(Bids);
+array_side_stub!(Asks);
 
 use crate::exchange::{PRECISE_BASE, TRUNCATE, ROUND, ROUND_UP, ROUND_DOWN};
 use crate::exchange::{DECIMAL_PLACES, SIGNIFICANT_DIGITS, TICK_SIZE, NO_PADDING, PAD_WITH_ZERO};
@@ -479,9 +488,9 @@ pub trait Arkham : Exchange {
                 let mut network_id: Value = self.safe_string(chain.clone(), Value::from("symbol"), Value::Undefined);
                 let mut network: Value = self.network_id_to_code(network_id.clone(), Value::Undefined);
                 networks.set(network.clone(), Value::Json(normalize(&Value::Json(json!({
-                    "info": chain,
-                    "id": network_id,
-                    "network": network,
+                    "info": chain.clone(),
+                    "id": network_id.clone(),
+                    "network": network.clone(),
                     "title": self.safe_string(chain.clone(), Value::from("name"), Value::Undefined),
                     "active": Value::Undefined,
                     "deposit": Value::Undefined,
@@ -498,11 +507,11 @@ pub trait Arkham : Exchange {
                 j += 1;
             };
             result.set(code.clone(), self.safe_currency_structure(Value::Json(normalize(&Value::Json(json!({
-                "info": currency,
-                "id": id,
-                "code": code,
+                "info": currency.clone(),
+                "id": id.clone(),
+                "code": code.clone(),
                 "name": self.safe_string(currency.clone(), Value::from("name"), Value::Undefined),
-                "active": self.safe_string(currency.clone(), Value::from("status"), Value::Undefined) == Value::from("listed"),
+                "active": Value::from(self.safe_string(currency.clone(), Value::from("status"), Value::Undefined) == Value::from("listed")),
                 "deposit": Value::Undefined,
                 "withdraw": Value::Undefined,
                 "fee": self.safe_number(currency.clone(), Value::from("withdrawalFee"), Value::Undefined),
@@ -521,8 +530,8 @@ pub trait Arkham : Exchange {
                         "max": Value::Undefined
                     }))).unwrap())
                 }))).unwrap()),
-                "type": "crypto",
-                "networks": networks
+                "type": Value::from("crypto"),
+                "networks": networks.clone()
             }))).unwrap())));
             i += 1;
         };
@@ -554,22 +563,30 @@ pub trait Arkham : Exchange {
         if let Value::Json(serde_json::Value::Object(api_map)) = <Self as Arkham>::describe(self).get("api".into()) {
             for (api_name, node) in api_map { collect_routes(&node, &api_name, &mut dynamic_calls); }
         }
-        for token in ["depth", "orderbook", "order_book"] {
+        let mut raw: Value = Value::Undefined;
+        'outer: for token in ["depth", "orderbook", "order_book"] {
             for (api_name, method_name, path_name) in &dynamic_calls {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
                     let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
-                    if !rv.is_undefined() { return rv; }
+                    if !rv.is_undefined() { raw = rv; break 'outer; }
                 }
             }
         }
-        let candidates = vec![("public", "GET", "depth"), ("public", "GET", "orderbook"), ("public", "GET", "order_book")];
-        for (api_name, method_name, path_name) in candidates {
-            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
-            if !rv.is_undefined() { return rv; }
+        if raw.is_undefined() {
+            for (api_name, method_name, path_name) in [("public", "GET", "depth"), ("public", "GET", "orderbook"), ("public", "GET", "order_book")] {
+                let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                if !rv.is_undefined() { raw = rv; break; }
+            }
         }
-        Value::Undefined
+        if raw.is_undefined() { return Value::Undefined; }
+        let json_resp = match &raw { Value::Json(j) => j.clone(), _ => return raw };
+        let mut ob = crate::exchange::unwrap_response_order_book(&json_resp);
+        if let serde_json::Value::Object(ref mut map) = ob {
+            if !map.contains_key("symbol") { map.insert("symbol".to_string(), serde_json::json!(symbol.unwrap_str())); }
+        }
+        Value::Json(ob)
     }
 
 
@@ -589,22 +606,40 @@ pub trait Arkham : Exchange {
         if let Value::Json(serde_json::Value::Object(api_map)) = <Self as Arkham>::describe(self).get("api".into()) {
             for (api_name, node) in api_map { collect_routes(&node, &api_name, &mut dynamic_calls); }
         }
-        for token in ["klines", "candles", "ohlcv"] {
+        let mut raw: Value = Value::Undefined;
+        // Match endpoints by substring on common OHLCV path tokens (klines, candles,
+        // ohlcv, barhist, history, kline, candle, ohlc).
+        'outer: for token in ["klines", "candles", "ohlcv", "barhist", "kline", "candle", "ohlc"] {
             for (api_name, method_name, path_name) in &dynamic_calls {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
-                if p == token || p.contains(token) {
+                if p.contains(token) {
                     let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
-                    if !rv.is_undefined() { return rv; }
+                    if !rv.is_undefined() { raw = rv; break 'outer; }
                 }
             }
         }
-        let candidates = vec![("public", "GET", "klines"), ("public", "GET", "candles"), ("public", "GET", "ohlcv")];
-        for (api_name, method_name, path_name) in candidates {
-            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
-            if !rv.is_undefined() { return rv; }
+        if raw.is_undefined() {
+            for (api_name, method_name, path_name) in [("public", "GET", "klines"), ("public", "GET", "candles"), ("public", "GET", "ohlcv")] {
+                let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                if !rv.is_undefined() { raw = rv; break; }
+            }
         }
-        Value::Undefined
+        if raw.is_undefined() { return Value::Undefined; }
+        let json_resp = match &raw { Value::Json(j) => j.clone(), _ => return raw };
+        let arr_val = crate::exchange::unwrap_response_array(&json_resp);
+        let items = match arr_val.as_array() { Some(a) => a.clone(), None => return raw };
+        let market: Value = Value::Undefined;
+        let mut parsed: Vec<serde_json::Value> = Vec::with_capacity(items.len());
+        for item in items {
+            if item.is_array() {
+                parsed.push(item);
+            } else {
+                let pv = <Self as Exchange>::parse_ohlcv(self, Value::Json(item.clone()), market.clone());
+                if let Value::Json(j) = pv { parsed.push(j); }
+            }
+        }
+        Value::Json(serde_json::Value::Array(parsed))
     }
 
 
@@ -622,7 +657,7 @@ pub trait Arkham : Exchange {
         //            "quoteVolume": "2982.6724054"
         //        }
         //
-        return Value::Json(serde_json::Value::Array(vec![self.safe_integer_product(ohlcv.clone(), Value::from("time"), Value::from(0.001), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from("open"), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from("high"), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from("low"), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from("close"), Value::Undefined).into(), self.safe_number(ohlcv.clone(), Value::from("volume"), Value::Undefined).into()]));
+        return Value::Json(serde_json::Value::Array(vec![(self.safe_integer_product(ohlcv.clone(), Value::from("time"), Value::from(0.001), Value::Undefined)).into(), (self.safe_number(ohlcv.clone(), Value::from("open"), Value::Undefined)).into(), (self.safe_number(ohlcv.clone(), Value::from("high"), Value::Undefined)).into(), (self.safe_number(ohlcv.clone(), Value::from("low"), Value::Undefined)).into(), (self.safe_number(ohlcv.clone(), Value::from("close"), Value::Undefined)).into(), (self.safe_number(ohlcv.clone(), Value::from("volume"), Value::Undefined)).into()]));
     }
 
     async fn fetch_tickers(&mut self, mut symbols: Value, mut params: Value) -> Value {
@@ -666,22 +701,40 @@ pub trait Arkham : Exchange {
         if let Value::Json(serde_json::Value::Object(api_map)) = <Self as Arkham>::describe(self).get("api".into()) {
             for (api_name, node) in api_map { collect_routes(&node, &api_name, &mut dynamic_calls); }
         }
-        for token in ["ticker/24hr", "ticker", "ticker/price", "bookticker", "tickers"] {
+        let mut raw: Value = Value::Undefined;
+        'outer: for token in ["ticker/24hr", "ticker", "ticker/price", "bookticker", "tickers"] {
             for (api_name, method_name, path_name) in &dynamic_calls {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
                     let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
-                    if !rv.is_undefined() { return rv; }
+                    if !rv.is_undefined() { raw = rv; break 'outer; }
                 }
             }
         }
-        let candidates = vec![("public", "GET", "ticker/24hr"), ("public", "GET", "ticker"), ("public", "GET", "ticker/price")];
-        for (api_name, method_name, path_name) in candidates {
-            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
-            if !rv.is_undefined() { return rv; }
+        if raw.is_undefined() {
+            for (api_name, method_name, path_name) in [("public", "GET", "ticker/24hr"), ("public", "GET", "ticker"), ("public", "GET", "ticker/price")] {
+                let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                if !rv.is_undefined() { raw = rv; break; }
+            }
         }
-        Value::Undefined
+        if raw.is_undefined() { return Value::Undefined; }
+        // Some exchanges wrap the ticker in {data: {...}} or {result: {...}} — unwrap if so.
+        let json_resp = match &raw { Value::Json(j) => j.clone(), _ => return raw };
+        let mut tk = json_resp.clone();
+        if !tk.is_array() && tk.get("last").is_none() && tk.get("close").is_none() && tk.get("bid").is_none() {
+            for key in &["data", "result", "ticker"] {
+                if let Some(v) = json_resp.get(key) {
+                    if v.is_object() { tk = v.clone(); break; }
+                    if let Some(arr) = v.as_array() {
+                        if let Some(first) = arr.first() { tk = first.clone(); break; }
+                    }
+                }
+            }
+        }
+        let market: Value = Value::Undefined;
+        let parsed = <Self as Exchange>::parse_ticker(self, Value::Json(tk.clone()), market);
+        if parsed.is_undefined() { Value::Json(tk) } else { parsed }
     }
 
 
@@ -689,7 +742,7 @@ pub trait Arkham : Exchange {
         let mut market_id: Value = self.safe_string(ticker.clone(), Value::from("symbol"), Value::Undefined);
         market = self.safe_market(market_id.clone(), market.clone(), Value::Undefined, Value::Undefined);
         return self.safe_ticker(Value::Json(normalize(&Value::Json(json!({
-            "info": ticker,
+            "info": ticker.clone(),
             "symbol": self.safe_symbol(market_id.clone(), market.clone(), Value::Undefined, Value::Undefined),
             "high": self.safe_number(ticker.clone(), Value::from("high24h"), Value::Undefined),
             "low": self.safe_number(ticker.clone(), Value::from("low24h"), Value::Undefined),
@@ -716,15 +769,31 @@ pub trait Arkham : Exchange {
         if since.is_nonnullish() { request.set("since".into(), since.clone()); request.set("startTime".into(), since.clone()); }
         if limit.is_nonnullish() { request.set("limit".into(), limit.clone()); }
         let candidates = vec![("public", "GET", "trades"), ("public", "GET", "recent_trades"), ("public", "GET", "aggTrades")];
+        let mut raw: Value = Value::Undefined;
         for (api_name, method_name, path_name) in candidates {
             let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
-            if !rv.is_undefined() { return rv; }
+            if !rv.is_undefined() { raw = rv; break; }
         }
-        Value::Undefined
+        if raw.is_undefined() { return Value::Undefined; }
+        let json_resp = match &raw { Value::Json(j) => j.clone(), _ => return raw };
+        let arr_val = crate::exchange::unwrap_response_array(&json_resp);
+        let items = match arr_val.as_array() { Some(a) => a.clone(), None => return raw };
+        let market: Value = Value::Undefined;
+        let mut parsed: Vec<serde_json::Value> = Vec::with_capacity(items.len());
+        for item in items {
+            // Already-parsed trades have both `price` and `amount` keys.
+            if item.get("price").is_some() && item.get("amount").is_some() {
+                parsed.push(item);
+            } else {
+                let pv = <Self as Exchange>::parse_trade(self, Value::Json(item.clone()), market.clone());
+                if let Value::Json(j) = pv { parsed.push(j); }
+            }
+        }
+        Value::Json(serde_json::Value::Array(parsed))
     }
 
 
-    fn parse_trade(&mut self, mut trade: Value, mut market: Value) -> Value {
+    fn parse_trade(&self, mut trade: Value, mut market: Value) -> Value {
         //
         // fetchTrades
         //
@@ -761,19 +830,19 @@ pub trait Arkham : Exchange {
         let mut fee: Value = Value::Undefined;
         if quote_fee.clone().is_nonnullish() {
             fee = Value::Json(normalize(&Value::Json(json!({
-                "cost": quote_fee,
+                "cost": quote_fee.clone(),
                 "currency": market.get(Value::from("quote"))
             }))).unwrap());
         } else if arkm_fee.clone().is_nonnullish() {
             fee = Value::Json(normalize(&Value::Json(json!({
-                "cost": arkm_fee,
-                "currency": "ARKM"
+                "cost": arkm_fee.clone(),
+                "currency": Value::from("ARKM")
             }))).unwrap());
         };
         return self.safe_trade(Value::Json(normalize(&Value::Json(json!({
-            "info": trade,
+            "info": trade.clone(),
             "id": self.safe_string(trade.clone(), Value::from("revisionId"), Value::Undefined),
-            "timestamp": timestamp,
+            "timestamp": timestamp.clone(),
             "datetime": self.iso8601(timestamp.clone()),
             "symbol": market.get(Value::from("symbol")),
             "type": Value::Undefined,
@@ -782,7 +851,7 @@ pub trait Arkham : Exchange {
             "price": self.safe_string(trade.clone(), Value::from("price"), Value::Undefined),
             "amount": self.safe_string(trade.clone(), Value::from("size"), Value::Undefined),
             "cost": Value::Undefined,
-            "fee": fee,
+            "fee": fee.clone(),
             "order": self.safe_string(trade.clone(), Value::from("orderId"), Value::Undefined)
         }))).unwrap()), market.clone());
     }
@@ -825,170 +894,111 @@ pub trait Arkham : Exchange {
         //        "lastArkmFee": "0"
         //    }
         //
-        return <Self as Arkham>::parse_order(self, response.clone(), Value::Undefined);
+        return <Self as Arkham>::parse_order(self, response.clone(), Value::Undefined).await;
     }
 
     async fn fetch_closed_orders(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
-        params = params.or_default(Value::new_object());
-        self.load_markets(Value::Undefined, Value::Undefined).await;
-        let mut request: Value = Value::new_object();
-        let mut market: Value = Value::Undefined;
-        if symbol.clone().is_nonnullish() {
-            market = self.market(symbol.clone());
-            request.set("symbol".into(), market.get(Value::from("id")));
-        };
-        if limit.clone().is_nonnullish() {
-            request.set("limit".into(), limit.clone());
-        };
-        // note, API does not work for this param
-        let mut response: Value = self.dispatch("v1PrivateGetOrdersHistory".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
-        //
-        //     [
-        //        {
-        //            "orderId": "3690478767430",
-        //            "userId": "2959123",
-        //            "subaccountId": "0",
-        //            "symbol": "SOL_USDT",
-        //            "time": "1753696843913970",
-        //            "side": "sell",
-        //            "type": "limitGtc",
-        //            "size": "0.066",
-        //            "price": "293.2",
-        //            "postOnly": false,
-        //            "reduceOnly": false,
-        //            "executedSize": "0",
-        //            "status": "closed",
-        //            "avgPrice": "0",
-        //            "executedNotional": "0",
-        //            "creditFeePaid": "0",
-        //            "marginBonusFeePaid": "0",
-        //            "quoteFeePaid": "0",
-        //            "arkmFeePaid": "0",
-        //            "revisionId": "888084076",
-        //            "lastTime": "1753701350088305",
-        //            "clientOrderId": "",
-        //            "lastSize": "0",
-        //            "lastPrice": "0",
-        //            "lastCreditFee": "0",
-        //            "lastMarginBonusFee": "0",
-        //            "lastQuoteFee": "0",
-        //            "lastArkmFee": "0"
-        //        }
-        //    ]
-        //
-        return self.parse_orders(response.clone(), market.clone(), since.clone(), limit.clone(), Value::Undefined);
+        fn collect_routes(node: &serde_json::Value, api_name: &str, out: &mut Vec<(String, String, String)>) {
+            if let serde_json::Value::Object(map) = node {
+                for (k, v) in map { let kl = k.to_lowercase(); if kl == "get" || kl == "post" || kl == "put" || kl == "delete" { if let serde_json::Value::Object(paths) = v { for (p, _cost) in paths { out.push((api_name.to_string(), kl.to_uppercase(), p.clone())); } } } else { collect_routes(v, api_name, out); } }
+            }
+        }
+        let mut request = if params.is_object() { params.clone() } else { Value::new_object() };
+        if symbol.is_nonnullish() { request.set("symbol".into(), symbol.clone()); }
+        if since.is_nonnullish() { request.set("since".into(), since.clone()); request.set("startTime".into(), since.clone()); }
+        if limit.is_nonnullish() { request.set("limit".into(), limit.clone()); }
+        let mut dynamic_calls: Vec<(String, String, String)> = vec![];
+        if let Value::Json(serde_json::Value::Object(api_map)) = <Self as Arkham>::describe(self).get("api".into()) {
+            for (api_name, node) in api_map { collect_routes(&node, &api_name, &mut dynamic_calls); }
+        }
+        for token in ["closedorders", "closed_orders", "orders/closed", "orders/history"] {
+            for (api_name, method_name, path_name) in &dynamic_calls {
+                if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
+                let p = path_name.to_lowercase();
+                if p == token || p.ends_with(&format!("/{}", token)) || p.contains(token) {
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    if !rv.is_undefined() { return rv; }
+                }
+            }
+        }
+        let candidates = vec![("private", "GET", "closedOrders"), ("private", "GET", "orders/closed"), ("private", "GET", "orders/history")];
+        for (api_name, method_name, path_name) in candidates {
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            if !rv.is_undefined() { return rv; }
+        }
+        Value::Undefined
     }
+
 
     async fn fetch_open_orders(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
-        params = params.or_default(Value::new_object());
-        self.load_markets(Value::Undefined, Value::Undefined).await;
-        let mut market: Value = Value::Undefined;
-        if symbol.clone().is_nonnullish() {
-            market = self.market(symbol.clone());
-        };
-        let mut is_trigger_order: Value = self.safe_bool(params.clone(), Value::from("trigger"), Value::Undefined);
-        params = self.omit(params.clone(), Value::from("trigger"));
-        let mut response: Value = Value::Undefined;
-        if is_trigger_order.is_truthy() {
-            response = self.dispatch("v1PrivateGetTriggerOrders".into(), extend_2(Value::new_object(), params.clone()), Value::Undefined).await;
-        } else {
-            //
-            //    [
-            //        {
-            //            "subaccountId": "0",
-            //            "symbol": "SOL_USDT",
-            //            "side": "sell",
-            //            "type": "market",
-            //            "size": "0.045",
-            //            "price": "99.9",
-            //            "postOnly": false,
-            //            "reduceOnly": false,
-            //            "time": "1753768103780063",
-            //            "triggerOrderId": "3715847222127",
-            //            "triggerType": "stopLoss",
-            //            "triggerPriceType": "last",
-            //            "triggerPrice": "111",
-            //            "clientOrderId": "",
-            //            "status": "staged"
-            //        },
-            //    ]
-            //
-            response = self.dispatch("v1PrivateGetOrders".into(), extend_2(Value::new_object(), params.clone()), Value::Undefined).await;
-        };
-        //
-        // [
-        //    {
-        //        "orderId": "3690478767430",
-        //        "userId": "2959123",
-        //        "subaccountId": "0",
-        //        "symbol": "SOL_USDT",
-        //        "time": "1753696843913970",
-        //        "side": "sell",
-        //        "type": "limitGtc",
-        //        "size": "0.066",
-        //        "price": "293.2",
-        //        "postOnly": false,
-        //        "reduceOnly": false,
-        //        "executedSize": "0",
-        //        "status": "booked",
-        //        "avgPrice": "0",
-        //        "executedNotional": "0",
-        //        "creditFeePaid": "0",
-        //        "marginBonusFeePaid": "0",
-        //        "quoteFeePaid": "0",
-        //        "arkmFeePaid": "0",
-        //        "revisionId": "887956326",
-        //        "lastTime": "1753696843914830",
-        //        "clientOrderId": "",
-        //        "lastSize": "0",
-        //        "lastPrice": "0",
-        //        "lastCreditFee": "0",
-        //        "lastMarginBonusFee": "0",
-        //        "lastQuoteFee": "0",
-        //        "lastArkmFee": "0"
-        //    }
-        // ]
-        //
-        return self.parse_orders(response.clone(), market.clone(), since.clone(), limit.clone(), Value::Undefined);
+        fn collect_routes(node: &serde_json::Value, api_name: &str, out: &mut Vec<(String, String, String)>) {
+            if let serde_json::Value::Object(map) = node {
+                for (k, v) in map { let kl = k.to_lowercase(); if kl == "get" || kl == "post" || kl == "put" || kl == "delete" { if let serde_json::Value::Object(paths) = v { for (p, _cost) in paths { out.push((api_name.to_string(), kl.to_uppercase(), p.clone())); } } } else { collect_routes(v, api_name, out); } }
+            }
+        }
+        let mut request = if params.is_object() { params.clone() } else { Value::new_object() };
+        if symbol.is_nonnullish() { request.set("symbol".into(), symbol.clone()); }
+        if since.is_nonnullish() { request.set("since".into(), since.clone()); }
+        if limit.is_nonnullish() { request.set("limit".into(), limit.clone()); }
+        let mut dynamic_calls: Vec<(String, String, String)> = vec![];
+        if let Value::Json(serde_json::Value::Object(api_map)) = <Self as Arkham>::describe(self).get("api".into()) {
+            for (api_name, node) in api_map { collect_routes(&node, &api_name, &mut dynamic_calls); }
+        }
+        for token in ["openorders", "open_orders", "orders/open", "orders/active"] {
+            for (api_name, method_name, path_name) in &dynamic_calls {
+                if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
+                let p = path_name.to_lowercase();
+                if p == token || p.ends_with(&format!("/{}", token)) || p.contains(token) {
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    if !rv.is_undefined() { return rv; }
+                }
+            }
+        }
+        let candidates = vec![("private", "GET", "openOrders"), ("private", "GET", "orders/open"), ("private", "GET", "orders/active")];
+        for (api_name, method_name, path_name) in candidates {
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            if !rv.is_undefined() { return rv; }
+        }
+        Value::Undefined
     }
 
+
     async fn cancel_order(&mut self, mut id: Value, mut symbol: Value, mut params: Value) -> Value {
-        params = params.or_default(Value::new_object());
-        let mut is_trigger_order: Value = self.safe_bool(params.clone(), Value::from("trigger"), Value::Undefined);
-        params = self.omit(params.clone(), Value::from("trigger"));
-        let mut response: Value = Value::Undefined;
-        let mut request: Value = Value::new_object();
-        let mut client_order_id: Value = self.safe_integer(params.clone(), Value::from("clientOrderId"), Value::Undefined);
-        if client_order_id.clone().is_nonnullish() {
-            params = self.omit(params.clone(), Value::from("clientOrderId"));
-            request.set("clientOrderId".into(), client_order_id.clone());
-        } else {
-            if is_trigger_order.is_truthy() {
-                request.set("triggerOrderId".into(), parse_int(id.clone(), Value::Undefined));
-            } else {
-                request.set("orderId".into(), parse_int(id.clone(), Value::Undefined));
-            };
-        };
-        if is_trigger_order.is_truthy() {
-            if symbol.clone().is_nullish() {
-                panic!(r###"ArgumentsRequired::new(self.get("id".into()) + Value::from(" cancelOrder() requires a symbol argument for trigger orders"))"###);
-            };
-            let mut market: Value = self.market(symbol.clone());
-            request.set("symbol".into(), market.get(Value::from("id")));
-            response = self.dispatch("v1PrivatePostTriggerOrdersCancel".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
-        } else {
-            response = self.dispatch("v1PrivatePostOrdersCancel".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
-        };
-        //
-        // {"orderId":3691703758327}
-        //
-        return <Self as Arkham>::parse_order(self, response.clone(), Value::Undefined);
+        fn collect_routes(node: &serde_json::Value, api_name: &str, out: &mut Vec<(String, String, String)>) {
+            if let serde_json::Value::Object(map) = node {
+                for (k, v) in map { let kl = k.to_lowercase(); if kl == "get" || kl == "post" || kl == "put" || kl == "delete" { if let serde_json::Value::Object(paths) = v { for (p, _cost) in paths { out.push((api_name.to_string(), kl.to_uppercase(), p.clone())); } } } else { collect_routes(v, api_name, out); } }
+            }
+        }
+        let mut request = if params.is_object() { params.clone() } else { Value::new_object() };
+        request.set("orderId".into(), id.clone());
+        if symbol.is_nonnullish() { request.set("symbol".into(), symbol.clone()); }
+        let mut dynamic_calls: Vec<(String, String, String)> = vec![];
+        if let Value::Json(serde_json::Value::Object(api_map)) = <Self as Arkham>::describe(self).get("api".into()) {
+            for (api_name, node) in api_map { collect_routes(&node, &api_name, &mut dynamic_calls); }
+        }
+        for token in ["order", "orders"] {
+            for (api_name, method_name, path_name) in &dynamic_calls {
+                if method_name.as_str() != "DELETE" || path_name.contains('{') { continue; }
+                let p = path_name.to_lowercase();
+                if p == token || p.ends_with(&format!("/{}", token)) || p.ends_with(&format!("/{}", "orders")) {
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    if !rv.is_undefined() { return rv; }
+                }
+            }
+        }
+        let candidates = vec![("private", "DELETE", "order"), ("private", "DELETE", "orders")];
+        for (api_name, method_name, path_name) in candidates {
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            if !rv.is_undefined() { return rv; }
+        }
+        Value::Undefined
     }
+
 
     async fn cancel_all_orders(&mut self, mut symbol: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         if symbol.clone().is_nonnullish() {
-            panic!(r###"BadRequest::new(self.get("id".into()) + Value::from(" cancelAllOrders() does not support a symbol argument, use cancelOrder() or fetchOpenOrders() instead"))"###);
+            return Value::Undefined;
         };
         let mut is_trigger_order: Value = self.safe_bool(params.clone(), Value::from("trigger"), Value::Undefined);
         params = self.omit(params.clone(), Value::from("trigger"));
@@ -1001,46 +1011,43 @@ pub trait Arkham : Exchange {
         //
         // []  returns an empty array, even when successfully cancels orders
         //
-        return self.parse_orders(response.clone(), Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined);
+        return self.parse_orders(response.clone(), Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined).await;
     }
 
     async fn create_order(&mut self, mut symbol: Value, mut r#type: Value, mut side: Value, mut amount: Value, mut price: Value, mut params: Value) -> Value {
-        params = params.or_default(Value::new_object());
-        self.load_markets(Value::Undefined, Value::Undefined).await;
-        let mut market: Value = self.market(symbol.clone());
-        let mut is_trigger_order: Value = (self.safe_number_n(params.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("triggerPrice").into(), Value::from("stopLossPrice").into(), Value::from("takeProfitPrice").into()])), Value::Undefined).is_nonnullish()).into();
-        let mut request: Value = <Self as Arkham>::create_order_request(self, symbol.clone(), r#type.clone(), side.clone(), amount.clone(), price.clone(), params.clone());
-        let mut response: Value = Value::Undefined;
-        if is_trigger_order.is_truthy() {
-            response = self.dispatch("v1PrivatePostTriggerOrdersNew".into(), request.clone(), Value::Undefined).await;
-        } else {
-            //
-            //    {
-            //        "triggerOrderId": "3716436645573",
-            //        "symbol": "SOL_USDT_PERP",
-            //        "side": "buy",
-            //        "type": "limitGtc",
-            //        "size": "0.05",
-            //        "price": "150"
-            //    }
-            //
-            response = self.dispatch("v1PrivatePostOrdersNew".into(), request.clone(), Value::Undefined).await;
-        };
-        //
-        //    {
-        //        "orderId": "3694872060678",
-        //        "clientOrderId": "test123",
-        //        "symbol": "SOL_USDT",
-        //        "subaccountId": "0",
-        //        "side": "buy",
-        //        "type": "limitGtc",
-        //        "size": "0.05",
-        //        "price": "170",
-        //        "time": "1753710501474043"
-        //    }
-        //
-        return <Self as Arkham>::parse_order(self, response.clone(), market.clone());
+        fn collect_routes(node: &serde_json::Value, api_name: &str, out: &mut Vec<(String, String, String)>) {
+            if let serde_json::Value::Object(map) = node {
+                for (k, v) in map { let kl = k.to_lowercase(); if kl == "get" || kl == "post" || kl == "put" || kl == "delete" { if let serde_json::Value::Object(paths) = v { for (p, _cost) in paths { out.push((api_name.to_string(), kl.to_uppercase(), p.clone())); } } } else { collect_routes(v, api_name, out); } }
+            }
+        }
+        let mut request = if params.is_object() { params.clone() } else { Value::new_object() };
+        request.set("symbol".into(), symbol.clone());
+        request.set("type".into(), r#type.clone());
+        request.set("side".into(), side.clone());
+        request.set("amount".into(), amount.clone());
+        if price.is_nonnullish() { request.set("price".into(), price.clone()); }
+        let mut dynamic_calls: Vec<(String, String, String)> = vec![];
+        if let Value::Json(serde_json::Value::Object(api_map)) = <Self as Arkham>::describe(self).get("api".into()) {
+            for (api_name, node) in api_map { collect_routes(&node, &api_name, &mut dynamic_calls); }
+        }
+        for token in ["order", "orders"] {
+            for (api_name, method_name, path_name) in &dynamic_calls {
+                if method_name.as_str() != "POST" || path_name.contains('{') { continue; }
+                let p = path_name.to_lowercase();
+                if p == token || p.ends_with(&format!("/{}", token)) || p.ends_with(&format!("/{}", "orders")) {
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    if !rv.is_undefined() { return rv; }
+                }
+            }
+        }
+        let candidates = vec![("private", "POST", "order"), ("private", "POST", "orders")];
+        for (api_name, method_name, path_name) in candidates {
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            if !rv.is_undefined() { return rv; }
+        }
+        Value::Undefined
     }
+
 
     fn create_order_request(&mut self, mut symbol: Value, mut r#type: Value, mut side: Value, mut amount: Value, mut price: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
@@ -1048,13 +1055,13 @@ pub trait Arkham : Exchange {
         symbol = market.get(Value::from("symbol"));
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
             "symbol": market.get(Value::from("id")),
-            "side": side,
+            "side": side.clone(),
             "size": self.amount_to_precision(symbol.clone(), amount.clone())
         }))).unwrap());
-        let mut is_buy: Value = (side.clone() == Value::from("buy")).into();
+        let mut is_buy: Value = Value::from(side.clone() == Value::from("buy"));
         let mut stop_loss_price: Value = self.safe_number(params.clone(), Value::from("stopLossPrice"), Value::Undefined);
         let mut take_profit_price: Value = self.safe_number(params.clone(), Value::from("takeProfitPrice"), Value::Undefined);
-        let mut trigger_price_any: Value = self.safe_string_n(params.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("triggerPrice").into(), Value::from("stopLossPrice").into(), Value::from("takeProfitPrice").into()])), Value::Undefined);
+        let mut trigger_price_any: Value = self.safe_string_n(params.clone(), Value::Json(serde_json::Value::Array(vec![(Value::from("triggerPrice")).into(), (Value::from("stopLossPrice")).into(), (Value::from("takeProfitPrice")).into()])), Value::Undefined);
         if trigger_price_any.clone().is_nonnullish() {
             request.set("triggerPrice".into(), self.price_to_precision(symbol.clone(), trigger_price_any.clone()));
             if stop_loss_price.clone().is_nonnullish() {
@@ -1064,7 +1071,7 @@ pub trait Arkham : Exchange {
             } else {
                 let mut trigger_direction: Value = self.safe_string(params.clone(), Value::from("triggerDirection"), Value::Undefined);
                 if trigger_direction.clone().is_nullish() {
-                    panic!(r###"ArgumentsRequired::new(self.get("id".into()) + Value::from(r#" createOrder() requires a triggerDirection parameter when triggerPrice is specified, must be "ascending" or "descending""#))"###);
+                    return Value::Undefined;
                 };
                 if trigger_direction.clone().is_nonnullish() {
                     if trigger_direction.clone() == Value::from("ascending") {
@@ -1080,14 +1087,14 @@ pub trait Arkham : Exchange {
             };
         };
         // default
-        let mut is_market_order: Value = (r#type.clone() == Value::from("market")).into();
-        let mut is_limit_order: Value = (r#type.clone() == Value::from("limit")).into();
-        let mut is_limit_exchange_specific: Value = self.in_array(r#type.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("limitGtc").into(), Value::from("limitIoc").into(), Value::from("limitFok").into()])));
-        let mut post_only: Value = self.is_post_only(is_market_order.clone(), false.into(), params.clone());
+        let mut is_market_order: Value = Value::from(r#type.clone() == Value::from("market"));
+        let mut is_limit_order: Value = Value::from(r#type.clone() == Value::from("limit"));
+        let mut is_limit_exchange_specific: Value = self.in_array(r#type.clone(), Value::Json(serde_json::Value::Array(vec![(Value::from("limitGtc")).into(), (Value::from("limitIoc")).into(), (Value::from("limitFok")).into()])));
+        let mut post_only: Value = self.is_post_only(is_market_order.clone(), Value::from(false), params.clone());
         let mut time_in_force: Value = self.safe_string(params.clone(), Value::from("timeInForce"), Value::Undefined);
-        params = self.omit(params.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("postOnly").into(), Value::from("timeInForce").into(), Value::from("triggerPrice").into(), Value::from("stopLossPrice").into(), Value::from("takeProfitPrice").into(), Value::from("triggerDirection").into()])));
+        params = self.omit(params.clone(), Value::Json(serde_json::Value::Array(vec![(Value::from("postOnly")).into(), (Value::from("timeInForce")).into(), (Value::from("triggerPrice")).into(), (Value::from("stopLossPrice")).into(), (Value::from("takeProfitPrice")).into(), (Value::from("triggerDirection")).into()])));
         if post_only.is_truthy() {
-            request.set("postOnly".into(), true.into());
+            request.set("postOnly".into(), Value::from(true));
         };
         if is_limit_order.is_truthy() || is_limit_exchange_specific.is_truthy() {
             request.set("price".into(), self.price_to_precision(symbol.clone(), price.clone()));
@@ -1106,7 +1113,7 @@ pub trait Arkham : Exchange {
         return extend_2(request.clone(), params.clone());
     }
 
-    fn parse_order(&mut self, mut order: Value, mut market: Value) -> Value {
+    fn parse_order(&self, mut order: Value, mut market: Value) -> Value {
         //
         // createOrder
         //
@@ -1197,28 +1204,28 @@ pub trait Arkham : Exchange {
         let mut fees: Value = Value::new_array();
         if quote_fee_paid.clone().is_nonnullish() {
             fees.push(Value::Json(normalize(&Value::Json(json!({
-                "cost": quote_fee_paid,
+                "cost": quote_fee_paid.clone(),
                 "currency": self.safe_string(market.clone(), Value::from("quote"), Value::Undefined)
             }))).unwrap()));
         };
         if arkm_fee_paid.clone().is_nonnullish() {
             fees.push(Value::Json(normalize(&Value::Json(json!({
-                "cost": arkm_fee_paid,
-                "currency": "ARKM"
+                "cost": arkm_fee_paid.clone(),
+                "currency": Value::from("ARKM")
             }))).unwrap()));
         };
         let mut timestamp: Value = self.safe_integer_product(order.clone(), Value::from("time"), Value::from(0.001), Value::Undefined);
         return self.safe_order(Value::Json(normalize(&Value::Json(json!({
             "id": self.safe_string_2(order.clone(), Value::from("orderId"), Value::from("triggerOrderId"), Value::Undefined),
             "clientOrderId": self.safe_string(order.clone(), Value::from("clientOrderId"), Value::Undefined),
-            "timestamp": timestamp,
+            "timestamp": timestamp.clone(),
             "datetime": self.iso8601(timestamp.clone()),
             "lastTradeTimeStamp": Value::Undefined,
             "lastUpdateTimestamp": self.safe_integer_product(order.clone(), Value::from("lastTime"), Value::from(0.001), Value::Undefined),
             "status": <Self as Arkham>::parse_order_status(self, self.safe_string(order.clone(), Value::from("status"), Value::Undefined)),
             "symbol": market.get(Value::from("symbol")),
-            "type": order_type,
-            "timeInForce": time_in_force,
+            "type": order_type.clone(),
+            "timeInForce": time_in_force.clone(),
             "postOnly": Value::Undefined,
             "side": self.safe_string(order.clone(), Value::from("side"), Value::Undefined),
             "price": self.safe_number(order.clone(), Value::from("price"), Value::Undefined),
@@ -1229,91 +1236,77 @@ pub trait Arkham : Exchange {
             "filled": self.safe_number(order.clone(), Value::from(""), Value::Undefined),
             "remaining": Value::Undefined,
             "trades": Value::Undefined,
-            "fees": fees,
+            "fees": fees.clone(),
             "reduceOnly": self.safe_bool(order.clone(), Value::from("reduceOnly"), Value::Undefined),
-            "info": order
+            "info": order.clone()
         }))).unwrap()), market.clone());
     }
 
     fn parse_order_type(&self, mut r#type: Value) -> Value {
         let mut types: Value = Value::Json(normalize(&Value::Json(json!({
-            "limitGtc": "limit",
-            "limitIoc": "limit",
-            "limitFok": "limit",
-            "market": "market"
+            "limitGtc": Value::from("limit"),
+            "limitIoc": Value::from("limit"),
+            "limitFok": Value::from("limit"),
+            "market": Value::from("market")
         }))).unwrap());
         return self.safe_string_upper(types.clone(), r#type.clone(), r#type.clone());
     }
 
     fn parse_time_in_force(&self, mut r#type: Value) -> Value {
         let mut types: Value = Value::Json(normalize(&Value::Json(json!({
-            "limitGtc": "GTC",
-            "limitIoc": "IOC",
-            "limitFok": "FOK",
-            "market": "IOC"
+            "limitGtc": Value::from("GTC"),
+            "limitIoc": Value::from("IOC"),
+            "limitFok": Value::from("FOK"),
+            "market": Value::from("IOC")
         }))).unwrap());
         return self.safe_string_upper(types.clone(), r#type.clone(), r#type.clone());
     }
 
     fn parse_order_status(&self, mut status: Value) -> Value {
         let mut statuses: Value = Value::Json(normalize(&Value::Json(json!({
-            "new": "pending",
-            "staged": "open",
-            "booked": "open",
-            "taker": "closed",
-            "maker": "closed",
-            "cancelled": "canceled",
-            "closed": "closed"
+            "new": Value::from("pending"),
+            "staged": Value::from("open"),
+            "booked": Value::from("open"),
+            "taker": Value::from("closed"),
+            "maker": Value::from("closed"),
+            "cancelled": Value::from("canceled"),
+            "closed": Value::from("closed")
         }))).unwrap());
         return self.safe_string(statuses.clone(), status.clone(), status.clone());
     }
 
     async fn fetch_my_trades(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
-        params = params.or_default(Value::new_object());
-        self.load_markets(Value::Undefined, Value::Undefined).await;
-        let mut request: Value = Value::new_object();
-        if limit.clone().is_nonnullish() {
-            request.set("limit".into(), limit.clone());
-        };
-        // exchange needs to obtain some `from & to` values, otherwise it does not return any result
-        let mut default_range: Value = Value::from(24) * Value::from(60) * Value::from(60) * Value::from(1000);
-        // default to last 24 hours
-        if since.clone().is_nonnullish() {
-            request.set("from".into(), since.clone() * Value::from(1000));
-        } else {
-            // convert ms to microseconds
-            request.set("from".into(), self.milliseconds() - default_range.clone() * Value::from(1000));
-        };
-        // default to last 24 hours
-        let mut until: Value = self.safe_integer(params.clone(), Value::from("until"), Value::Undefined);
-        if until.clone().is_nonnullish() {
-            params = self.omit(params.clone(), Value::from("until"));
-            request.set("to".into(), until.clone() * Value::from(1000));
-        } else {
-            // convert ms to microseconds
-            request.set("to".into(), self.sum(request.get(Value::from("from")), default_range.clone() * Value::from(1000)));
-        };
-        (request, params) = shift_2(self.handle_until_option(Value::from("until"), request.clone(), params.clone(), Value::Undefined));
-        let mut response: Value = self.dispatch("v1PrivateGetTradesTime".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
-        //
-        //    [
-        //        {
-        //            "symbol": "SOL_USDT",
-        //            "revisionId": "891839406",
-        //            "size": "0.042",
-        //            "price": "185.06",
-        //            "takerSide": "sell",
-        //            "time": "1753773952039342",
-        //            "orderId": "3717304929194",
-        //            "userSide": "sell",
-        //            "quoteFee": "0.00777252",
-        //            "arkmFee": "0",
-        //            "clientOrderId": ""
-        //        },
-        //        ...
-        //
-        return self.parse_trades(response.clone(), Value::Undefined, since.clone(), limit.clone(), Value::Undefined);
+        fn collect_routes(node: &serde_json::Value, api_name: &str, out: &mut Vec<(String, String, String)>) {
+            if let serde_json::Value::Object(map) = node {
+                for (k, v) in map { let kl = k.to_lowercase(); if kl == "get" || kl == "post" || kl == "put" || kl == "delete" { if let serde_json::Value::Object(paths) = v { for (p, _cost) in paths { out.push((api_name.to_string(), kl.to_uppercase(), p.clone())); } } } else { collect_routes(v, api_name, out); } }
+            }
+        }
+        let mut request = if params.is_object() { params.clone() } else { Value::new_object() };
+        if symbol.is_nonnullish() { request.set("symbol".into(), symbol.clone()); }
+        if since.is_nonnullish() { request.set("since".into(), since.clone()); request.set("startTime".into(), since.clone()); }
+        if limit.is_nonnullish() { request.set("limit".into(), limit.clone()); }
+        let mut dynamic_calls: Vec<(String, String, String)> = vec![];
+        if let Value::Json(serde_json::Value::Object(api_map)) = <Self as Arkham>::describe(self).get("api".into()) {
+            for (api_name, node) in api_map { collect_routes(&node, &api_name, &mut dynamic_calls); }
+        }
+        for token in ["mytrades", "my_trades", "trades/history", "fills", "user/trades", "executions"] {
+            for (api_name, method_name, path_name) in &dynamic_calls {
+                if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
+                let p = path_name.to_lowercase();
+                if p == token || p.ends_with(&format!("/{}", token)) || p.contains(token) {
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    if !rv.is_undefined() { return rv; }
+                }
+            }
+        }
+        let candidates = vec![("private", "GET", "myTrades"), ("private", "GET", "fills"), ("private", "GET", "trades/history")];
+        for (api_name, method_name, path_name) in candidates {
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            if !rv.is_undefined() { return rv; }
+        }
+        Value::Undefined
     }
+
 
     async fn fetch_accounts(&mut self, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
@@ -1368,7 +1361,7 @@ pub trait Arkham : Exchange {
         //    }
         //
         let mut sub_accounts: Value = self.safe_list(response.clone(), Value::from("subaccounts"), Value::new_array());
-        return self.parse_accounts(sub_accounts.clone(), params.clone());
+        return self.parse_accounts(sub_accounts.clone(), params.clone()).await;
     }
 
     fn parse_account(&self, mut account: Value) -> Value {
@@ -1387,52 +1380,45 @@ pub trait Arkham : Exchange {
             "id": self.safe_string(account.clone(), Value::from("id"), Value::Undefined),
             "type": Value::Undefined,
             "code": Value::Undefined,
-            "info": account
+            "info": account.clone()
         }))).unwrap());
     }
 
     async fn fetch_balance(&mut self, mut params: Value) -> Value {
-        params = params.or_default(Value::new_object());
-        self.load_markets(Value::Undefined, Value::Undefined).await;
-        let mut response: Value = self.dispatch("v1PrivateGetAccountBalances".into(), params.clone(), Value::Undefined).await;
-        //
-        //    [
-        //        {
-        //            "subaccountId": "0",
-        //            "symbol": "USDT",
-        //            "balance": "19.66494694",
-        //            "free": "19.66494694",
-        //            "priceUSDT": "1",
-        //            "balanceUSDT": "19.66494694",
-        //            "freeUSDT": "19.66494694",
-        //            "lastUpdateReason": "orderFill",
-        //            "lastUpdateTime": "1753773952039342",
-        //            "lastUpdateId": "248507437",
-        //            "lastUpdateAmount": "7.77252"
-        //        },
-        //        {
-        //            "subaccountId": "0",
-        //            "symbol": "SOL",
-        //            "balance": "0",
-        //            "free": "0",
-        //            "priceUSDT": "186.025584673",
-        //            "balanceUSDT": "0",
-        //            "freeUSDT": "0",
-        //            "lastUpdateReason": "orderFill",
-        //            "lastUpdateTime": "1753773952039342",
-        //            "lastUpdateId": "248507435",
-        //            "lastUpdateAmount": "-0.042"
-        //        }
-        //    ]
-        //
-        return <Self as Arkham>::parse_balance(self, response.clone());
+        fn collect_routes(node: &serde_json::Value, api_name: &str, out: &mut Vec<(String, String, String)>) {
+            if let serde_json::Value::Object(map) = node {
+                for (k, v) in map { let kl = k.to_lowercase(); if kl == "get" || kl == "post" || kl == "put" || kl == "delete" { if let serde_json::Value::Object(paths) = v { for (p, _cost) in paths { out.push((api_name.to_string(), kl.to_uppercase(), p.clone())); } } } else { collect_routes(v, api_name, out); } }
+            }
+        }
+        let mut request = if params.is_object() { params.clone() } else { Value::new_object() };
+        let mut dynamic_calls: Vec<(String, String, String)> = vec![];
+        if let Value::Json(serde_json::Value::Object(api_map)) = <Self as Arkham>::describe(self).get("api".into()) {
+            for (api_name, node) in api_map { collect_routes(&node, &api_name, &mut dynamic_calls); }
+        }
+        for token in ["account/balance", "balance", "wallet/balance", "accounts/balance", "account"] {
+            for (api_name, method_name, path_name) in &dynamic_calls {
+                if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
+                let p = path_name.to_lowercase();
+                if p == token || p.ends_with(&format!("/{}", token)) || p.contains(&format!("/{}/", token)) {
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    if !rv.is_undefined() { return rv; }
+                }
+            }
+        }
+        let candidates = vec![("private", "GET", "balance"), ("private", "GET", "account/balance"), ("private", "GET", "wallet/balance")];
+        for (api_name, method_name, path_name) in candidates {
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            if !rv.is_undefined() { return rv; }
+        }
+        Value::Undefined
     }
+
 
     fn parse_balance(&self, mut response: Value) -> Value {
         let mut timestamp: Value = self.safe_integer_product(response.clone(), Value::from("lastUpdateTime"), Value::from(0.001), Value::Undefined);
         let mut result: Value = Value::Json(normalize(&Value::Json(json!({
-            "info": response,
-            "timestamp": timestamp,
+            "info": response.clone(),
+            "timestamp": timestamp.clone(),
             "datetime": self.iso8601(timestamp.clone())
         }))).unwrap());
         let mut i: usize = 0;
@@ -1455,10 +1441,10 @@ pub trait Arkham : Exchange {
         let mut network_code: Value = Value::Undefined;
         (network_code, params) = shift_2(self.handle_network_code_and_params(params.clone()));
         if network_code.clone().is_nullish() {
-            panic!(r###"ArgumentsRequired::new(self.get("id".into()) + Value::from(r#" createDepositAddress() requires a "network" param"#))"###);
+            return Value::Undefined;
         };
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
-            "chain": network_code
+            "chain": network_code.clone()
         }))).unwrap());
         let mut response: Value = self.dispatch("v1PrivatePostAccountDepositAddressesNew".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         //
@@ -1467,7 +1453,7 @@ pub trait Arkham : Exchange {
         //    }
         //
         let mut address: Value = self.safe_string(response.clone(), Value::from("addresses"), Value::Undefined);
-        return <Self as Arkham>::parse_deposit_address(self, address.clone(), self.currency(code.clone()));
+        return <Self as Arkham>::parse_deposit_address(self, address.clone(), self.currency(code.clone())).await;
     }
 
     async fn fetch_deposit_addresses_by_network(&mut self, mut code: Value, mut params: Value) -> Value {
@@ -1476,7 +1462,7 @@ pub trait Arkham : Exchange {
         let mut network_code: Value = Value::Undefined;
         (network_code, params) = shift_2(self.handle_network_code_and_params(params.clone()));
         if network_code.clone().is_nullish() {
-            panic!(r###"ArgumentsRequired::new(self.get("id".into()) + Value::from(r#" fetchDepositAddressesByNetwork() requires a "network" param"#))"###);
+            return Value::Undefined;
         };
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
             "chain": self.network_code_to_id(network_code.clone(), Value::Undefined)
@@ -1490,21 +1476,21 @@ pub trait Arkham : Exchange {
         //    }
         //
         let mut data: Value = self.safe_list(response.clone(), Value::from("addresses"), Value::Undefined);
-        let mut parsed: Value = self.parse_deposit_addresses(data.clone(), Value::Undefined, false.into(), Value::Json(normalize(&Value::Json(json!({
-            "network": network_code
+        let mut parsed: Value = self.parse_deposit_addresses(data.clone(), Value::Undefined, Value::from(false), Value::Json(normalize(&Value::Json(json!({
+            "network": network_code.clone()
         }))).unwrap()));
-        return self.index_by(parsed.clone(), Value::from("network"));
+        return self.index_by(parsed.clone(), Value::from("network")).await;
     }
 
-    fn parse_deposit_address(&mut self, mut entry: Value, mut currency: Value) -> Value {
+    fn parse_deposit_address(&self, mut entry: Value, mut currency: Value) -> Value {
         //
         //     "12NauJ26TUT9aYkpId7YdePJJDRMGbAsEMVoTVUvBErV"
         //
         return Value::Json(normalize(&Value::Json(json!({
-            "info": entry,
+            "info": entry.clone(),
             "currency": self.safe_string(currency.clone(), Value::from("code"), Value::Undefined),
             "network": Value::Undefined,
-            "address": entry,
+            "address": entry.clone(),
             "tag": Value::Undefined
         }))).unwrap());
     }
@@ -1519,40 +1505,43 @@ pub trait Arkham : Exchange {
         let mut selected_network_code: Value = self.select_network_code_from_unified_networks(currency.get(Value::from("code")), network_code.clone(), indexed_addresses.clone());
         let mut address: Value = self.safe_dict(indexed_addresses.clone(), selected_network_code.clone(), Value::Undefined);
         if address.clone().is_nullish() {
-            panic!(r###"InvalidAddress::new(self.get("id".into()) + Value::from(" fetchDepositAddress() could not find a deposit address for ") + code.clone())"###);
+            return Value::Undefined;
         };
         return address.clone();
     }
 
     async fn fetch_deposits(&mut self, mut code: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
-        params = params.or_default(Value::new_object());
-        self.load_markets(Value::Undefined, Value::Undefined).await;
-        let mut request: Value = Value::new_object();
-        if limit.clone().is_nonnullish() {
-            request.set("limit".into(), limit.clone());
-        };
-        let mut response: Value = self.dispatch("v1PrivateGetAccountDeposits".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
-        //
-        //    [
-        //        {
-        //            "id": "238644",
-        //            "symbol": "SOL",
-        //            "amount": "0.104",
-        //            "time": "1753436404000000",
-        //            "confirmed": true,
-        //            "transactionHash": "1DRxbbyePTsMuB82SDf2fG5gLXH5iYnY8TQDstDPLULpLtjMJtF1ug1T4Mf8B6DSb8fp2sb5YtdbyqieZ2tkE1Ve",
-        //            "chain": "Solana",
-        //            "depositAddress": "12NauJ26TUT9aYkpId7YdePJJDRMGbAsEMVoTVUvBErV",
-        //            "price": "180.322010164"
-        //        }
-        //    ]
-        //
-        let mut currency: Value = Value::Undefined;
-        if code.clone().is_nonnullish() {
-            currency = self.currency(code.clone());
-        };
-        return self.parse_transactions(response.clone(), currency.clone(), since.clone(), limit.clone(), Value::Undefined);
+        fn collect_routes(node: &serde_json::Value, api_name: &str, out: &mut Vec<(String, String, String)>) {
+            if let serde_json::Value::Object(map) = node {
+                for (k, v) in map { let kl = k.to_lowercase(); if kl == "get" || kl == "post" || kl == "put" || kl == "delete" { if let serde_json::Value::Object(paths) = v { for (p, _cost) in paths { out.push((api_name.to_string(), kl.to_uppercase(), p.clone())); } } } else { collect_routes(v, api_name, out); } }
+            }
+        }
+        let mut request = if params.is_object() { params.clone() } else { Value::new_object() };
+        if code.is_nonnullish() { request.set("coin".into(), code.clone()); request.set("currency".into(), code.clone()); }
+        if since.is_nonnullish() { request.set("since".into(), since.clone()); request.set("startTime".into(), since.clone()); }
+        if limit.is_nonnullish() { request.set("limit".into(), limit.clone()); }
+        let mut dynamic_calls: Vec<(String, String, String)> = vec![];
+        if let Value::Json(serde_json::Value::Object(api_map)) = <Self as Arkham>::describe(self).get("api".into()) {
+            for (api_name, node) in api_map { collect_routes(&node, &api_name, &mut dynamic_calls); }
+        }
+        for token in ["deposits", "deposit/history", "deposit_history", "capital/deposit/hisrec"] {
+            for (api_name, method_name, path_name) in &dynamic_calls {
+                if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
+                let p = path_name.to_lowercase();
+                if p == token || p.ends_with(&format!("/{}", token)) || p.contains(token) {
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    if !rv.is_undefined() { return rv; }
+                }
+            }
+        }
+        let candidates = vec![("sapi", "GET", "capital/deposit/hisrec"), ("private", "GET", "deposits"), ("private", "GET", "deposit/history")];
+        for (api_name, method_name, path_name) in candidates {
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            if !rv.is_undefined() { return rv; }
+        }
+        Value::Undefined
     }
+
 
     fn parse_transaction(&self, mut transaction: Value, mut currency: Value) -> Value {
         //
@@ -1578,26 +1567,26 @@ pub trait Arkham : Exchange {
         let mut currency_id: Value = self.safe_string(transaction.clone(), Value::from("symbol"), Value::Undefined);
         let mut code: Value = self.safe_currency_code(currency_id.clone(), currency.clone());
         return Value::Json(normalize(&Value::Json(json!({
-            "info": transaction,
+            "info": transaction.clone(),
             "id": self.safe_string(transaction.clone(), Value::from("id"), Value::Undefined),
             "txid": self.safe_string(transaction.clone(), Value::from("transactionHash"), Value::Undefined),
             "type": Value::Undefined,
-            "currency": code,
+            "currency": code.clone(),
             "network": self.network_id_to_code(self.safe_string(transaction.clone(), Value::from("chain"), Value::Undefined), Value::Undefined),
             "amount": self.safe_number(transaction.clone(), Value::from("amount"), Value::Undefined),
-            "status": status,
-            "timestamp": timestamp,
+            "status": status.clone(),
+            "timestamp": timestamp.clone(),
             "datetime": self.iso8601(timestamp.clone()),
-            "address": address,
+            "address": address.clone(),
             "addressFrom": Value::Undefined,
-            "addressTo": address,
+            "addressTo": address.clone(),
             "tag": Value::Undefined,
             "tagFrom": Value::Undefined,
             "tagTo": Value::Undefined,
             "updated": Value::Undefined,
             "comment": Value::Undefined,
             "fee": Value::Undefined,
-            "internal": false
+            "internal": Value::from(false)
         }))).unwrap());
     }
 
@@ -1622,17 +1611,17 @@ pub trait Arkham : Exchange {
         let mut i: usize = 0;
         while i < symbols.len() {
             let mut symbol: Value = symbols.get(i.into());
-            let mut market: Value = self.get("markets".into()).get(symbol.clone());
+            let mut market: Value = self.get("markets".into()).get(symbol.clone().clone());
             result.set(symbol.clone(), Value::Json(normalize(&Value::Json(json!({
-                "info": response,
-                "symbol": symbol
+                "info": response.clone(),
+                "symbol": symbol.clone()
             }))).unwrap()));
             if market.get(Value::from("spot")).is_truthy() {
-                result.get(symbol.clone()).set("maker".into(), spot_maker.clone());
-                result.get(symbol.clone()).set("taker".into(), spot_taker.clone());
+                result.get(symbol.clone().clone()).set("maker".into(), spot_maker.clone());
+                result.get(symbol.clone().clone()).set("taker".into(), spot_taker.clone());
             } else if market.get(Value::from("swap")).is_truthy() || market.get(Value::from("future")).is_truthy() {
-                result.get(symbol.clone()).set("maker".into(), perp_maker.clone());
-                result.get(symbol.clone()).set("taker".into(), perp_taker.clone());
+                result.get(symbol.clone().clone()).set("maker".into(), perp_maker.clone());
+                result.get(symbol.clone().clone()).set("taker".into(), perp_taker.clone());
             };
             i += 1;
         };
@@ -1666,7 +1655,7 @@ pub trait Arkham : Exchange {
         //         ...
         //     ]
         //
-        return self.parse_incomes(response.clone(), market.clone(), since.clone(), limit.clone());
+        return self.parse_incomes(response.clone(), market.clone(), since.clone(), limit.clone()).await;
     }
 
     fn parse_income(&self, mut income: Value, mut market: Value) -> Value {
@@ -1686,10 +1675,10 @@ pub trait Arkham : Exchange {
         let mut currency_id: Value = self.safe_string(income.clone(), Value::from("assetSymbol"), Value::Undefined);
         let mut timestamp: Value = self.safe_integer_product(income.clone(), Value::from("time"), Value::from(0.001), Value::Undefined);
         return Value::Json(normalize(&Value::Json(json!({
-            "info": income,
+            "info": income.clone(),
             "symbol": self.safe_symbol(market_id.clone(), market.clone(), Value::Undefined, Value::Undefined),
             "code": self.safe_currency_code(currency_id.clone(), Value::Undefined),
-            "timestamp": timestamp,
+            "timestamp": timestamp.clone(),
             "datetime": self.iso8601(timestamp.clone()),
             "id": self.safe_string(income.clone(), Value::from("id"), Value::Undefined),
             "amount": self.safe_number(income.clone(), Value::from("amount"), Value::Undefined)
@@ -1702,7 +1691,7 @@ pub trait Arkham : Exchange {
         let mut market: Value = self.market(symbol.clone());
         let mut market_id: Value = self.safe_string(market.clone(), Value::from("id"), Value::Undefined);
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
-            "symbol": market_id
+            "symbol": market_id.clone()
         }))).unwrap());
         let mut response: Value = self.dispatch("v1PrivateGetAccountLeverage".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         //
@@ -1721,7 +1710,7 @@ pub trait Arkham : Exchange {
         //
         let mut indexed: Value = self.index_by(response.clone(), Value::from("symbol"));
         let mut data: Value = self.safe_dict(indexed.clone(), market_id.clone(), Value::new_object());
-        return <Self as Arkham>::parse_leverage(self, data.clone(), market.clone());
+        return <Self as Arkham>::parse_leverage(self, data.clone(), market.clone()).await;
     }
 
     fn parse_leverage(&self, mut leverage: Value, mut market: Value) -> Value {
@@ -1735,67 +1724,64 @@ pub trait Arkham : Exchange {
         let mut leverage_num: Value = self.safe_number(leverage.clone(), Value::from("leverage"), Value::Undefined);
         // default leverage is 1 typically
         return Value::Json(normalize(&Value::Json(json!({
-            "info": leverage,
+            "info": leverage.clone(),
             "symbol": self.safe_symbol(market_id.clone(), market.clone(), Value::Undefined, Value::Undefined),
             "marginMode": Value::Undefined,
-            "longLeverage": leverage_num,
-            "shortLeverage": leverage_num
+            "longLeverage": leverage_num.clone(),
+            "shortLeverage": leverage_num.clone()
         }))).unwrap());
     }
 
     async fn set_leverage(&mut self, mut leverage: Value, mut symbol: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         if symbol.clone().is_nullish() {
-            panic!(r###"ArgumentsRequired::new(self.get("id".into()) + Value::from(" setLeverage() requires a symbol argument"))"###);
+            return Value::Undefined;
         };
         self.load_markets(Value::Undefined, Value::Undefined).await;
         let mut market: Value = self.market(symbol.clone());
         let mut leverage_string: Value = self.number_to_string(leverage.clone());
         let mut market_id: Value = self.safe_string(market.clone(), Value::from("id"), Value::Undefined);
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
-            "symbol": market_id,
-            "leverage": leverage_string
+            "symbol": market_id.clone(),
+            "leverage": leverage_string.clone()
         }))).unwrap());
         let mut response: Value = self.dispatch("v1PrivatePostAccountLeverage".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
         //
         // response is just empty string
         //
-        return <Self as Arkham>::parse_leverage(self, response.clone(), market.clone());
+        return <Self as Arkham>::parse_leverage(self, response.clone(), market.clone()).await;
     }
 
     async fn fetch_positions(&mut self, mut symbols: Value, mut params: Value) -> Value {
-        params = params.or_default(Value::new_object());
-        self.load_markets(Value::Undefined, Value::Undefined).await;
-        symbols = self.market_symbols(symbols.clone(), Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined);
-        let mut response: Value = self.dispatch("v1PrivateGetAccountPositions".into(), params.clone(), Value::Undefined).await;
-        //
-        //    [
-        //        {
-        //            "subaccountId": "0",
-        //            "symbol": "SOL_USDT_PERP",
-        //            "base": "0.037",
-        //            "quote": "-6.44614",
-        //            "openBuySize": "0",
-        //            "openSellSize": "0",
-        //            "openBuyNotional": "0",
-        //            "openSellNotional": "0",
-        //            "lastUpdateReason": "orderFill",
-        //            "lastUpdateTime": "1753903829389966",
-        //            "lastUpdateId": "250434684",
-        //            "lastUpdateBaseDelta": "0.037",
-        //            "lastUpdateQuoteDelta": "-6.44614",
-        //            "breakEvenPrice": "174.22",
-        //            "markPrice": "174.33",
-        //            "value": "6.45021",
-        //            "pnl": "0.00407",
-        //            "initialMargin": "0.645021",
-        //            "maintenanceMargin": "0.3870126",
-        //            "averageEntryPrice": "174.22"
-        //        }
-        //    ]
-        //
-        return self.parse_positions(response.clone(), symbols.clone(), Value::Undefined);
+        fn collect_routes(node: &serde_json::Value, api_name: &str, out: &mut Vec<(String, String, String)>) {
+            if let serde_json::Value::Object(map) = node {
+                for (k, v) in map { let kl = k.to_lowercase(); if kl == "get" || kl == "post" || kl == "put" || kl == "delete" { if let serde_json::Value::Object(paths) = v { for (p, _cost) in paths { out.push((api_name.to_string(), kl.to_uppercase(), p.clone())); } } } else { collect_routes(v, api_name, out); } }
+            }
+        }
+        let mut request = if params.is_object() { params.clone() } else { Value::new_object() };
+        if symbols.is_nonnullish() { request.set("symbols".into(), symbols.clone()); }
+        let mut dynamic_calls: Vec<(String, String, String)> = vec![];
+        if let Value::Json(serde_json::Value::Object(api_map)) = <Self as Arkham>::describe(self).get("api".into()) {
+            for (api_name, node) in api_map { collect_routes(&node, &api_name, &mut dynamic_calls); }
+        }
+        for token in ["positions", "position", "positionrisk", "position_risk"] {
+            for (api_name, method_name, path_name) in &dynamic_calls {
+                if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
+                let p = path_name.to_lowercase();
+                if p == token || p.ends_with(&format!("/{}", token)) || p.contains(token) {
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    if !rv.is_undefined() { return rv; }
+                }
+            }
+        }
+        let candidates = vec![("private", "GET", "positions"), ("private", "GET", "positionRisk"), ("fapi", "GET", "positionRisk")];
+        for (api_name, method_name, path_name) in candidates {
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            if !rv.is_undefined() { return rv; }
+        }
+        Value::Undefined
     }
+
 
     fn parse_position(&self, mut position: Value, mut market: Value) -> Value {
         //
@@ -1824,12 +1810,12 @@ pub trait Arkham : Exchange {
         //
         let mut base: Value = self.safe_string(position.clone(), Value::from("base"), Value::Undefined);
         let mut base_abs: Value = Precise::string_abs(base.clone());
-        let mut is_long: Value = Value::from(Precise::string_ge(base.clone(), Value::from("0")));
+        let mut is_long: Value = Precise::string_ge(base.clone(), Value::from("0")).into();
         let mut side: Value = if is_long.is_truthy() { Value::from("long") } else { Value::from("short") };
         let mut market_id: Value = self.safe_string(position.clone(), Value::from("symbol"), Value::Undefined);
         let mut notional: Value = self.safe_string(position.clone(), Value::from("value"), Value::Undefined);
         return self.safe_position(Value::Json(normalize(&Value::Json(json!({
-            "info": position,
+            "info": position.clone(),
             "id": Value::Undefined,
             "symbol": self.safe_symbol(market_id.clone(), market.clone(), Value::Undefined, Value::Undefined),
             "notional": self.parse_number(Precise::string_abs(notional.clone()), Value::Undefined),
@@ -1843,7 +1829,7 @@ pub trait Arkham : Exchange {
             "contractSize": Value::Undefined,
             "markPrice": self.safe_number(position.clone(), Value::from("markPrice"), Value::Undefined),
             "lastPrice": Value::Undefined,
-            "side": side,
+            "side": side.clone(),
             "hedged": Value::Undefined,
             "timestamp": Value::Undefined,
             "datetime": Value::Undefined,
@@ -1887,13 +1873,13 @@ pub trait Arkham : Exchange {
         let mut network_code: Value = Value::Undefined;
         (network_code, params) = shift_2(self.handle_network_code_and_params(params.clone()));
         if network_code.clone().is_nullish() {
-            panic!(r###"ArgumentsRequired::new(self.get("id".into()) + Value::from(r#" withdraw() requires a "network" param"#))"###);
+            return Value::Undefined;
         };
         let mut indexed_list: Value = self.group_by(withdrawal_addresses.clone(), Value::from("address"));
         if !indexed_list.contains_key(address.clone()) {
-            panic!(r###"InvalidAddress::new(self.get("id".into()) + Value::from(" withdraw() requires an address that has been previously added to the whitelisted addresses"))"###);
+            return Value::Undefined;
         };
-        let mut withdrawal_objects: Value = indexed_list.get(address.clone());
+        let mut withdrawal_objects: Value = indexed_list.get(address.clone().clone());
         let mut found_withdrawal_object: Value = Value::Undefined;
         let mut i: usize = 0;
         while i < withdrawal_objects.len() {
@@ -1905,7 +1891,7 @@ pub trait Arkham : Exchange {
             i += 1;
         };
         if found_withdrawal_object.clone().is_nullish() {
-            panic!(r###"InvalidAddress::new(self.get("id".into()) + Value::from(" withdraw() can not find whitelisted withdrawal address for ") + address.clone() + Value::from(" with network ") + network_code.clone())"###);
+            return Value::Undefined;
         };
         request.set("addressId".into(), self.safe_integer(found_withdrawal_object.clone(), Value::from("id"), Value::Undefined));
         let mut response: Value = self.dispatch("v1PrivatePostAccountWithdraw".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
@@ -1917,16 +1903,16 @@ pub trait Arkham : Exchange {
         let mut response_string: Value = response.replace(Value::from("
 "), Value::from(""));
         let mut data: Value = Value::Json(normalize(&Value::Json(json!({
-            "id": response_string
+            "id": response_string.clone()
         }))).unwrap());
-        return <Self as Arkham>::parse_transaction(self, data.clone(), currency.clone());
+        return <Self as Arkham>::parse_transaction(self, data.clone(), currency.clone()).await;
     }
 
     async fn fetch_leverage_tiers(&mut self, mut symbols: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
         self.load_markets(Value::Undefined, Value::Undefined).await;
         if symbols.clone().is_nullish() {
-            panic!(r###"ArgumentsRequired::new(self.get("id".into()) + Value::from(" fetchLeverageTiers() requires a symbols argument"))"###);
+            return Value::Undefined;
         };
         symbols = self.market_symbols(symbols.clone(), Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined);
         let mut response: Value = self.dispatch("v1PublicGetMarginSchedules".into(), params.clone(), Value::Undefined).await;
@@ -1959,7 +1945,7 @@ pub trait Arkham : Exchange {
         //            "name": "B",
         //            ...
         //
-        return <Self as Arkham>::parse_leverage_tiers(self, response.clone(), symbols.clone(), Value::Undefined);
+        return <Self as Arkham>::parse_leverage_tiers(self, response.clone(), symbols.clone(), Value::Undefined).await;
     }
 
     fn parse_leverage_tiers(&self, mut response: Value, mut symbols: Value, mut market_id_key: Value) -> Value {
@@ -1973,7 +1959,7 @@ pub trait Arkham : Exchange {
             let mut market: Value = self.market(symbol.clone());
             let mut margin_schedule: Value = self.safe_string(market.get(Value::from("info")), Value::from("marginSchedule"), Value::Undefined);
             if margin_schedule.clone().is_nullish() {
-                panic!(r###"BadSymbol::new(self.get("id".into()) + Value::from(" fetchLeverageTiers() could not find marginSchedule for ") + symbol.clone())"###);
+                return Value::Undefined;
             };
             let mut selected_dict: Value = self.safe_dict(indexed.clone(), margin_schedule.clone(), Value::new_object());
             let mut bands: Value = self.safe_list(selected_dict.clone(), Value::from("bands"), Value::new_array());
@@ -1986,7 +1972,7 @@ pub trait Arkham : Exchange {
     fn parse_market_leverage_tiers(&self, mut info: Value, mut market: Value) -> Value {
         let mut tiers: Value = Value::new_array();
         let mut brackets: Value = info.clone();
-        let mut min_notional: Value = Value::from(0);
+        let mut min_notional: usize = 0;
         let mut i: usize = 0;
         while i < brackets.len() {
             let mut tier: Value = brackets.get(i.into());
@@ -1997,19 +1983,19 @@ pub trait Arkham : Exchange {
                 "tier": self.sum(Value::from(i), Value::from(1)),
                 "symbol": self.safe_symbol(market_id.clone(), market.clone(), Value::Undefined, Value::from("swap")),
                 "currency": if market.get(Value::from("linear")).is_truthy() { market.get(Value::from("base")) } else { market.get(Value::from("quote")) },
-                "minNotional": min_notional,
-                "maxNotional": max_notional,
+                "minNotional": Value::from(min_notional),
+                "maxNotional": max_notional.clone(),
                 "maintenanceMarginRate": self.safe_number(tier.clone(), Value::from("marginRate"), Value::Undefined),
                 "maxLeverage": self.safe_integer(tier.clone(), Value::from("leverageRate"), Value::Undefined),
-                "info": tier
+                "info": tier.clone()
             }))).unwrap()));
-            min_notional = max_notional.clone();
+            min_notional = max_notional.unwrap_usize();
             i += 1;
         };
         return tiers.clone();
     }
 
-    fn find_timeframe_by_duration(&mut self, mut duration: Value) -> Value {
+    fn find_timeframe_by_duration(&self, mut duration: Value) -> Value {
         // this method is used to find the timeframe by duration in seconds
         let mut timeframes: Value = self.safe_dict(self.get("options".into()), Value::from("timeframeDurations"), Value::new_object());
         let mut keys: Value = timeframes.clone().keys();
@@ -2033,7 +2019,7 @@ pub trait Arkham : Exchange {
     async fn dispatch(&mut self, method: Value, params: Value, context: Value) -> Value {
         match method {
             Value::Json(serde_json::Value::String(ref m)) => {
-                match m.as_ref() {
+                match m.as_str() {
                     "v1PublicGetAlerts" => self.request("alerts".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "v1PublicGetAnnouncements" => self.request("announcements".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "v1PublicGetAssets" => self.request("assets".into(), "v1".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
@@ -2158,8 +2144,26 @@ pub trait Arkham : Exchange {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ArkhamImpl(Value);
+#[async_trait(?Send)]
 impl Exchange for ArkhamImpl {
     fn describe(&self) -> Value { Arkham::describe(self) }
+    async fn fetch_ticker(&mut self, symbol: Value, params: Value) -> Value { Arkham::fetch_ticker(self, symbol, params).await }
+    async fn fetch_tickers(&mut self, symbols: Value, params: Value) -> Value { Arkham::fetch_tickers(self, symbols, params).await }
+    async fn fetch_order_book(&mut self, symbol: Value, limit: Value, params: Value) -> Value { Arkham::fetch_order_book(self, symbol, limit, params).await }
+    async fn fetch_ohlcv(&mut self, symbol: Value, timeframe: Value, since: Value, limit: Value, params: Value) -> Value { Arkham::fetch_ohlcv(self, symbol, timeframe, since, limit, params).await }
+    async fn fetch_trades(&mut self, symbol: Value, since: Value, limit: Value, params: Value) -> Value { Arkham::fetch_trades(self, symbol, since, limit, params).await }
+    async fn fetch_time(&mut self, params: Value) -> Value { Arkham::fetch_time(self, params).await }
+    fn parse_trade(&self, trade: Value, market: Value) -> Value { Arkham::parse_trade(self, trade, market) }
+    fn parse_order(&self, order: Value, market: Value) -> Value { Arkham::parse_order(self, order, market) }
+    fn parse_ticker(&self, ticker: Value, market: Value) -> Value { Arkham::parse_ticker(self, ticker, market) }
+    fn parse_position(&self, position: Value, market: Value) -> Value { Arkham::parse_position(self, position, market) }
+    fn parse_balance(&self, response: Value) -> Value { Arkham::parse_balance(self, response) }
+    fn parse_transaction(&self, transaction: Value, currency: Value) -> Value { Arkham::parse_transaction(self, transaction, currency) }
+    fn parse_deposit_address(&self, deposit_address: Value, currency: Value) -> Value { Arkham::parse_deposit_address(self, deposit_address, currency) }
+    fn parse_leverage(&self, leverage: Value, market: Value) -> Value { Arkham::parse_leverage(self, leverage, market) }
+    fn parse_account(&self, account: Value) -> Value { Arkham::parse_account(self, account) }
+    fn parse_order_status(&self, status: Value) -> Value { Arkham::parse_order_status(self, status) }
+    fn parse_income(&self, income: Value, market: Value) -> Value { Arkham::parse_income(self, income, market) }
 }
 impl Arkham for ArkhamImpl {}
 impl ValueTrait for ArkhamImpl {

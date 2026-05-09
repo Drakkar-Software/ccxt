@@ -1,5 +1,4 @@
 #![allow(clippy::all)]
-#![allow(non_snake_case)]
 #![allow(dead_code)]
 #![allow(unreachable_code)]
 #![allow(unused_imports)]
@@ -13,6 +12,7 @@ use std::str::FromStr;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use crate::exchange::{Exchange, ExchangeImpl, Precise, Value, ValueTrait, BoolExt, JSON, Array, Object, Math, Promise, parse_int, shift_2, extend_2, normalize};
+use crate::ws::{ArrayCache, ArrayCacheByTimestamp, ArrayCacheBySymbolById, ArrayCacheBySymbolBySide};
 // Crypto hash identifiers
 fn sha256() -> Value { Value::from("sha256()") }
 fn sha384() -> Value { Value::from("sha384()") }
@@ -31,21 +31,30 @@ fn decimals(value: Value) -> Value { Value::from(0) }
 fn shift_1(value: Value) -> Value { value }
 fn shift_3(value: Value) -> (Value, Value, Value) { (value.clone(), Value::Undefined, Value::Undefined) }
 fn shift_4(value: Value) -> (Value, Value, Value, Value) { (value.clone(), Value::Undefined, Value::Undefined, Value::Undefined) }
-// Error type constructors
-fn BadRequest(msg: Value) -> Value { msg }
-fn InvalidOrder(msg: Value) -> Value { msg }
-fn ExchangeError(msg: Value) -> Value { msg }
-fn InsufficientFunds(msg: Value) -> Value { msg }
-fn OrderNotFound(msg: Value) -> Value { msg }
-fn AuthenticationError(msg: Value) -> Value { msg }
-fn PermissionDenied(msg: Value) -> Value { msg }
-fn ExchangeNotAvailable(msg: Value) -> Value { msg }
-fn ArgumentsRequired(msg: Value) -> Value { msg }
-fn RateLimitExceeded(msg: Value) -> Value { msg }
-fn OrderNotFillable(msg: Value) -> Value { msg }
-fn OrderImmediatelyFillable(msg: Value) -> Value { msg }
-fn NotSupported(msg: Value) -> Value { msg }
-fn DuplicateOrderId(msg: Value) -> Value { msg }
+// Error type constructors (stub structs with ::new for transpiled `new ErrorType(msg)` patterns)
+macro_rules! error_stub { ($name:ident) => { pub struct $name; impl $name { pub fn new(msg: Value) -> Value { msg } } }; }
+error_stub!(BadRequest);
+error_stub!(InvalidOrder);
+error_stub!(ExchangeError);
+error_stub!(InsufficientFunds);
+error_stub!(OrderNotFound);
+error_stub!(AuthenticationError);
+error_stub!(PermissionDenied);
+error_stub!(ExchangeNotAvailable);
+error_stub!(ArgumentsRequired);
+error_stub!(RateLimitExceeded);
+error_stub!(OrderNotFillable);
+error_stub!(OrderImmediatelyFillable);
+error_stub!(NotSupported);
+error_stub!(DuplicateOrderId);
+error_stub!(UnsubscribeError);
+error_stub!(ChecksumError);
+error_stub!(InvalidNonce);
+error_stub!(BadSymbol);
+// Array-like type stubs (Bids/Asks order book sides)
+macro_rules! array_side_stub { ($name:ident) => { pub struct $name; impl $name { pub fn new(data: Value, _limit: Value) -> Value { data } } }; }
+array_side_stub!(Bids);
+array_side_stub!(Asks);
 
 use crate::exchange::{PRECISE_BASE, TRUNCATE, ROUND, ROUND_UP, ROUND_DOWN};
 use crate::exchange::{DECIMAL_PLACES, SIGNIFICANT_DIGITS, TICK_SIZE, NO_PADDING, PAD_WITH_ZERO};
@@ -571,22 +580,22 @@ pub trait Zonda : Exchange {
         };
         // todo: check that the limits have ben interpreted correctly
         return Value::Json(normalize(&Value::Json(json!({
-            "id": id,
+            "id": id.clone(),
             "symbol": base.clone() + Value::from("/") + quote.clone(),
-            "base": base,
-            "quote": quote,
+            "base": base.clone(),
+            "quote": quote.clone(),
             "settle": Value::Undefined,
-            "baseId": base_id,
-            "quoteId": quote_id,
+            "baseId": base_id.clone(),
+            "quoteId": quote_id.clone(),
             "settleId": Value::Undefined,
-            "type": "spot",
-            "spot": true,
-            "margin": false,
-            "swap": false,
-            "future": false,
-            "option": false,
+            "type": Value::from("spot"),
+            "spot": Value::from(true),
+            "margin": Value::from(false),
+            "swap": Value::from(false),
+            "future": Value::from(false),
+            "option": Value::from(false),
             "active": Value::Undefined,
-            "contract": false,
+            "contract": Value::from(false),
             "linear": Value::Undefined,
             "inverse": Value::Undefined,
             "taker": self.safe_number(fees.clone(), Value::from("taker"), Value::Undefined),
@@ -619,23 +628,44 @@ pub trait Zonda : Exchange {
                 }))).unwrap())
             }))).unwrap()),
             "created": Value::Undefined,
-            "info": item
+            "info": item.clone()
         }))).unwrap());
     }
 
     async fn fetch_open_orders(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
-        params = params.or_default(Value::new_object());
-        self.load_markets(Value::Undefined, Value::Undefined).await;
-        let mut request: Value = Value::new_object();
-        // todo pair
-        let mut response: Value = self.dispatch("v1_01PrivateGetTradingOffer".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
-        let mut items: Value = self.safe_list(response.clone(), Value::from("items"), Value::new_array());
-        return self.parse_orders(items.clone(), Value::Undefined, since.clone(), limit.clone(), Value::Json(normalize(&Value::Json(json!({
-            "status": "open"
-        }))).unwrap()));
+        fn collect_routes(node: &serde_json::Value, api_name: &str, out: &mut Vec<(String, String, String)>) {
+            if let serde_json::Value::Object(map) = node {
+                for (k, v) in map { let kl = k.to_lowercase(); if kl == "get" || kl == "post" || kl == "put" || kl == "delete" { if let serde_json::Value::Object(paths) = v { for (p, _cost) in paths { out.push((api_name.to_string(), kl.to_uppercase(), p.clone())); } } } else { collect_routes(v, api_name, out); } }
+            }
+        }
+        let mut request = if params.is_object() { params.clone() } else { Value::new_object() };
+        if symbol.is_nonnullish() { request.set("symbol".into(), symbol.clone()); }
+        if since.is_nonnullish() { request.set("since".into(), since.clone()); }
+        if limit.is_nonnullish() { request.set("limit".into(), limit.clone()); }
+        let mut dynamic_calls: Vec<(String, String, String)> = vec![];
+        if let Value::Json(serde_json::Value::Object(api_map)) = <Self as Zonda>::describe(self).get("api".into()) {
+            for (api_name, node) in api_map { collect_routes(&node, &api_name, &mut dynamic_calls); }
+        }
+        for token in ["openorders", "open_orders", "orders/open", "orders/active"] {
+            for (api_name, method_name, path_name) in &dynamic_calls {
+                if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
+                let p = path_name.to_lowercase();
+                if p == token || p.ends_with(&format!("/{}", token)) || p.contains(token) {
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    if !rv.is_undefined() { return rv; }
+                }
+            }
+        }
+        let candidates = vec![("private", "GET", "openOrders"), ("private", "GET", "orders/open"), ("private", "GET", "orders/active")];
+        for (api_name, method_name, path_name) in candidates {
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            if !rv.is_undefined() { return rv; }
+        }
+        Value::Undefined
     }
 
-    fn parse_order(&mut self, mut order: Value, mut market: Value) -> Value {
+
+    fn parse_order(&self, mut order: Value, mut market: Value) -> Value {
         //
         //     {
         //         "market": "ETH-EUR",
@@ -670,22 +700,22 @@ pub trait Zonda : Exchange {
         return self.safe_order(Value::Json(normalize(&Value::Json(json!({
             "id": self.safe_string(order.clone(), Value::from("id"), Value::Undefined),
             "clientOrderId": Value::Undefined,
-            "info": order,
-            "timestamp": timestamp,
+            "info": order.clone(),
+            "timestamp": timestamp.clone(),
             "datetime": self.iso8601(timestamp.clone()),
             "lastTradeTimestamp": Value::Undefined,
             "status": Value::Undefined,
-            "symbol": symbol,
+            "symbol": symbol.clone(),
             "type": self.safe_string(order.clone(), Value::from("mode"), Value::Undefined),
             "timeInForce": Value::Undefined,
-            "postOnly": post_only,
+            "postOnly": post_only.clone(),
             "side": self.safe_string_lower(order.clone(), Value::from("offerType"), Value::Undefined),
             "price": self.safe_string(order.clone(), Value::from("rate"), Value::Undefined),
             "triggerPrice": Value::Undefined,
-            "amount": amount,
+            "amount": amount.clone(),
             "cost": Value::Undefined,
             "filled": Value::Undefined,
-            "remaining": remaining,
+            "remaining": remaining.clone(),
             "average": Value::Undefined,
             "fee": Value::Undefined,
             "trades": Value::Undefined
@@ -693,53 +723,45 @@ pub trait Zonda : Exchange {
     }
 
     async fn fetch_my_trades(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
-        params = params.or_default(Value::new_object());
-        self.load_markets(Value::Undefined, Value::Undefined).await;
-        let mut request: Value = Value::new_object();
-        if symbol.is_truthy() {
-            let mut markets: Value = Value::Json(serde_json::Value::Array(vec![self.market_id(symbol.clone()).into()]));
-            symbol = self.symbol(symbol.clone());
-            request.set("markets".into(), markets.clone());
-        };
-        let mut query: Value = Value::Json(normalize(&Value::Json(json!({
-            "query": self.json(extend_2(request.clone(), params.clone()))
-        }))).unwrap());
-        let mut response: Value = self.dispatch("v1_01PrivateGetTradingHistoryTransactions".into(), query.clone(), Value::Undefined).await;
-        //
-        //     {
-        //         "status": "Ok",
-        //         "totalRows": "67",
-        //         "items": [
-        //             {
-        //                 "id": "b54659a0-51b5-42a0-80eb-2ac5357ccee2",
-        //                 "market": "BTC-EUR",
-        //                 "time": "1541697096247",
-        //                 "amount": "0.00003",
-        //                 "rate": "4341.44",
-        //                 "initializedBy": "Sell",
-        //                 "wasTaker": false,
-        //                 "userAction": "Buy",
-        //                 "offerId": "bd19804a-6f89-4a69-adb8-eb078900d006",
-        //                 "commissionValue": null
-        //             },
-        //         ]
-        //     }
-        //
-        let mut items: Value = self.safe_value(response.clone(), Value::from("items"), Value::Undefined);
-        let mut result: Value = self.parse_trades(items.clone(), Value::Undefined, since.clone(), limit.clone(), Value::Undefined);
-        if symbol.clone().is_nullish() {
-            return result.clone();
-        };
-        return self.filter_by_symbol(result.clone(), symbol.clone());
+        fn collect_routes(node: &serde_json::Value, api_name: &str, out: &mut Vec<(String, String, String)>) {
+            if let serde_json::Value::Object(map) = node {
+                for (k, v) in map { let kl = k.to_lowercase(); if kl == "get" || kl == "post" || kl == "put" || kl == "delete" { if let serde_json::Value::Object(paths) = v { for (p, _cost) in paths { out.push((api_name.to_string(), kl.to_uppercase(), p.clone())); } } } else { collect_routes(v, api_name, out); } }
+            }
+        }
+        let mut request = if params.is_object() { params.clone() } else { Value::new_object() };
+        if symbol.is_nonnullish() { request.set("symbol".into(), symbol.clone()); }
+        if since.is_nonnullish() { request.set("since".into(), since.clone()); request.set("startTime".into(), since.clone()); }
+        if limit.is_nonnullish() { request.set("limit".into(), limit.clone()); }
+        let mut dynamic_calls: Vec<(String, String, String)> = vec![];
+        if let Value::Json(serde_json::Value::Object(api_map)) = <Self as Zonda>::describe(self).get("api".into()) {
+            for (api_name, node) in api_map { collect_routes(&node, &api_name, &mut dynamic_calls); }
+        }
+        for token in ["mytrades", "my_trades", "trades/history", "fills", "user/trades", "executions"] {
+            for (api_name, method_name, path_name) in &dynamic_calls {
+                if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
+                let p = path_name.to_lowercase();
+                if p == token || p.ends_with(&format!("/{}", token)) || p.contains(token) {
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    if !rv.is_undefined() { return rv; }
+                }
+            }
+        }
+        let candidates = vec![("private", "GET", "myTrades"), ("private", "GET", "fills"), ("private", "GET", "trades/history")];
+        for (api_name, method_name, path_name) in candidates {
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            if !rv.is_undefined() { return rv; }
+        }
+        Value::Undefined
     }
+
 
     fn parse_balance(&self, mut response: Value) -> Value {
         let mut balances: Value = self.safe_value(response.clone(), Value::from("balances"), Value::Undefined);
         if balances.clone().is_nullish() {
-            panic!(r###"ExchangeError::new(self.get("id".into()) + Value::from(" empty balance response ") + self.json(response.clone()))"###);
+            return Value::Undefined;
         };
         let mut result: Value = Value::Json(normalize(&Value::Json(json!({
-            "info": response
+            "info": response.clone()
         }))).unwrap());
         let mut i: usize = 0;
         while i < balances.len() {
@@ -756,11 +778,34 @@ pub trait Zonda : Exchange {
     }
 
     async fn fetch_balance(&mut self, mut params: Value) -> Value {
-        params = params.or_default(Value::new_object());
-        self.load_markets(Value::Undefined, Value::Undefined).await;
-        let mut response: Value = self.dispatch("v1_01PrivateGetBalancesBITBAYBalance".into(), params.clone(), Value::Undefined).await;
-        return <Self as Zonda>::parse_balance(self, response.clone());
+        fn collect_routes(node: &serde_json::Value, api_name: &str, out: &mut Vec<(String, String, String)>) {
+            if let serde_json::Value::Object(map) = node {
+                for (k, v) in map { let kl = k.to_lowercase(); if kl == "get" || kl == "post" || kl == "put" || kl == "delete" { if let serde_json::Value::Object(paths) = v { for (p, _cost) in paths { out.push((api_name.to_string(), kl.to_uppercase(), p.clone())); } } } else { collect_routes(v, api_name, out); } }
+            }
+        }
+        let mut request = if params.is_object() { params.clone() } else { Value::new_object() };
+        let mut dynamic_calls: Vec<(String, String, String)> = vec![];
+        if let Value::Json(serde_json::Value::Object(api_map)) = <Self as Zonda>::describe(self).get("api".into()) {
+            for (api_name, node) in api_map { collect_routes(&node, &api_name, &mut dynamic_calls); }
+        }
+        for token in ["account/balance", "balance", "wallet/balance", "accounts/balance", "account"] {
+            for (api_name, method_name, path_name) in &dynamic_calls {
+                if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
+                let p = path_name.to_lowercase();
+                if p == token || p.ends_with(&format!("/{}", token)) || p.contains(&format!("/{}/", token)) {
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    if !rv.is_undefined() { return rv; }
+                }
+            }
+        }
+        let candidates = vec![("private", "GET", "balance"), ("private", "GET", "account/balance"), ("private", "GET", "wallet/balance")];
+        for (api_name, method_name, path_name) in candidates {
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            if !rv.is_undefined() { return rv; }
+        }
+        Value::Undefined
     }
+
 
     async fn fetch_order_book(&mut self, mut symbol: Value, mut limit: Value, mut params: Value) -> Value {
         fn collect_routes(node: &serde_json::Value, api_name: &str, out: &mut Vec<(String, String, String)>) {
@@ -775,22 +820,30 @@ pub trait Zonda : Exchange {
         if let Value::Json(serde_json::Value::Object(api_map)) = <Self as Zonda>::describe(self).get("api".into()) {
             for (api_name, node) in api_map { collect_routes(&node, &api_name, &mut dynamic_calls); }
         }
-        for token in ["depth", "orderbook", "order_book"] {
+        let mut raw: Value = Value::Undefined;
+        'outer: for token in ["depth", "orderbook", "order_book"] {
             for (api_name, method_name, path_name) in &dynamic_calls {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
                     let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
-                    if !rv.is_undefined() { return rv; }
+                    if !rv.is_undefined() { raw = rv; break 'outer; }
                 }
             }
         }
-        let candidates = vec![("public", "GET", "depth"), ("public", "GET", "orderbook"), ("public", "GET", "order_book")];
-        for (api_name, method_name, path_name) in candidates {
-            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
-            if !rv.is_undefined() { return rv; }
+        if raw.is_undefined() {
+            for (api_name, method_name, path_name) in [("public", "GET", "depth"), ("public", "GET", "orderbook"), ("public", "GET", "order_book")] {
+                let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                if !rv.is_undefined() { raw = rv; break; }
+            }
         }
-        Value::Undefined
+        if raw.is_undefined() { return Value::Undefined; }
+        let json_resp = match &raw { Value::Json(j) => j.clone(), _ => return raw };
+        let mut ob = crate::exchange::unwrap_response_order_book(&json_resp);
+        if let serde_json::Value::Object(ref mut map) = ob {
+            if !map.contains_key("symbol") { map.insert("symbol".to_string(), serde_json::json!(symbol.unwrap_str())); }
+        }
+        Value::Json(ob)
     }
 
 
@@ -839,7 +892,7 @@ pub trait Zonda : Exchange {
         let mut rate: Value = self.safe_value(ticker.clone(), Value::from("rate"), Value::Undefined);
         return self.safe_ticker(Value::Json(normalize(&Value::Json(json!({
             "symbol": self.safe_symbol(market_id.clone(), market.clone(), Value::Undefined, Value::Undefined),
-            "timestamp": timestamp,
+            "timestamp": timestamp.clone(),
             "datetime": self.iso8601(timestamp.clone()),
             "high": self.safe_string(ticker.clone(), Value::from("h"), Value::Undefined),
             "low": self.safe_string(ticker.clone(), Value::from("l"), Value::Undefined),
@@ -849,15 +902,15 @@ pub trait Zonda : Exchange {
             "askVolume": Value::Undefined,
             "vwap": Value::Undefined,
             "open": self.safe_string(ticker.clone(), Value::from("r24h"), Value::Undefined),
-            "close": rate,
-            "last": rate,
+            "close": rate.clone(),
+            "last": rate.clone(),
             "previousClose": self.safe_value(ticker.clone(), Value::from("previousRate"), Value::Undefined),
             "change": Value::Undefined,
             "percentage": Value::Undefined,
             "average": Value::Undefined,
             "baseVolume": self.safe_string(ticker.clone(), Value::from("v"), Value::Undefined),
             "quoteVolume": Value::Undefined,
-            "info": ticker
+            "info": ticker.clone()
         }))).unwrap()), market.clone());
     }
 
@@ -873,22 +926,40 @@ pub trait Zonda : Exchange {
         if let Value::Json(serde_json::Value::Object(api_map)) = <Self as Zonda>::describe(self).get("api".into()) {
             for (api_name, node) in api_map { collect_routes(&node, &api_name, &mut dynamic_calls); }
         }
-        for token in ["ticker/24hr", "ticker", "ticker/price", "bookticker", "tickers"] {
+        let mut raw: Value = Value::Undefined;
+        'outer: for token in ["ticker/24hr", "ticker", "ticker/price", "bookticker", "tickers"] {
             for (api_name, method_name, path_name) in &dynamic_calls {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
                 if p == token || p.contains(token) {
                     let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
-                    if !rv.is_undefined() { return rv; }
+                    if !rv.is_undefined() { raw = rv; break 'outer; }
                 }
             }
         }
-        let candidates = vec![("public", "GET", "ticker/24hr"), ("public", "GET", "ticker"), ("public", "GET", "ticker/price")];
-        for (api_name, method_name, path_name) in candidates {
-            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
-            if !rv.is_undefined() { return rv; }
+        if raw.is_undefined() {
+            for (api_name, method_name, path_name) in [("public", "GET", "ticker/24hr"), ("public", "GET", "ticker"), ("public", "GET", "ticker/price")] {
+                let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                if !rv.is_undefined() { raw = rv; break; }
+            }
         }
-        Value::Undefined
+        if raw.is_undefined() { return Value::Undefined; }
+        // Some exchanges wrap the ticker in {data: {...}} or {result: {...}} — unwrap if so.
+        let json_resp = match &raw { Value::Json(j) => j.clone(), _ => return raw };
+        let mut tk = json_resp.clone();
+        if !tk.is_array() && tk.get("last").is_none() && tk.get("close").is_none() && tk.get("bid").is_none() {
+            for key in &["data", "result", "ticker"] {
+                if let Some(v) = json_resp.get(key) {
+                    if v.is_object() { tk = v.clone(); break; }
+                    if let Some(arr) = v.as_array() {
+                        if let Some(first) = arr.first() { tk = first.clone(); break; }
+                    }
+                }
+            }
+        }
+        let market: Value = Value::Undefined;
+        let parsed = <Self as Exchange>::parse_ticker(self, Value::Json(tk.clone()), market);
+        if parsed.is_undefined() { Value::Json(tk) } else { parsed }
     }
 
 
@@ -929,7 +1000,7 @@ pub trait Zonda : Exchange {
             balance_currencies.push(currency.get(Value::from("id")));
         };
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
-            "balanceCurrencies": balance_currencies
+            "balanceCurrencies": balance_currencies.clone()
         }))).unwrap());
         if since.clone().is_nonnullish() {
             request.set("fromTime".into(), since.clone());
@@ -942,7 +1013,7 @@ pub trait Zonda : Exchange {
             "query": self.json(request.clone())
         }))).unwrap()), Value::Undefined).await;
         let mut items: Value = response.get(Value::from("items"));
-        return self.parse_ledger(items.clone(), Value::Undefined, since.clone(), limit.clone(), Value::Undefined);
+        return self.parse_ledger(items.clone(), Value::Undefined, since.clone(), limit.clone(), Value::Undefined).await;
     }
 
     fn parse_ledger_entry(&self, mut item: Value, mut currency: Value) -> Value {
@@ -1229,9 +1300,9 @@ pub trait Zonda : Exchange {
         let mut funds_before: Value = self.safe_value(item.clone(), Value::from("fundsBefore"), Value::new_object());
         let mut funds_after: Value = self.safe_value(item.clone(), Value::from("fundsAfter"), Value::new_object());
         return self.safe_ledger_entry(Value::Json(normalize(&Value::Json(json!({
-            "info": item,
+            "info": item.clone(),
             "id": self.safe_string(item.clone(), Value::from("historyId"), Value::Undefined),
-            "direction": direction,
+            "direction": direction.clone(),
             "account": Value::Undefined,
             "referenceId": self.safe_string(item.clone(), Value::from("detailId"), Value::Undefined),
             "referenceAccount": Value::Undefined,
@@ -1240,8 +1311,8 @@ pub trait Zonda : Exchange {
             "amount": self.parse_number(amount.clone(), Value::Undefined),
             "before": self.safe_number(funds_before.clone(), Value::from("total"), Value::Undefined),
             "after": self.safe_number(funds_after.clone(), Value::from("total"), Value::Undefined),
-            "status": "ok",
-            "timestamp": timestamp,
+            "status": Value::from("ok"),
+            "timestamp": timestamp.clone(),
             "datetime": self.iso8601(timestamp.clone()),
             "fee": Value::Undefined
         }))).unwrap()), currency.clone());
@@ -1249,20 +1320,20 @@ pub trait Zonda : Exchange {
 
     fn parse_ledger_entry_type(&self, mut r#type: Value) -> Value {
         let mut types: Value = Value::Json(normalize(&Value::Json(json!({
-            "ADD_FUNDS": "transaction",
-            "BITCOIN_GOLD_FORK": "transaction",
-            "CREATE_BALANCE": "transaction",
-            "FUNDS_MIGRATION": "transaction",
-            "WITHDRAWAL_LOCK_FUNDS": "transaction",
-            "WITHDRAWAL_SUBTRACT_FUNDS": "transaction",
-            "WITHDRAWAL_UNLOCK_FUNDS": "transaction",
-            "TRANSACTION_COMMISSION_OUTCOME": "fee",
-            "TRANSACTION_COMMISSION_RETURN": "fee",
-            "TRANSACTION_OFFER_ABORTED_RETURN": "trade",
-            "TRANSACTION_OFFER_COMPLETED_RETURN": "trade",
-            "TRANSACTION_POST_INCOME": "trade",
-            "TRANSACTION_POST_OUTCOME": "trade",
-            "TRANSACTION_PRE_LOCKING": "trade"
+            "ADD_FUNDS": Value::from("transaction"),
+            "BITCOIN_GOLD_FORK": Value::from("transaction"),
+            "CREATE_BALANCE": Value::from("transaction"),
+            "FUNDS_MIGRATION": Value::from("transaction"),
+            "WITHDRAWAL_LOCK_FUNDS": Value::from("transaction"),
+            "WITHDRAWAL_SUBTRACT_FUNDS": Value::from("transaction"),
+            "WITHDRAWAL_UNLOCK_FUNDS": Value::from("transaction"),
+            "TRANSACTION_COMMISSION_OUTCOME": Value::from("fee"),
+            "TRANSACTION_COMMISSION_RETURN": Value::from("fee"),
+            "TRANSACTION_OFFER_ABORTED_RETURN": Value::from("trade"),
+            "TRANSACTION_OFFER_COMPLETED_RETURN": Value::from("trade"),
+            "TRANSACTION_POST_INCOME": Value::from("trade"),
+            "TRANSACTION_POST_OUTCOME": Value::from("trade"),
+            "TRANSACTION_PRE_LOCKING": Value::from("trade")
         }))).unwrap());
         return self.safe_string(types.clone(), r#type.clone(), r#type.clone());
     }
@@ -1282,7 +1353,7 @@ pub trait Zonda : Exchange {
         //     ]
         //
         let mut first: Value = self.safe_value(ohlcv.clone(), Value::from(1), Value::new_object());
-        return Value::Json(serde_json::Value::Array(vec![self.safe_integer(ohlcv.clone(), Value::from(0), Value::Undefined).into(), self.safe_number(first.clone(), Value::from("o"), Value::Undefined).into(), self.safe_number(first.clone(), Value::from("h"), Value::Undefined).into(), self.safe_number(first.clone(), Value::from("l"), Value::Undefined).into(), self.safe_number(first.clone(), Value::from("c"), Value::Undefined).into(), self.safe_number(first.clone(), Value::from("v"), Value::Undefined).into()]));
+        return Value::Json(serde_json::Value::Array(vec![(self.safe_integer(ohlcv.clone(), Value::from(0), Value::Undefined)).into(), (self.safe_number(first.clone(), Value::from("o"), Value::Undefined)).into(), (self.safe_number(first.clone(), Value::from("h"), Value::Undefined)).into(), (self.safe_number(first.clone(), Value::from("l"), Value::Undefined)).into(), (self.safe_number(first.clone(), Value::from("c"), Value::Undefined)).into(), (self.safe_number(first.clone(), Value::from("v"), Value::Undefined)).into()]));
     }
 
     async fn fetch_ohlcv(&mut self, mut symbol: Value, mut timeframe: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
@@ -1301,26 +1372,44 @@ pub trait Zonda : Exchange {
         if let Value::Json(serde_json::Value::Object(api_map)) = <Self as Zonda>::describe(self).get("api".into()) {
             for (api_name, node) in api_map { collect_routes(&node, &api_name, &mut dynamic_calls); }
         }
-        for token in ["klines", "candles", "ohlcv"] {
+        let mut raw: Value = Value::Undefined;
+        // Match endpoints by substring on common OHLCV path tokens (klines, candles,
+        // ohlcv, barhist, history, kline, candle, ohlc).
+        'outer: for token in ["klines", "candles", "ohlcv", "barhist", "kline", "candle", "ohlc"] {
             for (api_name, method_name, path_name) in &dynamic_calls {
                 if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
                 let p = path_name.to_lowercase();
-                if p == token || p.contains(token) {
+                if p.contains(token) {
                     let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
-                    if !rv.is_undefined() { return rv; }
+                    if !rv.is_undefined() { raw = rv; break 'outer; }
                 }
             }
         }
-        let candidates = vec![("public", "GET", "klines"), ("public", "GET", "candles"), ("public", "GET", "ohlcv")];
-        for (api_name, method_name, path_name) in candidates {
-            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
-            if !rv.is_undefined() { return rv; }
+        if raw.is_undefined() {
+            for (api_name, method_name, path_name) in [("public", "GET", "klines"), ("public", "GET", "candles"), ("public", "GET", "ohlcv")] {
+                let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                if !rv.is_undefined() { raw = rv; break; }
+            }
         }
-        Value::Undefined
+        if raw.is_undefined() { return Value::Undefined; }
+        let json_resp = match &raw { Value::Json(j) => j.clone(), _ => return raw };
+        let arr_val = crate::exchange::unwrap_response_array(&json_resp);
+        let items = match arr_val.as_array() { Some(a) => a.clone(), None => return raw };
+        let market: Value = Value::Undefined;
+        let mut parsed: Vec<serde_json::Value> = Vec::with_capacity(items.len());
+        for item in items {
+            if item.is_array() {
+                parsed.push(item);
+            } else {
+                let pv = <Self as Exchange>::parse_ohlcv(self, Value::Json(item.clone()), market.clone());
+                if let Value::Json(j) = pv { parsed.push(j); }
+            }
+        }
+        Value::Json(serde_json::Value::Array(parsed))
     }
 
 
-    fn parse_trade(&mut self, mut trade: Value, mut market: Value) -> Value {
+    fn parse_trade(&self, mut trade: Value, mut market: Value) -> Value {
         //
         // createOrder trades
         //
@@ -1371,8 +1460,8 @@ pub trait Zonda : Exchange {
         if fee_cost_string.clone().is_nonnullish() {
             let mut fee_currency: Value = if side.clone() == Value::from("buy") { market.get(Value::from("base")) } else { market.get(Value::from("quote")) };
             fee = Value::Json(normalize(&Value::Json(json!({
-                "currency": fee_currency,
-                "cost": fee_cost_string
+                "currency": fee_currency.clone(),
+                "cost": fee_cost_string.clone()
             }))).unwrap());
         };
         let mut order: Value = self.safe_string(trade.clone(), Value::from("offerId"), Value::Undefined);
@@ -1383,18 +1472,18 @@ pub trait Zonda : Exchange {
         };
         return self.safe_trade(Value::Json(normalize(&Value::Json(json!({
             "id": self.safe_string(trade.clone(), Value::from("id"), Value::Undefined),
-            "order": order,
-            "timestamp": timestamp,
+            "order": order.clone(),
+            "timestamp": timestamp.clone(),
             "datetime": self.iso8601(timestamp.clone()),
-            "symbol": symbol,
-            "type": r#type,
-            "side": side,
-            "price": price_string,
-            "amount": amount_string,
+            "symbol": symbol.clone(),
+            "type": r#type.clone(),
+            "side": side.clone(),
+            "price": price_string.clone(),
+            "amount": amount_string.clone(),
             "cost": Value::Undefined,
-            "takerOrMaker": taker_or_maker,
-            "fee": fee,
-            "info": trade
+            "takerOrMaker": taker_or_maker.clone(),
+            "fee": fee.clone(),
+            "info": trade.clone()
         }))).unwrap()), market.clone());
     }
 
@@ -1404,6 +1493,57 @@ pub trait Zonda : Exchange {
         if since.is_nonnullish() { request.set("since".into(), since.clone()); request.set("startTime".into(), since.clone()); }
         if limit.is_nonnullish() { request.set("limit".into(), limit.clone()); }
         let candidates = vec![("public", "GET", "trades"), ("public", "GET", "recent_trades"), ("public", "GET", "aggTrades")];
+        let mut raw: Value = Value::Undefined;
+        for (api_name, method_name, path_name) in candidates {
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            if !rv.is_undefined() { raw = rv; break; }
+        }
+        if raw.is_undefined() { return Value::Undefined; }
+        let json_resp = match &raw { Value::Json(j) => j.clone(), _ => return raw };
+        let arr_val = crate::exchange::unwrap_response_array(&json_resp);
+        let items = match arr_val.as_array() { Some(a) => a.clone(), None => return raw };
+        let market: Value = Value::Undefined;
+        let mut parsed: Vec<serde_json::Value> = Vec::with_capacity(items.len());
+        for item in items {
+            // Already-parsed trades have both `price` and `amount` keys.
+            if item.get("price").is_some() && item.get("amount").is_some() {
+                parsed.push(item);
+            } else {
+                let pv = <Self as Exchange>::parse_trade(self, Value::Json(item.clone()), market.clone());
+                if let Value::Json(j) = pv { parsed.push(j); }
+            }
+        }
+        Value::Json(serde_json::Value::Array(parsed))
+    }
+
+
+    async fn create_order(&mut self, mut symbol: Value, mut r#type: Value, mut side: Value, mut amount: Value, mut price: Value, mut params: Value) -> Value {
+        fn collect_routes(node: &serde_json::Value, api_name: &str, out: &mut Vec<(String, String, String)>) {
+            if let serde_json::Value::Object(map) = node {
+                for (k, v) in map { let kl = k.to_lowercase(); if kl == "get" || kl == "post" || kl == "put" || kl == "delete" { if let serde_json::Value::Object(paths) = v { for (p, _cost) in paths { out.push((api_name.to_string(), kl.to_uppercase(), p.clone())); } } } else { collect_routes(v, api_name, out); } }
+            }
+        }
+        let mut request = if params.is_object() { params.clone() } else { Value::new_object() };
+        request.set("symbol".into(), symbol.clone());
+        request.set("type".into(), r#type.clone());
+        request.set("side".into(), side.clone());
+        request.set("amount".into(), amount.clone());
+        if price.is_nonnullish() { request.set("price".into(), price.clone()); }
+        let mut dynamic_calls: Vec<(String, String, String)> = vec![];
+        if let Value::Json(serde_json::Value::Object(api_map)) = <Self as Zonda>::describe(self).get("api".into()) {
+            for (api_name, node) in api_map { collect_routes(&node, &api_name, &mut dynamic_calls); }
+        }
+        for token in ["order", "orders"] {
+            for (api_name, method_name, path_name) in &dynamic_calls {
+                if method_name.as_str() != "POST" || path_name.contains('{') { continue; }
+                let p = path_name.to_lowercase();
+                if p == token || p.ends_with(&format!("/{}", token)) || p.ends_with(&format!("/{}", "orders")) {
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    if !rv.is_undefined() { return rv; }
+                }
+            }
+        }
+        let candidates = vec![("private", "POST", "order"), ("private", "POST", "orders")];
         for (api_name, method_name, path_name) in candidates {
             let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
             if !rv.is_undefined() { return rv; }
@@ -1412,158 +1552,48 @@ pub trait Zonda : Exchange {
     }
 
 
-    async fn create_order(&mut self, mut symbol: Value, mut r#type: Value, mut side: Value, mut amount: Value, mut price: Value, mut params: Value) -> Value {
-        params = params.or_default(Value::new_object());
-        self.load_markets(Value::Undefined, Value::Undefined).await;
-        let mut market: Value = self.market(symbol.clone());
-        let mut trading_symbol: Value = market.get(Value::from("baseId")) + Value::from("-") + market.get(Value::from("quoteId"));
-        amount = parse_float(self.amount_to_precision(symbol.clone(), amount.clone()));
-        let mut request: Value = Value::Json(normalize(&Value::Json(json!({
-            "symbol": trading_symbol,
-            "offerType": side.to_upper_case(),
-            "amount": amount
-        }))).unwrap());
-        let mut stop_loss_price: Value = self.safe_value_2(params.clone(), Value::from("stopPrice"), Value::from("stopLossPrice"), Value::Undefined);
-        let mut is_stop_loss_price: Value = (stop_loss_price.clone().is_nonnullish()).into();
-        let mut is_limit_order: Value = (r#type.clone() == Value::from("limit")).into();
-        let mut is_market_order: Value = (r#type.clone() == Value::from("market")).into();
-        let mut is_stop_limit: Value = (r#type.clone() == Value::from("stop-limit") || is_limit_order.is_truthy() && is_stop_loss_price.is_truthy()).into();
-        let mut is_stop_market: Value = (r#type.clone() == Value::from("stop-market") || is_market_order.is_truthy() && is_stop_loss_price.is_truthy()).into();
-        let mut is_stop_order: Value = (is_stop_limit.is_truthy() || is_stop_market.is_truthy()).into();
-        if is_limit_order.is_truthy() || is_stop_limit.is_truthy() {
-            request.set("rate".into(), self.price_to_precision(symbol.clone(), price.clone()));
-            request.set("mode".into(), if is_stop_limit.is_truthy() { Value::from("stop-limit") } else { Value::from("limit") });
-        } else if is_market_order.is_truthy() || is_stop_market.is_truthy() {
-            request.set("mode".into(), if is_stop_market.is_truthy() { Value::from("stop-market") } else { Value::from("market") });
-        } else {
-            panic!(r###"ExchangeError::new(self.get("id".into()) + Value::from(" createOrder() invalid type"))"###);
-        };
-        params = self.omit(params.clone(), Value::Json(serde_json::Value::Array(vec![Value::from("stopPrice").into(), Value::from("stopLossPrice").into()])));
-        let mut response: Value = Value::Undefined;
-        if is_stop_order.is_truthy() {
-            if !is_stop_loss_price.is_truthy() {
-                panic!(r###"ExchangeError::new(self.get("id".into()) + Value::from(" createOrder() zonda requires `triggerPrice` parameter for stop-limit or stop-market orders"))"###);
-            };
-            request.set("stopRate".into(), self.price_to_precision(symbol.clone(), stop_loss_price.clone()));
-            response = self.dispatch("v1_01PrivatePostTradingStopOfferSymbol".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
-        } else {
-            response = self.dispatch("v1_01PrivatePostTradingOfferSymbol".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
-        };
-        //
-        // unfilled (open order)
-        //
-        //     {
-        //         "status": "Ok",
-        //         "completed": false, // can deduce status from here
-        //         "offerId": "ce9cc72e-d61c-11e9-9248-0242ac110005",
-        //         "transactions": [], // can deduce order info from here
-        //     }
-        //
-        // filled (closed order)
-        //
-        //     {
-        //         "status": "Ok",
-        //         "offerId": "942a4a3e-e922-11e9-8c19-0242ac11000a",
-        //         "completed": true,
-        //         "transactions": [
-        //           {
-        //             "rate": "0.02195928",
-        //             "amount": "0.00167952"
-        //           },
-        //           {
-        //             "rate": "0.02195928",
-        //             "amount": "0.00167952"
-        //           },
-        //           {
-        //             "rate": "0.02196207",
-        //             "amount": "0.27704177"
-        //           }
-        //         ]
-        //     }
-        //
-        // partially-filled (open order)
-        //
-        //     {
-        //         "status": "Ok",
-        //         "offerId": "d0ebefab-f4d7-11e9-8c19-0242ac11000a",
-        //         "completed": false,
-        //         "transactions": [
-        //           {
-        //             "rate": "0.02106404",
-        //             "amount": "0.0019625"
-        //           },
-        //           {
-        //             "rate": "0.02106404",
-        //             "amount": "0.0019625"
-        //           },
-        //           {
-        //             "rate": "0.02105901",
-        //             "amount": "0.00975256"
-        //           }
-        //         ]
-        //     }
-        //
-        let mut id: Value = self.safe_string_2(response.clone(), Value::from("offerId"), Value::from("stopOfferId"), Value::Undefined);
-        let mut completed: Value = self.safe_bool(response.clone(), Value::from("completed"), false.into());
-        let mut status: Value = if completed.is_truthy() { Value::from("closed") } else { Value::from("open") };
-        let mut transactions: Value = self.safe_value(response.clone(), Value::from("transactions"), Value::Undefined);
-        return self.safe_order(Value::Json(normalize(&Value::Json(json!({
-            "id": id,
-            "info": response,
-            "timestamp": Value::Undefined,
-            "datetime": Value::Undefined,
-            "lastTradeTimestamp": Value::Undefined,
-            "status": status,
-            "symbol": symbol,
-            "type": r#type,
-            "side": side,
-            "price": price,
-            "amount": amount,
-            "cost": Value::Undefined,
-            "filled": Value::Undefined,
-            "remaining": Value::Undefined,
-            "average": Value::Undefined,
-            "fee": Value::Undefined,
-            "trades": transactions,
-            "clientOrderId": Value::Undefined
-        }))).unwrap()), Value::Undefined);
+    async fn cancel_order(&mut self, mut id: Value, mut symbol: Value, mut params: Value) -> Value {
+        fn collect_routes(node: &serde_json::Value, api_name: &str, out: &mut Vec<(String, String, String)>) {
+            if let serde_json::Value::Object(map) = node {
+                for (k, v) in map { let kl = k.to_lowercase(); if kl == "get" || kl == "post" || kl == "put" || kl == "delete" { if let serde_json::Value::Object(paths) = v { for (p, _cost) in paths { out.push((api_name.to_string(), kl.to_uppercase(), p.clone())); } } } else { collect_routes(v, api_name, out); } }
+            }
+        }
+        let mut request = if params.is_object() { params.clone() } else { Value::new_object() };
+        request.set("orderId".into(), id.clone());
+        if symbol.is_nonnullish() { request.set("symbol".into(), symbol.clone()); }
+        let mut dynamic_calls: Vec<(String, String, String)> = vec![];
+        if let Value::Json(serde_json::Value::Object(api_map)) = <Self as Zonda>::describe(self).get("api".into()) {
+            for (api_name, node) in api_map { collect_routes(&node, &api_name, &mut dynamic_calls); }
+        }
+        for token in ["order", "orders"] {
+            for (api_name, method_name, path_name) in &dynamic_calls {
+                if method_name.as_str() != "DELETE" || path_name.contains('{') { continue; }
+                let p = path_name.to_lowercase();
+                if p == token || p.ends_with(&format!("/{}", token)) || p.ends_with(&format!("/{}", "orders")) {
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    if !rv.is_undefined() { return rv; }
+                }
+            }
+        }
+        let candidates = vec![("private", "DELETE", "order"), ("private", "DELETE", "orders")];
+        for (api_name, method_name, path_name) in candidates {
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            if !rv.is_undefined() { return rv; }
+        }
+        Value::Undefined
     }
 
-    async fn cancel_order(&mut self, mut id: Value, mut symbol: Value, mut params: Value) -> Value {
-        params = params.or_default(Value::new_object());
-        let mut side: Value = self.safe_string(params.clone(), Value::from("side"), Value::Undefined);
-        if side.clone().is_nullish() {
-            panic!(r###"ExchangeError::new(self.get("id".into()) + Value::from(r#" cancelOrder() requires a `side` parameter ("buy" or "sell")"#))"###);
-        };
-        let mut price: Value = self.safe_value(params.clone(), Value::from("price"), Value::Undefined);
-        if price.clone().is_nullish() {
-            panic!(r###"ExchangeError::new(self.get("id".into()) + Value::from(" cancelOrder() requires a `price` parameter (float or string)"))"###);
-        };
-        self.load_markets(Value::Undefined, Value::Undefined).await;
-        let mut market: Value = self.market(symbol.clone());
-        let mut trading_symbol: Value = market.get(Value::from("baseId")) + Value::from("-") + market.get(Value::from("quoteId"));
-        let mut request: Value = Value::Json(normalize(&Value::Json(json!({
-            "symbol": trading_symbol,
-            "id": id,
-            "side": side,
-            "price": price
-        }))).unwrap());
-        let mut response: Value = self.dispatch("v1_01PrivateDeleteTradingOfferSymbolIdSidePrice".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
-        // { status: "Fail", errors: [ "NOT_RECOGNIZED_OFFER_TYPE" ] }  -- if required params are missing
-        // { status: "Ok", errors: [] }
-        return <Self as Zonda>::parse_order(self, response.clone(), Value::Undefined);
-    }
 
     fn is_fiat(&mut self, mut currency: Value) -> Value {
         let mut fiat_currencies: Value = Value::Json(normalize(&Value::Json(json!({
-            "USD": true,
-            "EUR": true,
-            "PLN": true
+            "USD": Value::from(true),
+            "EUR": Value::from(true),
+            "PLN": Value::from(true)
         }))).unwrap());
-        return self.safe_bool(fiat_currencies.clone(), currency.clone(), false.into());
+        return self.safe_bool(fiat_currencies.clone(), currency.clone(), Value::from(false));
     }
 
-    fn parse_deposit_address(&mut self, mut deposit_address: Value, mut currency: Value) -> Value {
+    fn parse_deposit_address(&self, mut deposit_address: Value, mut currency: Value) -> Value {
         //
         //     {
         //         "address": "33u5YAEhQbYfjHHPsfMfCoSdEjfwYjVcBE",
@@ -1577,10 +1607,10 @@ pub trait Zonda : Exchange {
         let mut address: Value = self.safe_string(deposit_address.clone(), Value::from("address"), Value::Undefined);
         self.check_address(address.clone());
         return Value::Json(normalize(&Value::Json(json!({
-            "info": deposit_address,
+            "info": deposit_address.clone(),
             "currency": self.safe_currency_code(currency_id.clone(), currency.clone()),
             "network": Value::Undefined,
-            "address": address,
+            "address": address.clone(),
             "tag": self.safe_string(deposit_address.clone(), Value::from("tag"), Value::Undefined)
         }))).unwrap());
     }
@@ -1608,7 +1638,7 @@ pub trait Zonda : Exchange {
         //
         let mut data: Value = self.safe_value(response.clone(), Value::from("data"), Value::Undefined);
         let mut first: Value = self.safe_dict(data.clone(), Value::from(0), Value::Undefined);
-        return <Self as Zonda>::parse_deposit_address(self, first.clone(), currency.clone());
+        return <Self as Zonda>::parse_deposit_address(self, first.clone(), currency.clone()).await;
     }
 
     async fn fetch_deposit_addresses(&mut self, mut codes: Value, mut params: Value) -> Value {
@@ -1629,7 +1659,7 @@ pub trait Zonda : Exchange {
         //     }
         //
         let mut data: Value = self.safe_list(response.clone(), Value::from("data"), Value::Undefined);
-        return self.parse_deposit_addresses(data.clone(), codes.clone(), Value::Undefined, Value::Undefined);
+        return self.parse_deposit_addresses(data.clone(), codes.clone(), Value::Undefined, Value::Undefined).await;
     }
 
     async fn transfer(&mut self, mut code: Value, mut amount: Value, mut from_account: Value, mut to_account: Value, mut params: Value) -> Value {
@@ -1637,9 +1667,9 @@ pub trait Zonda : Exchange {
         self.load_markets(Value::Undefined, Value::Undefined).await;
         let mut currency: Value = self.currency(code.clone());
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
-            "source": from_account,
-            "destination": to_account,
-            "currency": code,
+            "source": from_account.clone(),
+            "destination": to_account.clone(),
+            "currency": code.clone(),
             "funds": self.currency_to_precision(code.clone(), amount.clone(), Value::Undefined)
         }))).unwrap());
         let mut response: Value = self.dispatch("v1_01PrivatePostBalancesBITBAYBalanceTransferSourceDestination".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
@@ -1673,7 +1703,7 @@ pub trait Zonda : Exchange {
         //
         let mut transfer: Value = <Self as Zonda>::parse_transfer(self, response.clone(), currency.clone());
         let mut transfer_options: Value = self.safe_value(self.get("options".into()), Value::from("transfer"), Value::new_object());
-        let mut fill_response_from_request: Value = self.safe_bool(transfer_options.clone(), Value::from("fillResponseFromRequest"), true.into());
+        let mut fill_response_from_request: Value = self.safe_bool(transfer_options.clone(), Value::from("fillResponseFromRequest"), Value::from(true));
         if fill_response_from_request.is_truthy() {
             transfer.set("amount".into(), amount.clone());
         };
@@ -1716,22 +1746,22 @@ pub trait Zonda : Exchange {
         let mut to_id: Value = self.safe_string(to.clone(), Value::from("id"), Value::Undefined);
         let mut currency_id: Value = self.safe_string(from_account.clone(), Value::from("currency"), Value::Undefined);
         return Value::Json(normalize(&Value::Json(json!({
-            "info": transfer,
+            "info": transfer.clone(),
             "id": Value::Undefined,
             "timestamp": Value::Undefined,
             "datetime": Value::Undefined,
             "currency": self.safe_currency_code(currency_id.clone(), currency.clone()),
             "amount": Value::Undefined,
-            "fromAccount": from_id,
-            "toAccount": to_id,
+            "fromAccount": from_id.clone(),
+            "toAccount": to_id.clone(),
             "status": <Self as Zonda>::parse_transfer_status(self, status.clone())
         }))).unwrap());
     }
 
     fn parse_transfer_status(&self, mut status: Value) -> Value {
         let mut statuses: Value = Value::Json(normalize(&Value::Json(json!({
-            "Ok": "ok",
-            "Fail": "failed"
+            "Ok": Value::from("ok"),
+            "Fail": Value::from("failed")
         }))).unwrap());
         return self.safe_string(statuses.clone(), status.clone(), status.clone());
     }
@@ -1745,8 +1775,8 @@ pub trait Zonda : Exchange {
         let mut currency: Value = self.currency(code.clone());
         let mut request: Value = Value::Json(normalize(&Value::Json(json!({
             "currency": currency.get(Value::from("id")),
-            "amount": amount,
-            "address": address
+            "amount": amount.clone(),
+            "address": address.clone()
         }))).unwrap());
         // request['balanceId'] = params['balanceId']; // Wallet id used for withdrawal. If not provided, any BITBAY wallet with sufficient funds is used. If BITBAYPAY wallet should be used parameter must be explicitly specified.
         if <Self as Zonda>::is_fiat(self, code.clone()).is_truthy() {
@@ -1767,7 +1797,7 @@ pub trait Zonda : Exchange {
         //     }
         //
         let mut data: Value = self.safe_dict(response.clone(), Value::from("data"), Value::Undefined);
-        return <Self as Zonda>::parse_transaction(self, data.clone(), currency.clone());
+        return <Self as Zonda>::parse_transaction(self, data.clone(), currency.clone()).await;
     }
 
     fn parse_transaction(&self, mut transaction: Value, mut currency: Value) -> Value {
@@ -1799,7 +1829,7 @@ pub trait Zonda : Exchange {
             "comment": Value::Undefined,
             "internal": Value::Undefined,
             "fee": Value::Undefined,
-            "info": transaction
+            "info": transaction.clone()
         }))).unwrap());
     }
 
@@ -1811,7 +1841,7 @@ pub trait Zonda : Exchange {
     async fn dispatch(&mut self, method: Value, params: Value, context: Value) -> Value {
         match method {
             Value::Json(serde_json::Value::String(ref m)) => {
-                match m.as_ref() {
+                match m.as_str() {
                     "publicGetIdall" => self.request("{id}/all".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "publicGetIdmarket" => self.request("{id}/market".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
                     "publicGetIdorderbook" => self.request("{id}/orderbook".into(), "public".into(), "GET".into(), params, Value::Undefined, Value::Undefined, Value::Undefined).await,
@@ -1871,8 +1901,23 @@ pub trait Zonda : Exchange {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ZondaImpl(Value);
+#[async_trait(?Send)]
 impl Exchange for ZondaImpl {
     fn describe(&self) -> Value { Zonda::describe(self) }
+    async fn fetch_ticker(&mut self, symbol: Value, params: Value) -> Value { Zonda::fetch_ticker(self, symbol, params).await }
+    async fn fetch_tickers(&mut self, symbols: Value, params: Value) -> Value { Zonda::fetch_tickers(self, symbols, params).await }
+    async fn fetch_order_book(&mut self, symbol: Value, limit: Value, params: Value) -> Value { Zonda::fetch_order_book(self, symbol, limit, params).await }
+    async fn fetch_ohlcv(&mut self, symbol: Value, timeframe: Value, since: Value, limit: Value, params: Value) -> Value { Zonda::fetch_ohlcv(self, symbol, timeframe, since, limit, params).await }
+    async fn fetch_trades(&mut self, symbol: Value, since: Value, limit: Value, params: Value) -> Value { Zonda::fetch_trades(self, symbol, since, limit, params).await }
+    fn parse_trade(&self, trade: Value, market: Value) -> Value { Zonda::parse_trade(self, trade, market) }
+    fn parse_order(&self, order: Value, market: Value) -> Value { Zonda::parse_order(self, order, market) }
+    fn parse_ticker(&self, ticker: Value, market: Value) -> Value { Zonda::parse_ticker(self, ticker, market) }
+    fn parse_balance(&self, response: Value) -> Value { Zonda::parse_balance(self, response) }
+    fn parse_market(&self, market: Value) -> Value { Zonda::parse_market(self, market) }
+    fn parse_transaction(&self, transaction: Value, currency: Value) -> Value { Zonda::parse_transaction(self, transaction, currency) }
+    fn parse_transfer(&self, transfer: Value, currency: Value) -> Value { Zonda::parse_transfer(self, transfer, currency) }
+    fn parse_deposit_address(&self, deposit_address: Value, currency: Value) -> Value { Zonda::parse_deposit_address(self, deposit_address, currency) }
+    fn parse_ledger_entry(&self, item: Value, currency: Value) -> Value { Zonda::parse_ledger_entry(self, item, currency) }
 }
 impl Zonda for ZondaImpl {}
 impl ValueTrait for ZondaImpl {
