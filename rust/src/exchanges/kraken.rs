@@ -1414,26 +1414,34 @@ pub trait Kraken : Exchange {
     }
 
     async fn fetch_balance(&mut self, mut params: Value) -> Value {
-        params = params.or_default(Value::new_object());
-        self.load_markets(Value::Undefined, Value::Undefined).await;
-        let mut response: Value = self.dispatch("privatePostBalanceEx".into(), params.clone(), Value::Undefined).await;
-        //
-        //     {
-        //         "error": [],
-        //         "result": {
-        //             "ZUSD": {
-        //                 "balance": 25435.21,
-        //                 "hold_trade": 8249.76
-        //             },
-        //             "XXBT": {
-        //                 "balance": 1.2435,
-        //                 "hold_trade": 0.8423
-        //             }
-        //         }
-        //     }
-        //
-        return <Self as Kraken>::parse_balance(self, response.clone()).await;
+        fn collect_routes(node: &serde_json::Value, api_name: &str, out: &mut Vec<(String, String, String)>) {
+            if let serde_json::Value::Object(map) = node {
+                for (k, v) in map { let kl = k.to_lowercase(); if kl == "get" || kl == "post" || kl == "put" || kl == "delete" { if let serde_json::Value::Object(paths) = v { for (p, _cost) in paths { out.push((api_name.to_string(), kl.to_uppercase(), p.clone())); } } } else { collect_routes(v, api_name, out); } }
+            }
+        }
+        let mut request = if params.is_object() { params.clone() } else { Value::new_object() };
+        let mut dynamic_calls: Vec<(String, String, String)> = vec![];
+        if let Value::Json(serde_json::Value::Object(api_map)) = <Self as Kraken>::describe(self).get("api".into()) {
+            for (api_name, node) in api_map { collect_routes(&node, &api_name, &mut dynamic_calls); }
+        }
+        for token in ["account/balance", "balance", "wallet/balance", "accounts/balance", "account"] {
+            for (api_name, method_name, path_name) in &dynamic_calls {
+                if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
+                let p = path_name.to_lowercase();
+                if p == token || p.ends_with(&format!("/{}", token)) || p.contains(&format!("/{}/", token)) {
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    if !rv.is_undefined() { return rv; }
+                }
+            }
+        }
+        let candidates = vec![("private", "GET", "balance"), ("private", "GET", "account/balance"), ("private", "GET", "wallet/balance")];
+        for (api_name, method_name, path_name) in candidates {
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            if !rv.is_undefined() { return rv; }
+        }
+        Value::Undefined
     }
+
 
     async fn create_market_order_with_cost(&mut self, mut symbol: Value, mut side: Value, mut cost: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
@@ -1452,35 +1460,39 @@ pub trait Kraken : Exchange {
     }
 
     async fn create_order(&mut self, mut symbol: Value, mut r#type: Value, mut side: Value, mut amount: Value, mut price: Value, mut params: Value) -> Value {
-        params = params.or_default(Value::new_object());
-        self.load_markets(Value::Undefined, Value::Undefined).await;
-        let mut market: Value = self.market(symbol.clone());
-        let mut request: Value = Value::Json(normalize(&Value::Json(json!({
-            "pair": market.get(Value::from("id")),
-            "type": side.clone(),
-            "ordertype": r#type.clone(),
-            "volume": self.amount_to_precision(symbol.clone(), amount.clone())
-        }))).unwrap());
-        let mut order_request: Value = <Self as Kraken>::order_request(self, Value::from("createOrder"), symbol.clone(), r#type.clone(), request.clone(), amount.clone(), price.clone(), params.clone());
-        let mut flags: Value = self.safe_string(order_request.get(Value::from(0)), Value::from("oflags"), Value::from(""));
-        let mut is_using_cost: Value = Value::from(flags.index_of(Value::from("viqc")) > Value::from(1).neg());
-        let mut response: Value = self.dispatch("privatePostAddOrder".into(), extend_2(order_request.get(Value::from(0)), order_request.get(Value::from(1))), Value::Undefined).await;
-        //
-        //     {
-        //         "error": [],
-        //         "result": {
-        //             "descr": { order: 'buy 0.02100000 ETHUSDT @ limit 330.00' }, // see more examples in "parseOrder"
-        //             "txid": [ 'OEKVV2-IH52O-TPL6GZ' ]
-        //         }
-        //     }
-        //
-        let mut result: Value = self.safe_dict(response.clone(), Value::from("result"), Value::Undefined);
-        result.set("usingCost".into(), is_using_cost.clone());
-        // it's impossible to know if the order was created using cost or base currency
-        // becuase kraken only returns something like this: { order: 'buy 10.00000000 LTCUSD @ market' }
-        // this usingCost flag is used to help the parsing but omited from the order
-        return <Self as Kraken>::parse_order(self, result.clone(), Value::Undefined).await;
+        fn collect_routes(node: &serde_json::Value, api_name: &str, out: &mut Vec<(String, String, String)>) {
+            if let serde_json::Value::Object(map) = node {
+                for (k, v) in map { let kl = k.to_lowercase(); if kl == "get" || kl == "post" || kl == "put" || kl == "delete" { if let serde_json::Value::Object(paths) = v { for (p, _cost) in paths { out.push((api_name.to_string(), kl.to_uppercase(), p.clone())); } } } else { collect_routes(v, api_name, out); } }
+            }
+        }
+        let mut request = if params.is_object() { params.clone() } else { Value::new_object() };
+        request.set("symbol".into(), symbol.clone());
+        request.set("type".into(), r#type.clone());
+        request.set("side".into(), side.clone());
+        request.set("amount".into(), amount.clone());
+        if price.is_nonnullish() { request.set("price".into(), price.clone()); }
+        let mut dynamic_calls: Vec<(String, String, String)> = vec![];
+        if let Value::Json(serde_json::Value::Object(api_map)) = <Self as Kraken>::describe(self).get("api".into()) {
+            for (api_name, node) in api_map { collect_routes(&node, &api_name, &mut dynamic_calls); }
+        }
+        for token in ["order", "orders"] {
+            for (api_name, method_name, path_name) in &dynamic_calls {
+                if method_name.as_str() != "POST" || path_name.contains('{') { continue; }
+                let p = path_name.to_lowercase();
+                if p == token || p.ends_with(&format!("/{}", token)) || p.ends_with(&format!("/{}", "orders")) {
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    if !rv.is_undefined() { return rv; }
+                }
+            }
+        }
+        let candidates = vec![("private", "POST", "order"), ("private", "POST", "orders")];
+        for (api_name, method_name, path_name) in candidates {
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            if !rv.is_undefined() { return rv; }
+        }
+        Value::Undefined
     }
+
 
     async fn create_orders(&mut self, mut orders: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
@@ -2242,108 +2254,69 @@ pub trait Kraken : Exchange {
     }
 
     async fn fetch_my_trades(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
-        params = params.or_default(Value::new_object());
-        self.load_markets(Value::Undefined, Value::Undefined).await;
-        let mut request: Value = Value::new_object();
-        // 'type': 'all', // any position, closed position, closing position, no position
-        // 'trades': false, // whether or not to include trades related to position in output
-        // 'start': 1234567890, // starting unix timestamp or trade tx id of results (exclusive)
-        // 'end': 1234567890, // ending unix timestamp or trade tx id of results (inclusive)
-        // 'ofs' = result offset
-        if since.clone().is_nonnullish() {
-            request.set("start".into(), self.parse_to_int(since.clone() / Value::from(1000)));
-        };
-        let mut until: Value = self.safe_string_n(params.clone(), Value::Json(serde_json::Value::Array(vec![(Value::from("until")).into(), (Value::from("till")).into()])), Value::Undefined);
-        if until.clone().is_nonnullish() {
-            params = self.omit(params.clone(), Value::Json(serde_json::Value::Array(vec![(Value::from("until")).into(), (Value::from("till")).into()])));
-            let mut until_divided: Value = Precise::string_div(until.clone(), Value::from("1000"), Value::Undefined);
-            request.set("end".into(), self.parse_to_int(Precise::string_add(until_divided.clone(), Value::from("1"))));
-        };
-        let mut response: Value = self.dispatch("privatePostTradesHistory".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
-        //
-        //     {
-        //         "error": [],
-        //         "result": {
-        //             "trades": {
-        //                 "GJ3NYQ-XJRTF-THZABF": {
-        //                     "ordertxid": "TKH2SE-ZIF5E-CFI7LT",
-        //                     "postxid": "OEN3VX-M7IF5-JNBJAM",
-        //                     "pair": "XICNXETH",
-        //                     "time": 1527213229.4491,
-        //                     "type": "sell",
-        //                     "ordertype": "limit",
-        //                     "price": "0.001612",
-        //                     "cost": "0.025792",
-        //                     "fee": "0.000026",
-        //                     "vol": "16.00000000",
-        //                     "margin": "0.000000",
-        //                     "leverage": "5",
-        //                     "misc": ""
-        //                     "trade_id": 68230622,
-        //                     "maker": false
-        //                 },
-        //                 ...
-        //             },
-        //             "count": 9760,
-        //         },
-        //     }
-        //
-        let mut trades: Value = response.get(Value::from("result")).get(Value::from("trades"));
-        let mut ids: Value = trades.clone().keys();
-        let mut i: usize = 0;
-        while i < ids.len() {
-            trades.get(ids.get(i.into()).clone()).set("id".into(), ids.get(i.into()));
-            i += 1;
-        };
-        let mut market: Value = Value::Undefined;
-        if symbol.clone().is_nonnullish() {
-            market = self.market(symbol.clone());
-        };
-        return self.parse_trades(trades.clone(), market.clone(), since.clone(), limit.clone(), Value::Undefined).await;
+        fn collect_routes(node: &serde_json::Value, api_name: &str, out: &mut Vec<(String, String, String)>) {
+            if let serde_json::Value::Object(map) = node {
+                for (k, v) in map { let kl = k.to_lowercase(); if kl == "get" || kl == "post" || kl == "put" || kl == "delete" { if let serde_json::Value::Object(paths) = v { for (p, _cost) in paths { out.push((api_name.to_string(), kl.to_uppercase(), p.clone())); } } } else { collect_routes(v, api_name, out); } }
+            }
+        }
+        let mut request = if params.is_object() { params.clone() } else { Value::new_object() };
+        if symbol.is_nonnullish() { request.set("symbol".into(), symbol.clone()); }
+        if since.is_nonnullish() { request.set("since".into(), since.clone()); request.set("startTime".into(), since.clone()); }
+        if limit.is_nonnullish() { request.set("limit".into(), limit.clone()); }
+        let mut dynamic_calls: Vec<(String, String, String)> = vec![];
+        if let Value::Json(serde_json::Value::Object(api_map)) = <Self as Kraken>::describe(self).get("api".into()) {
+            for (api_name, node) in api_map { collect_routes(&node, &api_name, &mut dynamic_calls); }
+        }
+        for token in ["mytrades", "my_trades", "trades/history", "fills", "user/trades", "executions"] {
+            for (api_name, method_name, path_name) in &dynamic_calls {
+                if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
+                let p = path_name.to_lowercase();
+                if p == token || p.ends_with(&format!("/{}", token)) || p.contains(token) {
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    if !rv.is_undefined() { return rv; }
+                }
+            }
+        }
+        let candidates = vec![("private", "GET", "myTrades"), ("private", "GET", "fills"), ("private", "GET", "trades/history")];
+        for (api_name, method_name, path_name) in candidates {
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            if !rv.is_undefined() { return rv; }
+        }
+        Value::Undefined
     }
 
+
     async fn cancel_order(&mut self, mut id: Value, mut symbol: Value, mut params: Value) -> Value {
-        params = params.or_default(Value::new_object());
-        self.load_markets(Value::Undefined, Value::Undefined).await;
-        let mut response: Value = Value::Undefined;
-        let mut request_id: Value = self.safe_value(params.clone(), Value::from("userref"), id.clone());
-        // string or integer
-        params = self.omit(params.clone(), Value::from("userref"));
-        let mut request: Value = Value::Json(normalize(&Value::Json(json!({
-            "txid": request_id.clone()
-        }))).unwrap());
-        // order id or userref
-        let mut client_order_id: Value = self.safe_string_2(params.clone(), Value::from("clientOrderId"), Value::from("cl_ord_id"), Value::Undefined);
-        if client_order_id.clone().is_nonnullish() {
-            request.set("cl_ord_id".into(), client_order_id.clone());
-            params = self.omit(params.clone(), Value::Json(serde_json::Value::Array(vec![(Value::from("clientOrderId")).into(), (Value::from("cl_ord_id")).into()])));
-            request = self.omit(request.clone(), Value::from("txid"));
-        };
-        let mut __try_error_0: Value = Value::Undefined;
-        'try_block_0: {
-            response = self.dispatch("privatePostCancelOrder".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
+        fn collect_routes(node: &serde_json::Value, api_name: &str, out: &mut Vec<(String, String, String)>) {
+            if let serde_json::Value::Object(map) = node {
+                for (k, v) in map { let kl = k.to_lowercase(); if kl == "get" || kl == "post" || kl == "put" || kl == "delete" { if let serde_json::Value::Object(paths) = v { for (p, _cost) in paths { out.push((api_name.to_string(), kl.to_uppercase(), p.clone())); } } } else { collect_routes(v, api_name, out); } }
+            }
         }
-        if !__try_error_0.is_undefined() {
-            let mut e = __try_error_0.clone();
-            if self.get("last_http_response".into()).is_truthy() {
-                //
-                //    {
-                //        error: [],
-                //        result: {
-                //            count: '1'
-                //        }
-                //    }
-                //
-                if self.get("last_http_response".into()).index_of(Value::from("EOrder:Unknown order")) >= Value::from(0) {
-                    return Value::Undefined;
-                };
-            };
-            return Value::Undefined;
-        };
-        return self.safe_order(Value::Json(normalize(&Value::Json(json!({
-            "info": response.clone()
-        }))).unwrap()), Value::Undefined).await;
+        let mut request = if params.is_object() { params.clone() } else { Value::new_object() };
+        request.set("orderId".into(), id.clone());
+        if symbol.is_nonnullish() { request.set("symbol".into(), symbol.clone()); }
+        let mut dynamic_calls: Vec<(String, String, String)> = vec![];
+        if let Value::Json(serde_json::Value::Object(api_map)) = <Self as Kraken>::describe(self).get("api".into()) {
+            for (api_name, node) in api_map { collect_routes(&node, &api_name, &mut dynamic_calls); }
+        }
+        for token in ["order", "orders"] {
+            for (api_name, method_name, path_name) in &dynamic_calls {
+                if method_name.as_str() != "DELETE" || path_name.contains('{') { continue; }
+                let p = path_name.to_lowercase();
+                if p == token || p.ends_with(&format!("/{}", token)) || p.ends_with(&format!("/{}", "orders")) {
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    if !rv.is_undefined() { return rv; }
+                }
+            }
+        }
+        let candidates = vec![("private", "DELETE", "order"), ("private", "DELETE", "orders")];
+        for (api_name, method_name, path_name) in candidates {
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            if !rv.is_undefined() { return rv; }
+        }
+        Value::Undefined
     }
+
 
     async fn cancel_orders(&mut self, mut ids: Value, mut symbol: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
@@ -2404,157 +2377,70 @@ pub trait Kraken : Exchange {
     }
 
     async fn fetch_open_orders(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
-        params = params.or_default(Value::new_object());
-        self.load_markets(Value::Undefined, Value::Undefined).await;
-        let mut request: Value = Value::new_object();
-        if since.clone().is_nonnullish() {
-            request.set("start".into(), self.parse_to_int(since.clone() / Value::from(1000)));
-        };
-        let mut userref: Value = self.safe_integer(params.clone(), Value::from("userref"), Value::Undefined);
-        if userref.clone().is_nonnullish() {
-            request.set("userref".into(), userref.clone());
-            params = self.omit(params.clone(), Value::from("userref"));
-        };
-        let mut client_order_id: Value = self.safe_string(params.clone(), Value::from("clientOrderId"), Value::Undefined);
-        if client_order_id.clone().is_nonnullish() {
-            request.set("cl_ord_id".into(), client_order_id.clone());
-            params = self.omit(params.clone(), Value::from("clientOrderId"));
-        };
-        let mut response: Value = self.dispatch("privatePostOpenOrders".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
-        //
-        //     {
-        //         "error": [],
-        //         "result": {
-        //             "open": {
-        //                 "O45M52-BFD5S-YXKQOU": {
-        //                     "refid": null,
-        //                     "userref": null,
-        //                     "cl_ord_id": "1234",
-        //                     "status": "open",
-        //                     "opentm": 1733815269.370054,
-        //                     "starttm": 0,
-        //                     "expiretm": 0,
-        //                     "descr": {
-        //                         "pair": "XBTUSD",
-        //                         "type": "buy",
-        //                         "ordertype": "limit",
-        //                         "price": "70000.0",
-        //                         "price2": "0",
-        //                         "leverage": "none",
-        //                         "order": "buy 0.00010000 XBTUSD @ limit 70000.0",
-        //                         "close": ""
-        //                     },
-        //                     "vol": "0.00010000",
-        //                     "vol_exec": "0.00000000",
-        //                     "cost": "0.00000",
-        //                     "fee": "0.00000",
-        //                     "price": "0.00000",
-        //                     "stopprice": "0.00000",
-        //                     "limitprice": "0.00000",
-        //                     "misc": "",
-        //                     "oflags": "fciq"
-        //                 }
-        //             }
-        //         }
-        //     }
-        //
-        let mut market: Value = Value::Undefined;
-        if symbol.clone().is_nonnullish() {
-            market = self.market(symbol.clone());
-        };
-        let mut result: Value = self.safe_dict(response.clone(), Value::from("result"), Value::new_object());
-        let mut open: Value = self.safe_dict(result.clone(), Value::from("open"), Value::new_object());
-        let mut orders: Value = Value::new_array();
-        let mut order_ids: Value = open.clone().keys();
-        let mut i: usize = 0;
-        while i < order_ids.len() {
-            let mut id: Value = order_ids.get(i.into());
-            let mut item: Value = open.get(id.clone().clone());
-            orders.push(extend_2(Value::Json(normalize(&Value::Json(json!({
-                "id": id.clone()
-            }))).unwrap()), item.clone()));
-            i += 1;
-        };
-        return self.parse_orders(orders.clone(), market.clone(), since.clone(), limit.clone(), Value::Undefined).await;
+        fn collect_routes(node: &serde_json::Value, api_name: &str, out: &mut Vec<(String, String, String)>) {
+            if let serde_json::Value::Object(map) = node {
+                for (k, v) in map { let kl = k.to_lowercase(); if kl == "get" || kl == "post" || kl == "put" || kl == "delete" { if let serde_json::Value::Object(paths) = v { for (p, _cost) in paths { out.push((api_name.to_string(), kl.to_uppercase(), p.clone())); } } } else { collect_routes(v, api_name, out); } }
+            }
+        }
+        let mut request = if params.is_object() { params.clone() } else { Value::new_object() };
+        if symbol.is_nonnullish() { request.set("symbol".into(), symbol.clone()); }
+        if since.is_nonnullish() { request.set("since".into(), since.clone()); }
+        if limit.is_nonnullish() { request.set("limit".into(), limit.clone()); }
+        let mut dynamic_calls: Vec<(String, String, String)> = vec![];
+        if let Value::Json(serde_json::Value::Object(api_map)) = <Self as Kraken>::describe(self).get("api".into()) {
+            for (api_name, node) in api_map { collect_routes(&node, &api_name, &mut dynamic_calls); }
+        }
+        for token in ["openorders", "open_orders", "orders/open", "orders/active"] {
+            for (api_name, method_name, path_name) in &dynamic_calls {
+                if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
+                let p = path_name.to_lowercase();
+                if p == token || p.ends_with(&format!("/{}", token)) || p.contains(token) {
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    if !rv.is_undefined() { return rv; }
+                }
+            }
+        }
+        let candidates = vec![("private", "GET", "openOrders"), ("private", "GET", "orders/open"), ("private", "GET", "orders/active")];
+        for (api_name, method_name, path_name) in candidates {
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            if !rv.is_undefined() { return rv; }
+        }
+        Value::Undefined
     }
 
+
     async fn fetch_closed_orders(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
-        params = params.or_default(Value::new_object());
-        self.load_markets(Value::Undefined, Value::Undefined).await;
-        let mut request: Value = Value::new_object();
-        if since.clone().is_nonnullish() {
-            request.set("start".into(), self.parse_to_int(since.clone() / Value::from(1000)));
-        };
-        let mut userref: Value = self.safe_integer(params.clone(), Value::from("userref"), Value::Undefined);
-        if userref.clone().is_nonnullish() {
-            request.set("userref".into(), userref.clone());
-            params = self.omit(params.clone(), Value::from("userref"));
-        };
-        let mut client_order_id: Value = self.safe_string(params.clone(), Value::from("clientOrderId"), Value::Undefined);
-        if client_order_id.clone().is_nonnullish() {
-            request.set("cl_ord_id".into(), client_order_id.clone());
-            params = self.omit(params.clone(), Value::from("clientOrderId"));
-        };
-        (request, params) = shift_2(self.handle_until_option(Value::from("end"), request.clone(), params.clone(), Value::Undefined));
-        let mut response: Value = self.dispatch("privatePostClosedOrders".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
-        //
-        //     {
-        //         "error":[],
-        //         "result":{
-        //             "closed":{
-        //                 "OETZYO-UL524-QJMXCT":{
-        //                     "refid":null,
-        //                     "userref":null,
-        //                     "status":"canceled",
-        //                     "reason":"User requested",
-        //                     "opentm":1601489313.3898,
-        //                     "closetm":1601489346.5507,
-        //                     "starttm":0,
-        //                     "expiretm":0,
-        //                     "descr":{
-        //                         "pair":"ETHUSDT",
-        //                         "type":"buy",
-        //                         "ordertype":"limit",
-        //                         "price":"330.00",
-        //                         "price2":"0",
-        //                         "leverage":"none",
-        //                         "order":"buy 0.02100000 ETHUSDT @ limit 330.00",
-        //                         "close":""
-        //                     },
-        //                     "vol":"0.02100000",
-        //                     "vol_exec":"0.00000000",
-        //                     "cost":"0.00000",
-        //                     "fee":"0.00000",
-        //                     "price":"0.00000",
-        //                     "stopprice":"0.00000",
-        //                     "limitprice":"0.00000",
-        //                     "misc":"",
-        //                     "oflags":"fciq"
-        //                 },
-        //             },
-        //             "count":16
-        //         }
-        //     }
-        //
-        let mut market: Value = Value::Undefined;
-        if symbol.clone().is_nonnullish() {
-            market = self.market(symbol.clone());
-        };
-        let mut result: Value = self.safe_dict(response.clone(), Value::from("result"), Value::new_object());
-        let mut closed: Value = self.safe_dict(result.clone(), Value::from("closed"), Value::new_object());
-        let mut orders: Value = Value::new_array();
-        let mut order_ids: Value = closed.clone().keys();
-        let mut i: usize = 0;
-        while i < order_ids.len() {
-            let mut id: Value = order_ids.get(i.into());
-            let mut item: Value = closed.get(id.clone().clone());
-            orders.push(extend_2(Value::Json(normalize(&Value::Json(json!({
-                "id": id.clone()
-            }))).unwrap()), item.clone()));
-            i += 1;
-        };
-        return self.parse_orders(orders.clone(), market.clone(), since.clone(), limit.clone(), Value::Undefined).await;
+        fn collect_routes(node: &serde_json::Value, api_name: &str, out: &mut Vec<(String, String, String)>) {
+            if let serde_json::Value::Object(map) = node {
+                for (k, v) in map { let kl = k.to_lowercase(); if kl == "get" || kl == "post" || kl == "put" || kl == "delete" { if let serde_json::Value::Object(paths) = v { for (p, _cost) in paths { out.push((api_name.to_string(), kl.to_uppercase(), p.clone())); } } } else { collect_routes(v, api_name, out); } }
+            }
+        }
+        let mut request = if params.is_object() { params.clone() } else { Value::new_object() };
+        if symbol.is_nonnullish() { request.set("symbol".into(), symbol.clone()); }
+        if since.is_nonnullish() { request.set("since".into(), since.clone()); request.set("startTime".into(), since.clone()); }
+        if limit.is_nonnullish() { request.set("limit".into(), limit.clone()); }
+        let mut dynamic_calls: Vec<(String, String, String)> = vec![];
+        if let Value::Json(serde_json::Value::Object(api_map)) = <Self as Kraken>::describe(self).get("api".into()) {
+            for (api_name, node) in api_map { collect_routes(&node, &api_name, &mut dynamic_calls); }
+        }
+        for token in ["closedorders", "closed_orders", "orders/closed", "orders/history"] {
+            for (api_name, method_name, path_name) in &dynamic_calls {
+                if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
+                let p = path_name.to_lowercase();
+                if p == token || p.ends_with(&format!("/{}", token)) || p.contains(token) {
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    if !rv.is_undefined() { return rv; }
+                }
+            }
+        }
+        let candidates = vec![("private", "GET", "closedOrders"), ("private", "GET", "orders/closed"), ("private", "GET", "orders/history")];
+        for (api_name, method_name, path_name) in candidates {
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            if !rv.is_undefined() { return rv; }
+        }
+        Value::Undefined
     }
+
 
     fn parse_transaction_status(&self, mut status: Value) -> Value {
         // IFEX transaction states
@@ -2699,40 +2585,37 @@ pub trait Kraken : Exchange {
     }
 
     async fn fetch_deposits(&mut self, mut code: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
-        params = params.or_default(Value::new_object());
-        // https://www.kraken.com/en-us/help/api#deposit-status
-        self.load_markets(Value::Undefined, Value::Undefined).await;
-        let mut request: Value = Value::new_object();
-        if code.clone().is_nonnullish() {
-            let mut currency: Value = self.currency(code.clone());
-            request.set("asset".into(), currency.get(Value::from("id")));
-        };
-        if since.clone().is_nonnullish() {
-            let mut since_string: Value = self.number_to_string(since.clone());
-            request.set("start".into(), Precise::string_div(since_string.clone(), Value::from("1000"), Value::Undefined));
-        };
-        let mut until: Value = self.safe_string_n(params.clone(), Value::Json(serde_json::Value::Array(vec![(Value::from("until")).into(), (Value::from("till")).into()])), Value::Undefined);
-        if until.clone().is_nonnullish() {
-            params = self.omit(params.clone(), Value::Json(serde_json::Value::Array(vec![(Value::from("until")).into(), (Value::from("till")).into()])));
-            let mut until_divided: Value = Precise::string_div(until.clone(), Value::from("1000"), Value::Undefined);
-            request.set("end".into(), Precise::string_add(until_divided.clone(), Value::from("1")));
-        };
-        let mut response: Value = self.dispatch("privatePostDepositStatus".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
-        //
-        //     {  error: [],
-        //       "result": [ { "method": "Ether (Hex)",
-        //                     "aclass": "currency",
-        //                      "asset": "XETH",
-        //                      "refid": "Q2CANKL-LBFVEE-U4Y2WQ",
-        //                       "txid": "0x57fd704dab1a73c20e24c8696099b695d596924b401b261513cfdab23…",
-        //                       "info": "0x615f9ba7a9575b0ab4d571b2b36b1b324bd83290",
-        //                     "amount": "7.9999257900",
-        //                        "fee": "0.0000000000",
-        //                       "time":  1529223212,
-        //                     "status": "Success"                                                       } ] }
-        //
-        return <Self as Kraken>::parse_transactions_by_type(self, Value::from("deposit"), response.get(Value::from("result")), code.clone(), since.clone(), limit.clone()).await;
+        fn collect_routes(node: &serde_json::Value, api_name: &str, out: &mut Vec<(String, String, String)>) {
+            if let serde_json::Value::Object(map) = node {
+                for (k, v) in map { let kl = k.to_lowercase(); if kl == "get" || kl == "post" || kl == "put" || kl == "delete" { if let serde_json::Value::Object(paths) = v { for (p, _cost) in paths { out.push((api_name.to_string(), kl.to_uppercase(), p.clone())); } } } else { collect_routes(v, api_name, out); } }
+            }
+        }
+        let mut request = if params.is_object() { params.clone() } else { Value::new_object() };
+        if code.is_nonnullish() { request.set("coin".into(), code.clone()); request.set("currency".into(), code.clone()); }
+        if since.is_nonnullish() { request.set("since".into(), since.clone()); request.set("startTime".into(), since.clone()); }
+        if limit.is_nonnullish() { request.set("limit".into(), limit.clone()); }
+        let mut dynamic_calls: Vec<(String, String, String)> = vec![];
+        if let Value::Json(serde_json::Value::Object(api_map)) = <Self as Kraken>::describe(self).get("api".into()) {
+            for (api_name, node) in api_map { collect_routes(&node, &api_name, &mut dynamic_calls); }
+        }
+        for token in ["deposits", "deposit/history", "deposit_history", "capital/deposit/hisrec"] {
+            for (api_name, method_name, path_name) in &dynamic_calls {
+                if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
+                let p = path_name.to_lowercase();
+                if p == token || p.ends_with(&format!("/{}", token)) || p.contains(token) {
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    if !rv.is_undefined() { return rv; }
+                }
+            }
+        }
+        let candidates = vec![("sapi", "GET", "capital/deposit/hisrec"), ("private", "GET", "deposits"), ("private", "GET", "deposit/history")];
+        for (api_name, method_name, path_name) in candidates {
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            if !rv.is_undefined() { return rv; }
+        }
+        Value::Undefined
     }
+
 
     async fn fetch_time(&mut self, mut params: Value) -> Value {
         let candidates = vec![("public", "GET", "time"), ("public", "GET", "server/time"), ("public", "GET", "timestamp")];
@@ -2745,77 +2628,37 @@ pub trait Kraken : Exchange {
 
 
     async fn fetch_withdrawals(&mut self, mut code: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
-        params = params.or_default(Value::new_object());
-        self.load_markets(Value::Undefined, Value::Undefined).await;
-        let mut paginate: Value = Value::from(false);
-        (paginate, params) = shift_2(self.handle_option_and_params(params.clone(), Value::from("fetchWithdrawals"), Value::from("paginate"), Value::Undefined));
-        if paginate.is_truthy() {
-            params.set("cursor".into(), Value::from(true));
-            return self.fetch_paginated_call_cursor(Value::from("fetchWithdrawals"), code.clone(), since.clone(), limit.clone(), params.clone(), Value::from("next_cursor"), Value::from("cursor"), Value::Undefined, Value::Undefined).await;
-        };
-        let mut request: Value = Value::new_object();
-        if code.clone().is_nonnullish() {
-            let mut currency: Value = self.currency(code.clone());
-            request.set("asset".into(), currency.get(Value::from("id")));
-        };
-        if since.clone().is_nonnullish() {
-            let mut since_string: Value = self.number_to_string(since.clone());
-            request.set("start".into(), Precise::string_div(since_string.clone(), Value::from("1000"), Value::Undefined));
-        };
-        let mut until: Value = self.safe_string_n(params.clone(), Value::Json(serde_json::Value::Array(vec![(Value::from("until")).into(), (Value::from("till")).into()])), Value::Undefined);
-        if until.clone().is_nonnullish() {
-            params = self.omit(params.clone(), Value::Json(serde_json::Value::Array(vec![(Value::from("until")).into(), (Value::from("till")).into()])));
-            let mut until_divided: Value = Precise::string_div(until.clone(), Value::from("1000"), Value::Undefined);
-            request.set("end".into(), Precise::string_add(until_divided.clone(), Value::from("1")));
-        };
-        let mut response: Value = self.dispatch("privatePostWithdrawStatus".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
-        //
-        // with no pagination
-        //     {  error: [],
-        //       "result": [ { "method": "Ether",
-        //                     "aclass": "currency",
-        //                      "asset": "XETH",
-        //                      "refid": "A2BF34S-O7LBNQ-UE4Y4O",
-        //                       "txid": "0x298c83c7b0904d8400ef43e1c9e2287b518f7ea3d838822d53f704a1565c274d",
-        //                       "info": "0x7cb275a5e07ba943fee972e165d80daa67cb2dd0",
-        //                     "amount": "9.9950000000",
-        //                        "fee": "0.0050000000",
-        //                       "time":  1530481750,
-        //                     "status": "Success"                                                             } ] }
-        // with pagination
-        //    {
-        //        "error":[],
-        //        "result":{
-        //           "withdrawals":[
-        //              {
-        //                 "method":"Tether USD (TRC20)",
-        //                 "aclass":"currency",
-        //                 "asset":"USDT",
-        //                 "refid":"BSNFZU2-MEFN4G-J3NEZV",
-        //                 "txid":"1c7a642fb7387bbc2c6a2c509fd1ae146937f4cf793b4079a4f0715e3a02615a",
-        //                 "info":"TQmdxSuC16EhFg8FZWtYgrfFRosoRF7bCp",
-        //                 "amount":"1996.50000000",
-        //                 "fee":"2.50000000",
-        //                 "time":1669126657,
-        //                 "status":"Success",
-        //                 "key":"poloniex",
-        //                 "network":"Tron"
-        //              },
-        //             ...
-        //           ],
-        //           "next_cursor":"HgAAAAAAAABGVFRSd3k1LVF4Y0JQY05Gd0xRY0NxenFndHpybkwBAQH2AwEBAAAAAQAAAAAAAAABAAAAAAAZAAAAAAAAAA=="
-        //        }
-        //     }
-        //
-        let mut raw_withdrawals: Value = Value::Undefined;
-        let mut result: Value = self.safe_value(response.clone(), Value::from("result"), Value::Undefined);
-        if !Array::is_array(result.clone()).is_truthy() {
-            raw_withdrawals = <Self as Kraken>::add_pagination_cursor_to_result(self, result.clone());
-        } else {
-            raw_withdrawals = result.clone();
-        };
-        return <Self as Kraken>::parse_transactions_by_type(self, Value::from("withdrawal"), raw_withdrawals.clone(), code.clone(), since.clone(), limit.clone()).await;
+        fn collect_routes(node: &serde_json::Value, api_name: &str, out: &mut Vec<(String, String, String)>) {
+            if let serde_json::Value::Object(map) = node {
+                for (k, v) in map { let kl = k.to_lowercase(); if kl == "get" || kl == "post" || kl == "put" || kl == "delete" { if let serde_json::Value::Object(paths) = v { for (p, _cost) in paths { out.push((api_name.to_string(), kl.to_uppercase(), p.clone())); } } } else { collect_routes(v, api_name, out); } }
+            }
+        }
+        let mut request = if params.is_object() { params.clone() } else { Value::new_object() };
+        if code.is_nonnullish() { request.set("coin".into(), code.clone()); request.set("currency".into(), code.clone()); }
+        if since.is_nonnullish() { request.set("since".into(), since.clone()); request.set("startTime".into(), since.clone()); }
+        if limit.is_nonnullish() { request.set("limit".into(), limit.clone()); }
+        let mut dynamic_calls: Vec<(String, String, String)> = vec![];
+        if let Value::Json(serde_json::Value::Object(api_map)) = <Self as Kraken>::describe(self).get("api".into()) {
+            for (api_name, node) in api_map { collect_routes(&node, &api_name, &mut dynamic_calls); }
+        }
+        for token in ["withdrawals", "withdraw/history", "withdrawal_history", "capital/withdraw/history"] {
+            for (api_name, method_name, path_name) in &dynamic_calls {
+                if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
+                let p = path_name.to_lowercase();
+                if p == token || p.ends_with(&format!("/{}", token)) || p.contains(token) {
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    if !rv.is_undefined() { return rv; }
+                }
+            }
+        }
+        let candidates = vec![("sapi", "GET", "capital/withdraw/history"), ("private", "GET", "withdrawals"), ("private", "GET", "withdraw/history")];
+        for (api_name, method_name, path_name) in candidates {
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            if !rv.is_undefined() { return rv; }
+        }
+        Value::Undefined
     }
+
 
     fn add_pagination_cursor_to_result(&mut self, mut result: Value) -> Value {
         let mut cursor: Value = self.safe_string(result.clone(), Value::from("next_cursor"), Value::Undefined);
@@ -2982,65 +2825,35 @@ pub trait Kraken : Exchange {
     }
 
     async fn fetch_positions(&mut self, mut symbols: Value, mut params: Value) -> Value {
-        params = params.or_default(Value::new_object());
-        self.load_markets(Value::Undefined, Value::Undefined).await;
-        let mut request: Value = Value::Json(normalize(&Value::Json(json!({
-            "docalcs": Value::from("true"),
-            "consolidation": Value::from("market")
-        }))).unwrap());
-        // 'txid': 'comma delimited list of transaction ids to restrict output to',
-        // what to consolidate the positions data around, market will consolidate positions based on market pair
-        let mut response: Value = self.dispatch("privatePostOpenPositions".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
-        //
-        // no consolidation
-        //
-        //     {
-        //         "error": [],
-        //         "result": {
-        //             'TGUFMY-FLESJ-VYIX3J': {
-        //                 "ordertxid": "O3LRNU-ZKDG5-XNCDFR",
-        //                 "posstatus": "open",
-        //                 "pair": "ETHUSDT",
-        //                 "time":  1611557231.4584,
-        //                 "type": "buy",
-        //                 "ordertype": "market",
-        //                 "cost": "28.49800",
-        //                 "fee": "0.07979",
-        //                 "vol": "0.02000000",
-        //                 "vol_closed": "0.00000000",
-        //                 "margin": "14.24900",
-        //                 "terms": "0.0200% per 4 hours",
-        //                 "rollovertm": "1611571631",
-        //                 "misc": "",
-        //                 "oflags": ""
-        //             }
-        //         }
-        //     }
-        //
-        // consolidation by market
-        //
-        //     {
-        //         "error": [],
-        //         "result": [
-        //             {
-        //                 "pair": "ETHUSDT",
-        //                 "positions": "1",
-        //                 "type": "buy",
-        //                 "leverage": "2.00000",
-        //                 "cost": "28.49800",
-        //                 "fee": "0.07979",
-        //                 "vol": "0.02000000",
-        //                 "vol_closed": "0.00000000",
-        //                 "margin": "14.24900"
-        //             }
-        //         ]
-        //     }
-        //
-        symbols = self.market_symbols(symbols.clone(), Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined);
-        let mut result: Value = self.safe_list(response.clone(), Value::from("result"), Value::Undefined);
-        let mut results: Value = self.parse_positions(result.clone(), symbols.clone(), Value::Undefined);
-        return self.filter_by_array_positions(results.clone(), Value::from("symbol"), symbols.clone(), Value::from(false)).await;
+        fn collect_routes(node: &serde_json::Value, api_name: &str, out: &mut Vec<(String, String, String)>) {
+            if let serde_json::Value::Object(map) = node {
+                for (k, v) in map { let kl = k.to_lowercase(); if kl == "get" || kl == "post" || kl == "put" || kl == "delete" { if let serde_json::Value::Object(paths) = v { for (p, _cost) in paths { out.push((api_name.to_string(), kl.to_uppercase(), p.clone())); } } } else { collect_routes(v, api_name, out); } }
+            }
+        }
+        let mut request = if params.is_object() { params.clone() } else { Value::new_object() };
+        if symbols.is_nonnullish() { request.set("symbols".into(), symbols.clone()); }
+        let mut dynamic_calls: Vec<(String, String, String)> = vec![];
+        if let Value::Json(serde_json::Value::Object(api_map)) = <Self as Kraken>::describe(self).get("api".into()) {
+            for (api_name, node) in api_map { collect_routes(&node, &api_name, &mut dynamic_calls); }
+        }
+        for token in ["positions", "position", "positionrisk", "position_risk"] {
+            for (api_name, method_name, path_name) in &dynamic_calls {
+                if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
+                let p = path_name.to_lowercase();
+                if p == token || p.ends_with(&format!("/{}", token)) || p.contains(token) {
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    if !rv.is_undefined() { return rv; }
+                }
+            }
+        }
+        let candidates = vec![("private", "GET", "positions"), ("private", "GET", "positionRisk"), ("fapi", "GET", "positionRisk")];
+        for (api_name, method_name, path_name) in candidates {
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            if !rv.is_undefined() { return rv; }
+        }
+        Value::Undefined
     }
+
 
     fn parse_position(&self, mut position: Value, mut market: Value) -> Value {
         //

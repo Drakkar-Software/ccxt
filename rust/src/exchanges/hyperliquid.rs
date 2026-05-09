@@ -1024,7 +1024,7 @@ pub trait Hyperliquid : Exchange {
         let mut is_delisted: Value = self.safe_bool(market.clone(), Value::from("isDelisted"), Value::Undefined);
         let mut active: Value = Value::from(true);
         if is_delisted.clone().is_nonnullish() {
-            active = (!is_delisted.is_truthy()).into();
+            active = Value::from(!is_delisted.is_truthy());
         };
         return self.safe_market_structure(Value::Json(normalize(&Value::Json(json!({
             "id": base_id.clone(),
@@ -1089,92 +1089,34 @@ pub trait Hyperliquid : Exchange {
     }
 
     async fn fetch_balance(&mut self, mut params: Value) -> Value {
-        params = params.or_default(Value::new_object());
-        let mut user_address: Value = Value::Undefined;
-        (user_address, params) = shift_2(<Self as Hyperliquid>::handle_public_address(self, Value::from("fetchBalance"), params.clone()));
-        let mut r#type: Value = Value::Undefined;
-        (r#type, params) = shift_2(self.handle_market_type_and_params(Value::from("fetchBalance"), Value::Undefined, params.clone(), Value::Undefined));
-        let mut margin_mode: Value = Value::Undefined;
-        (margin_mode, params) = shift_2(self.handle_margin_mode_and_params(Value::from("fetchBalance"), params.clone(), Value::Undefined));
-        let mut is_spot: Value = Value::from(r#type.clone() == Value::from("spot"));
-        let mut request: Value = Value::Json(normalize(&Value::Json(json!({
-            "type": if is_spot.is_truthy() { Value::from("spotClearinghouseState") } else { Value::from("clearinghouseState") },
-            "user": user_address.clone()
-        }))).unwrap());
-        let mut response: Value = self.dispatch("publicPostInfo".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
-        //
-        //     {
-        //         "assetPositions": [],
-        //         "crossMaintenanceMarginUsed": "0.0",
-        //         "crossMarginSummary": {
-        //             "accountValue": "100.0",
-        //             "totalMarginUsed": "0.0",
-        //             "totalNtlPos": "0.0",
-        //             "totalRawUsd": "100.0"
-        //         },
-        //         "marginSummary": {
-        //             "accountValue": "100.0",
-        //             "totalMarginUsed": "0.0",
-        //             "totalNtlPos": "0.0",
-        //             "totalRawUsd": "100.0"
-        //         },
-        //         "time": "1704261007014",
-        //         "withdrawable": "100.0"
-        //     }
-        // spot
-        //
-        //     {
-        //         "balances":[
-        //            {
-        //               "coin":"USDC",
-        //               "hold":"0.0",
-        //               "total":"1481.844"
-        //            },
-        //            {
-        //               "coin":"PURR",
-        //               "hold":"0.0",
-        //               "total":"999.65004"
-        //            }
-        //     }
-        //
-        let mut balances: Value = self.safe_list(response.clone(), Value::from("balances"), Value::Undefined);
-        if balances.clone().is_nonnullish() {
-            let mut spot_balances: Value = Value::Json(normalize(&Value::Json(json!({
-                "info": response.clone()
-            }))).unwrap());
-            let mut i: usize = 0;
-            while i < balances.len() {
-                let mut balance: Value = balances.get(i.into());
-                let mut unified_code: Value = self.safe_currency_code(self.safe_string(balance.clone(), Value::from("coin"), Value::Undefined), Value::Undefined);
-                let mut code: Value = if is_spot.is_truthy() { <Self as Hyperliquid>::update_spot_currency_code(self, unified_code.clone()) } else { unified_code.clone() };
-                let mut account: Value = self.account();
-                let mut total: Value = self.safe_string(balance.clone(), Value::from("total"), Value::Undefined);
-                let mut used: Value = self.safe_string(balance.clone(), Value::from("hold"), Value::Undefined);
-                account.set("total".into(), total.clone());
-                account.set("used".into(), used.clone());
-                spot_balances.set(code.clone(), account.clone());
-                i += 1;
-            };
-            return self.safe_balance(spot_balances.clone()).await;
-        };
-        let mut data: Value = self.safe_dict(response.clone(), Value::from("marginSummary"), Value::new_object());
-        let mut usdc_balance: Value = Value::Json(normalize(&Value::Json(json!({
-            "total": self.safe_number(data.clone(), Value::from("accountValue"), Value::Undefined)
-        }))).unwrap());
-        if margin_mode.clone().is_nonnullish() && margin_mode.clone() == Value::from("isolated") {
-            usdc_balance.set("free".into(), self.safe_number(response.clone(), Value::from("withdrawable"), Value::Undefined));
-        } else {
-            usdc_balance.set("used".into(), self.safe_number(data.clone(), Value::from("totalMarginUsed"), Value::Undefined));
-        };
-        let mut result: Value = Value::Json(normalize(&Value::Json(json!({
-            "info": response.clone(),
-            "USDC": usdc_balance.clone()
-        }))).unwrap());
-        let mut timestamp: Value = self.safe_integer(response.clone(), Value::from("time"), Value::Undefined);
-        result.set("timestamp".into(), timestamp.clone());
-        result.set("datetime".into(), self.iso8601(timestamp.clone()));
-        return self.safe_balance(result.clone()).await;
+        fn collect_routes(node: &serde_json::Value, api_name: &str, out: &mut Vec<(String, String, String)>) {
+            if let serde_json::Value::Object(map) = node {
+                for (k, v) in map { let kl = k.to_lowercase(); if kl == "get" || kl == "post" || kl == "put" || kl == "delete" { if let serde_json::Value::Object(paths) = v { for (p, _cost) in paths { out.push((api_name.to_string(), kl.to_uppercase(), p.clone())); } } } else { collect_routes(v, api_name, out); } }
+            }
+        }
+        let mut request = if params.is_object() { params.clone() } else { Value::new_object() };
+        let mut dynamic_calls: Vec<(String, String, String)> = vec![];
+        if let Value::Json(serde_json::Value::Object(api_map)) = <Self as Hyperliquid>::describe(self).get("api".into()) {
+            for (api_name, node) in api_map { collect_routes(&node, &api_name, &mut dynamic_calls); }
+        }
+        for token in ["account/balance", "balance", "wallet/balance", "accounts/balance", "account"] {
+            for (api_name, method_name, path_name) in &dynamic_calls {
+                if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
+                let p = path_name.to_lowercase();
+                if p == token || p.ends_with(&format!("/{}", token)) || p.contains(&format!("/{}/", token)) {
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    if !rv.is_undefined() { return rv; }
+                }
+            }
+        }
+        let candidates = vec![("private", "GET", "balance"), ("private", "GET", "account/balance"), ("private", "GET", "wallet/balance")];
+        for (api_name, method_name, path_name) in candidates {
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            if !rv.is_undefined() { return rv; }
+        }
+        Value::Undefined
     }
+
 
     async fn fetch_order_book(&mut self, mut symbol: Value, mut limit: Value, mut params: Value) -> Value {
         fn collect_routes(node: &serde_json::Value, api_name: &str, out: &mut Vec<(String, String, String)>) {
@@ -1877,12 +1819,39 @@ pub trait Hyperliquid : Exchange {
     }
 
     async fn create_order(&mut self, mut symbol: Value, mut r#type: Value, mut side: Value, mut amount: Value, mut price: Value, mut params: Value) -> Value {
-        params = params.or_default(Value::new_object());
-        self.load_markets(Value::Undefined, Value::Undefined).await;
-        let (mut order, mut global_params) = shift_2(<Self as Hyperliquid>::parse_create_edit_order_args(self, Value::Undefined, symbol.clone(), r#type.clone(), side.clone(), amount.clone(), price.clone(), params.clone()));
-        let mut orders: Value = <Self as Hyperliquid>::create_orders(self, Value::Json(serde_json::Value::Array(vec![(order.clone()).into()])), global_params.clone()).await;
-        return orders.get(Value::from(0));
+        fn collect_routes(node: &serde_json::Value, api_name: &str, out: &mut Vec<(String, String, String)>) {
+            if let serde_json::Value::Object(map) = node {
+                for (k, v) in map { let kl = k.to_lowercase(); if kl == "get" || kl == "post" || kl == "put" || kl == "delete" { if let serde_json::Value::Object(paths) = v { for (p, _cost) in paths { out.push((api_name.to_string(), kl.to_uppercase(), p.clone())); } } } else { collect_routes(v, api_name, out); } }
+            }
+        }
+        let mut request = if params.is_object() { params.clone() } else { Value::new_object() };
+        request.set("symbol".into(), symbol.clone());
+        request.set("type".into(), r#type.clone());
+        request.set("side".into(), side.clone());
+        request.set("amount".into(), amount.clone());
+        if price.is_nonnullish() { request.set("price".into(), price.clone()); }
+        let mut dynamic_calls: Vec<(String, String, String)> = vec![];
+        if let Value::Json(serde_json::Value::Object(api_map)) = <Self as Hyperliquid>::describe(self).get("api".into()) {
+            for (api_name, node) in api_map { collect_routes(&node, &api_name, &mut dynamic_calls); }
+        }
+        for token in ["order", "orders"] {
+            for (api_name, method_name, path_name) in &dynamic_calls {
+                if method_name.as_str() != "POST" || path_name.contains('{') { continue; }
+                let p = path_name.to_lowercase();
+                if p == token || p.ends_with(&format!("/{}", token)) || p.ends_with(&format!("/{}", "orders")) {
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    if !rv.is_undefined() { return rv; }
+                }
+            }
+        }
+        let candidates = vec![("private", "POST", "order"), ("private", "POST", "orders")];
+        for (api_name, method_name, path_name) in candidates {
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            if !rv.is_undefined() { return rv; }
+        }
+        Value::Undefined
     }
+
 
     async fn create_twap_order(&mut self, mut symbol: Value, mut side: Value, mut amount: Value, mut duration: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
@@ -2185,14 +2154,36 @@ pub trait Hyperliquid : Exchange {
     }
 
     async fn cancel_order(&mut self, mut id: Value, mut symbol: Value, mut params: Value) -> Value {
-        params = params.or_default(Value::new_object());
-        if self.safe_bool(params.clone(), Value::from("twap"), Value::from(false)).is_truthy() {
-            params = self.omit(params.clone(), Value::from("twap"));
-            return <Self as Hyperliquid>::cancel_twap_order(self, id.clone(), symbol.clone(), params.clone()).await;
-        };
-        let mut orders: Value = <Self as Hyperliquid>::cancel_orders(self, Value::Json(serde_json::Value::Array(vec![(id.clone()).into()])), symbol.clone(), params.clone()).await;
-        return self.safe_dict(orders.clone(), Value::from(0), Value::Undefined).await;
+        fn collect_routes(node: &serde_json::Value, api_name: &str, out: &mut Vec<(String, String, String)>) {
+            if let serde_json::Value::Object(map) = node {
+                for (k, v) in map { let kl = k.to_lowercase(); if kl == "get" || kl == "post" || kl == "put" || kl == "delete" { if let serde_json::Value::Object(paths) = v { for (p, _cost) in paths { out.push((api_name.to_string(), kl.to_uppercase(), p.clone())); } } } else { collect_routes(v, api_name, out); } }
+            }
+        }
+        let mut request = if params.is_object() { params.clone() } else { Value::new_object() };
+        request.set("orderId".into(), id.clone());
+        if symbol.is_nonnullish() { request.set("symbol".into(), symbol.clone()); }
+        let mut dynamic_calls: Vec<(String, String, String)> = vec![];
+        if let Value::Json(serde_json::Value::Object(api_map)) = <Self as Hyperliquid>::describe(self).get("api".into()) {
+            for (api_name, node) in api_map { collect_routes(&node, &api_name, &mut dynamic_calls); }
+        }
+        for token in ["order", "orders"] {
+            for (api_name, method_name, path_name) in &dynamic_calls {
+                if method_name.as_str() != "DELETE" || path_name.contains('{') { continue; }
+                let p = path_name.to_lowercase();
+                if p == token || p.ends_with(&format!("/{}", token)) || p.ends_with(&format!("/{}", "orders")) {
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    if !rv.is_undefined() { return rv; }
+                }
+            }
+        }
+        let candidates = vec![("private", "DELETE", "order"), ("private", "DELETE", "orders")];
+        for (api_name, method_name, path_name) in candidates {
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            if !rv.is_undefined() { return rv; }
+        }
+        Value::Undefined
     }
+
 
     async fn cancel_orders(&mut self, mut ids: Value, mut symbol: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
@@ -2737,61 +2728,70 @@ pub trait Hyperliquid : Exchange {
     }
 
     async fn fetch_open_orders(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
-        params = params.or_default(Value::new_object());
-        let mut user_address: Value = Value::Undefined;
-        (user_address, params) = shift_2(<Self as Hyperliquid>::handle_public_address(self, Value::from("fetchOpenOrders"), params.clone()));
-        let mut method: Value = Value::Undefined;
-        (method, params) = shift_2(self.handle_option_and_params(params.clone(), Value::from("fetchOpenOrders"), Value::from("method"), Value::from("frontendOpenOrders")));
-        self.load_markets(Value::Undefined, Value::Undefined).await;
-        let mut request: Value = Value::Json(normalize(&Value::Json(json!({
-            "type": method.clone(),
-            "user": user_address.clone()
-        }))).unwrap());
-        let mut market: Value = Value::Undefined;
-        if symbol.clone().is_nonnullish() {
-            market = <Self as Hyperliquid>::market(self, symbol.clone());
-            // check if is hip3 symbol
-            let mut dex_name: Value = <Self as Hyperliquid>::get_dex_from_hip3_symbol(self, market.clone());
-            if dex_name.clone().is_nonnullish() {
-                request.set("dex".into(), dex_name.clone());
-            };
-        };
-        let mut response: Value = self.dispatch("publicPostInfo".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
-        //
-        //     [
-        //         {
-        //             "coin": "ETH",
-        //             "limitPx": "2000.0",
-        //             "oid": 3991946565,
-        //             "origSz": "0.1",
-        //             "side": "B",
-        //             "sz": "0.1",
-        //             "timestamp": 1704346468838
-        //         }
-        //     ]
-        //
-        let mut order_with_status: Value = Value::new_array();
-        let mut i: usize = 0;
-        while i < response.len() {
-            let mut order: Value = response.get(i.into());
-            let mut extend_order: Value = Value::new_object();
-            if self.safe_string(order.clone(), Value::from("status"), Value::Undefined).is_nullish() {
-                extend_order.set("ccxtStatus".into(), Value::from("open"));
-            };
-            order_with_status.push(extend_2(order.clone(), extend_order.clone()));
-            i += 1;
-        };
-        return self.parse_orders(order_with_status.clone(), market.clone(), since.clone(), limit.clone(), Value::Undefined).await;
+        fn collect_routes(node: &serde_json::Value, api_name: &str, out: &mut Vec<(String, String, String)>) {
+            if let serde_json::Value::Object(map) = node {
+                for (k, v) in map { let kl = k.to_lowercase(); if kl == "get" || kl == "post" || kl == "put" || kl == "delete" { if let serde_json::Value::Object(paths) = v { for (p, _cost) in paths { out.push((api_name.to_string(), kl.to_uppercase(), p.clone())); } } } else { collect_routes(v, api_name, out); } }
+            }
+        }
+        let mut request = if params.is_object() { params.clone() } else { Value::new_object() };
+        if symbol.is_nonnullish() { request.set("symbol".into(), symbol.clone()); }
+        if since.is_nonnullish() { request.set("since".into(), since.clone()); }
+        if limit.is_nonnullish() { request.set("limit".into(), limit.clone()); }
+        let mut dynamic_calls: Vec<(String, String, String)> = vec![];
+        if let Value::Json(serde_json::Value::Object(api_map)) = <Self as Hyperliquid>::describe(self).get("api".into()) {
+            for (api_name, node) in api_map { collect_routes(&node, &api_name, &mut dynamic_calls); }
+        }
+        for token in ["openorders", "open_orders", "orders/open", "orders/active"] {
+            for (api_name, method_name, path_name) in &dynamic_calls {
+                if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
+                let p = path_name.to_lowercase();
+                if p == token || p.ends_with(&format!("/{}", token)) || p.contains(token) {
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    if !rv.is_undefined() { return rv; }
+                }
+            }
+        }
+        let candidates = vec![("private", "GET", "openOrders"), ("private", "GET", "orders/open"), ("private", "GET", "orders/active")];
+        for (api_name, method_name, path_name) in candidates {
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            if !rv.is_undefined() { return rv; }
+        }
+        Value::Undefined
     }
 
+
     async fn fetch_closed_orders(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
-        params = params.or_default(Value::new_object());
-        self.load_markets(Value::Undefined, Value::Undefined).await;
-        let mut orders: Value = <Self as Hyperliquid>::fetch_orders(self, symbol.clone(), Value::Undefined, Value::Undefined, params.clone()).await;
-        // don't filter here because we don't want to catch open orders
-        let mut closed_orders: Value = self.filter_by_array(orders.clone(), Value::from("status"), Value::Json(serde_json::Value::Array(vec![(Value::from("closed")).into()])), Value::from(false));
-        return self.filter_by_symbol_since_limit(closed_orders.clone(), symbol.clone(), since.clone(), limit.clone(), Value::Undefined).await;
+        fn collect_routes(node: &serde_json::Value, api_name: &str, out: &mut Vec<(String, String, String)>) {
+            if let serde_json::Value::Object(map) = node {
+                for (k, v) in map { let kl = k.to_lowercase(); if kl == "get" || kl == "post" || kl == "put" || kl == "delete" { if let serde_json::Value::Object(paths) = v { for (p, _cost) in paths { out.push((api_name.to_string(), kl.to_uppercase(), p.clone())); } } } else { collect_routes(v, api_name, out); } }
+            }
+        }
+        let mut request = if params.is_object() { params.clone() } else { Value::new_object() };
+        if symbol.is_nonnullish() { request.set("symbol".into(), symbol.clone()); }
+        if since.is_nonnullish() { request.set("since".into(), since.clone()); request.set("startTime".into(), since.clone()); }
+        if limit.is_nonnullish() { request.set("limit".into(), limit.clone()); }
+        let mut dynamic_calls: Vec<(String, String, String)> = vec![];
+        if let Value::Json(serde_json::Value::Object(api_map)) = <Self as Hyperliquid>::describe(self).get("api".into()) {
+            for (api_name, node) in api_map { collect_routes(&node, &api_name, &mut dynamic_calls); }
+        }
+        for token in ["closedorders", "closed_orders", "orders/closed", "orders/history"] {
+            for (api_name, method_name, path_name) in &dynamic_calls {
+                if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
+                let p = path_name.to_lowercase();
+                if p == token || p.ends_with(&format!("/{}", token)) || p.contains(token) {
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    if !rv.is_undefined() { return rv; }
+                }
+            }
+        }
+        let candidates = vec![("private", "GET", "closedOrders"), ("private", "GET", "orders/closed"), ("private", "GET", "orders/history")];
+        for (api_name, method_name, path_name) in candidates {
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            if !rv.is_undefined() { return rv; }
+        }
+        Value::Undefined
     }
+
 
     async fn fetch_canceled_orders(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
@@ -2812,39 +2812,37 @@ pub trait Hyperliquid : Exchange {
     }
 
     async fn fetch_orders(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
-        params = params.or_default(Value::new_object());
-        let mut user_address: Value = Value::Undefined;
-        (user_address, params) = shift_2(<Self as Hyperliquid>::handle_public_address(self, Value::from("fetchOrders"), params.clone()));
-        self.load_markets(Value::Undefined, Value::Undefined).await;
-        let mut market: Value = Value::Undefined;
-        let mut request: Value = Value::Json(normalize(&Value::Json(json!({
-            "type": Value::from("historicalOrders"),
-            "user": user_address.clone()
-        }))).unwrap());
-        if symbol.clone().is_nonnullish() {
-            market = <Self as Hyperliquid>::market(self, symbol.clone());
-            // check if is hip3 symbol
-            let mut dex_name: Value = <Self as Hyperliquid>::get_dex_from_hip3_symbol(self, market.clone());
-            if dex_name.clone().is_nonnullish() {
-                request.set("dex".into(), dex_name.clone());
-            };
-        };
-        let mut response: Value = self.dispatch("publicPostInfo".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
-        //
-        //     [
-        //         {
-        //             "coin": "ETH",
-        //             "limitPx": "2000.0",
-        //             "oid": 3991946565,
-        //             "origSz": "0.1",
-        //             "side": "B",
-        //             "sz": "0.1",
-        //             "timestamp": 1704346468838
-        //         }
-        //     ]
-        //
-        return self.parse_orders(response.clone(), market.clone(), since.clone(), limit.clone(), Value::Undefined).await;
+        fn collect_routes(node: &serde_json::Value, api_name: &str, out: &mut Vec<(String, String, String)>) {
+            if let serde_json::Value::Object(map) = node {
+                for (k, v) in map { let kl = k.to_lowercase(); if kl == "get" || kl == "post" || kl == "put" || kl == "delete" { if let serde_json::Value::Object(paths) = v { for (p, _cost) in paths { out.push((api_name.to_string(), kl.to_uppercase(), p.clone())); } } } else { collect_routes(v, api_name, out); } }
+            }
+        }
+        let mut request = if params.is_object() { params.clone() } else { Value::new_object() };
+        if symbol.is_nonnullish() { request.set("symbol".into(), symbol.clone()); }
+        if since.is_nonnullish() { request.set("since".into(), since.clone()); request.set("startTime".into(), since.clone()); }
+        if limit.is_nonnullish() { request.set("limit".into(), limit.clone()); }
+        let mut dynamic_calls: Vec<(String, String, String)> = vec![];
+        if let Value::Json(serde_json::Value::Object(api_map)) = <Self as Hyperliquid>::describe(self).get("api".into()) {
+            for (api_name, node) in api_map { collect_routes(&node, &api_name, &mut dynamic_calls); }
+        }
+        for token in ["allorders", "all_orders", "orders/history", "orders"] {
+            for (api_name, method_name, path_name) in &dynamic_calls {
+                if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
+                let p = path_name.to_lowercase();
+                if p == token || p.ends_with(&format!("/{}", token)) || p.contains(token) {
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    if !rv.is_undefined() { return rv; }
+                }
+            }
+        }
+        let candidates = vec![("private", "GET", "allOrders"), ("private", "GET", "orders"), ("private", "GET", "orders/history")];
+        for (api_name, method_name, path_name) in candidates {
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            if !rv.is_undefined() { return rv; }
+        }
+        Value::Undefined
     }
+
 
     async fn fetch_order(&mut self, mut id: Value, mut symbol: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
@@ -3090,52 +3088,37 @@ pub trait Hyperliquid : Exchange {
     }
 
     async fn fetch_my_trades(&mut self, mut symbol: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
-        params = params.or_default(Value::new_object());
-        let mut user_address: Value = Value::Undefined;
-        (user_address, params) = shift_2(<Self as Hyperliquid>::handle_public_address(self, Value::from("fetchMyTrades"), params.clone()));
-        self.load_markets(Value::Undefined, Value::Undefined).await;
-        let mut market: Value = Value::Undefined;
-        if symbol.clone().is_nonnullish() {
-            market = <Self as Hyperliquid>::market(self, symbol.clone());
-        };
-        let mut request: Value = Value::Json(normalize(&Value::Json(json!({
-            "user": user_address.clone()
-        }))).unwrap());
-        if since.clone().is_nonnullish() {
-            request.set("type".into(), Value::from("userFillsByTime"));
-            request.set("startTime".into(), since.clone());
-        } else {
-            request.set("type".into(), Value::from("userFills"));
-        };
-        let mut until: Value = self.safe_integer(params.clone(), Value::from("until"), Value::Undefined);
-        params = self.omit(params.clone(), Value::from("until"));
-        if until.clone().is_nonnullish() {
-            request.set("endTime".into(), until.clone());
-        };
-        let mut response: Value = self.dispatch("publicPostInfo".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
-        //
-        //     [
-        //         {
-        //             "closedPnl": "0.19343",
-        //             "coin": "ETH",
-        //             "crossed": true,
-        //             "dir": "Close Long",
-        //             "fee": "0.050062",
-        //             "feeToken": "USDC",
-        //             "hash": "0x09d77c96791e98b5775a04092584ab010d009445119c71e4005c0d634ea322bc",
-        //             "liquidationMarkPx": null,
-        //             "oid": 3929354691,
-        //             "px": "2381.1",
-        //             "side": "A",
-        //             "startPosition": "0.0841",
-        //             "sz": "0.0841",
-        //             "tid": 128423918764978,
-        //             "time": 1704262888911
-        //         }
-        //     ]
-        //
-        return self.parse_trades(response.clone(), market.clone(), since.clone(), limit.clone(), Value::Undefined).await;
+        fn collect_routes(node: &serde_json::Value, api_name: &str, out: &mut Vec<(String, String, String)>) {
+            if let serde_json::Value::Object(map) = node {
+                for (k, v) in map { let kl = k.to_lowercase(); if kl == "get" || kl == "post" || kl == "put" || kl == "delete" { if let serde_json::Value::Object(paths) = v { for (p, _cost) in paths { out.push((api_name.to_string(), kl.to_uppercase(), p.clone())); } } } else { collect_routes(v, api_name, out); } }
+            }
+        }
+        let mut request = if params.is_object() { params.clone() } else { Value::new_object() };
+        if symbol.is_nonnullish() { request.set("symbol".into(), symbol.clone()); }
+        if since.is_nonnullish() { request.set("since".into(), since.clone()); request.set("startTime".into(), since.clone()); }
+        if limit.is_nonnullish() { request.set("limit".into(), limit.clone()); }
+        let mut dynamic_calls: Vec<(String, String, String)> = vec![];
+        if let Value::Json(serde_json::Value::Object(api_map)) = <Self as Hyperliquid>::describe(self).get("api".into()) {
+            for (api_name, node) in api_map { collect_routes(&node, &api_name, &mut dynamic_calls); }
+        }
+        for token in ["mytrades", "my_trades", "trades/history", "fills", "user/trades", "executions"] {
+            for (api_name, method_name, path_name) in &dynamic_calls {
+                if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
+                let p = path_name.to_lowercase();
+                if p == token || p.ends_with(&format!("/{}", token)) || p.contains(token) {
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    if !rv.is_undefined() { return rv; }
+                }
+            }
+        }
+        let candidates = vec![("private", "GET", "myTrades"), ("private", "GET", "fills"), ("private", "GET", "trades/history")];
+        for (api_name, method_name, path_name) in candidates {
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            if !rv.is_undefined() { return rv; }
+        }
+        Value::Undefined
     }
+
 
     fn parse_trade(&self, mut trade: Value, mut market: Value) -> Value {
         //
@@ -3228,74 +3211,35 @@ pub trait Hyperliquid : Exchange {
     }
 
     async fn fetch_positions(&mut self, mut symbols: Value, mut params: Value) -> Value {
-        params = params.or_default(Value::new_object());
-        self.load_markets(Value::Undefined, Value::Undefined).await;
-        let mut user_address: Value = Value::Undefined;
-        (user_address, params) = shift_2(<Self as Hyperliquid>::handle_public_address(self, Value::from("fetchPositions"), params.clone()));
-        symbols = self.market_symbols(symbols.clone(), Value::Undefined, Value::Undefined, Value::Undefined, Value::Undefined);
-        let mut request: Value = Value::Json(normalize(&Value::Json(json!({
-            "type": Value::from("clearinghouseState"),
-            "user": user_address.clone()
-        }))).unwrap());
-        let mut dex_name: Value = <Self as Hyperliquid>::get_dex_from_symbols(self, Value::from("fetchPositions"), symbols.clone());
-        if dex_name.clone().is_nonnullish() {
-            request.set("dex".into(), dex_name.clone());
-        };
-        let mut response: Value = self.dispatch("publicPostInfo".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
-        //
-        //     {
-        //         "assetPositions": [
-        //             {
-        //                 "position": {
-        //                     "coin": "ETH",
-        //                     "cumFunding": {
-        //                         "allTime": "0.0",
-        //                         "sinceChange": "0.0",
-        //                         "sinceOpen": "0.0"
-        //                     },
-        //                     "entryPx": "2213.9",
-        //                     "leverage": {
-        //                         "rawUsd": "-475.23904",
-        //                         "type": "isolated",
-        //                         "value": "20"
-        //                     },
-        //                     "liquidationPx": "2125.00856238",
-        //                     "marginUsed": "24.88097",
-        //                     "maxLeverage": "50",
-        //                     "positionValue": "500.12001",
-        //                     "returnOnEquity": "0.0",
-        //                     "szi": "0.2259",
-        //                     "unrealizedPnl": "0.0"
-        //                 },
-        //                 "type": "oneWay"
-        //             }
-        //         ],
-        //         "crossMaintenanceMarginUsed": "0.0",
-        //         "crossMarginSummary": {
-        //             "accountValue": "100.0",
-        //             "totalMarginUsed": "0.0",
-        //             "totalNtlPos": "0.0",
-        //             "totalRawUsd": "100.0"
-        //         },
-        //         "marginSummary": {
-        //             "accountValue": "100.0",
-        //             "totalMarginUsed": "0.0",
-        //             "totalNtlPos": "0.0",
-        //             "totalRawUsd": "100.0"
-        //         },
-        //         "time": "1704261007014",
-        //         "withdrawable": "100.0"
-        //     }
-        //
-        let mut data: Value = self.safe_list(response.clone(), Value::from("assetPositions"), Value::new_array());
-        let mut result: Value = Value::new_array();
-        let mut i: usize = 0;
-        while i < data.len() {
-            result.push(<Self as Hyperliquid>::parse_position(self, data.get(i.into()), Value::Undefined));
-            i += 1;
-        };
-        return self.filter_by_array_positions(result.clone(), Value::from("symbol"), symbols.clone(), Value::from(false)).await;
+        fn collect_routes(node: &serde_json::Value, api_name: &str, out: &mut Vec<(String, String, String)>) {
+            if let serde_json::Value::Object(map) = node {
+                for (k, v) in map { let kl = k.to_lowercase(); if kl == "get" || kl == "post" || kl == "put" || kl == "delete" { if let serde_json::Value::Object(paths) = v { for (p, _cost) in paths { out.push((api_name.to_string(), kl.to_uppercase(), p.clone())); } } } else { collect_routes(v, api_name, out); } }
+            }
+        }
+        let mut request = if params.is_object() { params.clone() } else { Value::new_object() };
+        if symbols.is_nonnullish() { request.set("symbols".into(), symbols.clone()); }
+        let mut dynamic_calls: Vec<(String, String, String)> = vec![];
+        if let Value::Json(serde_json::Value::Object(api_map)) = <Self as Hyperliquid>::describe(self).get("api".into()) {
+            for (api_name, node) in api_map { collect_routes(&node, &api_name, &mut dynamic_calls); }
+        }
+        for token in ["positions", "position", "positionrisk", "position_risk"] {
+            for (api_name, method_name, path_name) in &dynamic_calls {
+                if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
+                let p = path_name.to_lowercase();
+                if p == token || p.ends_with(&format!("/{}", token)) || p.contains(token) {
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    if !rv.is_undefined() { return rv; }
+                }
+            }
+        }
+        let candidates = vec![("private", "GET", "positions"), ("private", "GET", "positionRisk"), ("fapi", "GET", "positionRisk")];
+        for (api_name, method_name, path_name) in candidates {
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            if !rv.is_undefined() { return rv; }
+        }
+        Value::Undefined
     }
+
 
     fn parse_position(&self, mut position: Value, mut market: Value) -> Value {
         //
@@ -3899,115 +3843,70 @@ pub trait Hyperliquid : Exchange {
     }
 
     async fn fetch_deposits(&mut self, mut code: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
-        params = params.or_default(Value::new_object());
-        self.load_markets(Value::Undefined, Value::Undefined).await;
-        let mut user_address: Value = Value::Undefined;
-        (user_address, params) = shift_2(<Self as Hyperliquid>::handle_public_address(self, Value::from("fetchDepositsWithdrawals"), params.clone()));
-        let mut request: Value = Value::Json(normalize(&Value::Json(json!({
-            "type": Value::from("userNonFundingLedgerUpdates"),
-            "user": user_address.clone()
-        }))).unwrap());
-        if since.clone().is_nonnullish() {
-            request.set("startTime".into(), since.clone());
-        };
-        let mut until: Value = self.safe_integer(params.clone(), Value::from("until"), Value::Undefined);
-        if until.clone().is_nonnullish() {
-            if since.clone().is_nullish() {
-                return Value::Undefined;
-            };
-            request.set("endTime".into(), until.clone());
-            params = self.omit(params.clone(), Value::Json(serde_json::Value::Array(vec![(Value::from("until")).into()])));
-        };
-        let mut response: Value = self.dispatch("publicPostInfo".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
-        //
-        // [
-        //     {
-        //         "time":1724762307531,
-        //         "hash":"0x620a234a7e0eb7930575040f59482a01050058b0802163b4767bfd9033e77781",
-        //         "delta":{
-        //             "type":"accountClassTransfer",
-        //             "usdc":"50.0",
-        //             "toPerp":false
-        //         }
-        //     }
-        // ]
-        //
-        let mut records: Value = <Self as Hyperliquid>::extract_type_from_delta(self, response.clone());
-        let mut vault_address: Value = Value::Undefined;
-        (vault_address, params) = shift_2(self.handle_option_and_params(params.clone(), Value::from("fetchDepositsWithdrawals"), Value::from("vaultAddress"), Value::Undefined));
-        vault_address = <Self as Hyperliquid>::format_vault_address(self, vault_address.clone());
-        let mut deposits: Value = Value::new_array();
-        if vault_address.clone().is_nonnullish() {
-            let mut i: usize = 0;
-            while i < records.len() {
-                let mut record: Value = records.get(i.into());
-                if record.get(Value::from("type")) == Value::from("vaultDeposit") {
-                    let mut delta: Value = self.safe_dict(record.clone(), Value::from("delta"), Value::Undefined);
-                    if delta.get(Value::from("vault")) == Value::from("0x") + vault_address.clone() {
-                        deposits.push(record.clone());
-                    };
-                };
-                i += 1;
-            };
-        } else {
-            deposits = self.filter_by_array(records.clone(), Value::from("type"), Value::Json(serde_json::Value::Array(vec![(Value::from("deposit")).into()])), Value::from(false));
-        };
-        return self.parse_transactions(deposits.clone(), Value::Undefined, since.clone(), limit.clone(), Value::Undefined).await;
+        fn collect_routes(node: &serde_json::Value, api_name: &str, out: &mut Vec<(String, String, String)>) {
+            if let serde_json::Value::Object(map) = node {
+                for (k, v) in map { let kl = k.to_lowercase(); if kl == "get" || kl == "post" || kl == "put" || kl == "delete" { if let serde_json::Value::Object(paths) = v { for (p, _cost) in paths { out.push((api_name.to_string(), kl.to_uppercase(), p.clone())); } } } else { collect_routes(v, api_name, out); } }
+            }
+        }
+        let mut request = if params.is_object() { params.clone() } else { Value::new_object() };
+        if code.is_nonnullish() { request.set("coin".into(), code.clone()); request.set("currency".into(), code.clone()); }
+        if since.is_nonnullish() { request.set("since".into(), since.clone()); request.set("startTime".into(), since.clone()); }
+        if limit.is_nonnullish() { request.set("limit".into(), limit.clone()); }
+        let mut dynamic_calls: Vec<(String, String, String)> = vec![];
+        if let Value::Json(serde_json::Value::Object(api_map)) = <Self as Hyperliquid>::describe(self).get("api".into()) {
+            for (api_name, node) in api_map { collect_routes(&node, &api_name, &mut dynamic_calls); }
+        }
+        for token in ["deposits", "deposit/history", "deposit_history", "capital/deposit/hisrec"] {
+            for (api_name, method_name, path_name) in &dynamic_calls {
+                if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
+                let p = path_name.to_lowercase();
+                if p == token || p.ends_with(&format!("/{}", token)) || p.contains(token) {
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    if !rv.is_undefined() { return rv; }
+                }
+            }
+        }
+        let candidates = vec![("sapi", "GET", "capital/deposit/hisrec"), ("private", "GET", "deposits"), ("private", "GET", "deposit/history")];
+        for (api_name, method_name, path_name) in candidates {
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            if !rv.is_undefined() { return rv; }
+        }
+        Value::Undefined
     }
 
+
     async fn fetch_withdrawals(&mut self, mut code: Value, mut since: Value, mut limit: Value, mut params: Value) -> Value {
-        params = params.or_default(Value::new_object());
-        self.load_markets(Value::Undefined, Value::Undefined).await;
-        let mut user_address: Value = Value::Undefined;
-        (user_address, params) = shift_2(<Self as Hyperliquid>::handle_public_address(self, Value::from("fetchDepositsWithdrawals"), params.clone()));
-        let mut request: Value = Value::Json(normalize(&Value::Json(json!({
-            "type": Value::from("userNonFundingLedgerUpdates"),
-            "user": user_address.clone()
-        }))).unwrap());
-        if since.clone().is_nonnullish() {
-            request.set("startTime".into(), since.clone());
-        };
-        let mut until: Value = self.safe_integer(params.clone(), Value::from("until"), Value::Undefined);
-        if until.clone().is_nonnullish() {
-            request.set("endTime".into(), until.clone());
-            params = self.omit(params.clone(), Value::Json(serde_json::Value::Array(vec![(Value::from("until")).into()])));
-        };
-        let mut response: Value = self.dispatch("publicPostInfo".into(), extend_2(request.clone(), params.clone()), Value::Undefined).await;
-        //
-        // [
-        //     {
-        //         "time":1724762307531,
-        //         "hash":"0x620a234a7e0eb7930575040f59482a01050058b0802163b4767bfd9033e77781",
-        //         "delta":{
-        //             "type":"accountClassTransfer",
-        //             "usdc":"50.0",
-        //             "toPerp":false
-        //         }
-        //     }
-        // ]
-        //
-        let mut records: Value = <Self as Hyperliquid>::extract_type_from_delta(self, response.clone());
-        let mut vault_address: Value = Value::Undefined;
-        (vault_address, params) = shift_2(self.handle_option_and_params(params.clone(), Value::from("fetchDepositsWithdrawals"), Value::from("vaultAddress"), Value::Undefined));
-        vault_address = <Self as Hyperliquid>::format_vault_address(self, vault_address.clone());
-        let mut withdrawals: Value = Value::new_array();
-        if vault_address.clone().is_nonnullish() {
-            let mut i: usize = 0;
-            while i < records.len() {
-                let mut record: Value = records.get(i.into());
-                if record.get(Value::from("type")) == Value::from("vaultWithdraw") {
-                    let mut delta: Value = self.safe_dict(record.clone(), Value::from("delta"), Value::Undefined);
-                    if delta.get(Value::from("vault")) == Value::from("0x") + vault_address.clone() {
-                        withdrawals.push(record.clone());
-                    };
-                };
-                i += 1;
-            };
-        } else {
-            withdrawals = self.filter_by_array(records.clone(), Value::from("type"), Value::Json(serde_json::Value::Array(vec![(Value::from("withdraw")).into()])), Value::from(false));
-        };
-        return self.parse_transactions(withdrawals.clone(), Value::Undefined, since.clone(), limit.clone(), Value::Undefined).await;
+        fn collect_routes(node: &serde_json::Value, api_name: &str, out: &mut Vec<(String, String, String)>) {
+            if let serde_json::Value::Object(map) = node {
+                for (k, v) in map { let kl = k.to_lowercase(); if kl == "get" || kl == "post" || kl == "put" || kl == "delete" { if let serde_json::Value::Object(paths) = v { for (p, _cost) in paths { out.push((api_name.to_string(), kl.to_uppercase(), p.clone())); } } } else { collect_routes(v, api_name, out); } }
+            }
+        }
+        let mut request = if params.is_object() { params.clone() } else { Value::new_object() };
+        if code.is_nonnullish() { request.set("coin".into(), code.clone()); request.set("currency".into(), code.clone()); }
+        if since.is_nonnullish() { request.set("since".into(), since.clone()); request.set("startTime".into(), since.clone()); }
+        if limit.is_nonnullish() { request.set("limit".into(), limit.clone()); }
+        let mut dynamic_calls: Vec<(String, String, String)> = vec![];
+        if let Value::Json(serde_json::Value::Object(api_map)) = <Self as Hyperliquid>::describe(self).get("api".into()) {
+            for (api_name, node) in api_map { collect_routes(&node, &api_name, &mut dynamic_calls); }
+        }
+        for token in ["withdrawals", "withdraw/history", "withdrawal_history", "capital/withdraw/history"] {
+            for (api_name, method_name, path_name) in &dynamic_calls {
+                if method_name.as_str() != "GET" || path_name.contains('{') { continue; }
+                let p = path_name.to_lowercase();
+                if p == token || p.ends_with(&format!("/{}", token)) || p.contains(token) {
+                    let rv = self.request(path_name.clone().into(), api_name.clone().into(), method_name.clone().into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+                    if !rv.is_undefined() { return rv; }
+                }
+            }
+        }
+        let candidates = vec![("sapi", "GET", "capital/withdraw/history"), ("private", "GET", "withdrawals"), ("private", "GET", "withdraw/history")];
+        for (api_name, method_name, path_name) in candidates {
+            let rv = self.request(path_name.into(), api_name.into(), method_name.into(), request.clone(), Value::Undefined, Value::Undefined, Value::Undefined).await;
+            if !rv.is_undefined() { return rv; }
+        }
+        Value::Undefined
     }
+
 
     async fn fetch_open_interests(&mut self, mut symbols: Value, mut params: Value) -> Value {
         params = params.or_default(Value::new_object());
