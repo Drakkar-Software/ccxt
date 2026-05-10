@@ -13812,3 +13812,29 @@ class binance(Exchange, ImplicitAPI):
             'timestamp': timestamp,
             'datetime': self.iso8601(timestamp),
         }
+
+    def ob_get_max_open_orders_count_from_exchange_info_filters(self, symbol: str, params={}, logTag: Str = None) -> Int:
+        #
+        # octobot specific - max open orders from spot exchangeInfo symbol filters(MAX_NUM_ORDERS / MAX_NUM_ALGO_ORDERS)
+        #
+        isStopOrder = self.safe_bool(params, 'isStopOrder', False)
+        filterKey = 'MAX_NUM_ALGO_ORDERS' if isStopOrder else 'MAX_NUM_ORDERS'
+        try:
+            market = self.market(symbol)
+            info = market['info']
+            filtersRaw = self.safe_value(info, 'filters', [])
+            filters = filtersRaw if isinstance(filtersRaw, list) else []
+            valueKey = 'maxNumAlgoOrders' if isStopOrder else 'maxNumOrders'
+            fallbackKey = 'limit'
+            for idx in range(0, len(filters)):
+                f = filters[idx]
+                filterType = self.safe_string(f, 'filterType')
+                if filterType == filterKey:
+                    resolvedValueKey = valueKey
+                    if not (valueKey in f):
+                        resolvedValueKey = fallbackKey
+                    return self.safe_integer(f, resolvedValueKey, 200)
+            raise ExchangeError(self.id + ' ' + filterKey + ' missing')
+        except Exception as e:
+            self.log(logTag, symbol, e)
+            return 200

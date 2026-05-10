@@ -3302,6 +3302,10 @@ class coinbase(Exchange, ImplicitAPI):
         for i in range(0, len(orders)):
             success = self.safe_bool(orders[i], 'success')
             if success is not True:
+                failureReason = self.safe_string(orders[i], 'failure_reason')
+                if failureReason == 'UNKNOWN_CANCEL_ORDER':
+                    orderId = self.safe_string(orders[i], 'order_id')
+                    raise OrderNotFound(self.id + ' cancelOrders() has failed, order ' + str(orderId) + ' not found')
                 raise BadRequest(self.id + ' cancelOrders() has failed, check your arguments and parameters')
         return self.parse_orders(orders, market)
 
@@ -5000,9 +5004,17 @@ class coinbase(Exchange, ImplicitAPI):
         #
         errorCode = self.safe_string(response, 'error')
         if errorCode is not None:
-            errorMessage = self.safe_string_2(response, 'error_description', 'error')
             self.throw_exactly_matched_exception(self.exceptions['exact'], errorCode, feedback)
-            self.throw_broadly_matched_exception(self.exceptions['broad'], errorMessage, feedback)
+            # errors can be in different fields, try them all
+            errorDescriptionFields = [
+                'error_description',
+                'error_details',
+                'error_details ',  # not a typo
+            ]
+            for i in range(0, len(errorDescriptionFields)):
+                errorMessageField = errorDescriptionFields[i]
+                errorMessage = self.safe_string(response, errorMessageField)
+                self.throw_broadly_matched_exception(self.exceptions['broad'], errorMessage, feedback)
             raise ExchangeError(feedback)
         errorResponse = self.safe_dict(response, 'error_response')
         if errorResponse is not None:

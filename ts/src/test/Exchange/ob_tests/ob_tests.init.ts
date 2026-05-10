@@ -1,0 +1,47 @@
+import testObAscendex from './test.ob.ascendex.js';
+import testObBinance from './test.ob.binance.js';
+import testObBinanceus from './test.ob.binanceus.js';
+import testObBingx from './test.ob.bingx.js';
+import testObBitget from './test.ob.bitget.js';
+import testObBitmart from './test.ob.bitmart.js';
+import testObBybit from './test.ob.bybit.js';
+import testObCoinbase from './test.ob.coinbase.js';
+import testObCoinex from './test.ob.coinex.js';
+import testObCryptocom from './test.ob.cryptocom.js';
+import testObGateio from './test.ob.gateio.js';
+import testObHollaex from './test.ob.hollaex.js';
+import testObHyperliquid from './test.ob.hyperliquid.js';
+import testObHtx from './test.ob.htx.js';
+import testObKucoin from './test.ob.kucoin.js';
+import testObKucoinfutures from './test.ob.kucoinfutures.js';
+import testObLbank from './test.ob.lbank.js';
+import testObMexc from './test.ob.mexc.js';
+import testObOkx from './test.ob.okx.js';
+import testObPhemex from './test.ob.phemex.js';
+import testObWizardswap from './test.ob.wizardswap.js';
+
+async function obTestsInit () {
+    await testObAscendex ();
+    await testObBinance ();
+    await testObBinanceus ();
+    await testObBingx ();
+    await testObBitget ();
+    await testObBitmart ();
+    await testObBybit ();
+    await testObCoinbase ();
+    await testObCoinex ();
+    await testObCryptocom ();
+    await testObGateio ();
+    await testObHollaex ();
+    await testObHyperliquid ();
+    await testObHtx ();
+    await testObKucoin ();
+    await testObKucoinfutures ();
+    await testObLbank ();
+    await testObMexc ();
+    await testObOkx ();
+    await testObPhemex ();
+    await testObWizardswap ();
+}
+
+export default obTestsInit;

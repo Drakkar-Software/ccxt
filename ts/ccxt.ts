@@ -34,7 +34,7 @@ import { Precise }   from './src/base/Precise.js'
 import * as functions from './src/base/functions.js'
 import * as errors   from './src/base/errors.js'
 import type { Int, int, Str, Strings, Num, Bool, IndexType, OrderSide, OrderType, MarketType, SubType, Dict, NullableDict, List, NullableList, Fee, OHLCV, OHLCVC, implicitReturnType, Market, Currency, Dictionary, MinMax, FeeInterface, TradingFeeInterface, MarketInterface, Trade, Order, OrderBook, Ticker, Transaction, Tickers, CurrencyInterface, Balance, BalanceAccount, Account, PartialBalances, Balances, DepositAddress, WithdrawalResponse, FundingRate, FundingRates, Position, BorrowInterest, LeverageTier, LedgerEntry, DepositWithdrawFeeNetwork, DepositWithdrawFee, TransferEntry, CrossBorrowRate, IsolatedBorrowRate, FundingRateHistory, OpenInterest, Liquidation, OrderRequest, CancellationRequest, FundingHistory, MarketMarginModes, MarginMode, Greeks, Conversion, Option, LastPrice, Leverage, MarginModification, Leverages, LastPrices, Currencies, TradingFees, MarginModes, OptionChain, IsolatedBorrowRates, CrossBorrowRates, LeverageTiers, LongShortRatio, OrderBooks, OpenInterests, ConstructorArgs, ADL } from './src/base/types.js'
-import {BaseError, ExchangeError, AuthenticationError, PermissionDenied, AccountNotEnabled, AccountSuspended, ArgumentsRequired, BadRequest, BadSymbol, OperationRejected, NoChange, MarginModeAlreadySet, MarketClosed, ManualInteractionNeeded, RestrictedLocation, InsufficientFunds, InvalidAddress, AddressPending, InvalidOrder, OrderNotFound, OrderNotCached, OrderImmediatelyFillable, OrderNotFillable, DuplicateOrderId, ContractUnavailable, NotSupported, InvalidProxySettings, ExchangeClosedByUser, OperationFailed, NetworkError, DDoSProtection, RateLimitExceeded, ExchangeNotAvailable, OnMaintenance, InvalidNonce, ChecksumError, RequestTimeout, BadResponse, NullResponse, CancelPending, UnsubscribeError}  from './src/base/errors.js'
+import {BaseError, ExchangeError, AuthenticationError, PermissionDenied, AccountNotEnabled, AccountSuspended, OBIPWhitelistError, ArgumentsRequired, BadRequest, BadSymbol, OBUntradableSymbol, OBClosedPositionError, OBOrderUncancellableError, OBInternalSyncError, OBMaxOpenOrdersReached, OperationRejected, NoChange, MarginModeAlreadySet, MarketClosed, ManualInteractionNeeded, RestrictedLocation, InsufficientFunds, InvalidAddress, AddressPending, InvalidOrder, OrderNotFound, OrderNotCached, OrderImmediatelyFillable, OrderNotFillable, DuplicateOrderId, ContractUnavailable, NotSupported, InvalidProxySettings, ExchangeClosedByUser, OperationFailed, NetworkError, DDoSProtection, RateLimitExceeded, ExchangeNotAvailable, OnMaintenance, InvalidNonce, ChecksumError, RequestTimeout, BadResponse, NullResponse, CancelPending, UnsubscribeError}  from './src/base/errors.js'
 
 
 //-----------------------------------------------------------------------------
@@ -134,6 +134,39 @@ import modetrade from  './src/modetrade.js'
 import myokx from  './src/myokx.js'
 import ndax from  './src/ndax.js'
 import novadax from  './src/novadax.js'
+import ob_ascendex from  './src/ob_ascendex.js'
+import ob_binance from  './src/ob_binance.js'
+import ob_binanceus from  './src/ob_binanceus.js'
+import ob_bingx from  './src/ob_bingx.js'
+import ob_bitfinex from  './src/ob_bitfinex.js'
+import ob_bitget from  './src/ob_bitget.js'
+import ob_bitmart from  './src/ob_bitmart.js'
+import ob_bitmex from  './src/ob_bitmex.js'
+import ob_bitso from  './src/ob_bitso.js'
+import ob_bitstamp from  './src/ob_bitstamp.js'
+import ob_bybit from  './src/ob_bybit.js'
+import ob_coinbase from  './src/ob_coinbase.js'
+import ob_coinex from  './src/ob_coinex.js'
+import ob_cryptocom from  './src/ob_cryptocom.js'
+import ob_gateio from  './src/ob_gateio.js'
+import ob_hitbtc from  './src/ob_hitbtc.js'
+import ob_hollaex from  './src/ob_hollaex.js'
+import ob_htx from  './src/ob_htx.js'
+import ob_hyperliquid from  './src/ob_hyperliquid.js'
+import ob_kraken from  './src/ob_kraken.js'
+import ob_kucoin from  './src/ob_kucoin.js'
+import ob_kucoinfutures from  './src/ob_kucoinfutures.js'
+import ob_lbank from  './src/ob_lbank.js'
+import ob_mexc from  './src/ob_mexc.js'
+import ob_myokx from  './src/ob_myokx.js'
+import ob_ndax from  './src/ob_ndax.js'
+import ob_okx from  './src/ob_okx.js'
+import ob_okxus from  './src/ob_okxus.js'
+import ob_phemex from  './src/ob_phemex.js'
+import ob_poloniex from  './src/ob_poloniex.js'
+import ob_upbit from  './src/ob_upbit.js'
+import ob_wavesexchange from  './src/ob_wavesexchange.js'
+import ob_wizardswap from  './src/ob_wizardswap.js'
 import okx from  './src/okx.js'
 import okxus from  './src/okxus.js'
 import onetrading from  './src/onetrading.js'
@@ -150,6 +183,7 @@ import upbit from  './src/upbit.js'
 import wavesexchange from  './src/wavesexchange.js'
 import weex from  './src/weex.js'
 import whitebit from  './src/whitebit.js'
+import wizardswap from  './src/wizardswap.js'
 import woo from  './src/woo.js'
 import woofipro from  './src/woofipro.js'
 import xt from  './src/xt.js'
@@ -330,6 +364,39 @@ const exchanges = {
     'myokx':                  myokx,
     'ndax':                   ndax,
     'novadax':                novadax,
+    'ob_ascendex':            ob_ascendex,
+    'ob_binance':             ob_binance,
+    'ob_binanceus':           ob_binanceus,
+    'ob_bingx':               ob_bingx,
+    'ob_bitfinex':            ob_bitfinex,
+    'ob_bitget':              ob_bitget,
+    'ob_bitmart':             ob_bitmart,
+    'ob_bitmex':              ob_bitmex,
+    'ob_bitso':               ob_bitso,
+    'ob_bitstamp':            ob_bitstamp,
+    'ob_bybit':               ob_bybit,
+    'ob_coinbase':            ob_coinbase,
+    'ob_coinex':              ob_coinex,
+    'ob_cryptocom':           ob_cryptocom,
+    'ob_gateio':              ob_gateio,
+    'ob_hitbtc':              ob_hitbtc,
+    'ob_hollaex':             ob_hollaex,
+    'ob_htx':                 ob_htx,
+    'ob_hyperliquid':         ob_hyperliquid,
+    'ob_kraken':              ob_kraken,
+    'ob_kucoin':              ob_kucoin,
+    'ob_kucoinfutures':       ob_kucoinfutures,
+    'ob_lbank':               ob_lbank,
+    'ob_mexc':                ob_mexc,
+    'ob_myokx':               ob_myokx,
+    'ob_ndax':                ob_ndax,
+    'ob_okx':                 ob_okx,
+    'ob_okxus':               ob_okxus,
+    'ob_phemex':              ob_phemex,
+    'ob_poloniex':            ob_poloniex,
+    'ob_upbit':               ob_upbit,
+    'ob_wavesexchange':       ob_wavesexchange,
+    'ob_wizardswap':          ob_wizardswap,
     'okx':                    okx,
     'okxus':                  okxus,
     'onetrading':             onetrading,
@@ -346,6 +413,7 @@ const exchanges = {
     'wavesexchange':          wavesexchange,
     'weex':                   weex,
     'whitebit':               whitebit,
+    'wizardswap':             wizardswap,
     'woo':                    woo,
     'woofipro':               woofipro,
     'xt':                     xt,
@@ -467,9 +535,15 @@ export {
     PermissionDenied,
     AccountNotEnabled,
     AccountSuspended,
+    OBIPWhitelistError,
     ArgumentsRequired,
     BadRequest,
     BadSymbol,
+    OBUntradableSymbol,
+    OBClosedPositionError,
+    OBOrderUncancellableError,
+    OBInternalSyncError,
+    OBMaxOpenOrdersReached,
     OperationRejected,
     NoChange,
     MarginModeAlreadySet,
@@ -669,6 +743,39 @@ export {
     myokx,
     ndax,
     novadax,
+    ob_ascendex,
+    ob_binance,
+    ob_binanceus,
+    ob_bingx,
+    ob_bitfinex,
+    ob_bitget,
+    ob_bitmart,
+    ob_bitmex,
+    ob_bitso,
+    ob_bitstamp,
+    ob_bybit,
+    ob_coinbase,
+    ob_coinex,
+    ob_cryptocom,
+    ob_gateio,
+    ob_hitbtc,
+    ob_hollaex,
+    ob_htx,
+    ob_hyperliquid,
+    ob_kraken,
+    ob_kucoin,
+    ob_kucoinfutures,
+    ob_lbank,
+    ob_mexc,
+    ob_myokx,
+    ob_ndax,
+    ob_okx,
+    ob_okxus,
+    ob_phemex,
+    ob_poloniex,
+    ob_upbit,
+    ob_wavesexchange,
+    ob_wizardswap,
     okx,
     okxus,
     onetrading,
@@ -685,6 +792,7 @@ export {
     wavesexchange,
     weex,
     whitebit,
+    wizardswap,
     woo,
     woofipro,
     xt,

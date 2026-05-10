@@ -470,7 +470,7 @@ export default class wizardswap extends Exchange {
         }
         params = this.omit (params, [ 'address_to', 'refund_address' ]);
         const response = await this.publicPostExchange (this.extend (request, params));
-        if (response === false || response === 'False') {
+        if (((typeof response === 'boolean') && !response) || response === 'False') {
             throw new InvalidOrder (this.id + ' createOrder() failed: exchange returned False (order rejected)');
         }
         //
