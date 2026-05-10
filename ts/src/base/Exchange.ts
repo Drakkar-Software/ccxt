@@ -6151,7 +6151,7 @@ export class BaseExchange {
                 }
                 if (e instanceof OperationFailed) {
                     if (i < retries) {
-                        if (this.verbose) {
+                        if (retries > 0 || this.verbose) { // octobot override
                             const index = i + 1;
                             this.log ('Request failed with the error: ' + e.toString () + ', retrying ' + index.toString () + ' of ' + retries.toString () + '...');
                         }
@@ -8686,6 +8686,97 @@ export class BaseExchange {
 
     async isUTAEnabled (params = {}) {
         return false; // stub
+    }
+
+    obResolveRightsFromImaginaryCancelCatch (e: any, rights: string[], authPermissionMatch: Str): string[] {
+        // octobot specific
+        if (e instanceof AuthenticationError) {
+            const low = String (e).toLowerCase ();
+            if (authPermissionMatch === 'pair') {
+                if (low.indexOf ('permission') >= 0 && low.indexOf ('denied') >= 0) {
+                    return rights;
+                }
+            } else {
+                if (low.indexOf ('permission') >= 0 || low.indexOf ('denied') >= 0) {
+                    return rights;
+                }
+            }
+            throw e;
+        }
+        if (e instanceof NetworkError) {
+            throw e;
+        }
+        if ((e instanceof BadSymbol) || (e instanceof OperationFailed)) {
+            throw e;
+        }
+        if (e instanceof ArgumentsRequired) {
+            throw new AuthenticationError (this.id + ' ' + String (e.message));
+        }
+        if (!(e instanceof ExchangeError)) {
+            throw e;
+        }
+        const low = String (e).toLowerCase ();
+        if (low.indexOf ('permission') >= 0 && (low.indexOf ('denied') >= 0 || low.indexOf ('trading') >= 0)) {
+            return rights;
+        }
+        rights.push ('spotTrading');
+        rights.push ('marginTrading');
+        rights.push ('futuresTrading');
+        return rights;
+    }
+
+    async obFetchPermissionsImaginaryCancel (orderId: Str, symbol: Str, params = {}, authPermissionMatch: Str = 'either'): Promise<string[]> {
+        const rights: string[] = [ 'reading' ];
+        try {
+            await this.cancelOrder (orderId, symbol, params);
+            return rights;
+        } catch (e) {
+            return this.obResolveRightsFromImaginaryCancelCatch (e, rights, authPermissionMatch);
+        }
+    }
+
+    obIsAuthenticatedRequest (url: Str, method: Str, headers: Dict, body, probe: Str, probeParams: Dict = {}): Bool {
+        if (probe === 'urlBodySignature') {
+            const needle = ('needle' in probeParams) ? probeParams['needle'] : 'signature=';
+            let urlStr = '';
+            if (url) {
+                urlStr = String (url);
+            }
+            let bodyStr = '';
+            if (body) {
+                bodyStr = String (body);
+            }
+            return (urlStr.indexOf (needle) >= 0) || (bodyStr.indexOf (needle) >= 0);
+        }
+        if (probe === 'headersJsonAny') {
+            const needles = ('needles' in probeParams) ? probeParams['needles'] : [];
+            const hdrTxt = headers ? JSON.stringify (headers) : '';
+            for (let needleIdx = 0; needleIdx < needles.length; needleIdx++) {
+                const needleEntry = needles[needleIdx];
+                if (hdrTxt.indexOf (needleEntry) >= 0) {
+                    return true;
+                }
+            }
+            return false;
+        }
+        if (probe === 'restSignatureInHeadersJsonOrInUrl') {
+            const hdrsStr = headers ? JSON.stringify (headers) : '';
+            const hdrMatches = hdrsStr.indexOf ('Signature') >= 0;
+            let urlTxt = '';
+            if (url) {
+                urlTxt = String (url);
+            }
+            const urlMatches = urlTxt.indexOf ('signature=') >= 0;
+            return hdrMatches || urlMatches;
+        }
+        if (probe === 'signatureMethodInHeadersJsonOrSignInBody') {
+            const hdrsStr = headers ? JSON.stringify (headers).toLowerCase () : '';
+            const signatureMethodHit = hdrsStr.indexOf ('signature_method') >= 0;
+            const bodyStr = body ? String (body).toLowerCase () : '';
+            const bodyHit = bodyStr.indexOf ('sign=') >= 0;
+            return signatureMethodHit || bodyHit;
+        }
+        return false;
     }
 }
 

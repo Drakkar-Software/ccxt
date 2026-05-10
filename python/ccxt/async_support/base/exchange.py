@@ -979,7 +979,7 @@ class BaseExchange(SyncExchange):
                     self.add_fetch_cache(fetchData)
                 if isinstance(e, OperationFailed):
                     if i < retries:
-                        if self.verbose:
+                        if retries > 0 or self.verbose:  # octobot override
                             index = i + 1
                             self.log('Request failed with the error: ' + str(e) + ', retrying ' + str(index) + ' of ' + str(retries) + '...')
                         if (retryDelay is not None) and (retryDelay != 0):
@@ -1645,7 +1645,6 @@ class BaseExchange(SyncExchange):
 
     async def is_uta_enabled(self, params={}):
         return False  # stub
-
 
 class Exchange(BaseExchange):
 
@@ -2435,3 +2434,11 @@ class Exchange(BaseExchange):
             raise NotSupported(self.id + ' fetchTradingFee() is not supported yet')
         fees = await self.fetch_trading_fees(params)
         return self.safe_dict(fees, symbol)
+
+    async def ob_fetch_permissions_imaginary_cancel(self, orderId: Str, symbol: Str, params={}, authPermissionMatch: Str = 'either'):
+        rights: List[str] = ['reading']
+        try:
+            await self.cancel_order(orderId, symbol, params)
+            return rights
+        except Exception as e:
+            return self.ob_resolve_rights_from_imaginary_cancel_catch(e, rights, authPermissionMatch)

@@ -746,6 +746,7 @@ export default class okx extends Exchange {
                     '50113': AuthenticationError, // Invalid signature
                     '50114': AuthenticationError, // Invalid authorization
                     '50115': BadRequest, // Invalid request method
+                    '50119': AuthenticationError, // API key doesn't exist
                     // Trade Class
                     '51000': BadRequest, // Parameter {0} error
                     '51001': BadSymbol, // Instrument ID does not exist

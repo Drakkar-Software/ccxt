@@ -3485,6 +3485,11 @@ export default class coinbase extends Exchange {
         for (let i = 0; i < orders.length; i++) {
             const success = this.safeBool (orders[i], 'success');
             if (success !== true) {
+                const failureReason = this.safeString (orders[i], 'failure_reason');
+                if (failureReason === 'UNKNOWN_CANCEL_ORDER') {
+                    const orderId = this.safeString (orders[i], 'order_id');
+                    throw new OrderNotFound (this.id + ' cancelOrders() has failed, order ' + orderId.toString () + ' not found');
+                }
                 throw new BadRequest (this.id + ' cancelOrders() has failed, check your arguments and parameters');
             }
         }
@@ -5356,9 +5361,18 @@ export default class coinbase extends Exchange {
         //
         let errorCode = this.safeString (response, 'error');
         if (errorCode !== undefined) {
-            const errorMessage = this.safeString2 (response, 'error_description', 'error');
             this.throwExactlyMatchedException (this.exceptions['exact'], errorCode, feedback);
-            this.throwBroadlyMatchedException (this.exceptions['broad'], errorMessage, feedback);
+            // errors can be in different fields, try them all
+            const errorDescriptionFields = [
+                'error_description',
+                'error_details',
+                'error_details ', // not a typo
+            ]
+            for (let i = 0; i < errorDescriptionFields.length; i++) {
+                const errorMessageField = errorDescriptionFields[i];
+                const errorMessage = this.safeString (response, errorMessageField);
+                this.throwBroadlyMatchedException (this.exceptions['broad'], errorMessage, feedback);
+            }
             throw new ExchangeError (feedback);
         }
         const errorResponse = this.safeDict (response, 'error_response');

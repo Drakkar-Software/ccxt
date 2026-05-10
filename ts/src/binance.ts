@@ -14908,4 +14908,35 @@ export default class binance extends Exchange {
             'datetime': this.iso8601 (timestamp),
         } as ADL;
     }
+
+    obGetMaxOpenOrdersCountFromExchangeInfoFilters (symbol: string, params = {}, logTag: Str = undefined): Int {
+        //
+        // octobot specific - max open orders from spot exchangeInfo symbol filters (MAX_NUM_ORDERS / MAX_NUM_ALGO_ORDERS)
+        //
+        const isStopOrder = this.safeBool (params, 'isStopOrder', false);
+        const filterKey = isStopOrder ? 'MAX_NUM_ALGO_ORDERS' : 'MAX_NUM_ORDERS';
+        try {
+            const market = this.market (symbol);
+            const info = market['info'];
+            const filtersRaw = this.safeValue (info, 'filters', []);
+            const filters = Array.isArray (filtersRaw) ? filtersRaw : [];
+            let valueKey = isStopOrder ? 'maxNumAlgoOrders' : 'maxNumOrders';
+            const fallbackKey = 'limit';
+            for (let idx = 0; idx < filters.length; idx++) {
+                const f = filters[idx];
+                const filterType = this.safeString (f, 'filterType');
+                if (filterType === filterKey) {
+                    let resolvedValueKey = valueKey;
+                    if (!(valueKey in f)) {
+                        resolvedValueKey = fallbackKey;
+                    }
+                    return this.safeInteger (f, resolvedValueKey, 200);
+                }
+            }
+            throw new ExchangeError (this.id + ' ' + filterKey + ' missing');
+        } catch (e) {
+            this.log (logTag, symbol, e);
+            return 200;
+        }
+    }
 }

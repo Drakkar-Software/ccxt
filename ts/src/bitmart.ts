@@ -5858,8 +5858,8 @@ export default class bitmart extends Exchange {
         //     {"errno":"OK","message":"INVALID_PARAMETER","code":49998,"trace":"eb5ebb54-23cd-4de2-9064-e090b6c3b2e3","data":null}
         //
         const message = this.safeString (response, 'message');
-        const messageLower = (message as string).toLowerCase ();
-        const isErrorMessage = (message !== undefined) && (messageLower !== 'ok') && (messageLower !== 'success');
+        const messageLower = (message !== undefined) ? message.toLowerCase () : undefined;
+        const isErrorMessage = (messageLower !== undefined) && (messageLower !== 'ok') && (messageLower !== 'success');
         const errorCode = this.safeString (response, 'code');
         const isErrorCode = (errorCode !== undefined) && (errorCode !== '1000');
         if (isErrorCode || isErrorMessage) {
