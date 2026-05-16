@@ -27,6 +27,7 @@ class ob_hyperliquid(hyperliquid, ImplicitAPI):
                 'option': False,
             },
             'options': {
+                'hip3TokensByName': {},
                 'fetchMarkets': {
                     'types': ['spot'],  # only hyperliquid spot markets are supported
                 },

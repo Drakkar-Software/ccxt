@@ -3,7 +3,7 @@
 //  ---------------------------------------------------------------------------
 
 import phemex from './phemex.js';
-import type { Dict, Market, Order } from './base/types.js';
+import type { Dict, Market, Num, Order, OrderSide, OrderType, Str } from './base/types.js';
 
 //  ---------------------------------------------------------------------------
 
@@ -43,6 +43,30 @@ export default class ob_phemex extends phemex {
                 },
             },
         });
+    }
+
+    async createOrder (symbol: string, type: OrderType, side: OrderSide, amount: number, price: Num = undefined, params = {}): Promise<Order> {
+        // Spot Market orders: passing price switches base implementation to qtyType ByQuote and builds cost via amount × price;
+        // clear price here so qty stays ByBase (OctoBot phemex_exchange.py create_order parity).
+        await this.loadMarkets ();
+        const market = this.market (symbol);
+        let usePrice = price;
+        const capType = this.capitalize (type);
+        if (market['spot'] && capType === 'Market') {
+            usePrice = undefined;
+        }
+        return await super.createOrder (symbol, type, side, amount, usePrice, params);
+    }
+
+    async cancelOrder (id: string, symbol: Str = undefined, params = {}): Promise<Order> {
+        // Cancel response may expose unified status canceling; those orders cannot be fetched reliably on Phemex.
+        // Coerce to canceled — same intent as tentacle PENDING_CANCEL -> CANCELED.
+        const order = await super.cancelOrder (id, symbol, params) as Dict;
+        const st = this.safeStringLower (order, 'status');
+        if (st === 'canceling') {
+            order['status'] = 'canceled';
+        }
+        return order as Order;
     }
 
     async fetchPermissions (params = {}): Promise<string[]> {

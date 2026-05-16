@@ -4,6 +4,7 @@
 
 import mexc from './mexc.js';
 import { AuthenticationError, OBIPWhitelistError, OrderNotFound, PermissionDenied, OBUntradableSymbol } from './base/errors.js';
+import { sha256 } from './static_dependencies/noble-hashes/sha256.js';
 import type { Bool, Dict, Market, Order, Str } from './base/types.js';
 
 //  ---------------------------------------------------------------------------
@@ -63,6 +64,8 @@ export default class ob_mexc extends mexc {
                     'includeDisabledSymbolsInAvailableSymbols': true,
                     'expectPossibleOrderNotFoundDuringOrderCreation': true,
                     'requireOrderFeesFromTrades': true,
+                    'supportsForcedSigningAllRequests': true,
+                    'enableForcedSigningAllRequests': false,
                     'enableSpotBuyMarketWithCost': true,
                     'adjustForTimeDifference': true,
                     'localFeeCurrency': 'MX',
@@ -70,6 +73,91 @@ export default class ob_mexc extends mexc {
                 },
             },
         });
+    }
+
+    sign (path, api = 'public', method = 'GET', params = {}, headers = undefined, body = undefined) {
+        const octobotOpts = this.safeDict (this.options, 'octobot', {});
+        const enableForcedSigningAllRequests = this.safeBool (octobotOpts, 'enableForcedSigningAllRequests', false);
+        if (!enableForcedSigningAllRequests) {
+            return super.sign (path, api, method, params, headers, body);
+        }
+        const section = this.safeString (api, 0);
+        const access = this.safeString (api, 1);
+        [ path, params ] = this.resolvePath (path, params);
+        let url = undefined;
+        if (section === 'spot' || section === 'broker') {
+            if (section === 'broker') {
+                url = this.urls['api'][section][access] + '/' + path;
+            } else {
+                url = this.urls['api'][section][access] + '/api/' + this.version + '/' + path;
+            }
+            let urlParams = params;
+            // ob_mexc local override: begin (diff vs mexc.sign) — spot/broker force signing (see mexc_exchange _force_sign ~80-90)
+            if (true || access === 'private') {
+                if (section === 'broker' && ((method === 'POST') || (method === 'PUT') || (method === 'DELETE'))) {
+                    urlParams = {
+                        'timestamp': this.nonce (),
+                        'recvWindow': this.safeInteger (this.options, 'recvWindow', 5000),
+                    };
+                    body = this.json (params);
+                } else {
+                    urlParams['timestamp'] = this.nonce ();
+                    urlParams['recvWindow'] = this.safeInteger (this.options, 'recvWindow', 5000);
+                }
+            }
+            let paramsEncoded = '';
+            if (Object.keys (urlParams).length) {
+                paramsEncoded = this.urlencode (urlParams);
+                url += '?' + paramsEncoded;
+            }
+            if (true || access === 'private') {
+                this.checkRequiredCredentials ();
+                const signature = this.hmac (this.encode (paramsEncoded), this.encode (this.secret), sha256);
+                url += '&' + 'signature=' + signature;
+                headers = {
+                    'X-MEXC-APIKEY': this.apiKey,
+                    'source': this.safeString (this.options, 'broker', 'CCXT'),
+                };
+            }
+            // ob_mexc local override: end (diff vs mexc.sign)
+            if ((method === 'POST') || (method === 'PUT') || (method === 'DELETE')) {
+                headers['Content-Type'] = 'application/json';
+            }
+        } else if (section === 'contract' || section === 'spot2') {
+            url = this.urls['api'][section][access] + '/' + this.implodeParams (path, params);
+            params = this.omit (params, this.extractParams (path));
+            // ob_mexc local override: begin (diff vs mexc.sign) — contract/spot2 public unsigned skipped (see mexc.sign ~6189-6192)
+            // if (access === 'public') {
+            //     if (Object.keys (params).length) {
+            //         url += '?' + this.urlencode (params);
+            //     }
+            // } else {
+            this.checkRequiredCredentials ();
+            const timestamp = this.nonce ().toString ();
+            let auth = '';
+            headers = {
+                'ApiKey': this.apiKey,
+                'Request-Time': timestamp,
+                'Content-Type': 'application/json',
+                'source': this.safeString (this.options, 'broker', 'CCXT'),
+            };
+            if (method === 'POST') {
+                auth = this.json (params);
+                body = auth;
+            } else {
+                params = this.keysort (params);
+                if (Object.keys (params).length) {
+                    auth += this.urlencode (params);
+                    url += '?' + auth;
+                }
+            }
+            auth = this.apiKey + timestamp + auth;
+            const signature = this.hmac (this.encode (auth), this.encode (this.secret), sha256);
+            headers['Signature'] = signature;
+            // }
+            // ob_mexc local override: end (diff vs mexc.sign)
+        }
+        return { 'url': url, 'method': method, 'body': body, 'headers': headers };
     }
 
     async fetchPermissions (params = {}): Promise<string[]> {

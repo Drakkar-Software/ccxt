@@ -5,7 +5,7 @@
 
 from ccxt.async_support.phemex import phemex
 from ccxt.abstract.ob_phemex import ImplicitAPI
-from ccxt.base.types import Any, Market, Order
+from ccxt.base.types import Any, Market, Num, Order, OrderSide, OrderType, Str
 from typing import List
 
 
@@ -14,6 +14,10 @@ class ob_phemex(phemex, ImplicitAPI):
     def describe(self) -> Any:
         return self.deep_extend(super(ob_phemex, self).describe(), {
             'id': 'ob_phemex',
+            'name': 'Phemex',
+            'certified': False,
+            'urls': {
+            },
             'has': {
                 'CORS': None,
                 'spot': True,
@@ -42,6 +46,26 @@ class ob_phemex(phemex, ImplicitAPI):
                 },
             },
         })
+
+    async def create_order(self, symbol: str, type: OrderType, side: OrderSide, amount: float, price: Num = None, params={}) -> Order:
+        # Spot Market orders: passing price switches base implementation to qtyType ByQuote and builds cost via amount × price
+        # clear price here so qty stays ByBase(OctoBot phemex_exchange.py create_order parity).
+        await self.load_markets()
+        market = self.market(symbol)
+        usePrice = price
+        capType = self.capitalize(type)
+        if market['spot'] and capType == 'Market':
+            usePrice = None
+        return await super(ob_phemex, self).create_order(symbol, type, side, amount, usePrice, params)
+
+    async def cancel_order(self, id: str, symbol: Str = None, params={}) -> Order:
+        # Cancel response may expose unified status canceling; those orders cannot be fetched reliably on Phemex.
+        # Coerce to canceled — same intent PENDING_CANCEL -> CANCELED.
+        order = await super(ob_phemex, self).cancel_order(id, symbol, params)
+        st = self.safe_string_lower(order, 'status')
+        if st == 'canceling':
+            order['status'] = 'canceled'
+        return order
 
     async def fetch_permissions(self, params={}) -> List[str]:
         await self.fetch_balance(params)

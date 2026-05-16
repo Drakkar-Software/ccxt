@@ -5,6 +5,7 @@
 
 from ccxt.async_support.mexc import mexc
 from ccxt.abstract.ob_mexc import ImplicitAPI
+import hashlib
 from ccxt.base.types import Any, Bool, Market, Order, Str
 from typing import List
 from ccxt.base.errors import AuthenticationError
@@ -70,6 +71,8 @@ class ob_mexc(mexc, ImplicitAPI):
                     'includeDisabledSymbolsInAvailableSymbols': True,
                     'expectPossibleOrderNotFoundDuringOrderCreation': True,
                     'requireOrderFeesFromTrades': True,
+                    'supportsForcedSigningAllRequests': True,
+                    'enableForcedSigningAllRequests': False,
                     'enableSpotBuyMarketWithCost': True,
                     'adjustForTimeDifference': True,
                     'localFeeCurrency': 'MX',
@@ -77,6 +80,80 @@ class ob_mexc(mexc, ImplicitAPI):
                 },
             },
         })
+
+    def sign(self, path, api='public', method='GET', params={}, headers=None, body=None):
+        octobotOpts = self.safe_dict(self.options, 'octobot', {})
+        enableForcedSigningAllRequests = self.safe_bool(octobotOpts, 'enableForcedSigningAllRequests', False)
+        if not enableForcedSigningAllRequests:
+            return super(ob_mexc, self).sign(path, api, method, params, headers, body)
+        section = self.safe_string(api, 0)
+        access = self.safe_string(api, 1)
+        path, params = self.resolve_path(path, params)
+        url = None
+        if section == 'spot' or section == 'broker':
+            if section == 'broker':
+                url = self.urls['api'][section][access] + '/' + path
+            else:
+                url = self.urls['api'][section][access] + '/api/' + self.version + '/' + path
+            urlParams = params
+            # ob_mexc local override: begin(diff vs mexc.sign) — spot/broker force signing(see mexc_exchange _force_sign ~80-90)
+            if True or access == 'private':
+                if section == 'broker' and ((method == 'POST') or (method == 'PUT') or (method == 'DELETE')):
+                    urlParams = {
+                        'timestamp': self.nonce(),
+                        'recvWindow': self.safe_integer(self.options, 'recvWindow', 5000),
+                    }
+                    body = self.json(params)
+                else:
+                    urlParams['timestamp'] = self.nonce()
+                    urlParams['recvWindow'] = self.safe_integer(self.options, 'recvWindow', 5000)
+            paramsEncoded = ''
+            if urlParams:
+                paramsEncoded = self.urlencode(urlParams)
+                url += '?' + paramsEncoded
+            if True or access == 'private':
+                self.check_required_credentials()
+                signature = self.hmac(self.encode(paramsEncoded), self.encode(self.secret), hashlib.sha256)
+                url += '&' + 'signature=' + signature
+                headers = {
+                    'X-MEXC-APIKEY': self.apiKey,
+                    'source': self.safe_string(self.options, 'broker', 'CCXT'),
+                }
+            # ob_mexc local override: end(diff vs mexc.sign)
+            if (method == 'POST') or (method == 'PUT') or (method == 'DELETE'):
+                headers['Content-Type'] = 'application/json'
+        elif section == 'contract' or section == 'spot2':
+            url = self.urls['api'][section][access] + '/' + self.implode_params(path, params)
+            params = self.omit(params, self.extract_params(path))
+            # ob_mexc local override: begin(diff vs mexc.sign) — contract/spot2 public unsigned skipped(see mexc.sign ~6189-6192)
+            # if access == 'public':
+            #     if params:
+            #         url += '?' + self.urlencode(params)
+            #     }
+            # else:
+            self.check_required_credentials()
+            timestamp = str(self.nonce())
+            auth = ''
+            headers = {
+                'ApiKey': self.apiKey,
+                'Request-Time': timestamp,
+                'Content-Type': 'application/json',
+                'source': self.safe_string(self.options, 'broker', 'CCXT'),
+            }
+            if method == 'POST':
+                auth = self.json(params)
+                body = auth
+            else:
+                params = self.keysort(params)
+                if params:
+                    auth += self.urlencode(params)
+                    url += '?' + auth
+            auth = self.apiKey + timestamp + auth
+            signature = self.hmac(self.encode(auth), self.encode(self.secret), hashlib.sha256)
+            headers['Signature'] = signature
+            # }
+            # ob_mexc local override: end(diff vs mexc.sign)
+        return {'url': url, 'method': method, 'body': body, 'headers': headers}
 
     async def fetch_permissions(self, params={}) -> List[str]:
         return await self.ob_fetch_permissions_imaginary_cancel('12345', 'BTC/USDT', params, 'either')

@@ -144,6 +144,39 @@ async function testObMexc () {
             parentProto.parseOrder = orig;
         }
     }
+    // sign: enableForcedSigningAllRequests false — spot public stays unsigned (no signature in URL / no API key header)
+    {
+        const ex = new ccxt.ob_mexc ();
+        ex.apiKey = 'k';
+        ex.secret = 's';
+        const out: any = (ex as any).sign ('ping', [ 'spot', 'public' ], 'GET', {});
+        assert.strictEqual (out['headers'], undefined);
+        assert.strictEqual (out['url'].includes ('signature='), false);
+    }
+    // sign: forced spot public adds signature query + X-MEXC-APIKEY
+    {
+        const exAny = new ccxt.ob_mexc () as any;
+        exAny.options['octobot']['enableForcedSigningAllRequests'] = true;
+        exAny.apiKey = 'mykey';
+        exAny.secret = 'mysecret';
+        exAny.nonce = () => 42;
+        exAny.hmac = () => 'HMACSTUB';
+        const out = exAny.sign ('ping', [ 'spot', 'public' ], 'GET', {});
+        assert.strictEqual (out['headers']['X-MEXC-APIKEY'], 'mykey');
+        assert.ok (out['url'].includes ('signature=HMACSTUB'));
+    }
+    // sign: forced contract public adds Signature header (unsigned public branch skipped)
+    {
+        const exAny = new ccxt.ob_mexc () as any;
+        exAny.options['octobot']['enableForcedSigningAllRequests'] = true;
+        exAny.apiKey = 'mykey';
+        exAny.secret = 'mysecret';
+        exAny.nonce = () => 42;
+        exAny.hmac = () => 'CONTRACTSIG';
+        const out = exAny.sign ('ping', [ 'contract', 'public' ], 'GET', {});
+        assert.strictEqual (out['headers']['Signature'], 'CONTRACTSIG');
+        assert.strictEqual (out['headers']['ApiKey'], 'mykey');
+    }
 }
 
 export default testObMexc;

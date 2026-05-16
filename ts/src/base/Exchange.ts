@@ -6930,6 +6930,146 @@ export class BaseExchange {
         throw new NotSupported (this.id + ' createExpiredOptionMarket () is not supported yet');
     }
 
+    obIsStrictFiniteNumber (n: Num): boolean {
+        if (n === undefined) {
+            return false;
+        }
+        // Reject NaN and infinities using (n===n) and (n-n)===0; avoid number-type guards here
+        return (n === n) && ((n - n) === 0);
+    }
+
+    obCoerceScalarToFloatStrict (raw: any): Num {
+        if (raw === undefined) {
+            return undefined;
+        }
+        const src = typeof raw === 'string' ? raw.trim () : raw;
+        const n = this.parseNumber (src, undefined);
+        if (!this.obIsStrictFiniteNumber (n)) {
+            return undefined;
+        }
+        return n;
+    }
+
+    obPrecisionStepToDigitCount (value: Num): Num {
+        const n = this.parseNumber (value, undefined);
+        if (!this.obIsStrictFiniteNumber (n) || n <= 0) {
+            return undefined;
+        }
+        return Math.round (Math.abs (Math.log10 (n)));
+    }
+
+    obObtainMutablePrecisionAndLimits (base: Dict): Dict {
+        const result = this.extend ({}, base) as Dict;
+        const basePrec = base['precision'];
+        result['precision'] = this.isDictionary (basePrec) ? this.extend ({}, basePrec) : {};
+        const limitsIn = this.safeDict (base, 'limits', {});
+        const limitsCopy = this.extend ({}, limitsIn) as Dict;
+        const minMaxBranches = [ 'amount', 'price', 'cost' ];
+        for (let i = 0; i < minMaxBranches.length; i++) {
+            const groupKey = minMaxBranches[i];
+            const branch = limitsIn[groupKey];
+            if (this.isDictionary (branch)) {
+                limitsCopy[groupKey] = this.extend ({}, branch);
+            } else {
+                limitsCopy[groupKey] = {};
+            }
+        }
+        result['limits'] = limitsCopy;
+        return result;
+    }
+
+    obCoerceMarketStatusWhitelistToFloat (marketStatus: Dict) {
+        const precision = marketStatus['precision'];
+        if (this.isDictionary (precision)) {
+            precision['amount'] = this.obCoerceScalarToFloatStrict (precision['amount']);
+            precision['price'] = this.obCoerceScalarToFloatStrict (precision['price']);
+        }
+        const limits = marketStatus['limits'];
+        if (!this.isDictionary (limits)) {
+            return;
+        }
+        const cost = limits['cost'];
+        if (this.isDictionary (cost)) {
+            cost['min'] = this.obCoerceScalarToFloatStrict (cost['min']);
+            cost['max'] = this.obCoerceScalarToFloatStrict (cost['max']);
+        }
+        const amount = limits['amount'];
+        if (this.isDictionary (amount)) {
+            amount['min'] = this.obCoerceScalarToFloatStrict (amount['min']);
+            amount['max'] = this.obCoerceScalarToFloatStrict (amount['max']);
+        }
+        const priceLm = limits['price'];
+        if (this.isDictionary (priceLm)) {
+            priceLm['min'] = this.obCoerceScalarToFloatStrict (priceLm['min']);
+            priceLm['max'] = this.obCoerceScalarToFloatStrict (priceLm['max']);
+        }
+    }
+
+    obReplacePrecisionStepsWithDigitCount (precision: Dict) {
+        precision['amount'] = this.obPrecisionStepToDigitCount (precision['amount']);
+        precision['price'] = this.obPrecisionStepToDigitCount (precision['price']);
+    }
+
+    obScaleLimitByContractSize (v: Num, floatSize: Num): Num {
+        if (v === undefined) {
+            return undefined;
+        }
+        if (!this.obIsStrictFiniteNumber (v) || !this.obIsStrictFiniteNumber (floatSize)) {
+            return undefined;
+        }
+        return floatSize * v;
+    }
+
+    obApplyAdaptMarketStatusForContractSize (marketStatus: Dict) {
+        const floatSize = this.obCoerceScalarToFloatStrict (marketStatus['contractSize']);
+        if (!this.obIsStrictFiniteNumber (floatSize)) {
+            return;
+        }
+        const limits = marketStatus['limits'];
+        if (!this.isDictionary (limits)) {
+            return;
+        }
+        const amountLimits = limits['amount'];
+        if (!this.isDictionary (amountLimits)) {
+            return;
+        }
+        amountLimits['min'] = this.obScaleLimitByContractSize (amountLimits['min'], floatSize);
+        amountLimits['max'] = this.obScaleLimitByContractSize (amountLimits['max'], floatSize);
+        marketStatus['precision']['amount'] = this.obPrecisionStepToDigitCount (floatSize);
+    }
+
+    obGetFixedMarketStatus (symbol: string): Dict {
+        const base = this.market (symbol) as Dict;
+        const octobotCfg = this.safeDict (this.options, 'octobot', {});
+        const fixMarketStatus = this.safeBool (octobotCfg, 'fixMarketStatus', false) === true;
+        const removeMarketStatusPriceLimits = this.safeBool (octobotCfg, 'removeMarketStatusPriceLimits', false) === true;
+        const adaptMarketStatusForContractSize = this.safeBool (octobotCfg, 'adaptMarketStatusForContractSize', false) === true;
+        // Step build: selective shallow copy so untouched nested refs stay shared (.info unchanged by reference swap on top clone only when we omit deep copy)
+        const out = this.obObtainMutablePrecisionAndLimits (base);
+        // Step coerce: unify whitelist fields to floats; non-convertible -> undefined (OctoBot _fix_typing parity + failures explicit)
+        this.obCoerceMarketStatusWhitelistToFloat (out);
+        // Step fixes: connector order mirrors Python adapter + rest_exchange helpers
+        if (fixMarketStatus) {
+            this.obReplacePrecisionStepsWithDigitCount (out['precision']);
+        }
+        if (removeMarketStatusPriceLimits) {
+            const limitsLm = out['limits'];
+            if (this.isDictionary (limitsLm)) {
+                let priceLm = limitsLm['price'];
+                if (!this.isDictionary (priceLm)) {
+                    priceLm = {};
+                    limitsLm['price'] = priceLm;
+                }
+                priceLm['min'] = undefined;
+                priceLm['max'] = undefined;
+            }
+        }
+        if (adaptMarketStatusForContractSize) {
+            this.obApplyAdaptMarketStatusForContractSize (out);
+        }
+        return out;
+    }
+
     isLeveragedCurrency (currencyCode, checkBaseCoin: Bool = false, existingCurrencies: Dict = undefined): boolean {
         const leverageSuffixes = [
             '2L', '2S', '3L', '3S', '4L', '4S', '5L', '5S', // Leveraged Tokens (LT)

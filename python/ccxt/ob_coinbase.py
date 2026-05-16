@@ -5,17 +5,18 @@
 
 from ccxt.coinbase import coinbase
 from ccxt.abstract.ob_coinbase import ImplicitAPI
-from ccxt.base.types import Any, Balances, Bool, Market, Order, Str, Trade
+from ccxt.base.types import Any, Balances, Bool, Market, Num, Order, OrderSide, OrderType, Str, Trade
 from typing import List
 from ccxt.base.errors import ExchangeError
 from ccxt.base.errors import AuthenticationError
 from ccxt.base.errors import PermissionDenied
 from ccxt.base.errors import ArgumentsRequired
 from ccxt.base.errors import BadSymbol
+from ccxt.base.errors import OBInternalSyncError
 from ccxt.base.errors import OrderNotFound
 from ccxt.base.errors import OperationFailed
 from ccxt.base.errors import InvalidNonce
-from ccxt.base.errors import OBInternalSyncError
+from ccxt.base.precise import Precise
 
 
 class ob_coinbase(coinbase, ImplicitAPI):
@@ -23,6 +24,10 @@ class ob_coinbase(coinbase, ImplicitAPI):
     def describe(self) -> Any:
         return self.deep_extend(super(ob_coinbase, self).describe(), {
             'id': 'ob_coinbase',
+            'name': 'Coinbase Advanced',
+            'certified': False,
+            'urls': {
+            },
             'exceptions': {
                 'exact': {
                     'not_found': OrderNotFound,
@@ -109,6 +114,27 @@ class ob_coinbase(coinbase, ImplicitAPI):
         normalizedOrderType = str(order_type).upper()
         isStopOrder = (normalizedOrderType == 'STOP_LOSS') or (normalizedOrderType == 'STOP_LOSS_LIMIT')
         return not isStopOrder
+
+    def create_order(self, symbol: str, type: OrderType, side: OrderSide, amount: float, price: Num = None, params={}) -> Order:
+        """
+ Coinbase only supports stop-limit orders, not stop-market(`coinbase#createOrder` throws).
+ OctoBot `Coinbase._create_market_stop_loss_order`: limit stop-loss with limit = trigger * 0.98
+ (STOP_LIMIT_ORDER_INSTANT_FILL_PRICE_RATIO in coinbase_exchange.py).
+        """
+        normalizedType = str(type).upper()
+        if normalizedType == 'MARKET':
+            stopLossPrice = self.safe_number(params, 'stopLossPrice')
+            triggerFromParams = self.safe_number_n(params, ['stopPrice', 'stop_price', 'triggerPrice'])
+            takeProfitPrice = self.safe_number(params, 'takeProfitPrice')
+            if takeProfitPrice is None:
+                stopTrigger = stopLossPrice if (stopLossPrice is not None) else triggerFromParams
+                if stopTrigger is not None:
+                    limitPriceString = Precise.string_mul(self.number_to_string(stopTrigger), '0.98')
+                    limitPrice = float(limitPriceString)
+                    rest = self.omit(params, ['stopPrice', 'stop_price', 'triggerPrice', 'stopLossPrice'])
+                    merged = self.extend(rest, {'stopLossPrice': stopTrigger})
+                    return super(ob_coinbase, self).create_order(symbol, 'limit', side, amount, limitPrice, merged)
+        return super(ob_coinbase, self).create_order(symbol, type, side, amount, price, params)
 
     def get_orders_broker_parameters(self, params={}) -> Any:
         return self.extend({}, params)

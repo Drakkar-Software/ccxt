@@ -7,6 +7,7 @@ import testObBitmart from './test.ob.bitmart.js';
 import testObBybit from './test.ob.bybit.js';
 import testObCoinbase from './test.ob.coinbase.js';
 import testObCoinex from './test.ob.coinex.js';
+import testObExchangeMarketStatus from './test.ob.exchange.marketstatus.js';
 import testObCryptocom from './test.ob.cryptocom.js';
 import testObGateio from './test.ob.gateio.js';
 import testObHollaex from './test.ob.hollaex.js';
@@ -30,6 +31,7 @@ async function obTestsInit () {
     await testObBybit ();
     await testObCoinbase ();
     await testObCoinex ();
+    await testObExchangeMarketStatus ();
     await testObCryptocom ();
     await testObGateio ();
     await testObHollaex ();
