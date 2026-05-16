@@ -4,7 +4,8 @@
 
 import coinbase from './coinbase.js';
 import { AuthenticationError, ArgumentsRequired, BadSymbol, ExchangeError, InvalidNonce, OBInternalSyncError, OperationFailed, OrderNotFound, PermissionDenied } from './base/errors.js';
-import type { Balances, Bool, Dict, Market, Order, Str, Trade } from './base/types.js';
+import { Precise } from './base/Precise.js';
+import type { Balances, Bool, Dict, Market, Num, Order, OrderSide, OrderType, Str, Trade } from './base/types.js';
 
 //  ---------------------------------------------------------------------------
 
@@ -112,6 +113,31 @@ export default class ob_coinbase extends coinbase {
         const normalizedOrderType = String (order_type).toUpperCase ();
         const isStopOrder = (normalizedOrderType === 'STOP_LOSS') || (normalizedOrderType === 'STOP_LOSS_LIMIT');
         return !isStopOrder;
+    }
+
+    /**
+     * Coinbase only supports stop-limit orders, not stop-market (`coinbase#createOrder` throws).
+     * OctoBot `Coinbase._create_market_stop_loss_order`: limit stop-loss with limit = trigger * 0.98
+     * (STOP_LIMIT_ORDER_INSTANT_FILL_PRICE_RATIO in coinbase_exchange.py).
+     */
+    async createOrder (symbol: string, type: OrderType, side: OrderSide, amount: number, price: Num = undefined, params = {}): Promise<Order> {
+        const normalizedType = String (type).toUpperCase ();
+        if (normalizedType === 'MARKET') {
+            const stopLossPrice = this.safeNumber (params, 'stopLossPrice');
+            const triggerFromParams = this.safeNumberN (params, [ 'stopPrice', 'stop_price', 'triggerPrice' ]);
+            const takeProfitPrice = this.safeNumber (params, 'takeProfitPrice');
+            if (takeProfitPrice === undefined) {
+                const stopTrigger = (stopLossPrice !== undefined) ? stopLossPrice : triggerFromParams;
+                if (stopTrigger !== undefined) {
+                    const limitPriceString = Precise.stringMul (this.numberToString (stopTrigger), '0.98');
+                    const limitPrice = parseFloat (limitPriceString);
+                    const rest = this.omit (params, [ 'stopPrice', 'stop_price', 'triggerPrice', 'stopLossPrice' ]);
+                    const merged = this.extend (rest, { 'stopLossPrice': stopTrigger });
+                    return await super.createOrder (symbol, 'limit', side, amount, limitPrice, merged);
+                }
+            }
+        }
+        return await super.createOrder (symbol, type, side, amount, price, params);
     }
 
     getOrdersBrokerParameters (params = {}): any {

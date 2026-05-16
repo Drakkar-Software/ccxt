@@ -1,7 +1,7 @@
 
 import assert from 'assert';
 import ccxt from '../../../../ccxt.js';
-import { OrderNotFound, PermissionDenied } from '../../../base/errors.js';
+import { NotSupported, OrderNotFound, PermissionDenied } from '../../../base/errors.js';
 import { AuthenticationError, ExchangeError } from '../../tests.helpers.js';
 import assertObExchangeId from './obTestUtil.js';
 
@@ -307,6 +307,81 @@ async function testObCoinbase () {
             assert.strictEqual (parsed['amount'], 2);
         } finally {
             parentProto.parseTrade = orig;
+        }
+    }
+    // createOrder (ob_coinbase): market + stop trigger -> limit stop-loss at 0.98 * trigger (coinbase_exchange.py _create_market_stop_loss_order)
+    {
+        const ex = new ccxt.ob_coinbase ();
+        ex.loadMarkets = async () => {};
+        ex.market = function (): any {
+            return { 'id': 'BTC-USD', 'spot': true };
+        };
+        const parentProto = Object.getPrototypeOf (Object.getPrototypeOf (ex));
+        const orig = parentProto.createOrder;
+        let captured: any = undefined;
+        parentProto.createOrder = async function (sym: any, typ: any, sd: any, amt: any, prc: any, prms: any): Promise<any> {
+            captured = { sym, typ, sd, amt, prc, prms };
+            return { 'id': 'mock-order' };
+        };
+        try {
+            const result = await ex.createOrder ('BTC/USD', 'market', 'sell', 1.5, undefined, { 'stopLossPrice': 100 });
+            assert.strictEqual ((result as any)['id'], 'mock-order');
+            assert.strictEqual (captured.sym, 'BTC/USD');
+            assert.strictEqual (captured.typ, 'limit');
+            assert.strictEqual (captured.sd, 'sell');
+            assert.strictEqual (captured.amt, 1.5);
+            assert.strictEqual (captured.prc, 98);
+            assert.strictEqual (captured.prms['stopLossPrice'], 100);
+            assert.strictEqual (captured.prms['stopPrice'], undefined);
+        } finally {
+            parentProto.createOrder = orig;
+        }
+    }
+    // createOrder: stopPrice-only params normalize to stopLossPrice; stopLossPrice wins when both are set
+    {
+        const ex = new ccxt.ob_coinbase ();
+        ex.loadMarkets = async () => {};
+        ex.market = function (): any {
+            return { 'id': 'BTC-USD', 'spot': true };
+        };
+        const parentProto = Object.getPrototypeOf (Object.getPrototypeOf (ex));
+        const orig = parentProto.createOrder;
+        let captured: any = undefined;
+        parentProto.createOrder = async function (sym: any, typ: any, sd: any, amt: any, prc: any, prms: any): Promise<any> {
+            captured = { sym, typ, sd, amt, prc, prms };
+            return {};
+        };
+        try {
+            await ex.createOrder ('BTC/USD', 'market', 'buy', 2, undefined, { 'stopPrice': 50 });
+            assert.strictEqual (captured.typ, 'limit');
+            assert.strictEqual (captured.prc, 49);
+            assert.strictEqual (captured.prms['stopLossPrice'], 50);
+            captured = undefined;
+            await ex.createOrder ('BTC/USD', 'market', 'sell', 1, undefined, { 'stopLossPrice': 100, 'stopPrice': 200 });
+            assert.strictEqual (captured.prc, 98);
+            assert.strictEqual (captured.prms['stopLossPrice'], 100);
+        } finally {
+            parentProto.createOrder = orig;
+        }
+    }
+    // createOrder: market + takeProfitPrice is not rewritten (Coinbase base handles / rejects)
+    {
+        const ex = new ccxt.ob_coinbase ();
+        ex.loadMarkets = async () => {};
+        ex.market = function (): any {
+            return { 'id': 'BTC-USD', 'spot': true };
+        };
+        const parentProto = Object.getPrototypeOf (Object.getPrototypeOf (ex));
+        const orig = parentProto.createOrder;
+        parentProto.createOrder = async function () {
+            throw new NotSupported ('coinbase createOrder() only stop limit orders are supported');
+        };
+        try {
+            await assert.rejects (async () => {
+                await ex.createOrder ('BTC/USD', 'market', 'sell', 1, undefined, { 'takeProfitPrice': 200 });
+            }, NotSupported);
+        } finally {
+            parentProto.createOrder = orig;
         }
     }
 }

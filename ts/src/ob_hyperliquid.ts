@@ -24,6 +24,7 @@ export default class ob_hyperliquid extends hyperliquid {
                 'option': false,
             },
             'options': {
+                'hip3TokensByName': {},
                 'fetchMarkets': {
                     'types': [ 'spot' ], // only hyperliquid spot markets are supported
                 },

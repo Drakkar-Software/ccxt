@@ -6594,6 +6594,116 @@ class Exchange(object):
     def create_expired_option_market(self, symbol: str):
         raise NotSupported(self.id + ' createExpiredOptionMarket() is not supported yet')
 
+    def ob_is_strict_finite_number(self, n: Num):
+        if n is None:
+            return False
+        # Reject NaN and infinities using(n==n) and (n-n)==0; avoid number-type guards here
+        return(n == n) and ((n - n) == 0)
+
+    def ob_coerce_scalar_to_float_strict(self, raw: Any):
+        if raw is None:
+            return None
+        src = raw.strip() if isinstance(raw, str) else raw
+        n = self.parse_number(src, None)
+        if not self.ob_is_strict_finite_number(n):
+            return None
+        return n
+
+    def ob_precision_step_to_digit_count(self, value: Num):
+        n = self.parse_number(value, None)
+        if not self.ob_is_strict_finite_number(n) or n <= 0:
+            return None
+        return int(round(abs(math.log10(n))))
+
+    def ob_obtain_mutable_precision_and_limits(self, base: dict):
+        result = self.extend({}, base)
+        basePrec = base['precision']
+        result['precision'] = self.extend({}, basePrec) if self.is_dictionary(basePrec) else {}
+        limitsIn = self.safe_dict(base, 'limits', {})
+        limitsCopy = self.extend({}, limitsIn)
+        minMaxBranches = ['amount', 'price', 'cost']
+        for i in range(0, len(minMaxBranches)):
+            groupKey = minMaxBranches[i]
+            branch = limitsIn[groupKey]
+            if self.is_dictionary(branch):
+                limitsCopy[groupKey] = self.extend({}, branch)
+            else:
+                limitsCopy[groupKey] = {}
+        result['limits'] = limitsCopy
+        return result
+
+    def ob_coerce_market_status_whitelist_to_float(self, marketStatus: dict):
+        precision = marketStatus['precision']
+        if self.is_dictionary(precision):
+            precision['amount'] = self.ob_coerce_scalar_to_float_strict(precision['amount'])
+            precision['price'] = self.ob_coerce_scalar_to_float_strict(precision['price'])
+        limits = marketStatus['limits']
+        if not self.is_dictionary(limits):
+            return
+        cost = limits['cost']
+        if self.is_dictionary(cost):
+            cost['min'] = self.ob_coerce_scalar_to_float_strict(cost['min'])
+            cost['max'] = self.ob_coerce_scalar_to_float_strict(cost['max'])
+        amount = limits['amount']
+        if self.is_dictionary(amount):
+            amount['min'] = self.ob_coerce_scalar_to_float_strict(amount['min'])
+            amount['max'] = self.ob_coerce_scalar_to_float_strict(amount['max'])
+        priceLm = limits['price']
+        if self.is_dictionary(priceLm):
+            priceLm['min'] = self.ob_coerce_scalar_to_float_strict(priceLm['min'])
+            priceLm['max'] = self.ob_coerce_scalar_to_float_strict(priceLm['max'])
+
+    def ob_replace_precision_steps_with_digit_count(self, precision: dict):
+        precision['amount'] = self.ob_precision_step_to_digit_count(precision['amount'])
+        precision['price'] = self.ob_precision_step_to_digit_count(precision['price'])
+
+    def ob_scale_limit_by_contract_size(self, v: Num, floatSize: Num):
+        if v is None:
+            return None
+        if not self.ob_is_strict_finite_number(v) or not self.ob_is_strict_finite_number(floatSize):
+            return None
+        return floatSize * v
+
+    def ob_apply_adapt_market_status_for_contract_size(self, marketStatus: dict):
+        floatSize = self.ob_coerce_scalar_to_float_strict(marketStatus['contractSize'])
+        if not self.ob_is_strict_finite_number(floatSize):
+            return
+        limits = marketStatus['limits']
+        if not self.is_dictionary(limits):
+            return
+        amountLimits = limits['amount']
+        if not self.is_dictionary(amountLimits):
+            return
+        amountLimits['min'] = self.ob_scale_limit_by_contract_size(amountLimits['min'], floatSize)
+        amountLimits['max'] = self.ob_scale_limit_by_contract_size(amountLimits['max'], floatSize)
+        marketStatus['precision']['amount'] = self.ob_precision_step_to_digit_count(floatSize)
+
+    def ob_get_fixed_market_status(self, symbol: str):
+        base = self.market(symbol)
+        octobotCfg = self.safe_dict(self.options, 'octobot', {})
+        fixMarketStatus = self.safe_bool(octobotCfg, 'fixMarketStatus', False) is True
+        removeMarketStatusPriceLimits = self.safe_bool(octobotCfg, 'removeMarketStatusPriceLimits', False) is True
+        adaptMarketStatusForContractSize = self.safe_bool(octobotCfg, 'adaptMarketStatusForContractSize', False) is True
+        # Step build: selective shallow copy so untouched nested refs stay shared(.info unchanged by reference swap on top clone only when we omit deep copy)
+        out = self.ob_obtain_mutable_precision_and_limits(base)
+        # Step coerce: unify whitelist fields to floats; non-convertible -> None(OctoBot _fix_typing parity + failures explicit)
+        self.ob_coerce_market_status_whitelist_to_float(out)
+        # Step fixes: connector order mirrors Python adapter + rest_exchange helpers
+        if fixMarketStatus:
+            self.ob_replace_precision_steps_with_digit_count(out['precision'])
+        if removeMarketStatusPriceLimits:
+            limitsLm = out['limits']
+            if self.is_dictionary(limitsLm):
+                priceLm = limitsLm['price']
+                if not self.is_dictionary(priceLm):
+                    priceLm = {}
+                    limitsLm['price'] = priceLm
+                priceLm['min'] = None
+                priceLm['max'] = None
+        if adaptMarketStatusForContractSize:
+            self.ob_apply_adapt_market_status_for_contract_size(out)
+        return out
+
     def is_leveraged_currency(self, currencyCode, checkBaseCoin: Bool = False, existingCurrencies: dict = None):
         leverageSuffixes = [
             '2L', '2S', '3L', '3S', '4L', '4S', '5L', '5S',  # Leveraged Tokens(LT)

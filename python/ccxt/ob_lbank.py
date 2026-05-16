@@ -5,6 +5,7 @@
 
 from ccxt.lbank import lbank
 from ccxt.abstract.ob_lbank import ImplicitAPI
+import hashlib
 from ccxt.base.types import Any, Bool, Str
 from typing import List
 
@@ -14,6 +15,10 @@ class ob_lbank(lbank, ImplicitAPI):
     def describe(self) -> Any:
         return self.deep_extend(super(ob_lbank, self).describe(), {
             'id': 'ob_lbank',
+            'name': 'LBank',
+            'certified': False,
+            'urls': {
+            },
             'has': {
                 'CORS': False,
                 'spot': True,
@@ -43,9 +48,91 @@ class ob_lbank(lbank, ImplicitAPI):
                     'supportFetchingCancelledOrders': False,
                     'enableSpotBuyMarketWithCost': True,
                     'requireOrderFeesFromTrades': True,
+                    'supportsForcedSigningAllRequests': True,
+                    'enableForcedSigningAllRequests': False,
                 },
             },
         })
+
+    def convert_secret_to_pem(self, secret):
+        lineLength = 64
+        secretLength = len(secret) - 0
+        numLines = self.parse_to_int(secretLength / lineLength)
+        numLines = self.sum(numLines, 1)
+        pem = "-----BEGIN PRIVATE KEY-----\n"  # eslint-disable-line
+        for i in range(0, numLines):
+            start = i * lineLength
+            end = self.sum(start, lineLength)
+            pem += self.secret[start:end] + "\n"  # eslint-disable-line
+        return pem + '-----END PRIVATE KEY-----'
+
+    def sign(self, path, api='public', method='GET', params={}, headers=None, body=None):
+        octobotOpts = self.safe_dict(self.options, 'octobot', {})
+        enableForcedSigningAllRequests = self.safe_bool(octobotOpts, 'enableForcedSigningAllRequests', False)
+        if not enableForcedSigningAllRequests:
+            return super(ob_lbank, self).sign(path, api, method, params, headers, body)
+        query = self.omit(params, self.extract_params(path))
+        url = self.urls['api']['rest'] + '/' + self.version + '/' + self.implode_params(path, params)
+        # Every spot endpoint ends with ".do"
+        if api[0] == 'spot':
+            url += '.do'
+        else:
+            url = self.urls['api']['contract'] + '/' + self.implode_params(path, params)
+        # ob_lbank local override: begin(diff vs lbank.sign) — parent public unsigned query skipped(see lbank.sign ~2985-2988)
+        # if api[1] == 'public':
+        #     if query:
+        #         url += '?' + self.urlencode(self.keysort(query))
+        #     }
+        # }
+        # ob_lbank local override: end(diff vs lbank.sign)
+        self.check_required_credentials()
+        timestamp = str(self.milliseconds())
+        echostr = self.uuid22() + self.uuid16()
+        query = self.extend({
+            'api_key': self.apiKey,
+        }, query)
+        signatureMethod = None
+        if len(self.secret) > 32:
+            signatureMethod = 'RSA'
+        else:
+            signatureMethod = 'HmacSHA256'
+        auth = self.rawencode(self.keysort(self.extend({
+            'echostr': echostr,
+            'signature_method': signatureMethod,
+            'timestamp': timestamp,
+        }, query)))
+        encoded = self.encode(auth)
+        hash = self.hash(encoded, 'md5')
+        uppercaseHash = hash.upper()
+        sign = None
+        if signatureMethod == 'RSA':
+            cacheSecretAsPem = self.safe_bool(self.options, 'cacheSecretAsPem', True)
+            pem = None
+            if cacheSecretAsPem:
+                pem = self.safe_value(self.options, 'pem')
+                if pem is None:
+                    pem = self.convert_secret_to_pem(self.encode(self.secret))
+                    self.options['pem'] = pem
+            else:
+                pem = self.convert_secret_to_pem(self.encode(self.secret))
+            sign = self.rsa(uppercaseHash, pem, 'sha256')
+        elif signatureMethod == 'HmacSHA256':
+            sign = self.hmac(self.encode(uppercaseHash), self.encode(self.secret), hashlib.sha256)
+        query['sign'] = sign
+        # ob_lbank local override: begin(diff vs lbank.sign) — encoded params on URL query for public, else body(see lbank.sign ~3028 vs lbank_exchange _force_sign)
+        if api[1] == 'public':
+            if query:
+                url += '?' + self.urlencode(self.keysort(query))
+        else:
+            body = self.urlencode(self.keysort(query))
+        # ob_lbank local override: end(diff vs lbank.sign)
+        headers = {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'timestamp': timestamp,
+            'signature_method': signatureMethod,
+            'echostr': echostr,
+        }
+        return {'url': url, 'method': method, 'body': body, 'headers': headers}
 
     def fetch_permissions(self, params={}) -> List[str]:
         restrictions = self.spotPrivatePostSupplementApiRestrictions(params)
