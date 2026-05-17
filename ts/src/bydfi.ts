@@ -1309,6 +1309,9 @@ export default class bydfi extends Exchange {
             [ workingType, params ] = this.handleOptionAndParams (params, 'createOrder', 'triggerPriceType', workingType);
             request['workingType'] = this.encodeWorkingType (workingType);
         }
+        // Never forward unified triggerPrice into Bydfi's REST body (API uses stopPrice); stray keys come from helpers/tests on some runtimes.
+        // Omit params.type so a polluted params dict (e.g. Python mutable default {}) cannot override the computed API order type.
+        params = this.omit (params, [ 'triggerPrice', 'type' ]);
         return this.extend (request, params);
     }
 
