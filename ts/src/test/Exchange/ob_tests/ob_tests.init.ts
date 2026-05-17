@@ -5,6 +5,7 @@ import testObBingx from './test.ob.bingx.js';
 import testObBitget from './test.ob.bitget.js';
 import testObBitmart from './test.ob.bitmart.js';
 import testObBybit from './test.ob.bybit.js';
+import testObChangenow from './test.ob.changenow.js';
 import testObCoinbase from './test.ob.coinbase.js';
 import testObCoinex from './test.ob.coinex.js';
 import testObExchangeMarketStatus from './test.ob.exchange.marketstatus.js';
@@ -29,6 +30,7 @@ async function obTestsInit () {
     await testObBitget ();
     await testObBitmart ();
     await testObBybit ();
+    await testObChangenow ();
     await testObCoinbase ();
     await testObCoinex ();
     await testObExchangeMarketStatus ();
