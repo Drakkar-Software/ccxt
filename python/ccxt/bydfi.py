@@ -1276,6 +1276,9 @@ class bydfi(Exchange, ImplicitAPI):
             workingType = 'CONTRACT_PRICE'
             workingType, params = self.handle_option_and_params(params, 'createOrder', 'triggerPriceType', workingType)
             request['workingType'] = self.encode_working_type(workingType)
+        # Never forward unified triggerPrice into Bydfi's REST body(API uses stopPrice); stray keys come from helpers/tests on some runtimes.
+        # Omit params.type so a polluted params dict(e.g. Python mutable default {}) cannot override the computed API order type.
+        params = self.omit(params, ['triggerPrice', 'type'])
         return self.extend(request, params)
 
     def encode_working_type(self, workingType: Str) -> Str:
