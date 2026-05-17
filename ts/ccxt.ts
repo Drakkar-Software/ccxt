@@ -82,6 +82,7 @@ import bybit from  './src/bybit.js'
 import bybiteu from  './src/bybiteu.js'
 import bydfi from  './src/bydfi.js'
 import cex from  './src/cex.js'
+import changenow from  './src/changenow.js'
 import coinbase from  './src/coinbase.js'
 import coinbaseexchange from  './src/coinbaseexchange.js'
 import coinbaseinternational from  './src/coinbaseinternational.js'
@@ -141,6 +142,7 @@ import ob_bitmex from  './src/ob_bitmex.js'
 import ob_bitso from  './src/ob_bitso.js'
 import ob_bitstamp from  './src/ob_bitstamp.js'
 import ob_bybit from  './src/ob_bybit.js'
+import ob_changenow from  './src/ob_changenow.js'
 import ob_coinbase from  './src/ob_coinbase.js'
 import ob_coinex from  './src/ob_coinex.js'
 import ob_cryptocom from  './src/ob_cryptocom.js'
@@ -309,6 +311,7 @@ const exchanges = {
     'bybiteu':                bybiteu,
     'bydfi':                  bydfi,
     'cex':                    cex,
+    'changenow':              changenow,
     'coinbase':               coinbase,
     'coinbaseexchange':       coinbaseexchange,
     'coinbaseinternational':  coinbaseinternational,
@@ -368,6 +371,7 @@ const exchanges = {
     'ob_bitso':               ob_bitso,
     'ob_bitstamp':            ob_bitstamp,
     'ob_bybit':               ob_bybit,
+    'ob_changenow':           ob_changenow,
     'ob_coinbase':            ob_coinbase,
     'ob_coinex':              ob_coinex,
     'ob_cryptocom':           ob_cryptocom,
@@ -713,6 +717,7 @@ export {
     bybiteu,
     bydfi,
     cex,
+    changenow,
     coinbase,
     coinbaseexchange,
     coinbaseinternational,
@@ -772,6 +777,7 @@ export {
     ob_bitso,
     ob_bitstamp,
     ob_bybit,
+    ob_changenow,
     ob_coinbase,
     ob_coinex,
     ob_cryptocom,

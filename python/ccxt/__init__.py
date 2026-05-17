@@ -127,6 +127,7 @@ from ccxt.bybit import bybit                                          # noqa: F4
 from ccxt.bybiteu import bybiteu                                      # noqa: F401
 from ccxt.bydfi import bydfi                                          # noqa: F401
 from ccxt.cex import cex                                              # noqa: F401
+from ccxt.changenow import changenow                                  # noqa: F401
 from ccxt.coinbase import coinbase                                    # noqa: F401
 from ccxt.coinbaseexchange import coinbaseexchange                    # noqa: F401
 from ccxt.coinbaseinternational import coinbaseinternational          # noqa: F401
@@ -186,6 +187,7 @@ from ccxt.ob_bitmex import ob_bitmex                                  # noqa: F4
 from ccxt.ob_bitso import ob_bitso                                    # noqa: F401
 from ccxt.ob_bitstamp import ob_bitstamp                              # noqa: F401
 from ccxt.ob_bybit import ob_bybit                                    # noqa: F401
+from ccxt.ob_changenow import ob_changenow                            # noqa: F401
 from ccxt.ob_coinbase import ob_coinbase                              # noqa: F401
 from ccxt.ob_coinex import ob_coinex                                  # noqa: F401
 from ccxt.ob_cryptocom import ob_cryptocom                            # noqa: F401
@@ -267,6 +269,7 @@ exchanges = [
     'bybiteu',
     'bydfi',
     'cex',
+    'changenow',
     'coinbase',
     'coinbaseexchange',
     'coinbaseinternational',
@@ -326,6 +329,7 @@ exchanges = [
     'ob_bitso',
     'ob_bitstamp',
     'ob_bybit',
+    'ob_changenow',
     'ob_coinbase',
     'ob_coinex',
     'ob_cryptocom',
