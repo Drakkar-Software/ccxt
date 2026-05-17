@@ -312,7 +312,7 @@ async function testObCoinbase () {
     // createOrder (ob_coinbase): market + stop trigger -> limit stop-loss at 0.98 * trigger (coinbase_exchange.py _create_market_stop_loss_order)
     {
         const ex = new ccxt.ob_coinbase ();
-        ex.loadMarkets = async () => {};
+        ex.loadMarkets = async () => ({});
         ex.market = function (): any {
             return { 'id': 'BTC-USD', 'spot': true };
         };
@@ -340,7 +340,7 @@ async function testObCoinbase () {
     // createOrder: stopPrice-only params normalize to stopLossPrice; stopLossPrice wins when both are set
     {
         const ex = new ccxt.ob_coinbase ();
-        ex.loadMarkets = async () => {};
+        ex.loadMarkets = async () => ({});
         ex.market = function (): any {
             return { 'id': 'BTC-USD', 'spot': true };
         };
@@ -367,7 +367,7 @@ async function testObCoinbase () {
     // createOrder: market + takeProfitPrice is not rewritten (Coinbase base handles / rejects)
     {
         const ex = new ccxt.ob_coinbase ();
-        ex.loadMarkets = async () => {};
+        ex.loadMarkets = async () => ({});
         ex.market = function (): any {
             return { 'id': 'BTC-USD', 'spot': true };
         };

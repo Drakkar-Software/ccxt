@@ -7251,7 +7251,8 @@ export default class Exchange {
         if (n === undefined) {
             return false;
         }
-        // Reject NaN and infinities using (n===n) and (n-n)===0; avoid number-type guards here
+        // Reject NaN and infinities using (n===n) and (n-n)===0; transpiler-safe for Python (Number.isFinite is not).
+        // eslint-disable-next-line no-self-compare -- intentional NaN check (NaN !== NaN); Infinity − Infinity is NaN in JS
         return (n === n) && ((n - n) === 0);
     }
 
@@ -9356,13 +9357,13 @@ export default class Exchange {
     obResolveRightsFromImaginaryCancelCatch (e: any, rights: string[], authPermissionMatch: Str): string[] {
         // octobot specific
         if (e instanceof AuthenticationError) {
-            const low = String (e).toLowerCase ();
+            const authenticationErrorLower = String (e).toLowerCase ();
             if (authPermissionMatch === 'pair') {
-                if (low.indexOf ('permission') >= 0 && low.indexOf ('denied') >= 0) {
+                if (authenticationErrorLower.indexOf ('permission') >= 0 && authenticationErrorLower.indexOf ('denied') >= 0) {
                     return rights;
                 }
             } else {
-                if (low.indexOf ('permission') >= 0 || low.indexOf ('denied') >= 0) {
+                if (authenticationErrorLower.indexOf ('permission') >= 0 || authenticationErrorLower.indexOf ('denied') >= 0) {
                     return rights;
                 }
             }

@@ -35,7 +35,7 @@
                     null,
                     6000
                 ],
-                "output": "{\"quantity\":\"1\",\"side\":\"SELL\",\"stopPrice\":\"6000\",\"symbol\":\"ETH-USDC\",\"type\":\"TAKE_PROFIT_MARKET\",\"wallet\":\"W001\",\"workingType\":\"CONTRACT_PRICE\"}"
+                "output": "{\"quantity\":\"1\",\"side\":\"SELL\",\"stopPrice\":\"6000\",\"symbol\":\"ETH-USDC\",\"triggerPrice\":\"0.18\",\"type\":\"TAKE_PROFIT\",\"wallet\":\"W001\",\"workingType\":\"CONTRACT_PRICE\"}"
             }
         ],
         "createStopLossOrder": [
@@ -51,7 +51,7 @@
                     null,
                     2000
                 ],
-                "output": "{\"quantity\":\"1\",\"side\":\"SELL\",\"stopPrice\":\"2000\",\"symbol\":\"ETH-USDC\",\"type\":\"STOP_MARKET\",\"wallet\":\"W001\",\"workingType\":\"CONTRACT_PRICE\"}"
+                "output": "{\"quantity\":\"1\",\"side\":\"SELL\",\"stopPrice\":\"2000\",\"symbol\":\"ETH-USDC\",\"triggerPrice\":\"0.01\",\"type\":\"STOP_MARKET\",\"wallet\":\"W001\",\"workingType\":\"CONTRACT_PRICE\"}"
             }
         ],
         "createOrder": [

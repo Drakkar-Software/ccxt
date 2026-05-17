@@ -90,7 +90,7 @@ async function testObPhemex () {
     // createOrder: spot Market strips price passed to underlying (phemex_exchange.py parity)
     {
         const ex = new ccxt.ob_phemex ({});
-        ex.loadMarkets = async () => {};
+        ex.loadMarkets = async () => ({});
         ex.markets = {
             'BTC/USDT': {
                 id: 's',

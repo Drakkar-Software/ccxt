@@ -1,5 +1,4 @@
 
-
 //  ---------------------------------------------------------------------------
 
 import kucoin from './kucoin.js';
@@ -94,6 +93,9 @@ export default class ob_kucoin extends kucoin {
     /**
      * Raise `limits.cost.min` to at least `info.minFunds` when present (OctoBot Kucoin `get_market_status`).
      * (spot only)
+     * @name ob_kucoin#obApplyKucoinMinFundsCostMin
+     * @param market Parsed spot market structure.
+     * @returns Market with reconciled minimum cost limits.
      */
     obApplyKucoinMinFundsCostMin (market: Market): Market {
         const marketDict = market as Dict;
@@ -139,7 +141,7 @@ export default class ob_kucoin extends kucoin {
         return await super.fetchOpenOrders (symbol, since, effectiveLimit, params);
     }
 
-    supportsNativeEditOrder (order_type: Str, symbol: Str): Bool {
+    supportsNativeEditOrder (_order_type: Str, symbol: Str): Bool {
         return false;
     }
 

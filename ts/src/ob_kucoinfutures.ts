@@ -1,5 +1,4 @@
 
-
 //  ---------------------------------------------------------------------------
 
 import kucoinfutures from './kucoinfutures.js';
@@ -104,7 +103,7 @@ export default class ob_kucoinfutures extends kucoinfutures {
         return await super.fetchOpenOrders (symbol, since, effectiveLimit, params);
     }
 
-    supportsNativeEditOrder (order_type: Str, symbol: Str): Bool {
+    supportsNativeEditOrder (_order_type: Str, symbol: Str): Bool {
         return false;
     }
 

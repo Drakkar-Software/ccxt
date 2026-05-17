@@ -4,7 +4,7 @@
 import Exchange from './abstract/wizardswap.js';
 import { ExchangeError, BadRequest, ArgumentsRequired, InvalidOrder, OrderNotFound } from './base/errors.js';
 import { TICK_SIZE } from './base/functions/number.js';
-import type { Market, Str, Dict, Ticker, Num, Currencies, Currency, int, Order, OrderType, OrderSide } from './base/types.js';
+import type { Market, Str, Dict, Ticker, Num, Currencies, int, Order, OrderType, OrderSide } from './base/types.js';
 
 //  ---------------------------------------------------------------------------
 

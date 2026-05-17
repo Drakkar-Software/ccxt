@@ -10,9 +10,9 @@ from typing import List
 from ccxt.base.errors import ExchangeError
 from ccxt.base.errors import AuthenticationError
 from ccxt.base.errors import PermissionDenied
+from ccxt.base.errors import OBOrderUncancellableError
 from ccxt.base.errors import OrderImmediatelyFillable
 from ccxt.base.errors import NotSupported
-from ccxt.base.errors import OBOrderUncancellableError
 
 
 class ob_binance(binance, ImplicitAPI):
@@ -91,6 +91,16 @@ class ob_binance(binance, ImplicitAPI):
         })
 
     def create_order_request(self, symbol: str, type: OrderType, side: OrderSide, amount: float, price: Num = None, params={}):
+        """
+ Spot market sells keep base quantity; strip reference price before delegating(OctoBot Binance parity).
+ @param symbol Symbol passed through.
+ @param type Order type passed through.
+ @param side Order side passed through.
+ @param amount Amount passed through.
+ @param price Optional limit/reference price(cleared for spot market sells).
+ @param params Extra parameters passed through.
+        :returns: Result of parent `createOrderRequest`.
+        """
         market = self.market(symbol)
         effectivePrice = price
         if self.safe_bool(market, 'spot', False) and type.upper() == 'MARKET' and side.upper() == 'SELL':
@@ -101,6 +111,8 @@ class ob_binance(binance, ImplicitAPI):
     def uses_demo_trading_instead_of_sandbox(self, exchangeType: Str) -> Bool:
         """
  Binance futures use demo trading instead of classic sandbox(OctoBot binance tentacle); accept `futures` spelling too.
+ @param exchangeType Exchange subtype string from options or caller.
+        :returns: Whether demo-trading semantics apply(`future` / `futures`).
         """
         normalized = str(exchangeType or '').lower()
         return(normalized == 'future') or (normalized == 'futures')

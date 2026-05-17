@@ -1,5 +1,4 @@
 
-
 //  ---------------------------------------------------------------------------
 
 import mexc from './mexc.js';
@@ -93,7 +92,8 @@ export default class ob_mexc extends mexc {
             }
             let urlParams = params;
             // ob_mexc local override: begin (diff vs mexc.sign) — spot/broker force signing (see mexc_exchange _force_sign ~80-90)
-            if (true || access === 'private') {
+            // Same truth value as `true || …` here: we only reach this block when forced signing is enabled.
+            if (enableForcedSigningAllRequests || access === 'private') {
                 if (section === 'broker' && ((method === 'POST') || (method === 'PUT') || (method === 'DELETE'))) {
                     urlParams = {
                         'timestamp': this.nonce (),
@@ -110,7 +110,7 @@ export default class ob_mexc extends mexc {
                 paramsEncoded = this.urlencode (urlParams);
                 url += '?' + paramsEncoded;
             }
-            if (true || access === 'private') {
+            if (enableForcedSigningAllRequests || access === 'private') {
                 this.checkRequiredCredentials ();
                 const signature = this.hmac (this.encode (paramsEncoded), this.encode (this.secret), sha256);
                 url += '&' + 'signature=' + signature;
@@ -199,8 +199,12 @@ export default class ob_mexc extends mexc {
         const fee = this.safeDict (parsed, 'fee');
         if (status === 'canceled' && fee === undefined) {
             const quoteCcy = this.obQuoteFromSymbol (this.safeString (parsed, 'symbol', ''));
+            let feeCurrency = '';
+            if (quoteCcy !== undefined) {
+                feeCurrency = quoteCcy;
+            }
             parsed['fee'] = {
-                'currency': quoteCcy !== undefined ? quoteCcy : '',
+                'currency': feeCurrency,
                 'cost': 0,
             };
         }

@@ -1,5 +1,4 @@
 
-
 //  ---------------------------------------------------------------------------
 
 import hyperliquid from './hyperliquid.js';
@@ -50,6 +49,9 @@ export default class ob_hyperliquid extends hyperliquid {
     /**
      * Bump `limits.cost.min` by 10% (same intent as former HyperLiquidCCXTAdapter.fix_market_status):
      * Hyperliquid may reject orders that are only slightly above the advertised minimum notional.
+     * @name ob_hyperliquid#obBumpHyperliquidCostMin
+     * @param market Parsed market structure from CCXT.
+     * @returns Market with adjusted minimum cost limit when applicable.
      */
     obBumpHyperliquidCostMin (market: Market): Market {
         const marketDict = market as Dict;

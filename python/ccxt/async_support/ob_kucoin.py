@@ -9,9 +9,9 @@ from ccxt.base.types import Any, Bool, Int, Market, Order, Str, FundingRate, Tra
 from typing import List
 from ccxt.base.errors import PermissionDenied
 from ccxt.base.errors import OBIPWhitelistError
-from ccxt.base.errors import OperationFailed
 from ccxt.base.errors import OBClosedPositionError
 from ccxt.base.errors import OBOrderUncancellableError
+from ccxt.base.errors import OperationFailed
 
 
 class ob_kucoin(kucoin, ImplicitAPI):
@@ -101,6 +101,8 @@ class ob_kucoin(kucoin, ImplicitAPI):
         """
  Raise `limits.cost.min` to at least `info.minFunds` when present(OctoBot Kucoin `get_market_status`).
  (spot only)
+ @param market Parsed spot market structure.
+        :returns: Market with reconciled minimum cost limits.
         """
         marketDict = market
         info = self.safe_dict(marketDict, 'info', {})
@@ -136,7 +138,7 @@ class ob_kucoin(kucoin, ImplicitAPI):
             effectiveLimit = 200
         return await super(ob_kucoin, self).fetch_open_orders(symbol, since, effectiveLimit, params)
 
-    def supports_native_edit_order(self, order_type: Str, symbol: Str) -> Bool:
+    def supports_native_edit_order(self, _order_type: Str, symbol: Str) -> Bool:
         return False
 
     def fetch_stop_order_in_different_request(self, symbol: Str) -> Bool:

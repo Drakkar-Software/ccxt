@@ -1,7 +1,7 @@
 // WizardSwap — fetch all supported currencies
 // No API key needed
 
-import ccxt from '../../ts/ccxt.js';
+import ccxt from '../../js/ccxt.js';
 
 async function main () {
     const exchange = new ccxt.wizardswap ();
