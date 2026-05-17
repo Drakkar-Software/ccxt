@@ -53,6 +53,8 @@ class ob_hyperliquid(hyperliquid, ImplicitAPI):
         """
  Bump `limits.cost.min` by 10%(same intent HyperLiquidCCXTAdapter.fix_market_status):
  Hyperliquid may reject orders that are only slightly above the advertised minimum notional.
+ @param market Parsed market structure from CCXT.
+        :returns: Market with adjusted minimum cost limit when applicable.
         """
         marketDict = market
         limits = self.safe_dict(marketDict, 'limits', {})

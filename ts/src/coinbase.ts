@@ -5367,7 +5367,7 @@ export default class coinbase extends Exchange {
                 'error_description',
                 'error_details',
                 'error_details ', // not a typo
-            ]
+            ];
             for (let i = 0; i < errorDescriptionFields.length; i++) {
                 const errorMessageField = errorDescriptionFields[i];
                 const errorMessage = this.safeString (response, errorMessageField);

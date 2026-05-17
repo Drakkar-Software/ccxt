@@ -1,10 +1,9 @@
 
-
 //  ---------------------------------------------------------------------------
 
 import okxus from './okxus.js';
 import { OBIPWhitelistError, PermissionDenied } from './base/errors.js';
-import type { Bool, Dict, FundingRate, Market, Order, Str } from './base/types.js';
+import type { Bool, Dict, Market, Order, Str } from './base/types.js';
 
 //  ---------------------------------------------------------------------------
 

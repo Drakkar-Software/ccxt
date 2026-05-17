@@ -9,9 +9,9 @@ from ccxt.base.types import Any, Bool, Int, Market, Order, Str, FundingRate, Tra
 from typing import List
 from ccxt.base.errors import PermissionDenied
 from ccxt.base.errors import OBIPWhitelistError
-from ccxt.base.errors import OperationFailed
 from ccxt.base.errors import OBClosedPositionError
 from ccxt.base.errors import OBOrderUncancellableError
+from ccxt.base.errors import OperationFailed
 
 
 class ob_kucoinfutures(kucoinfutures, ImplicitAPI):
@@ -107,7 +107,7 @@ class ob_kucoinfutures(kucoinfutures, ImplicitAPI):
             effectiveLimit = 200
         return await super(ob_kucoinfutures, self).fetch_open_orders(symbol, since, effectiveLimit, params)
 
-    def supports_native_edit_order(self, order_type: Str, symbol: Str) -> Bool:
+    def supports_native_edit_order(self, _order_type: Str, symbol: Str) -> Bool:
         return False
 
     def fetch_stop_order_in_different_request(self, symbol: Str) -> Bool:

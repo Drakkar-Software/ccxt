@@ -1,5 +1,4 @@
 
-
 //  ---------------------------------------------------------------------------
 
 import binance from './binance.js';
@@ -83,6 +82,17 @@ export default class ob_binance extends binance {
         });
     }
 
+    /**
+     * Spot market sells keep base quantity; strip reference price before delegating (OctoBot Binance parity).
+     * @name ob_binance#createOrderRequest
+     * @param symbol Symbol passed through.
+     * @param type Order type passed through.
+     * @param side Order side passed through.
+     * @param amount Amount passed through.
+     * @param price Optional limit/reference price (cleared for spot market sells).
+     * @param params Extra parameters passed through.
+     * @returns Result of parent `createOrderRequest`.
+     */
     createOrderRequest (symbol: string, type: OrderType, side: OrderSide, amount: number, price: Num = undefined, params = {}) {
         const market = this.market (symbol);
         let effectivePrice = price;
@@ -95,6 +105,9 @@ export default class ob_binance extends binance {
 
     /**
      * Binance futures use demo trading instead of classic sandbox (OctoBot binance tentacle); accept `futures` spelling too.
+     * @name ob_binance#usesDemoTradingInsteadOfSandbox
+     * @param exchangeType Exchange subtype string from options or caller.
+     * @returns Whether demo-trading semantics apply (`future` / `futures`).
      */
     usesDemoTradingInsteadOfSandbox (exchangeType: Str): Bool {
         const normalized = String (exchangeType || '').toLowerCase ();

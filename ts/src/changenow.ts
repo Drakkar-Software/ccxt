@@ -362,7 +362,7 @@ export default class changenow extends Exchange {
     }
 
     parseTicker (ticker: Dict, market: Market = undefined): Ticker {
-        let symbol = this.safeString (market, 'symbol');
+        const symbol = this.safeString (market, 'symbol');
         const last = this.safeString (ticker, 'estimatedAmount');
         return this.safeTicker ({
             'symbol': symbol,

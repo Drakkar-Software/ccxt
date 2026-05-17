@@ -10,7 +10,7 @@
 // Example:
 //   npx tsx examples/ts/wizardswap-create-swap.ts bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh 0.5
 
-import ccxt from '../../ts/ccxt.js';
+import ccxt from '../../js/ccxt.js';
 
 async function main () {
     const btcAddress = process.argv[2];

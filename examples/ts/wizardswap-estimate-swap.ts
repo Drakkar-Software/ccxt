@@ -4,7 +4,7 @@
 // Usage:  npx tsx examples/ts/wizardswap-estimate-swap.ts [BASE/QUOTE] [amount]
 // E.g.:   npx tsx examples/ts/wizardswap-estimate-swap.ts XMR/BTC 1
 
-import ccxt from '../../ts/ccxt.js';
+import ccxt from '../../js/ccxt.js';
 
 async function main () {
     const symbol = process.argv[2] || 'XMR/BTC';

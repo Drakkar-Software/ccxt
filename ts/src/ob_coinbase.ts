@@ -1,5 +1,4 @@
 
-
 //  ---------------------------------------------------------------------------
 
 import coinbase from './coinbase.js';
@@ -119,6 +118,14 @@ export default class ob_coinbase extends coinbase {
      * Coinbase only supports stop-limit orders, not stop-market (`coinbase#createOrder` throws).
      * OctoBot `Coinbase._create_market_stop_loss_order`: limit stop-loss with limit = trigger * 0.98
      * (STOP_LIMIT_ORDER_INSTANT_FILL_PRICE_RATIO in coinbase_exchange.py).
+     * @name ob_coinbase#createOrder
+     * @param symbol Symbol passed through.
+     * @param type Order type passed through (market stop-loss is rewritten to limit).
+     * @param side Order side passed through.
+     * @param amount Amount passed through.
+     * @param price Limit price passed through when no stop-loss synthesis applies.
+     * @param params Extra parameters (`stopLossPrice` / `stopPrice` trigger handling).
+     * @returns Created order from the underlying Coinbase implementation.
      */
     async createOrder (symbol: string, type: OrderType, side: OrderSide, amount: number, price: Num = undefined, params = {}): Promise<Order> {
         const normalizedType = String (type).toUpperCase ();

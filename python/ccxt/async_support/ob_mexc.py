@@ -97,7 +97,8 @@ class ob_mexc(mexc, ImplicitAPI):
                 url = self.urls['api'][section][access] + '/api/' + self.version + '/' + path
             urlParams = params
             # ob_mexc local override: begin(diff vs mexc.sign) — spot/broker force signing(see mexc_exchange _force_sign ~80-90)
-            if True or access == 'private':
+            # Same truth value as `true or …` here: we only reach self block when forced signing is enabled.
+            if enableForcedSigningAllRequests or access == 'private':
                 if section == 'broker' and ((method == 'POST') or (method == 'PUT') or (method == 'DELETE')):
                     urlParams = {
                         'timestamp': self.nonce(),
@@ -111,7 +112,7 @@ class ob_mexc(mexc, ImplicitAPI):
             if urlParams:
                 paramsEncoded = self.urlencode(urlParams)
                 url += '?' + paramsEncoded
-            if True or access == 'private':
+            if enableForcedSigningAllRequests or access == 'private':
                 self.check_required_credentials()
                 signature = self.hmac(self.encode(paramsEncoded), self.encode(self.secret), hashlib.sha256)
                 url += '&' + 'signature=' + signature
@@ -187,8 +188,11 @@ class ob_mexc(mexc, ImplicitAPI):
         fee = self.safe_dict(parsed, 'fee')
         if status == 'canceled' and fee is None:
             quoteCcy = self.ob_quote_from_symbol(self.safe_string(parsed, 'symbol', ''))
+            feeCurrency = ''
+            if quoteCcy is not None:
+                feeCurrency = quoteCcy
             parsed['fee'] = {
-                'currency': quoteCcy is not quoteCcy if None else '',
+                'currency': feeCurrency,
                 'cost': 0,
             }
         return parsed

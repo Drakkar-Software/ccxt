@@ -14920,7 +14920,7 @@ export default class binance extends Exchange {
             const info = market['info'];
             const filtersRaw = this.safeValue (info, 'filters', []);
             const filters = Array.isArray (filtersRaw) ? filtersRaw : [];
-            let valueKey = isStopOrder ? 'maxNumAlgoOrders' : 'maxNumOrders';
+            const valueKey = isStopOrder ? 'maxNumAlgoOrders' : 'maxNumOrders';
             const fallbackKey = 'limit';
             for (let idx = 0; idx < filters.length; idx++) {
                 const f = filters[idx];

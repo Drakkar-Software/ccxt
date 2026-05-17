@@ -1,5 +1,4 @@
 
-
 //  ---------------------------------------------------------------------------
 
 import bingx from './bingx.js';
@@ -112,6 +111,9 @@ export default class ob_bingx extends bingx {
 
     /**
      * OctoBot BingxCCXTAdapter._update_stop_order_or_trade_type_and_price (orders and trades).
+     * @name ob_bingx#adaptBingxStopOrderOrTradeTypeAndPrice
+     * @param parsed
+     * @param logContext
      */
     adaptBingxStopOrderOrTradeTypeAndPrice (parsed: Dict, logContext: Str = 'ob_bingx.parseOrder') {
         // Step 1: only adjust when BingX stop-loss quote field is present

@@ -6142,7 +6142,8 @@ class BaseExchange(object):
     def ob_is_strict_finite_number(self, n: Num):
         if n is None:
             return False
-        # Reject NaN and infinities using(n==n) and (n-n)==0; avoid number-type guards here
+        # Reject NaN and infinities using(n==n) and (n-n)==0; transpiler-safe for Python(Number.isFinite is not).
+        # eslint-disable-next-line no-self-compare -- intentional NaN check(NaN != NaN); Infinity − Infinity is NaN in JS
         return(n == n) and ((n - n) == 0)
 
     def ob_coerce_scalar_to_float_strict(self, raw: Any):
@@ -8455,12 +8456,12 @@ class Exchange(BaseExchange):
     def ob_resolve_rights_from_imaginary_cancel_catch(self, e: Any, rights: List[str], authPermissionMatch: Str):
         # octobot specific
         if isinstance(e, AuthenticationError):
-            low = str(e).lower()
+            authenticationErrorLower = str(e).lower()
             if authPermissionMatch == 'pair':
-                if low.find('permission') >= 0 and low.find('denied') >= 0:
+                if authenticationErrorLower.find('permission') >= 0 and authenticationErrorLower.find('denied') >= 0:
                     return rights
             else:
-                if low.find('permission') >= 0 or low.find('denied') >= 0:
+                if authenticationErrorLower.find('permission') >= 0 or authenticationErrorLower.find('denied') >= 0:
                     return rights
             raise e
         if isinstance(e, NetworkError):
