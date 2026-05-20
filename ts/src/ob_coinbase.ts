@@ -4,7 +4,7 @@
 import coinbase from './coinbase.js';
 import { AuthenticationError, ArgumentsRequired, BadSymbol, ExchangeError, InvalidNonce, OBInternalSyncError, OperationFailed, OrderNotFound, PermissionDenied } from './base/errors.js';
 import { Precise } from './base/Precise.js';
-import type { Balances, Bool, Dict, Market, Num, Order, OrderSide, OrderType, Str, Trade } from './base/types.js';
+import type { Balances, Bool, Dict, Market, Num, Order, OrderSide, OrderType, Str, Ticker, Trade } from './base/types.js';
 
 //  ---------------------------------------------------------------------------
 
@@ -273,6 +273,16 @@ export default class ob_coinbase extends coinbase {
             parsed['amount'] = cost / price;
         }
         return parsed as Trade;
+    }
+
+    parseTicker (ticker: Dict, market: Market = undefined): Ticker {
+        // override the standard parseTicker to apply OctoBot's CoinbaseCCXTAdapter.fix_ticker:
+        // coinbase tickers may be returned with no timestamp, fall back to the current time
+        const parsed = super.parseTicker (ticker, market) as Dict;
+        if (!this.safeInteger (parsed, 'timestamp')) {
+            parsed['timestamp'] = this.milliseconds ();
+        }
+        return parsed as Ticker;
     }
 
     adaptStopOrderTypeAndPrice (parsed: Dict): Dict {

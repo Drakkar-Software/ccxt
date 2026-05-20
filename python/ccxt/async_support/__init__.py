@@ -114,6 +114,7 @@ from ccxt.async_support.coinbase import coinbase                                
 from ccxt.async_support.coinbaseadvanced import coinbaseadvanced                # noqa: F401
 from ccxt.async_support.coinbaseexchange import coinbaseexchange                # noqa: F401
 from ccxt.async_support.coinbaseinternational import coinbaseinternational      # noqa: F401
+from ccxt.async_support.coingecko import coingecko                              # noqa: F401
 from ccxt.async_support.coincheck import coincheck                              # noqa: F401
 from ccxt.async_support.coinex import coinex                                    # noqa: F401
 from ccxt.async_support.coinmate import coinmate                                # noqa: F401
@@ -127,6 +128,7 @@ from ccxt.async_support.deepcoin import deepcoin                                
 from ccxt.async_support.delta import delta                                      # noqa: F401
 from ccxt.async_support.deribit import deribit                                  # noqa: F401
 from ccxt.async_support.derive import derive                                    # noqa: F401
+from ccxt.async_support.dexscreener import dexscreener                            # noqa: F401
 from ccxt.async_support.digifinex import digifinex                              # noqa: F401
 from ccxt.async_support.dydx import dydx                                        # noqa: F401
 from ccxt.async_support.exmo import exmo                                        # noqa: F401
@@ -173,7 +175,9 @@ from ccxt.async_support.ob_bybit import ob_bybit                                
 from ccxt.async_support.ob_changenow import ob_changenow                        # noqa: F401
 from ccxt.async_support.ob_coinbase import ob_coinbase                          # noqa: F401
 from ccxt.async_support.ob_coinex import ob_coinex                              # noqa: F401
+from ccxt.async_support.ob_coingecko import ob_coingecko                        # noqa: F401
 from ccxt.async_support.ob_cryptocom import ob_cryptocom                        # noqa: F401
+from ccxt.async_support.ob_dexscreener import ob_dexscreener                  # noqa: F401
 from ccxt.async_support.ob_gateio import ob_gateio                              # noqa: F401
 from ccxt.async_support.ob_hitbtc import ob_hitbtc                              # noqa: F401
 from ccxt.async_support.ob_hollaex import ob_hollaex                            # noqa: F401
@@ -263,6 +267,7 @@ exchanges = [
     'coinbaseadvanced',
     'coinbaseexchange',
     'coinbaseinternational',
+    'coingecko',
     'coincheck',
     'coinex',
     'coinmate',
@@ -276,6 +281,7 @@ exchanges = [
     'delta',
     'deribit',
     'derive',
+    'dexscreener',
     'digifinex',
     'dydx',
     'exmo',
@@ -322,7 +328,9 @@ exchanges = [
     'ob_changenow',
     'ob_coinbase',
     'ob_coinex',
+    'ob_coingecko',
     'ob_cryptocom',
+    'ob_dexscreener',
     'ob_gateio',
     'ob_hitbtc',
     'ob_hollaex',

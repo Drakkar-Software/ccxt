@@ -90,6 +90,7 @@ import coinbase from  './src/coinbase.js'
 import coinbaseadvanced from  './src/coinbaseadvanced.js'
 import coinbaseexchange from  './src/coinbaseexchange.js'
 import coinbaseinternational from  './src/coinbaseinternational.js'
+import coingecko from  './src/coingecko.js'
 import coincheck from  './src/coincheck.js'
 import coinex from  './src/coinex.js'
 import coinmate from  './src/coinmate.js'
@@ -103,6 +104,7 @@ import deepcoin from  './src/deepcoin.js'
 import delta from  './src/delta.js'
 import deribit from  './src/deribit.js'
 import derive from  './src/derive.js'
+import dexscreener from  './src/dexscreener.js'
 import digifinex from  './src/digifinex.js'
 import dydx from  './src/dydx.js'
 import exmo from  './src/exmo.js'
@@ -149,7 +151,9 @@ import ob_bybit from  './src/ob_bybit.js'
 import ob_changenow from  './src/ob_changenow.js'
 import ob_coinbase from  './src/ob_coinbase.js'
 import ob_coinex from  './src/ob_coinex.js'
+import ob_coingecko from  './src/ob_coingecko.js'
 import ob_cryptocom from  './src/ob_cryptocom.js'
+import ob_dexscreener from  './src/ob_dexscreener.js'
 import ob_gateio from  './src/ob_gateio.js'
 import ob_hitbtc from  './src/ob_hitbtc.js'
 import ob_hollaex from  './src/ob_hollaex.js'
@@ -322,6 +326,7 @@ const exchanges = {
     'coinbaseadvanced':       coinbaseadvanced,
     'coinbaseexchange':       coinbaseexchange,
     'coinbaseinternational':  coinbaseinternational,
+    'coingecko':              coingecko,
     'coincheck':              coincheck,
     'coinex':                 coinex,
     'coinmate':               coinmate,
@@ -335,6 +340,7 @@ const exchanges = {
     'delta':                  delta,
     'deribit':                deribit,
     'derive':                 derive,
+    'dexscreener':            dexscreener,
     'digifinex':              digifinex,
     'dydx':                   dydx,
     'exmo':                   exmo,
@@ -381,7 +387,9 @@ const exchanges = {
     'ob_changenow':           ob_changenow,
     'ob_coinbase':            ob_coinbase,
     'ob_coinex':              ob_coinex,
+    'ob_coingecko':           ob_coingecko,
     'ob_cryptocom':           ob_cryptocom,
+    'ob_dexscreener':         ob_dexscreener,
     'ob_gateio':              ob_gateio,
     'ob_hitbtc':              ob_hitbtc,
     'ob_hollaex':             ob_hollaex,
@@ -703,6 +711,7 @@ export {
     coinbaseadvanced,
     coinbaseexchange,
     coinbaseinternational,
+    coingecko,
     coincheck,
     coinex,
     coinmate,
@@ -716,6 +725,7 @@ export {
     delta,
     deribit,
     derive,
+    dexscreener,
     digifinex,
     dydx,
     exmo,
@@ -762,7 +772,9 @@ export {
     ob_changenow,
     ob_coinbase,
     ob_coinex,
+    ob_coingecko,
     ob_cryptocom,
+    ob_dexscreener,
     ob_gateio,
     ob_hitbtc,
     ob_hollaex,

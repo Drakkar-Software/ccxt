@@ -2,7 +2,7 @@
 //  ---------------------------------------------------------------------------
 
 import htx from './htx.js';
-import type { Dict, Market, Order } from './base/types.js';
+import type { Dict, Market, Order, Ticker } from './base/types.js';
 
 //  ---------------------------------------------------------------------------
 
@@ -65,6 +65,16 @@ export default class ob_htx extends htx {
         const parsed = super.parseOrder (order, market) as Dict;
         this.obAdaptAmountFromFilledOrCost (parsed);
         return parsed as Order;
+    }
+
+    parseTicker (ticker: Dict, market: Market = undefined): Ticker {
+        // override the standard parseTicker to apply OctoBot's HTXCCXTAdapter.fix_ticker:
+        // htx tickers may be returned with no timestamp, fall back to the current time
+        const parsed = super.parseTicker (ticker, market) as Dict;
+        if (!this.safeInteger (parsed, 'timestamp')) {
+            parsed['timestamp'] = this.milliseconds ();
+        }
+        return parsed as Ticker;
     }
 
     obAdaptAmountFromFilledOrCost (parsed: Dict): Dict {

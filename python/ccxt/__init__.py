@@ -134,6 +134,7 @@ from ccxt.coinbase import coinbase                                    # noqa: F4
 from ccxt.coinbaseadvanced import coinbaseadvanced                    # noqa: F401
 from ccxt.coinbaseexchange import coinbaseexchange                    # noqa: F401
 from ccxt.coinbaseinternational import coinbaseinternational          # noqa: F401
+from ccxt.coingecko import coingecko                                  # noqa: F401
 from ccxt.coincheck import coincheck                                  # noqa: F401
 from ccxt.coinex import coinex                                        # noqa: F401
 from ccxt.coinmate import coinmate                                    # noqa: F401
@@ -147,6 +148,7 @@ from ccxt.deepcoin import deepcoin                                    # noqa: F4
 from ccxt.delta import delta                                          # noqa: F401
 from ccxt.deribit import deribit                                      # noqa: F401
 from ccxt.derive import derive                                        # noqa: F401
+from ccxt.dexscreener import dexscreener                              # noqa: F401
 from ccxt.digifinex import digifinex                                  # noqa: F401
 from ccxt.dydx import dydx                                            # noqa: F401
 from ccxt.exmo import exmo                                            # noqa: F401
@@ -193,7 +195,9 @@ from ccxt.ob_bybit import ob_bybit                                    # noqa: F4
 from ccxt.ob_changenow import ob_changenow                            # noqa: F401
 from ccxt.ob_coinbase import ob_coinbase                              # noqa: F401
 from ccxt.ob_coinex import ob_coinex                                  # noqa: F401
+from ccxt.ob_coingecko import ob_coingecko                            # noqa: F401
 from ccxt.ob_cryptocom import ob_cryptocom                            # noqa: F401
+from ccxt.ob_dexscreener import ob_dexscreener                        # noqa: F401
 from ccxt.ob_gateio import ob_gateio                                  # noqa: F401
 from ccxt.ob_hitbtc import ob_hitbtc                                  # noqa: F401
 from ccxt.ob_hollaex import ob_hollaex                                # noqa: F401
@@ -283,6 +287,7 @@ exchanges = [
     'coinbaseadvanced',
     'coinbaseexchange',
     'coinbaseinternational',
+    'coingecko',
     'coincheck',
     'coinex',
     'coinmate',
@@ -296,6 +301,7 @@ exchanges = [
     'delta',
     'deribit',
     'derive',
+    'dexscreener',
     'digifinex',
     'dydx',
     'exmo',
@@ -342,7 +348,9 @@ exchanges = [
     'ob_changenow',
     'ob_coinbase',
     'ob_coinex',
+    'ob_coingecko',
     'ob_cryptocom',
+    'ob_dexscreener',
     'ob_gateio',
     'ob_hitbtc',
     'ob_hollaex',
