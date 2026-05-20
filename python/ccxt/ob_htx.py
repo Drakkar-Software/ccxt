@@ -5,7 +5,7 @@
 
 from ccxt.htx import htx
 from ccxt.abstract.ob_htx import ImplicitAPI
-from ccxt.base.types import Any, Market, Order
+from ccxt.base.types import Any, Market, Order, Ticker
 from typing import List
 
 
@@ -14,6 +14,10 @@ class ob_htx(htx, ImplicitAPI):
     def describe(self) -> Any:
         return self.deep_extend(super(ob_htx, self).describe(), {
             'id': 'ob_htx',
+            'name': 'HTX',
+            'certified': False,
+            'urls': {
+            },
             'has': {
                 'CORS': None,
                 'spot': True,
@@ -61,6 +65,14 @@ class ob_htx(htx, ImplicitAPI):
         # call the standard parseOrder then run adapt_amount_from_filled_or_cost
         parsed = super(ob_htx, self).parse_order(order, market)
         self.ob_adapt_amount_from_filled_or_cost(parsed)
+        return parsed
+
+    def parse_ticker(self, ticker: dict, market: Market = None) -> Ticker:
+        # override the standard parseTicker to apply OctoBot's HTXCCXTAdapter.fix_ticker:
+        # htx tickers may be returned with no timestamp, fall back to the current time
+        parsed = super(ob_htx, self).parse_ticker(ticker, market)
+        if not self.safe_integer(parsed, 'timestamp'):
+            parsed['timestamp'] = self.milliseconds()
         return parsed
 
     def ob_adapt_amount_from_filled_or_cost(self, parsed: dict) -> dict:

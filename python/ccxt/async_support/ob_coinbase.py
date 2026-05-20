@@ -5,7 +5,7 @@
 
 from ccxt.async_support.coinbase import coinbase
 from ccxt.abstract.ob_coinbase import ImplicitAPI
-from ccxt.base.types import Any, Balances, Bool, Market, Num, Order, OrderSide, OrderType, Str, Trade
+from ccxt.base.types import Any, Balances, Bool, Market, Num, Order, OrderSide, OrderType, Str, Ticker, Trade
 from typing import List
 from ccxt.base.errors import ExchangeError
 from ccxt.base.errors import AuthenticationError
@@ -246,6 +246,14 @@ class ob_coinbase(coinbase, ImplicitAPI):
         if amount is None and cost is not None and cost != 0 and price is not None and price != 0:
             # convert amount to have the same units other exchange
             parsed['amount'] = cost / price
+        return parsed
+
+    def parse_ticker(self, ticker: dict, market: Market = None) -> Ticker:
+        # override the standard parseTicker to apply OctoBot's CoinbaseCCXTAdapter.fix_ticker:
+        # coinbase tickers may be returned with no timestamp, fall back to the current time
+        parsed = super(ob_coinbase, self).parse_ticker(ticker, market)
+        if not self.safe_integer(parsed, 'timestamp'):
+            parsed['timestamp'] = self.milliseconds()
         return parsed
 
     def adapt_stop_order_type_and_price(self, parsed: dict) -> dict:

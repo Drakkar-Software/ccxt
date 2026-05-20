@@ -5,7 +5,7 @@
 
 from ccxt.kucoinfutures import kucoinfutures
 from ccxt.abstract.ob_kucoinfutures import ImplicitAPI
-from ccxt.base.types import Any, Bool, Int, Market, Order, Str, FundingRate, Trade
+from ccxt.base.types import Any, Bool, Int, Market, Order, Str, Ticker, FundingRate, Trade
 from typing import List
 from ccxt.base.errors import PermissionDenied
 from ccxt.base.errors import OBIPWhitelistError
@@ -194,6 +194,14 @@ class ob_kucoinfutures(kucoinfutures, ImplicitAPI):
         parsed = super(ob_kucoinfutures, self).parse_trade(trade, market)
         self.adapt_kucoin_order_type(parsed)
         self.ensure_kucoin_fee(parsed)
+        return parsed
+
+    def parse_ticker(self, ticker: dict, market: Market = None) -> Ticker:
+        # override the standard parseTicker to apply OctoBot's KucoinCCXTAdapter.fix_ticker:
+        # kucoin futures tickers may be returned with no timestamp, fall back to the current time
+        parsed = super(ob_kucoinfutures, self).parse_ticker(ticker, market)
+        if not self.safe_integer(parsed, 'timestamp'):
+            parsed['timestamp'] = self.milliseconds()
         return parsed
 
     def parse_funding_rate(self, data, market: Market = None) -> FundingRate:

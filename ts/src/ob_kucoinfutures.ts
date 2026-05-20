@@ -3,7 +3,7 @@
 
 import kucoinfutures from './kucoinfutures.js';
 import { OBClosedPositionError, OBIPWhitelistError, OBOrderUncancellableError, PermissionDenied, OperationFailed } from './base/errors.js';
-import type { Bool, Dict, FundingRate, Int, Market, Order, Str, Trade } from './base/types.js';
+import type { Bool, Dict, FundingRate, Int, Market, Order, Str, Ticker, Trade } from './base/types.js';
 
 //  ---------------------------------------------------------------------------
 
@@ -211,6 +211,16 @@ export default class ob_kucoinfutures extends kucoinfutures {
         this.adaptKucoinOrderType (parsed);
         this.ensureKucoinFee (parsed);
         return parsed as Trade;
+    }
+
+    parseTicker (ticker: Dict, market: Market = undefined): Ticker {
+        // override the standard parseTicker to apply OctoBot's KucoinCCXTAdapter.fix_ticker:
+        // kucoin futures tickers may be returned with no timestamp, fall back to the current time
+        const parsed = super.parseTicker (ticker, market) as Dict;
+        if (!this.safeInteger (parsed, 'timestamp')) {
+            parsed['timestamp'] = this.milliseconds ();
+        }
+        return parsed as Ticker;
     }
 
     parseFundingRate (data, market: Market = undefined): FundingRate {
