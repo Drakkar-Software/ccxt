@@ -23,6 +23,7 @@ export default class ob_changenow extends changenow {
                 'option': false,
             },
             'options': {
+                'defaultAPIKey': '5f7dc0622f06ed2256261edd51a062c551cb93b799909f02dcaf695c40493c6c',
                 'octobot': {
                     'supportedElements': {
                         'spot': {
@@ -35,6 +36,7 @@ export default class ob_changenow extends changenow {
                         },
                     },
                     'fixMarketStatus': true,
+                    'removeMarketStatusPriceLimits': true,
                     'supportFetchingCancelledOrders': false,
                     'requireClosedOrdersFromRecentTrades': false,
                     'createOhlcvFromTickers': true,

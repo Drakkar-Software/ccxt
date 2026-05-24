@@ -26,6 +26,7 @@ class ob_changenow(changenow, ImplicitAPI):
                 'option': False,
             },
             'options': {
+                'defaultAPIKey': '5f7dc0622f06ed2256261edd51a062c551cb93b799909f02dcaf695c40493c6c',
                 'octobot': {
                     'supportedElements': {
                         'spot': {
@@ -38,6 +39,7 @@ class ob_changenow(changenow, ImplicitAPI):
                         },
                     },
                     'fixMarketStatus': True,
+                    'removeMarketStatusPriceLimits': True,
                     'supportFetchingCancelledOrders': False,
                     'requireClosedOrdersFromRecentTrades': False,
                     'createOhlcvFromTickers': True,
