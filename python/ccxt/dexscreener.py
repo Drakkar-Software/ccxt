@@ -394,6 +394,7 @@ class dexscreener(Exchange, ImplicitAPI):
     def set_markets(self, markets, currencies=None):
         super(dexscreener, self).set_markets(markets, currencies)
         self.index_address_pair_market_keys()
+        return self.markets
 
     def merge_markets(self, newMarkets: List[Market]):
         existingMarkets = list(self.markets.values())

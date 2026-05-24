@@ -1,7 +1,7 @@
 //  ---------------------------------------------------------------------------
 
 import Exchange from './abstract/changenow.js';
-import { ExchangeError, BadRequest, ArgumentsRequired, AuthenticationError, OrderNotFound } from './base/errors.js';
+import { ExchangeError, BadRequest, ArgumentsRequired, AuthenticationError, OrderNotFound, InvalidOrder } from './base/errors.js';
 import { TICK_SIZE } from './base/functions/number.js';
 import type { Market, Str, Dict, Ticker, Num, Currencies, int, Order, OrderType, OrderSide } from './base/types.js';
 
@@ -153,6 +153,8 @@ export default class changenow extends Exchange {
                 },
             },
             'options': {
+                'defaultAPIKey': '',
+                'forceDefaultAPIKey': false,
                 'statusMapping': {
                     'new': 'open',
                     'waiting': 'open',
@@ -167,6 +169,41 @@ export default class changenow extends Exchange {
                 },
             },
         });
+    }
+
+    resolveApiKey (): Str {
+        if (this.safeBool (this.options, 'forceDefaultAPIKey', false)) {
+            return this.safeString (this.options, 'defaultAPIKey');
+        }
+        if (this.apiKey) {
+            return this.apiKey;
+        }
+        return this.safeString (this.options, 'defaultAPIKey');
+    }
+
+    checkRequiredCredentials (error = true) {
+        const keys = Object.keys (this.requiredCredentials);
+        for (let credentialIndex = 0; credentialIndex < keys.length; credentialIndex++) {
+            const key = keys[credentialIndex];
+            if (this.requiredCredentials[key]) {
+                if (key === 'apiKey') {
+                    if (!this.resolveApiKey ()) {
+                        if (error) {
+                            throw new AuthenticationError (this.id + ' requires "' + key + '" credential');
+                        } else {
+                            return false;
+                        }
+                    }
+                } else if (!this[key]) {
+                    if (error) {
+                        throw new AuthenticationError (this.id + ' requires "' + key + '" credential');
+                    } else {
+                        return false;
+                    }
+                }
+            }
+        }
+        return true;
     }
 
     /**
@@ -338,7 +375,7 @@ export default class changenow extends Exchange {
         let response = undefined;
         if (fixedRate) {
             // v1 fixed-rate estimate requires api_key query parameter
-            request['api_key'] = this.apiKey;
+            request['api_key'] = this.resolveApiKey ();
             response = await this.publicGetExchangeAmountFixedRateAmountFromTo (this.extend (request, params));
         } else {
             response = await this.publicGetExchangeAmountAmountFromTo (this.extend (request, params));
@@ -399,9 +436,9 @@ export default class changenow extends Exchange {
      * @param {float} amount amount of the base currency to send
      * @param {float} [price] not used for ChangeNOW standard flow
      * @param {object} [params] extra parameters specific to the exchange API endpoint
-     * @param {string} params.address destination address for the quote currency (required)
+     * @param {string} params.address_to destination address for the quote currency (required)
      * @param {string} [params.extraId] extra id or memo for the destination address (e.g. for XRP, XLM)
-     * @param {string} [params.refundAddress] refund address for the base currency
+     * @param {string} [params.refund_address] refund address for the base currency
      * @param {string} [params.refundExtraId] extra id or memo for the refund address
      * @param {string} [params.rateId] rate id from fixed-rate estimate (required for fixed-rate)
      * @param {string} [params.contactEmail] contact email for notifications
@@ -413,22 +450,22 @@ export default class changenow extends Exchange {
         const market = this.market (symbol);
         const baseId = this.safeString (market, 'baseId');
         const quoteId = this.safeString (market, 'quoteId');
-        const address = this.safeString (params, 'address');
-        if (address === undefined) {
-            throw new ArgumentsRequired (this.id + ' createOrder() requires params.address – the destination address for the received currency');
+        const addressTo = this.safeString (params, 'address_to');
+        if (addressTo === undefined) {
+            throw new ArgumentsRequired (this.id + ' createOrder() requires params.address_to – the destination address for the received currency');
         }
         const request: Dict = {
-            'apiKey': this.apiKey,
+            'apiKey': this.resolveApiKey (),
             'from': baseId,
             'to': quoteId,
             'amount': this.numberToString (amount),
-            'address': address,
+            'address': addressTo,
         };
         const extraId = this.safeString (params, 'extraId');
         if (extraId !== undefined) {
             request['extraId'] = extraId;
         }
-        const refundAddress = this.safeString (params, 'refundAddress');
+        const refundAddress = this.safeString (params, 'refund_address');
         if (refundAddress !== undefined) {
             request['refundAddress'] = refundAddress;
         }
@@ -444,7 +481,7 @@ export default class changenow extends Exchange {
         if (contactEmail !== undefined) {
             request['contactEmail'] = contactEmail;
         }
-        params = this.omit (params, [ 'address', 'extraId', 'refundAddress', 'refundExtraId', 'rateId', 'contactEmail' ]);
+        params = this.omit (params, [ 'address_to', 'extraId', 'refund_address', 'refundExtraId', 'rateId', 'contactEmail' ]);
         const response = await this.privatePostTransactionsApiKey (this.extend (request, params));
         //
         //  {
@@ -474,7 +511,7 @@ export default class changenow extends Exchange {
         this.checkRequiredCredentials ();
         const request: Dict = {
             'id': id,
-            'apiKey': this.apiKey,
+            'apiKey': this.resolveApiKey (),
         };
         const response = await this.privateGetTransactionsIdApiKey (this.extend (request, params));
         //
@@ -610,6 +647,7 @@ export default class changenow extends Exchange {
         //  { "error": "pair_is_inactive", "message": "This pair is currently unavailable" }
         //  { "error": "not_valid_params", "message": "Invalid request parameters" }
         //  { "error": "deposit_too_small", "message": "Deposit amount is less than minimum" }
+        //  { "error": "out_of_range", "message": "Amount is less then minimal: 0.0223925 XMR" }
         //  { "message": "Unauthorized" }
         //
         const error = this.safeString (response, 'error');
@@ -623,6 +661,9 @@ export default class changenow extends Exchange {
             }
             if (error === 'not_found') {
                 throw new OrderNotFound (this.id + ' ' + body);
+            }
+            if (error === 'deposit_too_small' || error === 'out_of_range') {
+                throw new InvalidOrder (this.id + ' ' + body);
             }
             throw new ExchangeError (this.id + ' ' + body);
         }

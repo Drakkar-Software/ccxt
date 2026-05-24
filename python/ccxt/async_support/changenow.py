@@ -11,6 +11,7 @@ from ccxt.base.errors import ExchangeError
 from ccxt.base.errors import AuthenticationError
 from ccxt.base.errors import ArgumentsRequired
 from ccxt.base.errors import BadRequest
+from ccxt.base.errors import InvalidOrder
 from ccxt.base.errors import OrderNotFound
 from ccxt.base.decimal_to_precision import TICK_SIZE
 
@@ -154,6 +155,8 @@ class changenow(Exchange, ImplicitAPI):
                 },
             },
             'options': {
+                'defaultAPIKey': '',
+                'forceDefaultAPIKey': False,
                 'statusMapping': {
                     'new': 'open',
                     'waiting': 'open',
@@ -168,6 +171,31 @@ class changenow(Exchange, ImplicitAPI):
                 },
             },
         })
+
+    def resolve_api_key(self) -> Str:
+        if self.safe_bool(self.options, 'forceDefaultAPIKey', False):
+            return self.safe_string(self.options, 'defaultAPIKey')
+        if self.apiKey:
+            return self.apiKey
+        return self.safe_string(self.options, 'defaultAPIKey')
+
+    def check_required_credentials(self, error=True):
+        keys = list(self.requiredCredentials.keys())
+        for credentialIndex in range(0, len(keys)):
+            key = keys[credentialIndex]
+            if self.requiredCredentials[key]:
+                if key == 'apiKey':
+                    if not self.resolve_api_key():
+                        if error:
+                            raise AuthenticationError(self.id + ' requires "' + key + '" credential')
+                        else:
+                            return False
+                elif not getattr(self, key):
+                    if error:
+                        raise AuthenticationError(self.id + ' requires "' + key + '" credential')
+                    else:
+                        return False
+        return True
 
     async def fetch_currencies(self, params={}) -> Currencies:
         """
@@ -330,7 +358,7 @@ class changenow(Exchange, ImplicitAPI):
         response = None
         if fixedRate:
             # v1 fixed-rate estimate requires api_key query parameter
-            request['api_key'] = self.apiKey
+            request['api_key'] = self.resolve_api_key()
             response = await self.publicGetExchangeAmountFixedRateAmountFromTo(self.extend(request, params))
         else:
             response = await self.publicGetExchangeAmountAmountFromTo(self.extend(request, params))
@@ -389,9 +417,9 @@ class changenow(Exchange, ImplicitAPI):
         :param float amount: amount of the base currency to send
         :param float [price]: not used for ChangeNOW standard flow
         :param dict [params]: extra parameters specific to the exchange API endpoint
-        :param str params['address']: destination address for the quote currency(required)
+        :param str params['address_to']: destination address for the quote currency(required)
         :param str [params.extraId]: extra id or memo for the destination address(e.g. for XRP, XLM)
-        :param str [params.refundAddress]: refund address for the base currency
+        :param str [params.refund_address]: refund address for the base currency
         :param str [params.refundExtraId]: extra id or memo for the refund address
         :param str [params.rateId]: rate id from fixed-rate estimate(required for fixed-rate)
         :param str [params.contactEmail]: contact email for notifications
@@ -402,20 +430,20 @@ class changenow(Exchange, ImplicitAPI):
         market = self.market(symbol)
         baseId = self.safe_string(market, 'baseId')
         quoteId = self.safe_string(market, 'quoteId')
-        address = self.safe_string(params, 'address')
-        if address is None:
-            raise ArgumentsRequired(self.id + ' createOrder() requires params.address – the destination address for the received currency')
+        addressTo = self.safe_string(params, 'address_to')
+        if addressTo is None:
+            raise ArgumentsRequired(self.id + ' createOrder() requires params.address_to – the destination address for the received currency')
         request: dict = {
-            'apiKey': self.apiKey,
+            'apiKey': self.resolve_api_key(),
             'from': baseId,
             'to': quoteId,
             'amount': self.number_to_string(amount),
-            'address': address,
+            'address': addressTo,
         }
         extraId = self.safe_string(params, 'extraId')
         if extraId is not None:
             request['extraId'] = extraId
-        refundAddress = self.safe_string(params, 'refundAddress')
+        refundAddress = self.safe_string(params, 'refund_address')
         if refundAddress is not None:
             request['refundAddress'] = refundAddress
         refundExtraId = self.safe_string(params, 'refundExtraId')
@@ -427,7 +455,7 @@ class changenow(Exchange, ImplicitAPI):
         contactEmail = self.safe_string(params, 'contactEmail')
         if contactEmail is not None:
             request['contactEmail'] = contactEmail
-        params = self.omit(params, ['address', 'extraId', 'refundAddress', 'refundExtraId', 'rateId', 'contactEmail'])
+        params = self.omit(params, ['address_to', 'extraId', 'refund_address', 'refundExtraId', 'rateId', 'contactEmail'])
         response = await self.privatePostTransactionsApiKey(self.extend(request, params))
         #
         #  {
@@ -456,7 +484,7 @@ class changenow(Exchange, ImplicitAPI):
         self.check_required_credentials()
         request: dict = {
             'id': id,
-            'apiKey': self.apiKey,
+            'apiKey': self.resolve_api_key(),
         }
         response = await self.privateGetTransactionsIdApiKey(self.extend(request, params))
         #
@@ -577,6 +605,7 @@ class changenow(Exchange, ImplicitAPI):
         #  {"error": "pair_is_inactive", "message": "This pair is currently unavailable"}
         #  {"error": "not_valid_params", "message": "Invalid request parameters"}
         #  {"error": "deposit_too_small", "message": "Deposit amount is less than minimum"}
+        #  {"error": "out_of_range", "message": "Amount is less then minimal: 0.0223925 XMR"}
         #  {"message": "Unauthorized"}
         #
         error = self.safe_string(response, 'error')
@@ -588,6 +617,8 @@ class changenow(Exchange, ImplicitAPI):
                 raise AuthenticationError(self.id + ' ' + body)
             if error == 'not_found':
                 raise OrderNotFound(self.id + ' ' + body)
+            if error == 'deposit_too_small' or error == 'out_of_range':
+                raise InvalidOrder(self.id + ' ' + body)
             raise ExchangeError(self.id + ' ' + body)
         if message is not None and httpCode >= 400:
             if httpCode == 401 or httpCode == 403:

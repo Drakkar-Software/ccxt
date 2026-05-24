@@ -479,6 +479,7 @@ export default class dexscreener extends Exchange {
     setMarkets (markets, currencies = undefined) {
         super.setMarkets (markets, currencies);
         this.indexAddressPairMarketKeys ();
+        return this.markets;
     }
 
     mergeMarkets (newMarkets: Market[]) {
