@@ -46,6 +46,10 @@ class ob_hyperliquid(hyperliquid, ImplicitAPI):
                     'requireOrderFeesFromTrades': True,
                     'expectPossibleNotFoundOrderDuringOrderCreation': True,
                 },
+                'ref': 'OCTOBOT',
+                'builder': '0x4574F97475dc29034cf57bc1E255Ef1997b0cc43',
+                'feeRate': '0.01%',
+                'builderFee': True,
             },
         })
 
