@@ -198,6 +198,75 @@ async function testObChangenow () {
             ex.privateGetTransactionsIdApiKey = orig;
         }
     }
+    // fetchMyTrades MT1: symbol maps to from/to and apiKey is resolved
+    {
+        const ex = new ccxt.changenow ();
+        ex.apiKey = 'test-api-key';
+        ex.markets = {
+            'BTC/ETH': {
+                'symbol': 'BTC/ETH',
+                'baseId': 'btc',
+                'quoteId': 'eth',
+            },
+        };
+        ex.loadMarkets = async () => ex.markets;
+        let capturedRequest: any = undefined;
+        const orig = ex.privateGetTransactionsApiKey;
+        ex.privateGetTransactionsApiKey = async (request) => {
+            capturedRequest = request;
+            return [];
+        };
+        try {
+            await ex.fetchMyTrades ('BTC/ETH');
+            assert.strictEqual (capturedRequest['apiKey'], 'test-api-key');
+            assert.strictEqual (capturedRequest['from'], 'btc');
+            assert.strictEqual (capturedRequest['to'], 'eth');
+        } finally {
+            ex.privateGetTransactionsApiKey = orig;
+        }
+    }
+    // fetchMyTrades MT2: parseTrade maps finished transaction fields
+    {
+        const ex = new ccxt.changenow ();
+        const parsed: any = ex.parseTrade ({
+            'id': 'tx-id-1',
+            'fromCurrency': 'btc',
+            'toCurrency': 'eth',
+            'amountSend': '0.01',
+            'amountReceive': '0.32',
+            'networkFee': '0.0005',
+            'updatedAt': '2023-01-15T12:34:56.789Z',
+            'status': 'finished',
+        });
+        assert.strictEqual (parsed['id'], 'tx-id-1');
+        assert.strictEqual (parsed['order'], 'tx-id-1');
+        assert.strictEqual (parsed['symbol'], 'BTC/ETH');
+        assert.strictEqual (parsed['side'], 'sell');
+        assert.strictEqual (parsed['amount'], 0.01);
+        assert.strictEqual (parsed['cost'], 0.32);
+        assert.strictEqual (parsed['price'], 32);
+        assert.strictEqual (parsed['type'], 'market');
+        assert.strictEqual (parsed['timestamp'], ex.parse8601 ('2023-01-15T12:34:56.789Z'));
+    }
+    // fetchMyTrades MT3: since maps to dateFrom
+    {
+        const ex = new ccxt.changenow ();
+        ex.apiKey = 'test-api-key';
+        ex.loadMarkets = async () => ({});
+        let capturedRequest: any = undefined;
+        const orig = ex.privateGetTransactionsApiKey;
+        ex.privateGetTransactionsApiKey = async (request) => {
+            capturedRequest = request;
+            return [];
+        };
+        try {
+            const since = 1700000000000;
+            await ex.fetchMyTrades (undefined, since);
+            assert.strictEqual (capturedRequest['dateFrom'], ex.iso8601 (since));
+        } finally {
+            ex.privateGetTransactionsApiKey = orig;
+        }
+    }
     // handleErrors E1: out_of_range -> InvalidOrder
     {
         const ex = new ccxt.changenow ();
@@ -215,6 +284,15 @@ async function testObChangenow () {
         assert.throws (() => {
             ex.handleErrors (400, 'Bad Request', '', 'POST', {}, body, response, {}, undefined);
         }, ccxt.InvalidOrder);
+    }
+    // handleErrors E3: invalid_api_key -> PermissionDenied
+    {
+        const ex = new ccxt.changenow ();
+        const body = '{"error":"invalid_api_key","message":"Use private key for this endpoint"}';
+        const response = { 'error': 'invalid_api_key', 'message': 'Use private key for this endpoint' };
+        assert.throws (() => {
+            ex.handleErrors (403, 'Forbidden', '', 'GET', {}, body, response, {}, undefined);
+        }, ccxt.PermissionDenied);
     }
 }
 

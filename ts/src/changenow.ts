@@ -1,9 +1,10 @@
 //  ---------------------------------------------------------------------------
 
 import Exchange from './abstract/changenow.js';
-import { ExchangeError, BadRequest, ArgumentsRequired, AuthenticationError, OrderNotFound, InvalidOrder } from './base/errors.js';
+import { ExchangeError, BadRequest, ArgumentsRequired, AuthenticationError, OrderNotFound, InvalidOrder, PermissionDenied } from './base/errors.js';
 import { TICK_SIZE } from './base/functions/number.js';
-import type { Market, Str, Dict, Ticker, Num, Currencies, int, Order, OrderType, OrderSide } from './base/types.js';
+import { Precise } from './base/Precise.js';
+import type { Market, Str, Dict, Ticker, Num, Currencies, int, Int, Order, OrderType, OrderSide, Trade } from './base/types.js';
 
 //  ---------------------------------------------------------------------------
 
@@ -47,6 +48,7 @@ export default class changenow extends Exchange {
                 'fetchIndexOHLCV': false,
                 'fetchMarkets': true,
                 'fetchMarkOHLCV': false,
+                'fetchMyTrades': true,
                 'fetchOpenInterestHistory': false,
                 'fetchOrder': true,
                 'fetchOrderBook': false,
@@ -131,7 +133,13 @@ export default class changenow extends Exchange {
                         'iceberg': false,
                     },
                     'createOrders': undefined,
-                    'fetchMyTrades': undefined,
+                    'fetchMyTrades': {
+                        'marginMode': false,
+                        'limit': undefined,
+                        'daysBack': undefined,
+                        'untilDays': undefined,
+                        'symbolRequired': false,
+                    },
                     'fetchOrder': {
                         'marginMode': false,
                         'trigger': false,
@@ -536,6 +544,121 @@ export default class changenow extends Exchange {
         return this.parseOrder (response);
     }
 
+    /**
+     * @method
+     * @name changenow#fetchMyTrades
+     * @description fetches completed swap transactions for the authenticated API key
+     * @see https://documenter.getpostman.com/view/8180765/SVfTPnM8?version=latest#d4d5a53e-f92a-4113-b0d9-e9d097e080b8
+     * @param {string} [symbol] unified market symbol, e.g. 'BTC/ETH'
+     * @param {int} [since] the earliest time in ms to fetch trades for
+     * @param {int} [limit] the maximum number of trade structures to retrieve
+     * @param {object} [params] extra parameters specific to the exchange API endpoint
+     * @param {string} [params.status] filter by transaction status (e.g. 'finished')
+     * @param {int} [params.offset] number of transactions to skip
+     * @param {string} [params.dateTo] return transactions created before this ISO-8601 datetime
+     * @param {string} [params.from] payin currency ticker filter
+     * @param {string} [params.to] payout currency ticker filter
+     * @returns {Trade[]} a list of [trade structures]{@link https://docs.ccxt.com/?id=trade-structure}
+     */
+    async fetchMyTrades (symbol: Str = undefined, since: Int = undefined, limit: Int = undefined, params = {}): Promise<Trade[]> {
+        this.checkRequiredCredentials ();
+        await this.loadMarkets ();
+        const request: Dict = {
+            'apiKey': this.resolveApiKey (),
+        };
+        let market = undefined;
+        if (symbol !== undefined) {
+            market = this.market (symbol);
+            request['from'] = this.safeString (market, 'baseId');
+            request['to'] = this.safeString (market, 'quoteId');
+        }
+        if (since !== undefined) {
+            request['dateFrom'] = this.iso8601 (since);
+        }
+        if (limit !== undefined) {
+            request['limit'] = limit;
+        }
+        params = this.omit (params, [ 'from', 'to', 'dateFrom', 'limit' ]);
+        const response = await this.privateGetTransactionsApiKey (this.extend (request, params));
+        //
+        //  [
+        //      {
+        //          "id": "a5c73e2603f40d",
+        //          "status": "finished",
+        //          "fromCurrency": "btc",
+        //          "toCurrency": "eth",
+        //          "amountSend": 0.01,
+        //          "amountReceive": 0.3233127,
+        //          "networkFee": "0.0005",
+        //          "payinHash": "0x...",
+        //          "payoutHash": "0x...",
+        //          "updatedAt": "2023-01-15T12:34:56.789Z"
+        //      },
+        //      ...
+        //  ]
+        //
+        return this.parseTrades (response, market, since, limit);
+    }
+
+    parseTrades (trades: any[], market: Market = undefined, since: Int = undefined, limit: Int = undefined, params = {}): Trade[] {
+        trades = this.toArray (trades);
+        const filtered = [];
+        for (let tradeIndex = 0; tradeIndex < trades.length; tradeIndex++) {
+            const rawTrade = trades[tradeIndex];
+            const amountSend = this.safeString (rawTrade, 'amountSend');
+            const amountReceive = this.safeString (rawTrade, 'amountReceive');
+            if (amountSend === undefined || amountReceive === undefined) {
+                continue;
+            }
+            if (Precise.stringEq (amountSend, '0') || Precise.stringEq (amountReceive, '0')) {
+                continue;
+            }
+            filtered.push (rawTrade);
+        }
+        return super.parseTrades (filtered, market, since, limit, params);
+    }
+
+    parseTrade (trade: Dict, market: Market = undefined): Trade {
+        const id = this.safeString (trade, 'id');
+        const fromCurrency = this.safeString (trade, 'fromCurrency');
+        const toCurrency = this.safeString (trade, 'toCurrency');
+        let parsedSymbol = undefined;
+        if (fromCurrency !== undefined && toCurrency !== undefined) {
+            const baseCode = this.safeCurrencyCode (fromCurrency);
+            const quoteCode = this.safeCurrencyCode (toCurrency);
+            parsedSymbol = baseCode + '/' + quoteCode;
+        }
+        let symbol = this.safeSymbol (undefined, market);
+        if (symbol === undefined) {
+            symbol = parsedSymbol;
+        }
+        const amountSend = this.safeString (trade, 'amountSend');
+        const amountReceive = this.safeString (trade, 'amountReceive');
+        const price = Precise.stringDiv (amountReceive, amountSend);
+        const updatedAt = this.safeString (trade, 'updatedAt');
+        const timestamp = this.parse8601 (updatedAt);
+        const networkFee = this.safeString (trade, 'networkFee');
+        return this.safeTrade ({
+            'info': trade,
+            'id': id,
+            'timestamp': timestamp,
+            'datetime': this.iso8601 (timestamp),
+            'symbol': symbol,
+            'order': id,
+            'type': 'market',
+            'side': 'sell',
+            'takerOrMaker': undefined,
+            'price': price,
+            'amount': amountSend,
+            'cost': amountReceive,
+            'fee': {
+                'currency': undefined,
+                'cost': networkFee,
+                'rate': undefined,
+            },
+        }, market);
+    }
+
     parseOrder (order: Dict, market: Market = undefined): Order {
         const id = this.safeString (order, 'id');
         const fromCurrency = this.safeString (order, 'fromCurrency');
@@ -648,6 +771,7 @@ export default class changenow extends Exchange {
         //  { "error": "not_valid_params", "message": "Invalid request parameters" }
         //  { "error": "deposit_too_small", "message": "Deposit amount is less than minimum" }
         //  { "error": "out_of_range", "message": "Amount is less then minimal: 0.0223925 XMR" }
+        //  { "error": "invalid_api_key", "message": "Use private key for this endpoint" }
         //  { "message": "Unauthorized" }
         //
         const error = this.safeString (response, 'error');
@@ -655,6 +779,9 @@ export default class changenow extends Exchange {
         if (error !== undefined) {
             if (error === 'not_valid_params') {
                 throw new BadRequest (this.id + ' ' + body);
+            }
+            if (error === 'invalid_api_key') {
+                throw new PermissionDenied (this.id + ' ' + body);
             }
             if (error === 'unauthorized') {
                 throw new AuthenticationError (this.id + ' ' + body);

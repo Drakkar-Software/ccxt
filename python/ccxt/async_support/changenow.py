@@ -5,15 +5,17 @@
 
 from ccxt.async_support.base.exchange import Exchange
 from ccxt.abstract.changenow import ImplicitAPI
-from ccxt.base.types import Any, Currencies, Market, Num, Order, OrderSide, OrderType, Str, Ticker
+from ccxt.base.types import Any, Currencies, Int, Market, Num, Order, OrderSide, OrderType, Str, Ticker, Trade
 from typing import List
 from ccxt.base.errors import ExchangeError
 from ccxt.base.errors import AuthenticationError
+from ccxt.base.errors import PermissionDenied
 from ccxt.base.errors import ArgumentsRequired
 from ccxt.base.errors import BadRequest
 from ccxt.base.errors import InvalidOrder
 from ccxt.base.errors import OrderNotFound
 from ccxt.base.decimal_to_precision import TICK_SIZE
+from ccxt.base.precise import Precise
 
 
 class changenow(Exchange, ImplicitAPI):
@@ -49,6 +51,7 @@ class changenow(Exchange, ImplicitAPI):
                 'fetchIndexOHLCV': False,
                 'fetchMarkets': True,
                 'fetchMarkOHLCV': False,
+                'fetchMyTrades': True,
                 'fetchOpenInterestHistory': False,
                 'fetchOrder': True,
                 'fetchOrderBook': False,
@@ -133,7 +136,13 @@ class changenow(Exchange, ImplicitAPI):
                         'iceberg': False,
                     },
                     'createOrders': None,
-                    'fetchMyTrades': None,
+                    'fetchMyTrades': {
+                        'marginMode': False,
+                        'limit': None,
+                        'daysBack': None,
+                        'untilDays': None,
+                        'symbolRequired': False,
+                    },
                     'fetchOrder': {
                         'marginMode': False,
                         'trigger': False,
@@ -508,6 +517,110 @@ class changenow(Exchange, ImplicitAPI):
         #
         return self.parse_order(response)
 
+    async def fetch_my_trades(self, symbol: Str = None, since: Int = None, limit: Int = None, params={}) -> List[Trade]:
+        """
+        fetches completed swap transactions for the authenticated API key
+
+        https://documenter.getpostman.com/view/8180765/SVfTPnM8?version=latest#d4d5a53e-f92a-4113-b0d9-e9d097e080b8
+
+        :param str [symbol]: unified market symbol, e.g. 'BTC/ETH'
+        :param int [since]: the earliest time in ms to fetch trades for
+        :param int [limit]: the maximum number of trade structures to retrieve
+        :param dict [params]: extra parameters specific to the exchange API endpoint
+        :param str [params.status]: filter by transaction status(e.g. 'finished')
+        :param int [params.offset]: number of transactions to skip
+        :param str [params.dateTo]: return transactions created before self ISO-8601 datetime
+        :param str [params.from]: payin currency ticker filter
+        :param str [params.to]: payout currency ticker filter
+        :returns Trade[]: a list of `trade structures <https://docs.ccxt.com/?id=trade-structure>`
+        """
+        self.check_required_credentials()
+        await self.load_markets()
+        request: dict = {
+            'apiKey': self.resolve_api_key(),
+        }
+        market = None
+        if symbol is not None:
+            market = self.market(symbol)
+            request['from'] = self.safe_string(market, 'baseId')
+            request['to'] = self.safe_string(market, 'quoteId')
+        if since is not None:
+            request['dateFrom'] = self.iso8601(since)
+        if limit is not None:
+            request['limit'] = limit
+        params = self.omit(params, ['from', 'to', 'dateFrom', 'limit'])
+        response = await self.privateGetTransactionsApiKey(self.extend(request, params))
+        #
+        #  [
+        #      {
+        #          "id": "a5c73e2603f40d",
+        #          "status": "finished",
+        #          "fromCurrency": "btc",
+        #          "toCurrency": "eth",
+        #          "amountSend": 0.01,
+        #          "amountReceive": 0.3233127,
+        #          "networkFee": "0.0005",
+        #          "payinHash": "0x...",
+        #          "payoutHash": "0x...",
+        #          "updatedAt": "2023-01-15T12:34:56.789Z"
+        #      },
+        #      ...
+        #  ]
+        #
+        return self.parse_trades(response, market, since, limit)
+
+    def parse_trades(self, trades: List[Any], market: Market = None, since: Int = None, limit: Int = None, params={}) -> List[Trade]:
+        trades = self.to_array(trades)
+        filtered = []
+        for tradeIndex in range(0, len(trades)):
+            rawTrade = trades[tradeIndex]
+            amountSend = self.safe_string(rawTrade, 'amountSend')
+            amountReceive = self.safe_string(rawTrade, 'amountReceive')
+            if amountSend is None or amountReceive is None:
+                continue
+            if Precise.string_eq(amountSend, '0') or Precise.string_eq(amountReceive, '0'):
+                continue
+            filtered.append(rawTrade)
+        return super(changenow, self).parse_trades(filtered, market, since, limit, params)
+
+    def parse_trade(self, trade: dict, market: Market = None) -> Trade:
+        id = self.safe_string(trade, 'id')
+        fromCurrency = self.safe_string(trade, 'fromCurrency')
+        toCurrency = self.safe_string(trade, 'toCurrency')
+        parsedSymbol = None
+        if fromCurrency is not None and toCurrency is not None:
+            baseCode = self.safe_currency_code(fromCurrency)
+            quoteCode = self.safe_currency_code(toCurrency)
+            parsedSymbol = baseCode + '/' + quoteCode
+        symbol = self.safe_symbol(None, market)
+        if symbol is None:
+            symbol = parsedSymbol
+        amountSend = self.safe_string(trade, 'amountSend')
+        amountReceive = self.safe_string(trade, 'amountReceive')
+        price = Precise.string_div(amountReceive, amountSend)
+        updatedAt = self.safe_string(trade, 'updatedAt')
+        timestamp = self.parse8601(updatedAt)
+        networkFee = self.safe_string(trade, 'networkFee')
+        return self.safe_trade({
+            'info': trade,
+            'id': id,
+            'timestamp': timestamp,
+            'datetime': self.iso8601(timestamp),
+            'symbol': symbol,
+            'order': id,
+            'type': 'market',
+            'side': 'sell',
+            'takerOrMaker': None,
+            'price': price,
+            'amount': amountSend,
+            'cost': amountReceive,
+            'fee': {
+                'currency': None,
+                'cost': networkFee,
+                'rate': None,
+            },
+        }, market)
+
     def parse_order(self, order: dict, market: Market = None) -> Order:
         id = self.safe_string(order, 'id')
         fromCurrency = self.safe_string(order, 'fromCurrency')
@@ -606,6 +719,7 @@ class changenow(Exchange, ImplicitAPI):
         #  {"error": "not_valid_params", "message": "Invalid request parameters"}
         #  {"error": "deposit_too_small", "message": "Deposit amount is less than minimum"}
         #  {"error": "out_of_range", "message": "Amount is less then minimal: 0.0223925 XMR"}
+        #  {"error": "invalid_api_key", "message": "Use private key for self endpoint"}
         #  {"message": "Unauthorized"}
         #
         error = self.safe_string(response, 'error')
@@ -613,6 +727,8 @@ class changenow(Exchange, ImplicitAPI):
         if error is not None:
             if error == 'not_valid_params':
                 raise BadRequest(self.id + ' ' + body)
+            if error == 'invalid_api_key':
+                raise PermissionDenied(self.id + ' ' + body)
             if error == 'unauthorized':
                 raise AuthenticationError(self.id + ' ' + body)
             if error == 'not_found':
