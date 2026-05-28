@@ -62,7 +62,7 @@ class coingecko(Exchange, ImplicitAPI):
                 '1d': '1d',
             },
             'urls': {
-                'logo': 'https://static.coingecko.com/coingecko-logo.png',
+                'logo': 'https://static.coingecko.com/s/coingecko-logo-white-750bdea438e850281f784dffc8f4fd498415754f088d655a1140849745cb66ac.svg',
                 'api': {
                     'rest': 'https://api.coingecko.com/api/v3',
                 },
@@ -290,9 +290,9 @@ class coingecko(Exchange, ImplicitAPI):
             if query:
                 url += '?' + self.urlencode(query)
         if (self.apiKey is not None) and (self.apiKey != ''):
-            headers = self.extend({}, headers, {
-                'x-cg-demo-api-key': self.apiKey,
-            })
+            if headers is None:
+                headers = {}
+            headers['x-cg-demo-api-key'] = self.apiKey
         return {'url': url, 'method': method, 'body': body, 'headers': headers}
 
     def handle_errors(self, httpCode: int, reason: str, url: str, method: str, headers: dict, body: str, response, requestHeaders, requestBody):

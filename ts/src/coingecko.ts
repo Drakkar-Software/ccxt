@@ -59,7 +59,7 @@ export default class coingecko extends Exchange {
                 '1d': '1d',
             },
             'urls': {
-                'logo': 'https://static.coingecko.com/coingecko-logo.png',
+                'logo': 'https://static.coingecko.com/s/coingecko-logo-white-750bdea438e850281f784dffc8f4fd498415754f088d655a1140849745cb66ac.svg',
                 'api': {
                     'rest': 'https://api.coingecko.com/api/v3',
                 },
@@ -303,9 +303,10 @@ export default class coingecko extends Exchange {
             }
         }
         if ((this.apiKey !== undefined) && (this.apiKey !== '')) {
-            headers = this.extend ({}, headers, {
-                'x-cg-demo-api-key': this.apiKey,
-            });
+            if (headers === undefined) {
+                headers = {};
+            }
+            headers['x-cg-demo-api-key'] = this.apiKey;
         }
         return { 'url': url, 'method': method, 'body': body, 'headers': headers };
     }

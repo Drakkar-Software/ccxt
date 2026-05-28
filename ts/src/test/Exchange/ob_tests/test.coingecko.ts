@@ -124,6 +124,19 @@ async function testCoingecko () {
             exchange.publicGetCoinsMarkets = origPublicGetCoinsMarkets;
         }
     }
+    // sign S1: undefined headers with apiKey -> demo api key header
+    {
+        const exchange: any = new ccxt.coingecko ({ 'apiKey': 'test-demo-key' });
+        const signed: any = exchange.sign ('coins/list');
+        assert.strictEqual (signed['headers']['x-cg-demo-api-key'], 'test-demo-key');
+        assert.strictEqual (signed['url'], exchange.urls['api']['rest'] + '/coins/list');
+    }
+    // sign S2: no apiKey -> headers stay undefined
+    {
+        const exchange: any = new ccxt.coingecko ();
+        const signed: any = exchange.sign ('coins/list');
+        assert.strictEqual (signed['headers'], undefined);
+    }
 }
 
 export default testCoingecko;
