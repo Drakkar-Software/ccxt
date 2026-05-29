@@ -6250,6 +6250,71 @@ class BaseExchange(object):
             self.ob_apply_adapt_market_status_for_contract_size(out)
         return out
 
+    def ob_sanitize_network_dex_token(self, token: Str):
+        if token is None:
+            return None
+        sanitized = ''
+        for charIndex in range(0, len(token)):
+            char = token[charIndex]
+            if char != '!' and char != '@' and char != ':':
+                sanitized = sanitized + char
+        return sanitized
+
+    def ob_parse_network_dex_symbol(self, symbol: str):
+        networkSeparator = '@'
+        dexSeparator = '!'
+        anyDexWildcard = '*'
+        if symbol.find(networkSeparator) < 0:
+            raise BadSymbol(self.id + ' symbol must include a network suffix using ' + networkSeparator)
+        separatorIndex = -1
+        for charIndex in range(0, len(symbol)):
+            if symbol[charIndex] == networkSeparator:
+                separatorIndex = charIndex
+        tradingSymbol = symbol[0:separatorIndex]
+        networkAndDex = symbol[separatorIndex + 1:]
+        if networkAndDex == '':
+            raise BadSymbol(self.id + ' invalid symbol ' + symbol + ': network must be specified after ' + networkSeparator)
+        networkCode = networkAndDex
+        dexCode = None
+        dexSeparatorIndex = networkAndDex.find(dexSeparator)
+        if dexSeparatorIndex >= 0:
+            networkCode = networkAndDex[0:dexSeparatorIndex]
+            dexCode = networkAndDex[dexSeparatorIndex + 1:]
+            if dexCode == '':
+                dexCode = None
+        networkCode = self.ob_sanitize_network_dex_token(networkCode)
+        if dexCode is not None:
+            dexCode = self.ob_sanitize_network_dex_token(dexCode)
+            if dexCode == anyDexWildcard:
+                dexCode = anyDexWildcard
+        if (networkCode is None) or (networkCode == ''):
+            raise BadSymbol(self.id + ' invalid symbol ' + symbol + ': network must be specified after ' + networkSeparator)
+        return {
+            'tradingSymbol': tradingSymbol,
+            'networkCode': networkCode,
+            'dexCode': dexCode,
+        }
+
+    def ob_dex_code_to_id(self, dexCode: str):
+        if dexCode is None:
+            return None
+        sanitizedDexCode = self.ob_sanitize_network_dex_token(dexCode)
+        dexesByCode = self.safe_dict(self.options, 'dexesById', {})
+        dexId = self.safe_string(dexesByCode, sanitizedDexCode)
+        if dexId is not None:
+            return dexId
+        return sanitizedDexCode.lower()
+
+    def ob_dex_id_to_code(self, dexId: str):
+        if dexId is None:
+            return None
+        sanitizedDexId = self.ob_sanitize_network_dex_token(dexId).lower()
+        dexes = self.safe_dict(self.options, 'dexes', {})
+        dexCode = self.safe_string(dexes, sanitizedDexId)
+        if dexCode is not None:
+            return dexCode
+        return sanitizedDexId.upper()
+
     def is_leveraged_currency(self, currencyCode, checkBaseCoin: Bool = False, existingCurrencies: dict = None):
         leverageSuffixes = [
             '2L', '2S', '3L', '3S', '4L', '4S', '5L', '5S',  # Leveraged Tokens(LT)

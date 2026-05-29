@@ -6,6 +6,7 @@
 from ccxt.dexscreener import dexscreener
 from ccxt.abstract.ob_dexscreener import ImplicitAPI
 from ccxt.base.types import Any
+from typing import List
 
 
 class ob_dexscreener(dexscreener, ImplicitAPI):
@@ -38,10 +39,29 @@ class ob_dexscreener(dexscreener, ImplicitAPI):
                         },
                     },
                     'fixMarketStatus': True,
-                    'requiresConfiguration': True,
                     'createOhlcvFromTickers': True,
                     'requiresSymbolsParamToFetchTickers': True,
-                    'supportsMarketsCache': False,  # market status depend on the exchange config
+                    'supportsMarketsCache': False,
+                    'supportsAllSymbolsListing': False,
+                    'lazyLoadMarkets': True,
                 },
             },
         })
+
+    def ob_load_markets_for_symbols(self, symbols: List[str], reload=False, params={}) -> List[dict]:
+        """
+        lazily loads and returns fixed market status structures for the given symbols
+
+        https://docs.dexscreener.com/api/reference
+
+        :param str[] symbols: list of base/quote symbols, optionally with @networknot dex suffix
+        :param boolean reload: when True, re-fetch symbols even if already cached in self.markets
+        :param dict [params]: extra parameters specific to the exchange API endpoint
+        :returns dict[]: list of fixed market status structures
+        """
+        super(ob_dexscreener, self).ob_load_markets_for_symbols(symbols, reload, params)
+        symbolsLength = len(symbols)
+        result = []
+        for symbolIndex in range(0, symbolsLength):
+            result.append(self.ob_get_fixed_market_status(symbols[symbolIndex]))
+        return result
