@@ -255,6 +255,16 @@ class TransferEntry(TypedDict):
     status: Str
 
 
+class ObDexPair(TypedDict):
+    symbol: Str
+    network: Str
+    dex: Str
+    baseTokenAddress: Str
+    quoteTokenAddress: Str
+    price: Num
+    quoteLiquidity: Num
+
+
 class Ticker(TypedDict):
     info: Dict[str, Any]
     symbol: Str

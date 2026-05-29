@@ -867,6 +867,9 @@ class Transpiler {
             'Transaction': /-> (?:List\[)?Transaction/,
             'FundingRateHistory': /-> (?:List\[)?FundingRateHistory/,
             'MarketInterface': /-> (?:List\[)?MarketInterface/,
+            // OctoBot local: ObDexPair (ts/src/base/types.ts) is used by dexscreener#obFetchDexPairs;
+            // without this entry, transpiled Python omits `from ccxt.base.types import ObDexPair`.
+            'ObDexPair': /-> (?:List\[)?ObDexPair/,
             'TransferEntry': /-> TransferEntry:/,
         }
         const matches: string[] = []

@@ -7388,6 +7388,91 @@ export default class Exchange {
         return out;
     }
 
+    obSanitizeNetworkDexToken (token: Str): Str {
+        if (token === undefined) {
+            return undefined;
+        }
+        let sanitized = '';
+        for (let charIndex = 0; charIndex < token.length; charIndex++) {
+            const char = token[charIndex];
+            if (char !== '!' && char !== '@' && char !== ':') {
+                sanitized = sanitized + char;
+            }
+        }
+        return sanitized;
+    }
+
+    obParseNetworkDexSymbol (symbol: string): Dict {
+        const networkSeparator = '@';
+        const dexSeparator = '!';
+        const anyDexWildcard = '*';
+        if (symbol.indexOf (networkSeparator) < 0) {
+            throw new BadSymbol (this.id + ' symbol must include a network suffix using ' + networkSeparator);
+        }
+        let separatorIndex = -1;
+        for (let charIndex = 0; charIndex < symbol.length; charIndex++) {
+            if (symbol[charIndex] === networkSeparator) {
+                separatorIndex = charIndex;
+            }
+        }
+        const tradingSymbol = symbol.slice (0, separatorIndex);
+        const networkAndDex = symbol.slice (separatorIndex + 1);
+        if (networkAndDex === '') {
+            throw new BadSymbol (this.id + ' invalid symbol ' + symbol + ': network must be specified after ' + networkSeparator);
+        }
+        let networkCode = networkAndDex;
+        let dexCode = undefined;
+        const dexSeparatorIndex = networkAndDex.indexOf (dexSeparator);
+        if (dexSeparatorIndex >= 0) {
+            networkCode = networkAndDex.slice (0, dexSeparatorIndex);
+            dexCode = networkAndDex.slice (dexSeparatorIndex + 1);
+            if (dexCode === '') {
+                dexCode = undefined;
+            }
+        }
+        networkCode = this.obSanitizeNetworkDexToken (networkCode);
+        if (dexCode !== undefined) {
+            dexCode = this.obSanitizeNetworkDexToken (dexCode);
+            if (dexCode === anyDexWildcard) {
+                dexCode = anyDexWildcard;
+            }
+        }
+        if ((networkCode === undefined) || (networkCode === '')) {
+            throw new BadSymbol (this.id + ' invalid symbol ' + symbol + ': network must be specified after ' + networkSeparator);
+        }
+        return {
+            'tradingSymbol': tradingSymbol,
+            'networkCode': networkCode,
+            'dexCode': dexCode,
+        };
+    }
+
+    obDexCodeToId (dexCode: string): string {
+        if (dexCode === undefined) {
+            return undefined;
+        }
+        const sanitizedDexCode = this.obSanitizeNetworkDexToken (dexCode);
+        const dexesByCode = this.safeDict (this.options, 'dexesById', {});
+        const dexId = this.safeString (dexesByCode, sanitizedDexCode);
+        if (dexId !== undefined) {
+            return dexId;
+        }
+        return sanitizedDexCode.toLowerCase ();
+    }
+
+    obDexIdToCode (dexId: string): string {
+        if (dexId === undefined) {
+            return undefined;
+        }
+        const sanitizedDexId = this.obSanitizeNetworkDexToken (dexId).toLowerCase ();
+        const dexes = this.safeDict (this.options, 'dexes', {});
+        const dexCode = this.safeString (dexes, sanitizedDexId);
+        if (dexCode !== undefined) {
+            return dexCode;
+        }
+        return sanitizedDexId.toUpperCase ();
+    }
+
     isLeveragedCurrency (currencyCode, checkBaseCoin: Bool = false, existingCurrencies: Dict = undefined): boolean {
         const leverageSuffixes = [
             '2L', '2S', '3L', '3S', '4L', '4S', '5L', '5S', // Leveraged Tokens (LT)

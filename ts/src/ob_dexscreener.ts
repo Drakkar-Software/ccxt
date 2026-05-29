@@ -2,6 +2,7 @@
 //  ---------------------------------------------------------------------------
 
 import dexscreener from './dexscreener.js';
+import type { Dict } from './base/types.js';
 
 //  ---------------------------------------------------------------------------
 
@@ -34,12 +35,33 @@ export default class ob_dexscreener extends dexscreener {
                         },
                     },
                     'fixMarketStatus': true,
-                    'requiresConfiguration': true,
                     'createOhlcvFromTickers': true,
                     'requiresSymbolsParamToFetchTickers': true,
-                    'supportsMarketsCache': false, // market status depend on the exchange config
+                    'supportsMarketsCache': false,
+                    'supportsAllSymbolsListing': false,
+                    'lazyLoadMarkets': true,
                 },
             },
         });
+    }
+
+    /**
+     * @method
+     * @name ob_dexscreener#obLoadMarketsForSymbols
+     * @description lazily loads and returns fixed market status structures for the given symbols
+     * @see https://docs.dexscreener.com/api/reference
+     * @param {string[]} symbols list of base/quote symbols, optionally with @network!dex suffix
+     * @param {boolean} reload when true, re-fetch symbols even if already cached in this.markets
+     * @param {object} [params] extra parameters specific to the exchange API endpoint
+     * @returns {object[]} list of fixed market status structures
+     */
+    async obLoadMarketsForSymbols (symbols: string[], reload = false, params = {}): Promise<Dict[]> {
+        await super.obLoadMarketsForSymbols (symbols, reload, params);
+        const symbolsLength = symbols.length;
+        const result = [];
+        for (let symbolIndex = 0; symbolIndex < symbolsLength; symbolIndex++) {
+            result.push (this.obGetFixedMarketStatus (symbols[symbolIndex]));
+        }
+        return result;
     }
 }

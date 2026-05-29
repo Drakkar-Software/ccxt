@@ -2,7 +2,7 @@
 
 import Exchange from './abstract/dexscreener.js';
 import { ArgumentsRequired, BadRequest, BadSymbol, ExchangeError, RateLimitExceeded } from './base/errors.js';
-import type { Market, Dict, Ticker, int, Strings, Tickers, MarketInterface } from './base/types.js';
+import type { Market, Dict, Ticker, int, Strings, Tickers, MarketInterface, ObDexPair } from './base/types.js';
 
 //  ---------------------------------------------------------------------------
 
@@ -14,11 +14,217 @@ import type { Market, Dict, Ticker, int, Strings, Tickers, MarketInterface } fro
  */
 export default class dexscreener extends Exchange {
     describe (): any {
+        const dexes: Dict = {
+            'uniswap': 'UNISWAP',
+            'uniswapv2': 'UNISWAPV2',
+            'uniswapv3': 'UNISWAPV3',
+            'sushiswap': 'SUSHISWAP',
+            'pancakeswap': 'PANCAKESWAP',
+            'pancakeswapv2': 'PANCAKESWAPV2',
+            'pancakeswapv3': 'PANCAKESWAPV3',
+            'raydium': 'RAYDIUM',
+            'orca': 'ORCA',
+            'meteora': 'METEORA',
+            'curve': 'CURVE',
+            'balancer': 'BALANCER',
+            'aerodrome': 'AERODROME',
+            'quickswap': 'QUICKSWAP',
+            'quickswapv3': 'QUICKSWAPV3',
+            'pumpswap': 'PUMPSWAP',
+            'pumpfun': 'PUMPFUN',
+            'traderjoe': 'TRADERJOE',
+            'camelot': 'CAMELOT',
+            'velodrome': 'VELODROME',
+            'baseswap': 'BASESWAP',
+            'syncswap': 'SYNCSWAP',
+            'spookyswap': 'SPOOKYSWAP',
+            'spiritswap': 'SPIRITSWAP',
+            'osmosis': 'OSMOSIS',
+            'jupiter': 'JUPITER',
+            'lifinity': 'LIFINITY',
+            'phoenix': 'PHOENIX',
+            'dedust': 'DEDUST',
+            'stonfi': 'STONFI',
+            'cetus': 'CETUS',
+            'turbos': 'TURBOS',
+            'bluemove': 'BLUEMOVE',
+            'liquidswap': 'LIQUIDSWAP',
+            'thala': 'THALA',
+            'hyperliquid': 'HYPERLIQUID',
+            'dydx': 'DYDX',
+            'gmx': 'GMX',
+            'kyberswap': 'KYBERSWAP',
+            'biswap': 'BISWAP',
+            'mdex': 'MDEX',
+            'apeswap': 'APESWAP',
+            'vvsfinance': 'VVSFINANCE',
+            'mmfinance': 'MMFINANCE',
+            'shibaswap': 'SHIBASWAP',
+            'fraxswap': 'FRAXSWAP',
+            'wagmi': 'WAGMI',
+            'agni': 'AGNI',
+            'lynex': 'LYNEX',
+            'retro': 'RETRO',
+            'ramses': 'RAMSES',
+            'thena': 'THENA',
+            'bancor': 'BANCOR',
+            'dodo': 'DODO',
+            'maverick': 'MAVERICK',
+            'woofi': 'WOOFI',
+            'equalizer': 'EQUALIZER',
+            'solidly': 'SOLIDLY',
+            'voltage': 'VOLTAGE',
+            'kinetix': 'KINETIX',
+            'hermes': 'HERMES',
+            'merchantmoe': 'MERCHANTMOE',
+            'beamswap': 'BEAMSWAP',
+            'stellaswap': 'STELLASWAP',
+            'arthswap': 'ARTHSWAP',
+            'solarbeam': 'SOLARBEAM',
+            'voltagefinance': 'VOLTAGEFINANCE',
+            'honeyswap': 'HONEYSWAP',
+            'ubeswap': 'UBESWAP',
+            'trisolaris': 'TRISOLARIS',
+            'reffinance': 'REFFINANCE',
+            'saucerswap': 'SAUCERSWAP',
+            'helix': 'HELIX',
+            'injective': 'INJECTIVE',
+            'bluefin': 'BLUEFIN',
+            'flowx': 'FLOWX',
+            'crescent': 'CRESCENT',
+            'astroport': 'ASTROPORT',
+            'terraswap': 'TERRASWAP',
+            'stepn': 'STEPN',
+            'step': 'STEP',
+            'raydiumclmm': 'RAYDIUMCLMM',
+            'raydiumcpmm': 'RAYDIUMCPMM',
+            'meteoradlmm': 'METEORADLMM',
+            'meteoradamm': 'METEORADAMM',
+        };
+        const dexesById: Dict = {};
+        const dexKeys = Object.keys (dexes);
+        for (let dexIndex = 0; dexIndex < dexKeys.length; dexIndex++) {
+            const dexId = dexKeys[dexIndex];
+            dexesById[dexes[dexId]] = dexId;
+        }
+        const networks: Dict = {
+            // CCXT unified
+            'BTC': 'bitcoin',
+            'ETH': 'ethereum',
+            'BSC': 'bsc',
+            'XRP': 'xrpl',
+            'LTC': 'litecoin',
+            'DOGE': 'dogechain',
+            'XLM': 'stellar',
+            'TRX': 'tron',
+            'ETC': 'ethereumclassic',
+            'ZEC': 'zcash',
+            'XMR': 'monero',
+            'ADA': 'cardano',
+            'XTZ': 'tezos',
+            'ATOM': 'cosmos',
+            'SOL': 'solana',
+            'DOT': 'polkadot',
+            'ALGO': 'algorand',
+            'BCH': 'smartbch',
+            'FIL': 'filecoin',
+            'KSM': 'kusama',
+            'EGLD': 'elrond',
+            'RUNE': 'thorchain',
+            'ICP': 'icp',
+            'NEAR': 'near',
+            'CELO': 'celo',
+            'HBAR': 'hedera',
+            'MIOTA': 'iota',
+            'KLAY': 'klaytn',
+            'VET': 'vechain',
+            'THETA': 'theta',
+            'STX': 'stacks',
+            'OPTIMISM': 'optimism',
+            'ARBITRUM': 'arbitrum',
+            'MATIC': 'polygon',
+            'FTM': 'fantom',
+            // token-standard aliases
+            'ERC20': 'ethereum',
+            'TRC20': 'tron',
+            'BEP20': 'bsc',
+            'BEP2': 'bnb',
+            'AVAX': 'avalanche',
+            'AVAXC': 'avalanche',
+            'ZKSYNC': 'zksync',
+            'ZKSYNCERA': 'zksync',
+            // DexScreener L2 / extra
+            'BASE': 'base',
+            'SUI': 'sui',
+            'APT': 'aptos',
+            'SCROLL': 'scroll',
+            'KAVA': 'kava',
+            'RSK': 'rsk',
+            'SEI': 'sei',
+            'TON': 'ton',
+            'OSMO': 'osmosis',
+            'ACA': 'acala',
+            'METIS': 'metis',
+            'ASTR': 'astar',
+            'CFX': 'conflux',
+            'SCRT': 'secret',
+            'ONT': 'ontology',
+            'CRONOS': 'cronos',
+            'LINEA': 'linea',
+            'BLAST': 'blast',
+            'MANTLE': 'mantle',
+            'MODE': 'mode',
+            'CORE': 'core',
+            'TAIKO': 'taiko',
+            'MNT': 'mantle',
+            'BERACHAIN': 'berachain',
+            'HYPERLIQUID': 'hyperliquid',
+            'INJECTIVE': 'injective',
+            'PULSECHAIN': 'pulsechain',
+            'BOBA': 'boba',
+            'MOONBEAM': 'moonbeam',
+            'MOONRIVER': 'moonriver',
+            'GNOSIS': 'gnosis',
+            'AURORA': 'aurora',
+            'HARMONY': 'harmony',
+            'FUSE': 'fuse',
+            'OKC': 'okc',
+            'HECO': 'heco',
+            'KCC': 'kcc',
+            'WAVES': 'waves',
+            'EOS': 'eos',
+            'FLOW': 'flow',
+            'ZORA': 'zora',
+            'WORLDCHAIN': 'worldchain',
+            'ABSTRACT': 'abstract',
+            'SONIC': 'sonic',
+            'UNICHAIN': 'unichain',
+            'INK': 'ink',
+        };
+        const networksById: Dict = {};
+        const networkKeys = Object.keys (networks);
+        for (let networkIndex = 0; networkIndex < networkKeys.length; networkIndex++) {
+            const networkCode = networkKeys[networkIndex];
+            networksById[networks[networkCode]] = networkCode;
+        }
+        const preferredNetworkCodeByChainId: Dict = {
+            'ethereum': 'ETH',
+            'tron': 'TRX',
+            'bsc': 'BEP20',
+            'avalanche': 'AVAX',
+            'zksync': 'ZKSYNC',
+            'mantle': 'MANTLE',
+        };
+        const preferredChainIds = Object.keys (preferredNetworkCodeByChainId);
+        for (let chainIndex = 0; chainIndex < preferredChainIds.length; chainIndex++) {
+            const chainId = preferredChainIds[chainIndex];
+            networksById[chainId] = preferredNetworkCodeByChainId[chainId];
+        }
         return this.deepExtend (super.describe (), {
             'id': 'dexscreener',
             'name': 'DexScreener',
             'countries': [ ],
-            'rateLimit': 1000,
+            'rateLimit': 200, // 300 requests per minute (DEX/pairs endpoints)
             'version': 'v1',
             'certified': false,
             'pro': false,
@@ -53,6 +259,8 @@ export default class dexscreener extends Exchange {
                 'fetchTrades': false,
                 'fetchTradingFee': false,
                 'fetchTradingFees': false,
+                'obFetchDexPairs': true,
+                'obLoadMarketsForSymbols': true,
                 'transfer': false,
             },
             'timeframes': {
@@ -70,11 +278,13 @@ export default class dexscreener extends Exchange {
             },
             'api': {
                 'public': {
-                    'get': [
-                        'tokens/v1/{chainId}/{tokenAddresses}',
-                        'token-pairs/v1/{chainId}/{tokenAddress}',
-                        'latest/dex/pairs/{chainId}/{pairId}',
-                    ],
+                    // DEX/pairs request rate limit of 300 per minute
+                    // cost = 1 => (1000 / (200 * 1)) * 60 = 300
+                    'get': {
+                        'latest/dex/search': 1,
+                        'tokens/v1/{chainId}/{tokenAddresses}': 1,
+                        'latest/dex/pairs/{chainId}/{pairId}': 1,
+                    },
                 },
             },
             'requiredCredentials': {
@@ -82,159 +292,13 @@ export default class dexscreener extends Exchange {
                 'secret': false,
             },
             'options': {
-                'chainId': undefined,
-                'dexId': undefined,
-                'baseTokenAddresses': undefined,
-                'quoteTokenAddresses': undefined,
                 'maxTokenAddressesPerRequest': 30,
+                'networks': networks,
+                'networksById': networksById,
+                'dexes': dexes,
+                'dexesById': dexesById,
             },
         });
-    }
-
-    checkRequiredOptions () {
-        const chainId = this.safeString (this.options, 'chainId');
-        const dexId = this.safeString (this.options, 'dexId');
-        if ((chainId === undefined) || (chainId === '')) {
-            throw new ArgumentsRequired (this.id + ' requires options.chainId to be set');
-        }
-        if ((dexId === undefined) || (dexId === '')) {
-            throw new ArgumentsRequired (this.id + ' requires options.dexId to be set');
-        }
-    }
-
-    getConfiguredChainId () {
-        this.checkRequiredOptions ();
-        return this.safeString (this.options, 'chainId');
-    }
-
-    getConfiguredDexId () {
-        this.checkRequiredOptions ();
-        return this.safeString (this.options, 'dexId');
-    }
-
-    getTokenAddressList (optionKey: string): string[] {
-        const raw = this.safeList (this.options, optionKey, []);
-        const result: string[] = [];
-        for (let i = 0; i < raw.length; i++) {
-            const address = this.safeString (raw, i);
-            if (address !== undefined) {
-                result.push (address);
-            }
-        }
-        return result;
-    }
-
-    getAllConfiguredTokenAddresses (): string[] {
-        const baseAddresses = this.getTokenAddressList ('baseTokenAddresses');
-        const quoteAddresses = this.getTokenAddressList ('quoteTokenAddresses');
-        return this.getUniqueTokenAddresses (this.arrayConcat (baseAddresses, quoteAddresses));
-    }
-
-    getMarketDiscoveryAddresses (): string[] {
-        const baseAddresses = this.getTokenAddressList ('baseTokenAddresses');
-        if (baseAddresses.length > 0) {
-            return this.getUniqueTokenAddresses (baseAddresses);
-        }
-        return this.getUniqueTokenAddresses (this.getTokenAddressList ('quoteTokenAddresses'));
-    }
-
-    clearDiscoveryPairsCache () {
-        this.options['discoveryPairsCache'] = undefined;
-    }
-
-    getCachedDiscoveryPairs () {
-        const cached = this.safeValue (this.options, 'discoveryPairsCache');
-        if (cached === undefined) {
-            return undefined;
-        }
-        return cached;
-    }
-
-    setCachedDiscoveryPairs (pairs: Dict[]) {
-        this.options['discoveryPairsCache'] = pairs;
-    }
-
-    pairMatchesAddressCombination (pair: Dict, baseAddress: string, quoteAddress: string): boolean {
-        const baseToken = this.safeDict (pair, 'baseToken', {});
-        const quoteToken = this.safeDict (pair, 'quoteToken', {});
-        const pairBase = this.normalizeTokenAddress (this.safeString (baseToken, 'address'));
-        const pairQuote = this.normalizeTokenAddress (this.safeString (quoteToken, 'address'));
-        const baseMatch = pairBase === this.normalizeTokenAddress (baseAddress);
-        const quoteMatch = pairQuote === this.normalizeTokenAddress (quoteAddress);
-        return baseMatch && quoteMatch;
-    }
-
-    hasAllConfiguredCombinations (pairs: Dict[]): boolean {
-        const baseAddresses = this.getTokenAddressList ('baseTokenAddresses');
-        const quoteAddresses = this.getTokenAddressList ('quoteTokenAddresses');
-        if ((baseAddresses.length === 0) || (quoteAddresses.length === 0)) {
-            return true;
-        }
-        const dexId = this.getConfiguredDexId ();
-        for (let baseIndex = 0; baseIndex < baseAddresses.length; baseIndex++) {
-            const baseAddress = baseAddresses[baseIndex];
-            for (let quoteIndex = 0; quoteIndex < quoteAddresses.length; quoteIndex++) {
-                const quoteAddress = quoteAddresses[quoteIndex];
-                let found = false;
-                for (let pairIndex = 0; pairIndex < pairs.length; pairIndex++) {
-                    const pair = pairs[pairIndex];
-                    if (this.safeString (pair, 'dexId') !== dexId) {
-                        continue;
-                    }
-                    if (this.pairMatchesAddressCombination (pair, baseAddress, quoteAddress)) {
-                        found = true;
-                        break;
-                    }
-                }
-                if (!found) {
-                    return false;
-                }
-            }
-        }
-        return true;
-    }
-
-    mergePairsByPairAddress (pairs: Dict[]): Dict[] {
-        const mergedByPairAddress: Dict = {};
-        for (let i = 0; i < pairs.length; i++) {
-            const pair = pairs[i];
-            const pairAddress = this.safeString (pair, 'pairAddress');
-            if (pairAddress === undefined) {
-                continue;
-            }
-            mergedByPairAddress[pairAddress] = pair;
-        }
-        return Object.values (mergedByPairAddress);
-    }
-
-    async fetchDiscoveryPairs (params = {}, extraTokenAddresses: string[] = []): Promise<any[]> {
-        const useCache = extraTokenAddresses.length === 0;
-        if (useCache) {
-            const cachedPairs = this.getCachedDiscoveryPairs ();
-            if (cachedPairs !== undefined) {
-                return cachedPairs;
-            }
-        }
-        const allAddresses = this.getUniqueTokenAddresses (
-            this.arrayConcat (this.getAllConfiguredTokenAddresses (), extraTokenAddresses)
-        );
-        if (allAddresses.length === 0) {
-            return [];
-        }
-        let pairs = await this.fetchPairsForTokensV1 (allAddresses, params);
-        if (!this.hasAllConfiguredCombinations (pairs)) {
-            const discoveryAddresses = this.getUniqueTokenAddresses (
-                this.arrayConcat (this.getMarketDiscoveryAddresses (), extraTokenAddresses)
-            );
-            if (discoveryAddresses.length > 0) {
-                const extraPairs = await this.fetchPairsForTokenAddresses (discoveryAddresses, params);
-                pairs = this.mergePairsByPairAddress (this.arrayConcat (pairs, extraPairs));
-            }
-        }
-        if (useCache) {
-            this.setCachedDiscoveryPairs (pairs);
-        }
-        return pairs;
     }
 
     normalizeTokenAddress (address) {
@@ -245,11 +309,20 @@ export default class dexscreener extends Exchange {
     }
 
     isTokenAddress (value) {
-        return (value !== undefined) && (value.length > 4);
+        return (value !== undefined) && (value.length > 5);
+    }
+
+    getTradingSymbolPart (symbol: string): string {
+        const separatorIndex = symbol.indexOf ('@');
+        if (separatorIndex >= 0) {
+            return symbol.slice (0, separatorIndex);
+        }
+        return symbol;
     }
 
     isAddressPairSymbol (symbol: string): boolean {
-        const parts = symbol.split ('/');
+        const tradingSymbol = this.getTradingSymbolPart (symbol);
+        const parts = tradingSymbol.split ('/');
         if (parts.length !== 2) {
             return false;
         }
@@ -258,18 +331,29 @@ export default class dexscreener extends Exchange {
         return this.isTokenAddress (basePart) && this.isTokenAddress (quotePart);
     }
 
-    getAddressPairSymbol (baseAddress, quoteAddress) {
-        return this.normalizeTokenAddress (baseAddress) + '/' + this.normalizeTokenAddress (quoteAddress);
+    getAddressPairSymbol (baseAddress, quoteAddress, networkCode, dexCode) {
+        let suffix = '@' + networkCode;
+        if (dexCode !== undefined) {
+            suffix = suffix + '!' + dexCode;
+        }
+        return this.normalizeTokenAddress (baseAddress) + '/' + this.normalizeTokenAddress (quoteAddress) + suffix;
     }
 
     normalizeAddressPairSymbol (symbol: string): string {
         if (!this.isAddressPairSymbol (symbol)) {
             return symbol;
         }
-        const parts = symbol.split ('/');
+        const parsed = this.obParseDexPairSymbolInput (symbol);
+        const tradingSymbol = this.safeString (parsed, 'tradingSymbol');
+        const networkCode = this.safeString (parsed, 'networkCode');
+        const dexCode = this.safeString (parsed, 'dexCode');
+        const parts = tradingSymbol.split ('/');
         const baseAddress = this.safeString (parts, 0);
         const quoteAddress = this.safeString (parts, 1);
-        return this.getAddressPairSymbol (baseAddress, quoteAddress);
+        if (networkCode === undefined) {
+            return this.normalizeTokenAddress (baseAddress) + '/' + this.normalizeTokenAddress (quoteAddress);
+        }
+        return this.getAddressPairSymbol (baseAddress, quoteAddress, networkCode, dexCode);
     }
 
     market (symbol: string): MarketInterface {
@@ -291,46 +375,16 @@ export default class dexscreener extends Exchange {
         return this.safeNumber (liquidity, 'usd', 0);
     }
 
-    pairPassesFilters (pair: Dict, baseAddresses: string[], quoteAddresses: string[]): boolean {
-        const dexId = this.getConfiguredDexId ();
-        const pairDexId = this.safeString (pair, 'dexId');
-        if (pairDexId !== dexId) {
-            return false;
+    safeLiquidityQuote (pair: Dict): number {
+        const liquidity = this.safeDict (pair, 'liquidity', {});
+        return this.safeNumber (liquidity, 'quote', 0);
+    }
+
+    safeLiquidityForPairSelection (pair: Dict, dexCode): number {
+        if (dexCode === '*') {
+            return this.safeLiquidityQuote (pair);
         }
-        const baseToken = this.safeDict (pair, 'baseToken', {});
-        const quoteToken = this.safeDict (pair, 'quoteToken', {});
-        const baseAddress = this.normalizeTokenAddress (this.safeString (baseToken, 'address'));
-        const quoteAddress = this.normalizeTokenAddress (this.safeString (quoteToken, 'address'));
-        const hasBaseList = baseAddresses.length > 0;
-        const hasQuoteList = quoteAddresses.length > 0;
-        if (hasBaseList && hasQuoteList) {
-            const baseSet: Dict = {};
-            const quoteSet: Dict = {};
-            for (let i = 0; i < baseAddresses.length; i++) {
-                baseSet[this.normalizeTokenAddress (baseAddresses[i])] = true;
-            }
-            for (let j = 0; j < quoteAddresses.length; j++) {
-                quoteSet[this.normalizeTokenAddress (quoteAddresses[j])] = true;
-            }
-            return (baseAddress in baseSet) && (quoteAddress in quoteSet);
-        }
-        if (hasBaseList) {
-            for (let i = 0; i < baseAddresses.length; i++) {
-                if (this.normalizeTokenAddress (baseAddresses[i]) === baseAddress) {
-                    return true;
-                }
-            }
-            return false;
-        }
-        if (hasQuoteList) {
-            for (let i = 0; i < quoteAddresses.length; i++) {
-                if (this.normalizeTokenAddress (quoteAddresses[i]) === quoteAddress) {
-                    return true;
-                }
-            }
-            return false;
-        }
-        return false;
+        return this.safeLiquidityUsd (pair);
     }
 
     parseTokenPairsResponse (response) {
@@ -340,32 +394,10 @@ export default class dexscreener extends Exchange {
         return this.safeList (response, 'pairs', []);
     }
 
-    async fetchPairsForTokenAddressBatch (tokenAddresses: string[], params = {}): Promise<any[]> {
-        const allPairs: Dict[] = [];
-        const chainId = this.getConfiguredChainId ();
-        for (let i = 0; i < tokenAddresses.length; i++) {
-            const tokenAddress = tokenAddresses[i];
-            const request: Dict = {
-                'chainId': chainId,
-                'tokenAddress': tokenAddress,
-            };
-            const response = await this.publicGetTokenPairsV1ChainIdTokenAddress (this.extend (request, params));
-            const pairs = this.parseTokenPairsResponse (response);
-            for (let j = 0; j < pairs.length; j++) {
-                allPairs.push (pairs[j]);
-            }
-        }
-        return allPairs;
-    }
-
-    async fetchPairsForTokenAddress (tokenAddress: string, params = {}): Promise<any[]> {
-        return await this.fetchPairsForTokenAddressBatch ([ tokenAddress ], params);
-    }
-
     getUniqueTokenAddresses (tokenAddresses: string[]): string[] {
         const uniqueAddresses: Dict = {};
-        for (let i = 0; i < tokenAddresses.length; i++) {
-            const address = tokenAddresses[i];
+        for (let addressIndex = 0; addressIndex < tokenAddresses.length; addressIndex++) {
+            const address = tokenAddresses[addressIndex];
             if (address !== undefined) {
                 uniqueAddresses[address] = true;
             }
@@ -373,27 +405,10 @@ export default class dexscreener extends Exchange {
         return Object.keys (uniqueAddresses);
     }
 
-    async fetchPairsForTokenAddresses (tokenAddresses: string[], params = {}): Promise<any[]> {
-        const addresses = this.getUniqueTokenAddresses (tokenAddresses);
-        const maxBatchSize = this.safeInteger (this.options, 'maxTokenAddressesPerRequest', 30);
-        const allPairs: Dict[] = [];
-        let offset = 0;
-        while (offset < addresses.length) {
-            const batch = addresses.slice (offset, offset + maxBatchSize);
-            const pairs = await this.fetchPairsForTokenAddressBatch (batch, params);
-            for (let j = 0; j < pairs.length; j++) {
-                allPairs.push (pairs[j]);
-            }
-            offset = offset + maxBatchSize;
-        }
-        return allPairs;
-    }
-
-    async fetchPairsForTokensV1Batch (tokenAddresses: string[], params = {}): Promise<any[]> {
+    async fetchPairsForTokensV1Batch (tokenAddresses: string[], chainId: string, params = {}): Promise<any[]> {
         if (tokenAddresses.length === 0) {
             return [];
         }
-        const chainId = this.getConfiguredChainId ();
         const request: Dict = {
             'chainId': chainId,
             'tokenAddresses': tokenAddresses.join (','),
@@ -402,134 +417,126 @@ export default class dexscreener extends Exchange {
         return this.parseTokenPairsResponse (response);
     }
 
-    async fetchPairsForTokensV1 (tokenAddresses: string[], params = {}): Promise<any[]> {
+    async fetchPairsForTokensV1 (tokenAddresses: string[], chainId: string, params = {}): Promise<any[]> {
         const addresses = this.getUniqueTokenAddresses (tokenAddresses);
         const maxBatchSize = this.safeInteger (this.options, 'maxTokenAddressesPerRequest', 30);
         const allPairs: Dict[] = [];
         let offset = 0;
         while (offset < addresses.length) {
             const batch = addresses.slice (offset, offset + maxBatchSize);
-            const pairs = await this.fetchPairsForTokensV1Batch (batch, params);
-            for (let j = 0; j < pairs.length; j++) {
-                allPairs.push (pairs[j]);
+            const pairs = await this.fetchPairsForTokensV1Batch (batch, chainId, params);
+            for (let pairIndex = 0; pairIndex < pairs.length; pairIndex++) {
+                allPairs.push (pairs[pairIndex]);
             }
             offset = offset + maxBatchSize;
         }
         return allPairs;
     }
 
-    selectBestPairs (pairs: Dict[]): Dict[] {
-        const bestBySymbol: Dict = {};
-        for (let i = 0; i < pairs.length; i++) {
-            const pair = pairs[i];
-            const baseToken = this.safeDict (pair, 'baseToken', {});
-            const quoteToken = this.safeDict (pair, 'quoteToken', {});
-            const base = this.safeCurrencyCode (this.safeString (baseToken, 'symbol'));
-            const quote = this.safeCurrencyCode (this.safeString (quoteToken, 'symbol'));
-            if ((base === undefined) || (quote === undefined)) {
+    mergePairsByPairAddress (pairs: Dict[]): Dict[] {
+        const mergedByPairAddress: Dict = {};
+        for (let pairIndex = 0; pairIndex < pairs.length; pairIndex++) {
+            const pair = pairs[pairIndex];
+            const pairAddress = this.safeString (pair, 'pairAddress');
+            if (pairAddress === undefined) {
                 continue;
             }
-            const symbol = base + '/' + quote;
-            const liquidityUsd = this.safeLiquidityUsd (pair);
-            const existing = this.safeDict (bestBySymbol, symbol);
-            if (existing === undefined) {
-                bestBySymbol[symbol] = pair;
-            } else if (liquidityUsd > this.safeLiquidityUsd (existing)) {
-                bestBySymbol[symbol] = pair;
-            }
+            mergedByPairAddress[pairAddress] = pair;
         }
-        return Object.values (bestBySymbol);
+        return Object.values (mergedByPairAddress);
     }
 
-    buildMarketsFromPairs (pairs: Dict[]): Market[] {
-        const bestPairs = this.selectBestPairs (pairs);
-        const result: Market[] = [];
-        for (let i = 0; i < bestPairs.length; i++) {
-            const market = this.parseMarket (bestPairs[i]);
-            result.push (market);
-        }
-        return result;
-    }
-
-    indexAddressPairMarketKeys () {
-        const marketsList = Object.values (this.markets);
-        for (let i = 0; i < marketsList.length; i++) {
-            const market = marketsList[i];
-            const baseId = this.safeString (market, 'baseId');
-            const quoteId = this.safeString (market, 'quoteId');
-            if ((baseId === undefined) || (quoteId === undefined)) {
-                continue;
+    pairMatchesTickerSymbol (pair: Dict, base: string, quote: string): boolean {
+        const baseToken = this.safeDict (pair, 'baseToken', {});
+        const quoteToken = this.safeDict (pair, 'quoteToken', {});
+        if (this.isTokenAddress (base)) {
+            const pairBase = this.normalizeTokenAddress (this.safeString (baseToken, 'address'));
+            if (pairBase !== this.normalizeTokenAddress (base)) {
+                return false;
             }
-            const aliasSymbol = this.getAddressPairSymbol (baseId, quoteId);
-            const unifiedSymbol = this.safeString (market, 'symbol');
-            if ((aliasSymbol !== unifiedSymbol) && !(aliasSymbol in this.markets)) {
-                this.markets[aliasSymbol] = market;
+        } else {
+            const pairBase = this.safeCurrencyCode (this.safeString (baseToken, 'symbol'));
+            if (pairBase !== this.safeCurrencyCode (base)) {
+                return false;
             }
         }
-        const unifiedSymbols: Dict = {};
-        for (let i = 0; i < marketsList.length; i++) {
-            const unifiedSymbol = this.safeString (marketsList[i], 'symbol');
-            if (unifiedSymbol !== undefined) {
-                unifiedSymbols[unifiedSymbol] = true;
+        if (this.isTokenAddress (quote)) {
+            const pairQuote = this.normalizeTokenAddress (this.safeString (quoteToken, 'address'));
+            if (pairQuote !== this.normalizeTokenAddress (quote)) {
+                return false;
+            }
+        } else {
+            const pairQuote = this.safeCurrencyCode (this.safeString (quoteToken, 'symbol'));
+            if (pairQuote !== this.safeCurrencyCode (quote)) {
+                return false;
             }
         }
-        this.symbols = Object.keys (this.keysort (unifiedSymbols));
+        return true;
     }
 
-    setMarkets (markets, currencies = undefined) {
-        super.setMarkets (markets, currencies);
-        this.indexAddressPairMarketKeys ();
-        return this.markets;
-    }
-
-    mergeMarkets (newMarkets: Market[]) {
-        const existingMarkets = Object.values (this.markets);
-        const combined = this.arrayConcat (existingMarkets, newMarkets);
-        this.setMarkets (combined);
-    }
-
-    /**
-     * @method
-     * @name dexscreener#fetchMarkets
-     * @description fetches markets for configured token addresses on a chain and dex
-     * @see https://docs.dexscreener.com/api/reference
-     * @param {object} [params] extra parameters specific to the exchange API endpoint
-     * @returns {Market[]} an array of market structures
-     */
-    async fetchMarkets (params = {}): Promise<Market[]> {
-        const chainId = this.safeString (this.options, 'chainId');
-        const dexId = this.safeString (this.options, 'dexId');
-        if ((chainId === undefined) || (chainId === '') || (dexId === undefined) || (dexId === '')) {
-            return [];
-        }
-        const baseAddresses = this.getTokenAddressList ('baseTokenAddresses');
-        const quoteAddresses = this.getTokenAddressList ('quoteTokenAddresses');
-        if ((baseAddresses.length === 0) && (quoteAddresses.length === 0)) {
-            return [];
-        }
-        this.clearDiscoveryPairsCache ();
-        const rawPairs = await this.fetchDiscoveryPairs (params);
-        const filteredPairs = [];
-        for (let i = 0; i < rawPairs.length; i++) {
-            const pair = rawPairs[i];
-            if (this.pairPassesFilters (pair, baseAddresses, quoteAddresses)) {
-                filteredPairs.push (pair);
+    pairMatchesNetworkAndDex (pair: Dict, networkCode, dexCode) {
+        if (networkCode !== undefined) {
+            const chainId = this.safeString (pair, 'chainId');
+            const pairNetworkCode = this.networkIdToCode (chainId);
+            if (this.obSanitizeNetworkDexToken (pairNetworkCode) !== this.obSanitizeNetworkDexToken (networkCode)) {
+                return false;
             }
         }
-        return this.buildMarketsFromPairs (filteredPairs);
+        if (dexCode === undefined) {
+            return true;
+        }
+        if (dexCode === '*') {
+            return true;
+        }
+        const pairDexId = this.safeString (pair, 'dexId');
+        return pairDexId === this.obDexCodeToId (dexCode);
+    }
+
+    pairMatchesAddressCombination (pair: Dict, baseAddress: string, quoteAddress: string): boolean {
+        const baseToken = this.safeDict (pair, 'baseToken', {});
+        const quoteToken = this.safeDict (pair, 'quoteToken', {});
+        const pairBase = this.normalizeTokenAddress (this.safeString (baseToken, 'address'));
+        const pairQuote = this.normalizeTokenAddress (this.safeString (quoteToken, 'address'));
+        return (pairBase === this.normalizeTokenAddress (baseAddress)) && (pairQuote === this.normalizeTokenAddress (quoteAddress));
+    }
+
+    buildMarketSymbol (tradingSymbol: string, networkCode: string, dexCode): string {
+        if (dexCode !== undefined) {
+            return tradingSymbol + '@' + networkCode + '!' + dexCode;
+        }
+        return tradingSymbol + '@' + networkCode;
+    }
+
+    buildMarketId (networkCode: string, dexCode, chainId: string, pairAddress: string): string {
+        const unifiedDexCode = (dexCode !== undefined) ? dexCode : '';
+        return networkCode + ':' + unifiedDexCode + ':' + chainId + ':' + pairAddress;
+    }
+
+    parseMarketId (marketId: string): Dict {
+        const parts = marketId.split (':');
+        return {
+            'networkCode': this.safeString (parts, 0),
+            'dexCode': this.safeString (parts, 1),
+            'chainId': this.safeString (parts, 2),
+            'pairAddress': this.safeString (parts, 3),
+        };
     }
 
     parseMarket (pair: Dict): Market {
-        const chainId = this.safeString (pair, 'chainId', this.getConfiguredChainId ());
+        const chainId = this.safeString (pair, 'chainId');
         const pairAddress = this.safeString (pair, 'pairAddress');
+        const pairDexId = this.safeString (pair, 'dexId');
+        const networkCode = this.networkIdToCode (chainId);
+        const dexCode = this.obDexIdToCode (pairDexId);
         const baseToken = this.safeDict (pair, 'baseToken', {});
         const quoteToken = this.safeDict (pair, 'quoteToken', {});
         const baseId = this.safeString (baseToken, 'address');
         const quoteId = this.safeString (quoteToken, 'address');
         const base = this.safeCurrencyCode (this.safeString (baseToken, 'symbol'));
         const quote = this.safeCurrencyCode (this.safeString (quoteToken, 'symbol'));
-        const symbol = base + '/' + quote;
-        const id = chainId + ':' + pairAddress;
+        const tradingSymbol = base + '/' + quote;
+        const symbol = this.buildMarketSymbol (tradingSymbol, networkCode, dexCode);
+        const id = this.buildMarketId (networkCode, dexCode, chainId, pairAddress);
         return {
             'id': id,
             'symbol': symbol,
@@ -574,6 +581,198 @@ export default class dexscreener extends Exchange {
         };
     }
 
+    parseAddressMarket (pair: Dict, tradingSymbol: string, networkCode: string, dexCode): Market {
+        const chainId = this.safeString (pair, 'chainId');
+        const pairAddress = this.safeString (pair, 'pairAddress');
+        const baseToken = this.safeDict (pair, 'baseToken', {});
+        const quoteToken = this.safeDict (pair, 'quoteToken', {});
+        const baseId = this.safeString (baseToken, 'address');
+        const quoteId = this.safeString (quoteToken, 'address');
+        const base = this.safeCurrencyCode (this.safeString (baseToken, 'symbol'));
+        const quote = this.safeCurrencyCode (this.safeString (quoteToken, 'symbol'));
+        let effectiveNetworkCode = networkCode;
+        if (effectiveNetworkCode === undefined) {
+            effectiveNetworkCode = this.networkIdToCode (chainId);
+        }
+        let effectiveDexCode = dexCode;
+        if ((effectiveDexCode === undefined) || (effectiveDexCode === '*')) {
+            const pairDexId = this.safeString (pair, 'dexId');
+            effectiveDexCode = this.obDexIdToCode (pairDexId);
+        }
+        const symbol = this.buildMarketSymbol (tradingSymbol, effectiveNetworkCode, effectiveDexCode);
+        const id = this.buildMarketId (effectiveNetworkCode, effectiveDexCode, chainId, pairAddress);
+        return {
+            'id': id,
+            'symbol': symbol,
+            'base': base,
+            'quote': quote,
+            'settle': undefined,
+            'baseId': baseId,
+            'quoteId': quoteId,
+            'settleId': undefined,
+            'type': 'spot',
+            'spot': true,
+            'margin': false,
+            'swap': false,
+            'future': false,
+            'option': false,
+            'active': true,
+            'contract': false,
+            'linear': undefined,
+            'inverse': undefined,
+            'contractSize': undefined,
+            'expiry': undefined,
+            'expiryDatetime': undefined,
+            'strike': undefined,
+            'optionType': undefined,
+            'taker': undefined,
+            'maker': undefined,
+            'percentage': undefined,
+            'tierBased': undefined,
+            'feeSide': undefined,
+            'precision': {
+                'amount': undefined,
+                'price': undefined,
+            },
+            'limits': {
+                'leverage': { 'min': undefined, 'max': undefined },
+                'amount': { 'min': undefined, 'max': undefined },
+                'price': { 'min': undefined, 'max': undefined },
+                'cost': { 'min': undefined, 'max': undefined },
+            },
+            'created': undefined,
+            'info': pair,
+        };
+    }
+
+    indexAddressPairMarketKeys () {
+        const marketsList = Object.values (this.markets);
+        for (let marketIndex = 0; marketIndex < marketsList.length; marketIndex++) {
+            const market = marketsList[marketIndex];
+            const unifiedSymbol = this.safeString (market, 'symbol');
+            if (unifiedSymbol === undefined) {
+                continue;
+            }
+            if (unifiedSymbol.indexOf ('@') < 0) {
+                continue;
+            }
+            const parsed = this.obParseNetworkDexSymbol (unifiedSymbol);
+            const networkCode = this.safeString (parsed, 'networkCode');
+            const dexCode = this.safeString (parsed, 'dexCode');
+            const baseId = this.safeString (market, 'baseId');
+            const quoteId = this.safeString (market, 'quoteId');
+            const base = this.safeString (market, 'base');
+            const quote = this.safeString (market, 'quote');
+            if ((baseId !== undefined) && (quoteId !== undefined)) {
+                const addressAliasSymbol = this.getAddressPairSymbol (baseId, quoteId, networkCode, dexCode);
+                if ((addressAliasSymbol !== unifiedSymbol) && !(addressAliasSymbol in this.markets)) {
+                    this.markets[addressAliasSymbol] = market;
+                }
+            }
+            if ((base !== undefined) && (quote !== undefined) && this.isAddressPairSymbol (unifiedSymbol)) {
+                const tickerAliasSymbol = this.buildMarketSymbol (base + '/' + quote, networkCode, dexCode);
+                if ((tickerAliasSymbol !== unifiedSymbol) && !(tickerAliasSymbol in this.markets)) {
+                    this.markets[tickerAliasSymbol] = market;
+                }
+            }
+        }
+        const unifiedSymbols: Dict = {};
+        for (let marketIndex = 0; marketIndex < marketsList.length; marketIndex++) {
+            const unifiedSymbol = this.safeString (marketsList[marketIndex], 'symbol');
+            if (unifiedSymbol !== undefined) {
+                unifiedSymbols[unifiedSymbol] = true;
+            }
+        }
+        this.symbols = Object.keys (this.keysort (unifiedSymbols));
+    }
+
+    setMarkets (markets, currencies = undefined) {
+        super.setMarkets (markets, currencies);
+        this.indexAddressPairMarketKeys ();
+        return this.markets;
+    }
+
+    mergeMarkets (newMarkets: Market[]) {
+        const existingMarkets = (this.markets === undefined) ? [] : Object.values (this.markets);
+        const combined = this.arrayConcat (existingMarkets, newMarkets);
+        this.setMarkets (combined);
+    }
+
+    /**
+     * @method
+     * @name dexscreener#fetchMarkets
+     * @description fetches markets; returns empty by default (markets loaded on demand)
+     * @see https://docs.dexscreener.com/api/reference
+     * @param {object} [params] extra parameters specific to the exchange API endpoint
+     * @returns {Market[]} an array of market structures
+     */
+    async fetchMarkets (params = {}): Promise<Market[]> {
+        return [];
+    }
+
+    normalizeTradingSymbolPart (part: string): string {
+        if (this.isTokenAddress (part)) {
+            return this.normalizeTokenAddress (part);
+        }
+        return this.safeCurrencyCode (part);
+    }
+
+    buildSearchQueryFromTradingSymbol (tradingSymbol: string): string {
+        const parts = tradingSymbol.split ('/');
+        if (parts.length !== 2) {
+            throw new BadSymbol (this.id + ' buildSearchQueryFromTradingSymbol() requires a base/quote symbol');
+        }
+        const basePart = this.safeString (parts, 0);
+        const quotePart = this.safeString (parts, 1);
+        const base = this.normalizeTradingSymbolPart (basePart);
+        const quote = this.normalizeTradingSymbolPart (quotePart);
+        return base + '/' + quote;
+    }
+
+    /**
+     * @method
+     * @name dexscreener#fetchMarketsForSymbol
+     * @description fetches all markets matching a base/quote ticker symbol via search
+     * @see https://docs.dexscreener.com/api/reference
+     * @param {string} symbol trading symbol without network suffix, e.g. WETH/USDC
+     * @param {object} [params] extra parameters specific to the exchange API endpoint
+     * @returns {Market[]} an array of market structures
+     */
+    async fetchMarketsForSymbol (symbol: string, params = {}): Promise<Market[]> {
+        const parts = symbol.split ('/');
+        if (parts.length !== 2) {
+            throw new BadSymbol (this.id + ' fetchMarketsForSymbol() requires a base/quote symbol');
+        }
+        const basePart = this.safeString (parts, 0);
+        const quotePart = this.safeString (parts, 1);
+        const base = this.normalizeTradingSymbolPart (basePart);
+        const quote = this.normalizeTradingSymbolPart (quotePart);
+        const request: Dict = {
+            'q': this.buildSearchQueryFromTradingSymbol (symbol),
+        };
+        const response = await this.publicGetLatestDexSearch (this.extend (request, params));
+        const rawPairs = this.parseTokenPairsResponse (response);
+        const filteredPairs = [];
+        const seenMarketIds: Dict = {};
+        for (let pairIndex = 0; pairIndex < rawPairs.length; pairIndex++) {
+            const pair = rawPairs[pairIndex];
+            if (!this.pairMatchesTickerSymbol (pair, base, quote)) {
+                continue;
+            }
+            const market = this.parseMarket (pair);
+            const marketId = this.safeString (market, 'id');
+            if (marketId in seenMarketIds) {
+                continue;
+            }
+            seenMarketIds[marketId] = true;
+            filteredPairs.push (market);
+        }
+        if (filteredPairs.length > 0) {
+            this.mergeMarkets (filteredPairs);
+        }
+        return filteredPairs;
+    }
+
     extractPairFromResponse (response: Dict): Dict {
         const pair = this.safeDict (response, 'pair');
         if (pair !== undefined) {
@@ -590,182 +789,79 @@ export default class dexscreener extends Exchange {
     }
 
     getPairIdFromMarket (market: Market) {
-        const info = this.safeDict (market, 'info', {});
-        const pairAddress = this.safeString2 (info, 'pairAddress', 'pair_address');
-        if (pairAddress !== undefined) {
-            return pairAddress;
-        }
         const marketId = this.safeString (market, 'id');
-        if (marketId === undefined) {
+        if (marketId !== undefined) {
+            const parsedMarketId = this.parseMarketId (marketId);
+            const pairAddress = this.safeString (parsedMarketId, 'pairAddress');
+            if (pairAddress !== undefined) {
+                return pairAddress;
+            }
+        }
+        const info = this.safeDict (market, 'info', {});
+        return this.safeString2 (info, 'pairAddress', 'pair_address');
+    }
+
+    getChainIdFromMarket (market: Market) {
+        const marketId = this.safeString (market, 'id');
+        if (marketId !== undefined) {
+            const parsedMarketId = this.parseMarketId (marketId);
+            const chainId = this.safeString (parsedMarketId, 'chainId');
+            if (chainId !== undefined) {
+                return chainId;
+            }
+        }
+        const info = this.safeDict (market, 'info', {});
+        return this.safeString (info, 'chainId');
+    }
+
+    async fetchPairForMarket (market: Market, dexCode, params = {}): Promise<Dict> {
+        const symbol = this.safeString (market, 'symbol');
+        const parsed = this.obParseNetworkDexSymbol (symbol);
+        const tradingSymbol = this.safeString (parsed, 'tradingSymbol');
+        const networkCode = this.safeString (parsed, 'networkCode');
+        const effectiveDexCode = (dexCode !== undefined) ? dexCode : this.safeString (parsed, 'dexCode');
+        const request: Dict = {
+            'q': this.buildSearchQueryFromTradingSymbol (tradingSymbol),
+        };
+        const response = await this.publicGetLatestDexSearch (this.extend (request, params));
+        const rawPairs = this.parseTokenPairsResponse (response);
+        const filteredPairs = this.filterPairsForResolvedSymbol (rawPairs, symbol, networkCode, effectiveDexCode, tradingSymbol);
+        const pair = this.selectBestFilteredPair (filteredPairs, effectiveDexCode);
+        if (pair === undefined) {
+            throw new BadSymbol (this.id + ' no pair data for symbol ' + symbol);
+        }
+        return pair;
+    }
+
+    getPairFromMarketInfo (market: Market) {
+        const info = this.safeDict (market, 'info', {});
+        const pairAddress = this.safeString (info, 'pairAddress');
+        if (pairAddress === undefined) {
             return undefined;
         }
-        const parts = marketId.split (':');
-        return this.safeString (parts, 1);
+        return info;
     }
 
-    async fetchPairTicker (market: Market, params = {}): Promise<Ticker> {
-        const chainId = this.getConfiguredChainId ();
-        const pairId = this.getPairIdFromMarket (market);
-        if (pairId === undefined) {
-            throw new BadSymbol (this.id + ' market has no pair address');
+    async fetchPairForMarketTicker (market: Market, pairs: Dict[], dexCode, params = {}): Promise<Dict> {
+        const pair = this.selectBestPairForMarket (pairs, market, dexCode);
+        if (pair !== undefined) {
+            return pair;
         }
-        const request: Dict = {
-            'chainId': chainId,
-            'pairId': pairId,
-        };
-        const response = await this.publicGetLatestDexPairsChainIdPairId (this.extend (request, params));
-        const pair = this.extractPairFromResponse (response);
-        return this.parseTicker (pair, market);
+        return await this.fetchPairForMarket (market, dexCode, params);
     }
 
-    filterPairsForUnifiedSymbol (rawPairs: Dict[], symbol: string): Dict[] {
-        const parts = symbol.split ('/');
-        const baseCode = this.safeCurrencyCode (this.safeString (parts, 0));
-        const quoteCode = this.safeCurrencyCode (this.safeString (parts, 1));
-        const baseAddresses = this.getTokenAddressList ('baseTokenAddresses');
-        const quoteAddresses = this.getTokenAddressList ('quoteTokenAddresses');
-        const filteredPairs = [];
-        for (let i = 0; i < rawPairs.length; i++) {
-            const pair = rawPairs[i];
-            if (!this.pairPassesFilters (pair, baseAddresses, quoteAddresses)) {
-                continue;
-            }
-            const baseToken = this.safeDict (pair, 'baseToken', {});
-            const quoteToken = this.safeDict (pair, 'quoteToken', {});
-            const pairBase = this.safeCurrencyCode (this.safeString (baseToken, 'symbol'));
-            const pairQuote = this.safeCurrencyCode (this.safeString (quoteToken, 'symbol'));
-            if ((pairBase === baseCode) && (pairQuote === quoteCode)) {
-                filteredPairs.push (pair);
-            }
-        }
-        return filteredPairs;
-    }
-
-    filterPairsForAddressSymbol (rawPairs: Dict[], symbol: string): Dict[] {
-        const parts = symbol.split ('/');
-        const baseAddress = this.safeString (parts, 0);
-        const quoteAddress = this.safeString (parts, 1);
-        const filteredPairs = [];
-        for (let i = 0; i < rawPairs.length; i++) {
-            const pair = rawPairs[i];
-            if (!this.pairPassesFilters (pair, [ baseAddress ], [ quoteAddress ])) {
-                continue;
-            }
-            const baseToken = this.safeDict (pair, 'baseToken', {});
-            const quoteToken = this.safeDict (pair, 'quoteToken', {});
-            const pairBase = this.normalizeTokenAddress (this.safeString (baseToken, 'address'));
-            const pairQuote = this.normalizeTokenAddress (this.safeString (quoteToken, 'address'));
-            if ((pairBase === this.normalizeTokenAddress (baseAddress)) && (pairQuote === this.normalizeTokenAddress (quoteAddress))) {
-                filteredPairs.push (pair);
-            }
-        }
-        return filteredPairs;
-    }
-
-    assignResolvedMarket (marketsBySymbol: Dict, symbol: string) {
-        marketsBySymbol[symbol] = this.market (symbol);
-    }
-
-    addConfiguredTokenAddresses (tokenAddressesToFetch: Dict) {
-        const baseAddresses = this.getTokenAddressList ('baseTokenAddresses');
-        const quoteAddresses = this.getTokenAddressList ('quoteTokenAddresses');
-        for (let i = 0; i < baseAddresses.length; i++) {
-            tokenAddressesToFetch[baseAddresses[i]] = true;
-        }
-        for (let i = 0; i < quoteAddresses.length; i++) {
-            tokenAddressesToFetch[quoteAddresses[i]] = true;
-        }
-    }
-
-    async resolveMarkets (symbols: string[], params = {}): Promise<Dict> {
-        const marketsBySymbol: Dict = {};
-        const missingAddressSymbols = [];
-        const missingUnifiedSymbols = [];
-        const tokenAddressesToFetch: Dict = {};
-        for (let i = 0; i < symbols.length; i++) {
-            const symbol = symbols[i];
-            const normalizedSymbol = this.normalizeAddressPairSymbol (symbol);
-            if ((symbol in this.markets) || ((normalizedSymbol !== symbol) && (normalizedSymbol in this.markets))) {
-                marketsBySymbol[symbol] = this.market (symbol);
-                continue;
-            }
-            if (!this.isAddressPairSymbol (symbol)) {
-                missingUnifiedSymbols.push (symbol);
-                this.addConfiguredTokenAddresses (tokenAddressesToFetch);
-                continue;
-            }
-            missingAddressSymbols.push (symbol);
-            const parts = symbol.split ('/');
-            const baseAddress = this.safeString (parts, 0);
-            const quoteAddress = this.safeString (parts, 1);
-            tokenAddressesToFetch[baseAddress] = true;
-            tokenAddressesToFetch[quoteAddress] = true;
-        }
-        const symbolsToResolve = this.arrayConcat (missingAddressSymbols, missingUnifiedSymbols);
-        if (symbolsToResolve.length > 0) {
-            const addressList = Object.keys (tokenAddressesToFetch);
-            if (addressList.length === 0) {
-                throw new BadSymbol (this.id + ' no token addresses configured to resolve markets');
-            }
-            const rawPairs = await this.fetchDiscoveryPairs (params, addressList);
-            const pairsToMerge = [];
-            for (let i = 0; i < missingAddressSymbols.length; i++) {
-                const symbol = missingAddressSymbols[i];
-                const filteredPairs = this.filterPairsForAddressSymbol (rawPairs, symbol);
-                if (filteredPairs.length === 0) {
-                    throw new BadSymbol (this.id + ' tokens are not supported for symbol ' + symbol);
-                }
-                for (let j = 0; j < filteredPairs.length; j++) {
-                    pairsToMerge.push (filteredPairs[j]);
-                }
-            }
-            for (let i = 0; i < missingUnifiedSymbols.length; i++) {
-                const symbol = missingUnifiedSymbols[i];
-                const filteredPairs = this.filterPairsForUnifiedSymbol (rawPairs, symbol);
-                if (filteredPairs.length === 0) {
-                    throw new BadSymbol (this.id + ' tokens are not supported for symbol ' + symbol);
-                }
-                for (let j = 0; j < filteredPairs.length; j++) {
-                    pairsToMerge.push (filteredPairs[j]);
-                }
-            }
-            const newMarkets = this.buildMarketsFromPairs (pairsToMerge);
-            this.mergeMarkets (newMarkets);
-            for (let i = 0; i < symbolsToResolve.length; i++) {
-                const symbol = symbolsToResolve[i];
-                this.assignResolvedMarket (marketsBySymbol, symbol);
-            }
-        }
-        return marketsBySymbol;
-    }
-
-    async resolveMarket (symbol: string, params = {}): Promise<Market> {
-        const marketsBySymbol = await this.resolveMarkets ([ symbol ], params);
-        return marketsBySymbol[symbol];
-    }
-
-    getMarketsMissingPair (symbols: string[], marketsBySymbol: Dict, pairs: Dict[]) {
-        const missing = [];
-        for (let i = 0; i < symbols.length; i++) {
-            const symbol = symbols[i];
-            const market = this.safeValue (marketsBySymbol, symbol);
-            if (this.findPairForMarket (pairs, market) === undefined) {
-                missing.push (market);
-            }
-        }
-        return missing;
-    }
-
-    findPairForMarket (pairs: Dict[], market: Market) {
-        const dexId = this.getConfiguredDexId ();
+    selectBestPairForMarket (pairs: Dict[], market: Market, dexCode) {
         const marketBaseId = this.normalizeTokenAddress (this.safeString (market, 'baseId'));
         const marketQuoteId = this.normalizeTokenAddress (this.safeString (market, 'quoteId'));
+        const marketId = this.safeString (market, 'id');
+        const parsedMarketId = this.parseMarketId (marketId);
+        const targetNetworkCode = this.safeString (parsedMarketId, 'networkCode');
+        const targetDexCode = (dexCode !== undefined) ? dexCode : this.safeString (parsedMarketId, 'dexCode');
         let bestPair = undefined;
-        let bestLiquidityUsd = 0;
-        for (let i = 0; i < pairs.length; i++) {
-            const pair = pairs[i];
-            const pairDexId = this.safeString (pair, 'dexId');
-            if (pairDexId !== dexId) {
+        let bestLiquidity = 0;
+        for (let pairIndex = 0; pairIndex < pairs.length; pairIndex++) {
+            const pair = pairs[pairIndex];
+            if (!this.pairMatchesNetworkAndDex (pair, targetNetworkCode, targetDexCode)) {
                 continue;
             }
             const baseToken = this.safeDict (pair, 'baseToken', {});
@@ -775,69 +871,320 @@ export default class dexscreener extends Exchange {
             if ((pairBase !== marketBaseId) || (pairQuote !== marketQuoteId)) {
                 continue;
             }
-            const liquidityUsd = this.safeLiquidityUsd (pair);
-            if ((bestPair === undefined) || (liquidityUsd > bestLiquidityUsd)) {
+            const liquidity = this.safeLiquidityForPairSelection (pair, targetDexCode);
+            if ((bestPair === undefined) || (liquidity > bestLiquidity)) {
                 bestPair = pair;
-                bestLiquidityUsd = liquidityUsd;
+                bestLiquidity = liquidity;
             }
         }
         return bestPair;
     }
 
-    getTokenPairFallbackAddresses (markets: Market[]): string[] {
-        const discoveryAddresses: Dict = {};
-        for (let i = 0; i < markets.length; i++) {
-            const market = markets[i];
-            const baseId = this.safeString (market, 'baseId');
-            if (baseId !== undefined) {
-                discoveryAddresses[baseId] = true;
+    filterPairsForResolvedSymbol (rawPairs: Dict[], symbol: string, networkCode: string, dexCode, tradingSymbol: string): Dict[] {
+        const filteredPairs = [];
+        for (let pairIndex = 0; pairIndex < rawPairs.length; pairIndex++) {
+            const pair = rawPairs[pairIndex];
+            if (!this.pairMatchesNetworkAndDex (pair, networkCode, dexCode)) {
+                continue;
             }
+            const parts = tradingSymbol.split ('/');
+            const base = this.safeString (parts, 0);
+            const quote = this.safeString (parts, 1);
+            if (!this.pairMatchesTickerSymbol (pair, base, quote)) {
+                continue;
+            }
+            filteredPairs.push (pair);
         }
-        const addressList = Object.keys (discoveryAddresses);
-        if (addressList.length > 0) {
-            return addressList;
-        }
-        return this.getMarketDiscoveryAddresses ();
+        return filteredPairs;
     }
 
-    async fetchTickersFromTokensV1 (symbols: string[], marketsBySymbol: Dict, params = {}): Promise<Tickers> {
-        const tokenAddressesToFetch: Dict = {};
-        for (let i = 0; i < symbols.length; i++) {
-            const symbol = symbols[i];
-            const market = this.safeValue (marketsBySymbol, symbol);
-            const baseId = this.safeString (market, 'baseId');
-            const quoteId = this.safeString (market, 'quoteId');
-            if (baseId !== undefined) {
-                tokenAddressesToFetch[baseId] = true;
-            }
-            if (quoteId !== undefined) {
-                tokenAddressesToFetch[quoteId] = true;
+    async resolveAddressPairFromRawPairs (rawPairs: Dict[], symbol: string, networkCode: string, dexCode, tradingSymbol: string, params = {}): Promise<Dict> {
+        let filteredPairs = this.filterPairsForResolvedSymbol (rawPairs, symbol, networkCode, dexCode, tradingSymbol);
+        if (filteredPairs.length === 0) {
+            const request: Dict = {
+                'q': this.buildSearchQueryFromTradingSymbol (tradingSymbol),
+            };
+            const response = await this.publicGetLatestDexSearch (this.extend (request, params));
+            const searchPairs = this.parseTokenPairsResponse (response);
+            filteredPairs = this.filterPairsForResolvedSymbol (searchPairs, symbol, networkCode, dexCode, tradingSymbol);
+        }
+        return {
+            'pairs': filteredPairs,
+        };
+    }
+
+    async fetchPairsForAddressSymbol (symbol: string, networkCode: string, dexCode, tradingSymbol: string, chainId: string, params = {}): Promise<Dict> {
+        const parts = tradingSymbol.split ('/');
+        const baseAddress = this.safeString (parts, 0);
+        const rawPairs = await this.fetchPairsForTokensV1 ([ baseAddress ], chainId, params);
+        return await this.resolveAddressPairFromRawPairs (rawPairs, symbol, networkCode, dexCode, tradingSymbol, params);
+    }
+
+    selectBestFilteredPair (filteredPairs: Dict[], dexCode = undefined): Dict {
+        let bestPair = undefined;
+        let bestLiquidity = 0;
+        for (let pairIndex = 0; pairIndex < filteredPairs.length; pairIndex++) {
+            const pair = filteredPairs[pairIndex];
+            const liquidity = this.safeLiquidityForPairSelection (pair, dexCode);
+            if ((bestPair === undefined) || (liquidity > bestLiquidity)) {
+                bestPair = pair;
+                bestLiquidity = liquidity;
             }
         }
-        const tokenAddressList = Object.keys (tokenAddressesToFetch);
-        if (tokenAddressList.length === 0) {
-            throw new BadSymbol (this.id + ' no token addresses available to refresh tickers');
+        return bestPair;
+    }
+
+    registerWildcardMarketAlias (wildcardSymbol: string, concreteSymbol: string) {
+        const concreteMarket = this.safeValue (this.markets, concreteSymbol);
+        if (concreteMarket !== undefined) {
+            this.markets[wildcardSymbol] = concreteMarket;
         }
-        let allPairs = await this.fetchPairsForTokensV1 (tokenAddressList, params);
-        const marketsMissingPair = this.getMarketsMissingPair (symbols, marketsBySymbol, allPairs);
-        if (marketsMissingPair.length > 0) {
-            const fallbackAddresses = this.getTokenPairFallbackAddresses (marketsMissingPair);
-            if (fallbackAddresses.length > 0) {
-                const extraPairs = await this.fetchPairsForTokenAddresses (fallbackAddresses, params);
-                allPairs = this.mergePairsByPairAddress (this.arrayConcat (allPairs, extraPairs));
+    }
+
+    isMarketSymbolCached (symbol: string): boolean {
+        if (this.markets === undefined) {
+            return false;
+        }
+        const normalizedSymbol = this.normalizeAddressPairSymbol (symbol);
+        return (symbol in this.markets) || ((normalizedSymbol !== symbol) && (normalizedSymbol in this.markets));
+    }
+
+    removeCachedMarketSymbol (symbol: string) {
+        if (this.markets === undefined) {
+            return;
+        }
+        if (symbol in this.markets) {
+            delete this.markets[symbol];
+        }
+        const normalizedSymbol = this.normalizeAddressPairSymbol (symbol);
+        if ((normalizedSymbol !== symbol) && (normalizedSymbol in this.markets)) {
+            delete this.markets[normalizedSymbol];
+        }
+    }
+
+    async resolveMarket (symbol: string, params = {}): Promise<Market> {
+        const resolveResult = await this.resolveMarkets ([ symbol ], params);
+        return resolveResult['marketsBySymbol'][symbol];
+    }
+
+    formatNetworkDexResolutionDetails (networkCode, dexCode): string {
+        const unifiedNetwork = (networkCode !== undefined) ? networkCode : 'none';
+        const localNetwork = (networkCode !== undefined) ? this.networkCodeToId (networkCode) : 'none';
+        let unifiedDex = 'none';
+        let localDex = 'none';
+        if (dexCode === '*') {
+            unifiedDex = '*';
+            localDex = 'any';
+        } else if (dexCode !== undefined) {
+            unifiedDex = dexCode;
+            localDex = this.obDexCodeToId (dexCode);
+        }
+        return 'network unified=' + unifiedNetwork + ' local=' + localNetwork + ', dex unified=' + unifiedDex + ' local=' + localDex;
+    }
+
+    async resolveMarkets (symbols: string[], params = {}): Promise<Dict> {
+        const marketsBySymbol: Dict = {};
+        const justResolvedSymbols: Dict = {};
+        const tradingSymbolsToFetch: Dict = {};
+        const pendingSymbols = [];
+        // 1) split cached markets from symbols that still need resolve
+        for (let symbolIndex = 0; symbolIndex < symbols.length; symbolIndex++) {
+            const symbol = symbols[symbolIndex];
+            const normalizedSymbol = this.normalizeAddressPairSymbol (symbol);
+            if ((symbol in this.markets) || ((normalizedSymbol !== symbol) && (normalizedSymbol in this.markets))) {
+                marketsBySymbol[symbol] = this.market (symbol);
+                continue;
+            }
+            const parsed = this.obParseDexPairSymbolInput (symbol);
+            const tradingSymbol = this.safeString (parsed, 'tradingSymbol');
+            pendingSymbols.push ({
+                'symbol': symbol,
+                'parsed': parsed,
+            });
+            if (!this.isAddressPairSymbol (symbol)) {
+                tradingSymbolsToFetch[tradingSymbol] = true;
             }
         }
+        // 2) unified (non-address) symbols: load candidate markets via search
+        const tradingSymbolList = Object.keys (tradingSymbolsToFetch);
+        for (let tradingIndex = 0; tradingIndex < tradingSymbolList.length; tradingIndex++) {
+            await this.fetchMarketsForSymbol (tradingSymbolList[tradingIndex], params);
+        }
+        // 3) address-pair symbols: batch tokens/v1 once per chain (base addresses only)
+        const addressPairChainGroups: Dict = {};
+        for (let pendingIndex = 0; pendingIndex < pendingSymbols.length; pendingIndex++) {
+            const pending = pendingSymbols[pendingIndex];
+            const symbol = this.safeString (pending, 'symbol');
+            if (!this.isAddressPairSymbol (symbol)) {
+                continue;
+            }
+            const parsed = this.safeDict (pending, 'parsed', {});
+            const tradingSymbol = this.safeString (parsed, 'tradingSymbol');
+            const networkCode = this.safeString (parsed, 'networkCode');
+            const normalizedSymbol = this.normalizeAddressPairSymbol (symbol);
+            if ((symbol in this.markets) || ((normalizedSymbol !== symbol) && (normalizedSymbol in this.markets))) {
+                continue;
+            }
+            if (networkCode === undefined) {
+                continue;
+            }
+            const chainId = this.networkCodeToId (networkCode);
+            if (!(chainId in addressPairChainGroups)) {
+                addressPairChainGroups[chainId] = {
+                    'baseAddresses': {},
+                };
+            }
+            const parts = tradingSymbol.split ('/');
+            const baseAddress = this.normalizeTokenAddress (this.safeString (parts, 0));
+            if (baseAddress !== undefined) {
+                addressPairChainGroups[chainId]['baseAddresses'][baseAddress] = true;
+            }
+        }
+        const pairsByChain: Dict = {};
+        const addressPairChainIds = Object.keys (addressPairChainGroups);
+        for (let chainIndex = 0; chainIndex < addressPairChainIds.length; chainIndex++) {
+            const chainId = addressPairChainIds[chainIndex];
+            const baseAddressList = Object.keys (addressPairChainGroups[chainId]['baseAddresses']);
+            pairsByChain[chainId] = await this.fetchPairsForTokensV1 (baseAddressList, chainId, params);
+        }
+        // 4) resolve each pending symbol: filter batched pairs (or search fallback), merge market
+        const pendingMarketAliases: Dict = {};
+        for (let pendingIndex = 0; pendingIndex < pendingSymbols.length; pendingIndex++) {
+            const pending = pendingSymbols[pendingIndex];
+            const symbol = this.safeString (pending, 'symbol');
+            const parsed = this.safeDict (pending, 'parsed', {});
+            const tradingSymbol = this.safeString (parsed, 'tradingSymbol');
+            const networkCode = this.safeString (parsed, 'networkCode');
+            const dexCode = this.safeString (parsed, 'dexCode');
+            const normalizedSymbol = this.normalizeAddressPairSymbol (symbol);
+            if ((symbol in this.markets) || ((normalizedSymbol !== symbol) && (normalizedSymbol in this.markets))) {
+                marketsBySymbol[symbol] = this.market (symbol);
+                continue;
+            }
+            let filteredPairs = [];
+            if (this.isAddressPairSymbol (symbol)) {
+                if (networkCode === undefined) {
+                    const addressResolveResult = await this.resolveAddressPairFromRawPairs ([], symbol, networkCode, dexCode, tradingSymbol, params);
+                    filteredPairs = this.safeList (addressResolveResult, 'pairs', []);
+                } else {
+                    const chainId = this.networkCodeToId (networkCode);
+                    const rawPairs = this.safeList (pairsByChain, chainId, []);
+                    const addressResolveResult = await this.resolveAddressPairFromRawPairs (rawPairs, symbol, networkCode, dexCode, tradingSymbol, params);
+                    filteredPairs = this.safeList (addressResolveResult, 'pairs', []);
+                }
+            } else {
+                const parts = tradingSymbol.split ('/');
+                const base = this.safeCurrencyCode (this.safeString (parts, 0));
+                const quote = this.safeCurrencyCode (this.safeString (parts, 1));
+                const marketSymbols = Object.keys (this.markets);
+                for (let marketIndex = 0; marketIndex < marketSymbols.length; marketIndex++) {
+                    const marketSymbol = marketSymbols[marketIndex];
+                    const cachedMarket = this.markets[marketSymbol];
+                    const marketTradingSymbol = cachedMarket['base'] + '/' + cachedMarket['quote'];
+                    if (marketTradingSymbol !== (base + '/' + quote)) {
+                        continue;
+                    }
+                    const marketId = this.safeString (cachedMarket, 'id');
+                    const parsedMarketId = this.parseMarketId (marketId);
+                    if (networkCode !== undefined) {
+                        if (this.obSanitizeNetworkDexToken (this.safeString (parsedMarketId, 'networkCode')) !== this.obSanitizeNetworkDexToken (networkCode)) {
+                            continue;
+                        }
+                    }
+                    if ((dexCode !== undefined) && (dexCode !== '*')) {
+                        if (this.obSanitizeNetworkDexToken (this.safeString (parsedMarketId, 'dexCode')) !== this.obSanitizeNetworkDexToken (dexCode)) {
+                            continue;
+                        }
+                    }
+                    filteredPairs.push (this.safeDict (cachedMarket, 'info', {}));
+                }
+            }
+            if (filteredPairs.length === 0) {
+                throw new BadSymbol (this.id + ' tokens are not supported for symbol ' + symbol + ' (' + this.formatNetworkDexResolutionDetails (networkCode, dexCode) + ')');
+            }
+            const selectedPair = this.selectBestFilteredPair (filteredPairs, dexCode);
+            let market = undefined;
+            if (this.isAddressPairSymbol (symbol)) {
+                market = this.parseAddressMarket (selectedPair, tradingSymbol, networkCode, dexCode);
+            } else {
+                market = this.parseMarket (selectedPair);
+            }
+            this.mergeMarkets ([ market ]);
+            if (symbol !== market['symbol']) {
+                pendingMarketAliases[symbol] = market['symbol'];
+                this.registerWildcardMarketAlias (symbol, market['symbol']);
+            }
+            marketsBySymbol[symbol] = this.market (symbol);
+            justResolvedSymbols[symbol] = true;
+        }
+        const pendingAliasSymbols = Object.keys (pendingMarketAliases);
+        for (let aliasIndex = 0; aliasIndex < pendingAliasSymbols.length; aliasIndex++) {
+            const aliasSymbol = pendingAliasSymbols[aliasIndex];
+            this.registerWildcardMarketAlias (aliasSymbol, pendingMarketAliases[aliasSymbol]);
+        }
+        return {
+            'marketsBySymbol': marketsBySymbol,
+            'justResolvedSymbols': justResolvedSymbols,
+        };
+    }
+
+    async fetchTickersFromTokensV1 (symbols: string[], marketsBySymbol: Dict, justResolvedSymbols: Dict = {}, params = {}): Promise<Tickers> {
+        const chainGroups: Dict = {};
         const result: Dict = {};
-        for (let i = 0; i < symbols.length; i++) {
-            const symbol = symbols[i];
+        // 1) just-resolved symbols: reuse pair data already stored in market.info (no HTTP)
+        for (let symbolIndex = 0; symbolIndex < symbols.length; symbolIndex++) {
+            const symbol = symbols[symbolIndex];
             const market = this.safeValue (marketsBySymbol, symbol);
-            const pair = this.findPairForMarket (allPairs, market);
-            if (pair === undefined) {
-                throw new BadSymbol (this.id + ' no pair data for symbol ' + symbol);
+            if (this.safeValue (justResolvedSymbols, symbol, false)) {
+                const pair = this.getPairFromMarketInfo (market);
+                if (pair === undefined) {
+                    throw new BadSymbol (this.id + ' no pair data for symbol ' + symbol);
+                }
+                const ticker = this.parseTicker (pair, market);
+                ticker['symbol'] = symbol;
+                result[symbol] = ticker;
+                continue;
             }
-            const ticker = this.parseTicker (pair, market);
-            ticker['symbol'] = symbol;
-            result[symbol] = ticker;
+            // 2) pre-existing symbols: group by chain and collect base token addresses for batch fetch
+            const chainId = this.getChainIdFromMarket (market);
+            if (chainId === undefined) {
+                throw new BadSymbol (this.id + ' market has no chain id for symbol ' + symbol);
+            }
+            if (!(chainId in chainGroups)) {
+                chainGroups[chainId] = {
+                    'symbols': [],
+                    'tokenAddresses': {},
+                };
+            }
+            chainGroups[chainId]['symbols'].push (symbol);
+            const baseId = this.safeString (market, 'baseId');
+            if (baseId !== undefined) {
+                chainGroups[chainId]['tokenAddresses'][baseId] = true;
+            }
+        }
+        // 3) fetch fresh pair data once per chain
+        const pairsByChain: Dict = {};
+        const chainIds = Object.keys (chainGroups);
+        for (let chainIndex = 0; chainIndex < chainIds.length; chainIndex++) {
+            const chainId = chainIds[chainIndex];
+            const tokenAddressList = Object.keys (chainGroups[chainId]['tokenAddresses']);
+            pairsByChain[chainId] = await this.fetchPairsForTokensV1 (tokenAddressList, chainId, params);
+        }
+        // 4) match batched pairs to each symbol and parse tickers (search fallback on batch miss)
+        for (let chainIndex = 0; chainIndex < chainIds.length; chainIndex++) {
+            const chainId = chainIds[chainIndex];
+            const chainSymbols = chainGroups[chainId]['symbols'];
+            const allPairs = pairsByChain[chainId];
+            for (let symbolIndex = 0; symbolIndex < chainSymbols.length; symbolIndex++) {
+                const symbol = chainSymbols[symbolIndex];
+                const market = this.safeValue (marketsBySymbol, symbol);
+                const parsed = this.obParseNetworkDexSymbol (symbol);
+                const dexCode = this.safeString (parsed, 'dexCode');
+                const pair = await this.fetchPairForMarketTicker (market, allPairs, dexCode, params);
+                const ticker = this.parseTicker (pair, market);
+                ticker['symbol'] = symbol;
+                result[symbol] = ticker;
+            }
         }
         return result;
     }
@@ -847,15 +1194,14 @@ export default class dexscreener extends Exchange {
      * @name dexscreener#fetchTicker
      * @description fetches a price ticker for a market
      * @see https://docs.dexscreener.com/api/reference
-     * @param {string} symbol unified market symbol
+     * @param {string} symbol unified market symbol with @network!dex suffix
      * @param {object} [params] extra parameters specific to the exchange API endpoint
      * @returns {object} a [ticker structure]{@link https://docs.ccxt.com/?id=ticker-structure}
      */
     async fetchTicker (symbol: string, params = {}): Promise<Ticker> {
-        this.checkRequiredOptions ();
         await this.loadMarkets ();
-        const marketsBySymbol = await this.resolveMarkets ([ symbol ], params);
-        const tickers = await this.fetchTickersFromTokensV1 ([ symbol ], marketsBySymbol, params);
+        const resolveResult = await this.resolveMarkets ([ symbol ], params);
+        const tickers = await this.fetchTickersFromTokensV1 ([ symbol ], resolveResult['marketsBySymbol'], resolveResult['justResolvedSymbols'], params);
         return tickers[symbol];
     }
 
@@ -864,12 +1210,11 @@ export default class dexscreener extends Exchange {
      * @name dexscreener#fetchTickers
      * @description fetches price tickers for multiple markets
      * @see https://docs.dexscreener.com/api/reference
-     * @param {string[]} symbols list of unified market symbols
+     * @param {string[]} symbols list of unified market symbols with @network!dex suffix
      * @param {object} [params] extra parameters specific to the exchange API endpoint
      * @returns {object} a dictionary of [ticker structures]{@link https://docs.ccxt.com/?id=ticker-structure}
      */
     async fetchTickers (symbols: Strings = undefined, params = {}): Promise<Tickers> {
-        this.checkRequiredOptions ();
         if (symbols === undefined) {
             throw new ArgumentsRequired (this.id + ' fetchTickers() requires a non-empty symbols argument');
         }
@@ -878,85 +1223,46 @@ export default class dexscreener extends Exchange {
             throw new ArgumentsRequired (this.id + ' fetchTickers() requires a non-empty symbols argument');
         }
         await this.loadMarkets ();
-        const marketsBySymbol = await this.resolveMarkets (symbols, params);
-        return await this.fetchTickersFromTokensV1 (symbols, marketsBySymbol, params);
+        const resolveResult = await this.resolveMarkets (symbols, params);
+        return await this.fetchTickersFromTokensV1 (symbols, resolveResult['marketsBySymbol'], resolveResult['justResolvedSymbols'], params);
+    }
+
+    /**
+     * @method
+     * @name dexscreener#obLoadMarketsForSymbols
+     * @description lazily resolves and populates this.markets for the given symbols
+     * @see https://docs.dexscreener.com/api/reference
+     * @param {string[]} symbols list of base/quote symbols, optionally with @network!dex suffix
+     * @param {boolean} reload when true, re-fetch symbols even if already cached in this.markets
+     * @param {object} params extra parameters specific to the exchange API endpoint
+     * @returns {object[]} empty list; subclasses may return fixed market status structures
+     */
+    async obLoadMarketsForSymbols (symbols: string[], reload = false, params = {}): Promise<Dict[]> {
+        if (symbols === undefined) {
+            throw new ArgumentsRequired (this.id + ' obLoadMarketsForSymbols() requires a non-empty symbols argument');
+        }
+        const symbolsLength = symbols.length;
+        if (symbolsLength === 0) {
+            throw new ArgumentsRequired (this.id + ' obLoadMarketsForSymbols() requires a non-empty symbols argument');
+        }
+        await this.loadMarkets ();
+        const symbolsToResolve = [];
+        for (let symbolIndex = 0; symbolIndex < symbolsLength; symbolIndex++) {
+            const symbol = symbols[symbolIndex];
+            if (reload) {
+                this.removeCachedMarketSymbol (symbol);
+                symbolsToResolve.push (symbol);
+            } else if (!this.isMarketSymbolCached (symbol)) {
+                symbolsToResolve.push (symbol);
+            }
+        }
+        if (symbolsToResolve.length > 0) {
+            await this.resolveMarkets (symbolsToResolve, params);
+        }
+        return [];
     }
 
     parseTicker (pair: Dict, market: Market = undefined): Ticker {
-        // {
-        //     "chainId": "solana",
-        //     "dexId": "raydium",
-        //     "url": "https://dexscreener.com/solana/3nmfwzxwy1s1m5s8vyahqd4wgs4isxxe4lroummyqegf",
-        //     "pairAddress": "3nMFwZXwY1s1M5s8vYAHqd4wGs4iSxXE4LRoUMMYqEgF",
-        //     "labels": [
-        //         "CLMM"
-        //     ],
-        //     "baseToken": {
-        //         "address": "So11111111111111111111111111111111111111112",
-        //         "name": "Wrapped SOL",
-        //         "symbol": "SOL"
-        //     },
-        //     "quoteToken": {
-        //         "address": "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB",
-        //         "name": "USDT",
-        //         "symbol": "USDT"
-        //     },
-        //     "priceNative": "87.4816",
-        //     "priceUsd": "87.48",
-        //     "txns": {
-        //         "m5": {
-        //         "buys": 133,
-        //         "sells": 154
-        //         },
-        //         "h1": {
-        //         "buys": 2005,
-        //         "sells": 1955
-        //         },
-        //         "h6": {
-        //         "buys": 10034,
-        //         "sells": 12583
-        //         },
-        //         "h24": {
-        //         "buys": 44952,
-        //         "sells": 47953
-        //         }
-        //     },
-        //     "volume": {
-        //         "h24": 32204203.35,
-        //         "h6": 6729764.11,
-        //         "h1": 1037755.64,
-        //         "m5": 91765.17
-        //     },
-        //     "priceChange": {
-        //         "m5": -0.05,
-        //         "h1": 0.73,
-        //         "h6": 0.91,
-        //         "h24": 2.24
-        //     },
-        //     "liquidity": {
-        //         "usd": 2544708.51,
-        //         "base": 16710,
-        //         "quote": 1082810
-        //     },
-        //     "pairCreatedAt": 1723699294000,
-        //     "info": {
-        //         "imageUrl": "https://cdn.dexscreener.com/cms/images/fcfb87378d3198fe753ca08ba51a5552a84f34cf48cd09d83971aa195bdf00d2?width=800&height=800&quality=95&format=auto",
-        //         "header": "https://cdn.dexscreener.com/cms/images/7a8b9d77ffff37a36144cdebff51443a7c35bd737e8f327fc03f1121357731dd?width=1500&height=500&quality=95&format=auto",
-        //         "openGraph": "https://cdn.dexscreener.com/token-images/og/solana/So11111111111111111111111111111111111111112?timestamp=1779452700000",
-        //         "websites": [
-        //         {
-        //             "url": "https://solana.com",
-        //             "label": "Website"
-        //         }
-        //         ],
-        //         "socials": [
-        //         {
-        //             "url": "https://x.com/solana",
-        //             "type": "twitter"
-        //         }
-        //         ]
-        //     }
-        // }
         const symbol = this.safeString (market, 'symbol');
         const last = this.safeString (pair, 'priceNative');
         const timestamp = this.seconds ();
@@ -984,6 +1290,203 @@ export default class dexscreener extends Exchange {
             'quoteVolume': quoteVolume,
             'info': pair,
         }, market);
+    }
+
+    obParseDexPairSymbolInput (symbol: string): Dict {
+        if (symbol.indexOf ('@') >= 0) {
+            return this.obParseNetworkDexSymbol (symbol);
+        }
+        const parts = symbol.split ('/');
+        if (parts.length !== 2) {
+            throw new BadSymbol (this.id + ' obParseDexPairSymbolInput() requires a base/quote symbol');
+        }
+        const basePart = this.safeString (parts, 0);
+        const quotePart = this.safeString (parts, 1);
+        if ((basePart === undefined) || (basePart === '') || (quotePart === undefined) || (quotePart === '')) {
+            throw new BadSymbol (this.id + ' obParseDexPairSymbolInput() requires a base/quote symbol');
+        }
+        return {
+            'tradingSymbol': symbol,
+            'networkCode': undefined,
+            'dexCode': undefined,
+        };
+    }
+
+    filterPairsForObDexPairQuery (rawPairs: Dict[], tradingSymbol: string, networkCode, dexCode): Dict[] {
+        const filteredPairs = [];
+        const parts = tradingSymbol.split ('/');
+        const base = this.safeString (parts, 0);
+        const quote = this.safeString (parts, 1);
+        for (let pairIndex = 0; pairIndex < rawPairs.length; pairIndex++) {
+            const pair = rawPairs[pairIndex];
+            if (!this.pairMatchesNetworkAndDex (pair, networkCode, dexCode)) {
+                continue;
+            }
+            if (!this.pairMatchesTickerSymbol (pair, base, quote)) {
+                continue;
+            }
+            filteredPairs.push (pair);
+        }
+        return filteredPairs;
+    }
+
+    parsePairToObDexPair (pair: Dict): ObDexPair {
+        const chainId = this.safeString (pair, 'chainId');
+        const pairDexId = this.safeString (pair, 'dexId');
+        const networkCode = this.networkIdToCode (chainId);
+        const dexCode = this.obDexIdToCode (pairDexId);
+        const baseToken = this.safeDict (pair, 'baseToken', {});
+        const quoteToken = this.safeDict (pair, 'quoteToken', {});
+        const base = this.safeCurrencyCode (this.safeString (baseToken, 'symbol'));
+        const quote = this.safeCurrencyCode (this.safeString (quoteToken, 'symbol'));
+        const liquidityInfo = this.safeDict (pair, 'liquidity', {});
+        return {
+            'symbol': base + '/' + quote,
+            'network': networkCode,
+            'dex': dexCode,
+            'baseTokenAddress': this.safeString (baseToken, 'address'),
+            'quoteTokenAddress': this.safeString (quoteToken, 'address'),
+            'price': this.safeNumber (pair, 'priceNative'),
+            'quoteLiquidity': this.safeNumber (liquidityInfo, 'quote'),
+        };
+    }
+
+    selectBestPairByQuoteLiquidity (pairs: Dict[]): Dict {
+        let bestPair = undefined;
+        let bestQuoteLiquidity = 0;
+        for (let pairIndex = 0; pairIndex < pairs.length; pairIndex++) {
+            const pair = pairs[pairIndex];
+            const liquidityInfo = this.safeDict (pair, 'liquidity', {});
+            const quoteLiquidity = this.safeNumber (liquidityInfo, 'quote', 0);
+            if ((bestPair === undefined) || (quoteLiquidity > bestQuoteLiquidity)) {
+                bestPair = pair;
+                bestQuoteLiquidity = quoteLiquidity;
+            }
+        }
+        return bestPair;
+    }
+
+    buildVenueKey (networkCode: string, dexCode: string): string {
+        return networkCode + ':' + dexCode;
+    }
+
+    async fetchCandidatePairsForObDexPairInput (parsedInput: Dict, params = {}, cache: Dict = {}): Promise<Dict[]> {
+        const tradingSymbol = parsedInput['tradingSymbol'];
+        const networkCode = parsedInput['networkCode'];
+        const dexCode = parsedInput['dexCode'];
+        const rawPairs: Dict[] = [];
+        const parts = tradingSymbol.split ('/');
+        const basePart = this.safeString (parts, 0);
+        if ((networkCode !== undefined) && this.isTokenAddress (basePart)) {
+            const chainId = this.networkCodeToId (networkCode);
+            const baseAddress = this.normalizeTokenAddress (basePart);
+            const tokensCacheKey = chainId + ':' + baseAddress;
+            if (!('tokensV1' in cache)) {
+                cache['tokensV1'] = {};
+            }
+            const tokensV1Cache: Dict = cache['tokensV1'];
+            if (!(tokensCacheKey in tokensV1Cache)) {
+                tokensV1Cache[tokensCacheKey] = await this.fetchPairsForTokensV1 ([ baseAddress ], chainId, params);
+            }
+            const tokensPairs = tokensV1Cache[tokensCacheKey];
+            for (let pairIndex = 0; pairIndex < tokensPairs.length; pairIndex++) {
+                rawPairs.push (tokensPairs[pairIndex]);
+            }
+        }
+        const searchQuery = this.buildSearchQueryFromTradingSymbol (tradingSymbol);
+        if (!('search' in cache)) {
+            cache['search'] = {};
+        }
+        const searchCache: Dict = cache['search'];
+        if (!(searchQuery in searchCache)) {
+            const request: Dict = {
+                'q': searchQuery,
+            };
+            const response = await this.publicGetLatestDexSearch (this.extend (request, params));
+            searchCache[searchQuery] = this.parseTokenPairsResponse (response);
+        }
+        const searchPairs = searchCache[searchQuery];
+        for (let pairIndex = 0; pairIndex < searchPairs.length; pairIndex++) {
+            rawPairs.push (searchPairs[pairIndex]);
+        }
+        return this.filterPairsForObDexPairQuery (this.mergePairsByPairAddress (rawPairs), tradingSymbol, networkCode, dexCode);
+    }
+
+    /**
+     * @method
+     * @name dexscreener#obFetchDexPairs
+     * @description discovers DEX pairs across venues that list every requested symbol
+     * @see https://docs.dexscreener.com/api/reference
+     * @param {string[]} symbols list of base/quote symbols, optionally with @network!dex suffix
+     * @param {object} [params] extra parameters specific to the exchange API endpoint
+     * @returns {ObDexPair[]} list of DEX pair structures for venues listing all requested symbols
+     */
+    async obFetchDexPairs (symbols: string[], params = {}): Promise<ObDexPair[]> {
+        if (symbols === undefined) {
+            throw new ArgumentsRequired (this.id + ' obFetchDexPairs() requires a non-empty symbols argument');
+        }
+        const symbolsLength = symbols.length;
+        if (symbolsLength === 0) {
+            throw new ArgumentsRequired (this.id + ' obFetchDexPairs() requires a non-empty symbols argument');
+        }
+        const seenInputs: Dict = {};
+        const parsedInputs: Dict[] = [];
+        for (let symbolIndex = 0; symbolIndex < symbolsLength; symbolIndex++) {
+            const symbol = symbols[symbolIndex];
+            if (symbol in seenInputs) {
+                continue;
+            }
+            seenInputs[symbol] = true;
+            parsedInputs.push (this.obParseDexPairSymbolInput (symbol));
+        }
+        const cache: Dict = {};
+        const venues: Dict = {};
+        const requiredTradingSymbols: Dict = {};
+        for (let inputIndex = 0; inputIndex < parsedInputs.length; inputIndex++) {
+            const parsedInput = parsedInputs[inputIndex];
+            const tradingSymbol = parsedInput['tradingSymbol'];
+            requiredTradingSymbols[tradingSymbol] = true;
+            const candidatePairs = await this.fetchCandidatePairsForObDexPairInput (parsedInput, params, cache);
+            for (let pairIndex = 0; pairIndex < candidatePairs.length; pairIndex++) {
+                const pair = candidatePairs[pairIndex];
+                const chainId = this.safeString (pair, 'chainId');
+                const pairNetworkCode = this.networkIdToCode (chainId);
+                const pairDexCode = this.obDexIdToCode (this.safeString (pair, 'dexId'));
+                const venueKey = this.buildVenueKey (pairNetworkCode, pairDexCode);
+                if (!(venueKey in venues)) {
+                    venues[venueKey] = {};
+                }
+                const venueSymbols: Dict = venues[venueKey];
+                if (!(tradingSymbol in venueSymbols)) {
+                    venueSymbols[tradingSymbol] = pair;
+                } else {
+                    venueSymbols[tradingSymbol] = this.selectBestPairByQuoteLiquidity ([ venueSymbols[tradingSymbol], pair ]);
+                }
+            }
+        }
+        const requiredSymbolsList = Object.keys (requiredTradingSymbols);
+        const result = [];
+        const venueKeys = Object.keys (venues);
+        for (let venueKeyIndex = 0; venueKeyIndex < venueKeys.length; venueKeyIndex++) {
+            const venueKey = venueKeys[venueKeyIndex];
+            const venueSymbols: Dict = venues[venueKey];
+            let hasAllSymbols = true;
+            for (let requiredIndex = 0; requiredIndex < requiredSymbolsList.length; requiredIndex++) {
+                const requiredTradingSymbol = requiredSymbolsList[requiredIndex];
+                if (!(requiredTradingSymbol in venueSymbols)) {
+                    hasAllSymbols = false;
+                    break;
+                }
+            }
+            if (!hasAllSymbols) {
+                continue;
+            }
+            for (let requiredIndex = 0; requiredIndex < requiredSymbolsList.length; requiredIndex++) {
+                const requiredTradingSymbol = requiredSymbolsList[requiredIndex];
+                result.push (this.parsePairToObDexPair (venueSymbols[requiredTradingSymbol]));
+            }
+        }
+        return result;
     }
 
     sign (path, api = 'public', method = 'GET', params = {}, headers = undefined, body = undefined) {

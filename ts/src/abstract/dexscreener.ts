@@ -9,8 +9,8 @@ import { implicitReturnType } from '../base/types.js';
 import { Exchange as _Exchange } from '../base/Exchange.js';
 
 interface Exchange {
+    publicGetLatestDexSearch (params?: {}): Promise<implicitReturnType>;
     publicGetTokensV1ChainIdTokenAddresses (params?: {}): Promise<implicitReturnType>;
-    publicGetTokenPairsV1ChainIdTokenAddress (params?: {}): Promise<implicitReturnType>;
     publicGetLatestDexPairsChainIdPairId (params?: {}): Promise<implicitReturnType>;
 }
 abstract class Exchange extends _Exchange {}

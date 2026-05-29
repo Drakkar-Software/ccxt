@@ -5,7 +5,7 @@
 
 from ccxt.base.exchange import Exchange
 from ccxt.abstract.dexscreener import ImplicitAPI
-from ccxt.base.types import Any, Market, Strings, Ticker, Tickers, MarketInterface
+from ccxt.base.types import Any, Market, Strings, Ticker, Tickers, MarketInterface, ObDexPair
 from typing import List
 from ccxt.base.errors import ExchangeError
 from ccxt.base.errors import ArgumentsRequired
@@ -17,11 +17,214 @@ from ccxt.base.errors import RateLimitExceeded
 class dexscreener(Exchange, ImplicitAPI):
 
     def describe(self) -> Any:
+        dexes: dict = {
+            'uniswap': 'UNISWAP',
+            'uniswapv2': 'UNISWAPV2',
+            'uniswapv3': 'UNISWAPV3',
+            'sushiswap': 'SUSHISWAP',
+            'pancakeswap': 'PANCAKESWAP',
+            'pancakeswapv2': 'PANCAKESWAPV2',
+            'pancakeswapv3': 'PANCAKESWAPV3',
+            'raydium': 'RAYDIUM',
+            'orca': 'ORCA',
+            'meteora': 'METEORA',
+            'curve': 'CURVE',
+            'balancer': 'BALANCER',
+            'aerodrome': 'AERODROME',
+            'quickswap': 'QUICKSWAP',
+            'quickswapv3': 'QUICKSWAPV3',
+            'pumpswap': 'PUMPSWAP',
+            'pumpfun': 'PUMPFUN',
+            'traderjoe': 'TRADERJOE',
+            'camelot': 'CAMELOT',
+            'velodrome': 'VELODROME',
+            'baseswap': 'BASESWAP',
+            'syncswap': 'SYNCSWAP',
+            'spookyswap': 'SPOOKYSWAP',
+            'spiritswap': 'SPIRITSWAP',
+            'osmosis': 'OSMOSIS',
+            'jupiter': 'JUPITER',
+            'lifinity': 'LIFINITY',
+            'phoenix': 'PHOENIX',
+            'dedust': 'DEDUST',
+            'stonfi': 'STONFI',
+            'cetus': 'CETUS',
+            'turbos': 'TURBOS',
+            'bluemove': 'BLUEMOVE',
+            'liquidswap': 'LIQUIDSWAP',
+            'thala': 'THALA',
+            'hyperliquid': 'HYPERLIQUID',
+            'dydx': 'DYDX',
+            'gmx': 'GMX',
+            'kyberswap': 'KYBERSWAP',
+            'biswap': 'BISWAP',
+            'mdex': 'MDEX',
+            'apeswap': 'APESWAP',
+            'vvsfinance': 'VVSFINANCE',
+            'mmfinance': 'MMFINANCE',
+            'shibaswap': 'SHIBASWAP',
+            'fraxswap': 'FRAXSWAP',
+            'wagmi': 'WAGMI',
+            'agni': 'AGNI',
+            'lynex': 'LYNEX',
+            'retro': 'RETRO',
+            'ramses': 'RAMSES',
+            'thena': 'THENA',
+            'bancor': 'BANCOR',
+            'dodo': 'DODO',
+            'maverick': 'MAVERICK',
+            'woofi': 'WOOFI',
+            'equalizer': 'EQUALIZER',
+            'solidly': 'SOLIDLY',
+            'voltage': 'VOLTAGE',
+            'kinetix': 'KINETIX',
+            'hermes': 'HERMES',
+            'merchantmoe': 'MERCHANTMOE',
+            'beamswap': 'BEAMSWAP',
+            'stellaswap': 'STELLASWAP',
+            'arthswap': 'ARTHSWAP',
+            'solarbeam': 'SOLARBEAM',
+            'voltagefinance': 'VOLTAGEFINANCE',
+            'honeyswap': 'HONEYSWAP',
+            'ubeswap': 'UBESWAP',
+            'trisolaris': 'TRISOLARIS',
+            'reffinance': 'REFFINANCE',
+            'saucerswap': 'SAUCERSWAP',
+            'helix': 'HELIX',
+            'injective': 'INJECTIVE',
+            'bluefin': 'BLUEFIN',
+            'flowx': 'FLOWX',
+            'crescent': 'CRESCENT',
+            'astroport': 'ASTROPORT',
+            'terraswap': 'TERRASWAP',
+            'stepn': 'STEPN',
+            'step': 'STEP',
+            'raydiumclmm': 'RAYDIUMCLMM',
+            'raydiumcpmm': 'RAYDIUMCPMM',
+            'meteoradlmm': 'METEORADLMM',
+            'meteoradamm': 'METEORADAMM',
+        }
+        dexesById: dict = {}
+        dexKeys = list(dexes.keys())
+        for dexIndex in range(0, len(dexKeys)):
+            dexId = dexKeys[dexIndex]
+            dexesById[dexes[dexId]] = dexId
+        networks: dict = {
+            # CCXT unified
+            'BTC': 'bitcoin',
+            'ETH': 'ethereum',
+            'BSC': 'bsc',
+            'XRP': 'xrpl',
+            'LTC': 'litecoin',
+            'DOGE': 'dogechain',
+            'XLM': 'stellar',
+            'TRX': 'tron',
+            'ETC': 'ethereumclassic',
+            'ZEC': 'zcash',
+            'XMR': 'monero',
+            'ADA': 'cardano',
+            'XTZ': 'tezos',
+            'ATOM': 'cosmos',
+            'SOL': 'solana',
+            'DOT': 'polkadot',
+            'ALGO': 'algorand',
+            'BCH': 'smartbch',
+            'FIL': 'filecoin',
+            'KSM': 'kusama',
+            'EGLD': 'elrond',
+            'RUNE': 'thorchain',
+            'ICP': 'icp',
+            'NEAR': 'near',
+            'CELO': 'celo',
+            'HBAR': 'hedera',
+            'MIOTA': 'iota',
+            'KLAY': 'klaytn',
+            'VET': 'vechain',
+            'THETA': 'theta',
+            'STX': 'stacks',
+            'OPTIMISM': 'optimism',
+            'ARBITRUM': 'arbitrum',
+            'MATIC': 'polygon',
+            'FTM': 'fantom',
+            # token-standard aliases
+            'ERC20': 'ethereum',
+            'TRC20': 'tron',
+            'BEP20': 'bsc',
+            'BEP2': 'bnb',
+            'AVAX': 'avalanche',
+            'AVAXC': 'avalanche',
+            'ZKSYNC': 'zksync',
+            'ZKSYNCERA': 'zksync',
+            # DexScreener L2 / extra
+            'BASE': 'base',
+            'SUI': 'sui',
+            'APT': 'aptos',
+            'SCROLL': 'scroll',
+            'KAVA': 'kava',
+            'RSK': 'rsk',
+            'SEI': 'sei',
+            'TON': 'ton',
+            'OSMO': 'osmosis',
+            'ACA': 'acala',
+            'METIS': 'metis',
+            'ASTR': 'astar',
+            'CFX': 'conflux',
+            'SCRT': 'secret',
+            'ONT': 'ontology',
+            'CRONOS': 'cronos',
+            'LINEA': 'linea',
+            'BLAST': 'blast',
+            'MANTLE': 'mantle',
+            'MODE': 'mode',
+            'CORE': 'core',
+            'TAIKO': 'taiko',
+            'MNT': 'mantle',
+            'BERACHAIN': 'berachain',
+            'HYPERLIQUID': 'hyperliquid',
+            'INJECTIVE': 'injective',
+            'PULSECHAIN': 'pulsechain',
+            'BOBA': 'boba',
+            'MOONBEAM': 'moonbeam',
+            'MOONRIVER': 'moonriver',
+            'GNOSIS': 'gnosis',
+            'AURORA': 'aurora',
+            'HARMONY': 'harmony',
+            'FUSE': 'fuse',
+            'OKC': 'okc',
+            'HECO': 'heco',
+            'KCC': 'kcc',
+            'WAVES': 'waves',
+            'EOS': 'eos',
+            'FLOW': 'flow',
+            'ZORA': 'zora',
+            'WORLDCHAIN': 'worldchain',
+            'ABSTRACT': 'abstract',
+            'SONIC': 'sonic',
+            'UNICHAIN': 'unichain',
+            'INK': 'ink',
+        }
+        networksById: dict = {}
+        networkKeys = list(networks.keys())
+        for networkIndex in range(0, len(networkKeys)):
+            networkCode = networkKeys[networkIndex]
+            networksById[networks[networkCode]] = networkCode
+        preferredNetworkCodeByChainId: dict = {
+            'ethereum': 'ETH',
+            'tron': 'TRX',
+            'bsc': 'BEP20',
+            'avalanche': 'AVAX',
+            'zksync': 'ZKSYNC',
+            'mantle': 'MANTLE',
+        }
+        preferredChainIds = list(preferredNetworkCodeByChainId.keys())
+        for chainIndex in range(0, len(preferredChainIds)):
+            chainId = preferredChainIds[chainIndex]
+            networksById[chainId] = preferredNetworkCodeByChainId[chainId]
         return self.deep_extend(super(dexscreener, self).describe(), {
             'id': 'dexscreener',
             'name': 'DexScreener',
             'countries': [],
-            'rateLimit': 1000,
+            'rateLimit': 200,  # 300 requests per minute(DEX/pairs endpoints)
             'version': 'v1',
             'certified': False,
             'pro': False,
@@ -56,6 +259,8 @@ class dexscreener(Exchange, ImplicitAPI):
                 'fetchTrades': False,
                 'fetchTradingFee': False,
                 'fetchTradingFees': False,
+                'obFetchDexPairs': True,
+                'obLoadMarketsForSymbols': True,
                 'transfer': False,
             },
             'timeframes': {
@@ -73,11 +278,13 @@ class dexscreener(Exchange, ImplicitAPI):
             },
             'api': {
                 'public': {
-                    'get': [
-                        'tokens/v1/{chainId}/{tokenAddresses}',
-                        'token-pairs/v1/{chainId}/{tokenAddress}',
-                        'latest/dex/pairs/{chainId}/{pairId}',
-                    ],
+                    # DEX/pairs request rate limit of 300 per minute
+                    # cost = 1 =>(1000 / (200 * 1)) * 60 = 300
+                    'get': {
+                        'latest/dex/search': 1,
+                        'tokens/v1/{chainId}/{tokenAddresses}': 1,
+                        'latest/dex/pairs/{chainId}/{pairId}': 1,
+                    },
                 },
             },
             'requiredCredentials': {
@@ -85,125 +292,13 @@ class dexscreener(Exchange, ImplicitAPI):
                 'secret': False,
             },
             'options': {
-                'chainId': None,
-                'dexId': None,
-                'baseTokenAddresses': None,
-                'quoteTokenAddresses': None,
                 'maxTokenAddressesPerRequest': 30,
+                'networks': networks,
+                'networksById': networksById,
+                'dexes': dexes,
+                'dexesById': dexesById,
             },
         })
-
-    def check_required_options(self):
-        chainId = self.safe_string(self.options, 'chainId')
-        dexId = self.safe_string(self.options, 'dexId')
-        if (chainId is None) or (chainId == ''):
-            raise ArgumentsRequired(self.id + ' requires options.chainId to be set')
-        if (dexId is None) or (dexId == ''):
-            raise ArgumentsRequired(self.id + ' requires options.dexId to be set')
-
-    def get_configured_chain_id(self):
-        self.check_required_options()
-        return self.safe_string(self.options, 'chainId')
-
-    def get_configured_dex_id(self):
-        self.check_required_options()
-        return self.safe_string(self.options, 'dexId')
-
-    def get_token_address_list(self, optionKey: str) -> List[str]:
-        raw = self.safe_list(self.options, optionKey, [])
-        result: List[str] = []
-        for i in range(0, len(raw)):
-            address = self.safe_string(raw, i)
-            if address is not None:
-                result.append(address)
-        return result
-
-    def get_all_configured_token_addresses(self) -> List[str]:
-        baseAddresses = self.get_token_address_list('baseTokenAddresses')
-        quoteAddresses = self.get_token_address_list('quoteTokenAddresses')
-        return self.get_unique_token_addresses(self.array_concat(baseAddresses, quoteAddresses))
-
-    def get_market_discovery_addresses(self) -> List[str]:
-        baseAddresses = self.get_token_address_list('baseTokenAddresses')
-        if len(baseAddresses) > 0:
-            return self.get_unique_token_addresses(baseAddresses)
-        return self.get_unique_token_addresses(self.get_token_address_list('quoteTokenAddresses'))
-
-    def clear_discovery_pairs_cache(self):
-        self.options['discoveryPairsCache'] = None
-
-    def get_cached_discovery_pairs(self):
-        cached = self.safe_value(self.options, 'discoveryPairsCache')
-        if cached is None:
-            return None
-        return cached
-
-    def set_cached_discovery_pairs(self, pairs: List[dict]):
-        self.options['discoveryPairsCache'] = pairs
-
-    def pair_matches_address_combination(self, pair: dict, baseAddress: str, quoteAddress: str) -> bool:
-        baseToken = self.safe_dict(pair, 'baseToken', {})
-        quoteToken = self.safe_dict(pair, 'quoteToken', {})
-        pairBase = self.normalize_token_address(self.safe_string(baseToken, 'address'))
-        pairQuote = self.normalize_token_address(self.safe_string(quoteToken, 'address'))
-        baseMatch = pairBase == self.normalize_token_address(baseAddress)
-        quoteMatch = pairQuote == self.normalize_token_address(quoteAddress)
-        return baseMatch and quoteMatch
-
-    def has_all_configured_combinations(self, pairs: List[dict]) -> bool:
-        baseAddresses = self.get_token_address_list('baseTokenAddresses')
-        quoteAddresses = self.get_token_address_list('quoteTokenAddresses')
-        if (len(baseAddresses) == 0) or (len(quoteAddresses) == 0):
-            return True
-        dexId = self.get_configured_dex_id()
-        for baseIndex in range(0, len(baseAddresses)):
-            baseAddress = baseAddresses[baseIndex]
-            for quoteIndex in range(0, len(quoteAddresses)):
-                quoteAddress = quoteAddresses[quoteIndex]
-                found = False
-                for pairIndex in range(0, len(pairs)):
-                    pair = pairs[pairIndex]
-                    if self.safe_string(pair, 'dexId') != dexId:
-                        continue
-                    if self.pair_matches_address_combination(pair, baseAddress, quoteAddress):
-                        found = True
-                        break
-                if not found:
-                    return False
-        return True
-
-    def merge_pairs_by_pair_address(self, pairs: List[dict]) -> List[dict]:
-        mergedByPairAddress: dict = {}
-        for i in range(0, len(pairs)):
-            pair = pairs[i]
-            pairAddress = self.safe_string(pair, 'pairAddress')
-            if pairAddress is None:
-                continue
-            mergedByPairAddress[pairAddress] = pair
-        return list(mergedByPairAddress.values())
-
-    def fetch_discovery_pairs(self, params={}, extraTokenAddresses: List[str] = []) -> List[Any]:
-        useCache = len(extraTokenAddresses) == 0
-        if useCache:
-            cachedPairs = self.get_cached_discovery_pairs()
-            if cachedPairs is not None:
-                return cachedPairs
-        allAddresses = self.get_unique_token_addresses(
-            self.array_concat(self.get_all_configured_token_addresses(), extraTokenAddresses)
-        )
-        if len(allAddresses) == 0:
-            return []
-        pairs = self.fetch_pairs_for_tokens_v1(allAddresses, params)
-        if not self.has_all_configured_combinations(pairs):
-            discoveryAddresses = self.get_unique_token_addresses(
-                self.array_concat(self.get_market_discovery_addresses(), extraTokenAddresses)
-            )
-            if len(discoveryAddresses) > 0:
-                extraPairs = self.fetch_pairs_for_token_addresses(discoveryAddresses, params)
-                pairs = self.merge_pairs_by_pair_address(self.array_concat(pairs, extraPairs))
-        if useCache:
-            self.set_cached_discovery_pairs(pairs)
-        return pairs
 
     def normalize_token_address(self, address):
         if address is None:
@@ -211,26 +306,42 @@ class dexscreener(Exchange, ImplicitAPI):
         return address.lower()
 
     def is_token_address(self, value):
-        return(value is not None) and (len(value) > 4)
+        return(value is not None) and (len(value) > 5)
+
+    def get_trading_symbol_part(self, symbol: str) -> str:
+        separatorIndex = symbol.find('@')
+        if separatorIndex >= 0:
+            return symbol[0:separatorIndex]
+        return symbol
 
     def is_address_pair_symbol(self, symbol: str) -> bool:
-        parts = symbol.split('/')
+        tradingSymbol = self.get_trading_symbol_part(symbol)
+        parts = tradingSymbol.split('/')
         if len(parts) != 2:
             return False
         basePart = self.safe_string(parts, 0)
         quotePart = self.safe_string(parts, 1)
         return self.is_token_address(basePart) and self.is_token_address(quotePart)
 
-    def get_address_pair_symbol(self, baseAddress, quoteAddress):
-        return self.normalize_token_address(baseAddress) + '/' + self.normalize_token_address(quoteAddress)
+    def get_address_pair_symbol(self, baseAddress, quoteAddress, networkCode, dexCode):
+        suffix = '@' + networkCode
+        if dexCode is not None:
+            suffix = suffix + '!' + dexCode
+        return self.normalize_token_address(baseAddress) + '/' + self.normalize_token_address(quoteAddress) + suffix
 
     def normalize_address_pair_symbol(self, symbol: str) -> str:
         if not self.is_address_pair_symbol(symbol):
             return symbol
-        parts = symbol.split('/')
+        parsed = self.ob_parse_dex_pair_symbol_input(symbol)
+        tradingSymbol = self.safe_string(parsed, 'tradingSymbol')
+        networkCode = self.safe_string(parsed, 'networkCode')
+        dexCode = self.safe_string(parsed, 'dexCode')
+        parts = tradingSymbol.split('/')
         baseAddress = self.safe_string(parts, 0)
         quoteAddress = self.safe_string(parts, 1)
-        return self.get_address_pair_symbol(baseAddress, quoteAddress)
+        if networkCode is None:
+            return self.normalize_token_address(baseAddress) + '/' + self.normalize_token_address(quoteAddress)
+        return self.get_address_pair_symbol(baseAddress, quoteAddress, networkCode, dexCode)
 
     def market(self, symbol: str) -> MarketInterface:
         if self.markets is None:
@@ -246,85 +357,31 @@ class dexscreener(Exchange, ImplicitAPI):
         liquidity = self.safe_dict(pair, 'liquidity', {})
         return self.safe_number(liquidity, 'usd', 0)
 
-    def pair_passes_filters(self, pair: dict, baseAddresses: List[str], quoteAddresses: List[str]) -> bool:
-        dexId = self.get_configured_dex_id()
-        pairDexId = self.safe_string(pair, 'dexId')
-        if pairDexId != dexId:
-            return False
-        baseToken = self.safe_dict(pair, 'baseToken', {})
-        quoteToken = self.safe_dict(pair, 'quoteToken', {})
-        baseAddress = self.normalize_token_address(self.safe_string(baseToken, 'address'))
-        quoteAddress = self.normalize_token_address(self.safe_string(quoteToken, 'address'))
-        hasBaseList = len(baseAddresses) > 0
-        hasQuoteList = len(quoteAddresses) > 0
-        if hasBaseList and hasQuoteList:
-            baseSet: dict = {}
-            quoteSet: dict = {}
-            for i in range(0, len(baseAddresses)):
-                baseSet[self.normalize_token_address(baseAddresses[i])] = True
-            for j in range(0, len(quoteAddresses)):
-                quoteSet[self.normalize_token_address(quoteAddresses[j])] = True
-            return(baseAddress in baseSet) and (quoteAddress in quoteSet)
-        if hasBaseList:
-            for i in range(0, len(baseAddresses)):
-                if self.normalize_token_address(baseAddresses[i]) == baseAddress:
-                    return True
-            return False
-        if hasQuoteList:
-            for i in range(0, len(quoteAddresses)):
-                if self.normalize_token_address(quoteAddresses[i]) == quoteAddress:
-                    return True
-            return False
-        return False
+    def safe_liquidity_quote(self, pair: dict) -> float:
+        liquidity = self.safe_dict(pair, 'liquidity', {})
+        return self.safe_number(liquidity, 'quote', 0)
+
+    def safe_liquidity_for_pair_selection(self, pair: dict, dexCode) -> float:
+        if dexCode == '*':
+            return self.safe_liquidity_quote(pair)
+        return self.safe_liquidity_usd(pair)
 
     def parse_token_pairs_response(self, response):
         if isinstance(response, list):
             return response
         return self.safe_list(response, 'pairs', [])
 
-    def fetch_pairs_for_token_address_batch(self, tokenAddresses: List[str], params={}) -> List[Any]:
-        allPairs: List[dict] = []
-        chainId = self.get_configured_chain_id()
-        for i in range(0, len(tokenAddresses)):
-            tokenAddress = tokenAddresses[i]
-            request: dict = {
-                'chainId': chainId,
-                'tokenAddress': tokenAddress,
-            }
-            response = self.publicGetTokenPairsV1ChainIdTokenAddress(self.extend(request, params))
-            pairs = self.parse_token_pairs_response(response)
-            for j in range(0, len(pairs)):
-                allPairs.append(pairs[j])
-        return allPairs
-
-    def fetch_pairs_for_token_address(self, tokenAddress: str, params={}) -> List[Any]:
-        return self.fetch_pairs_for_token_address_batch([tokenAddress], params)
-
     def get_unique_token_addresses(self, tokenAddresses: List[str]) -> List[str]:
         uniqueAddresses: dict = {}
-        for i in range(0, len(tokenAddresses)):
-            address = tokenAddresses[i]
+        for addressIndex in range(0, len(tokenAddresses)):
+            address = tokenAddresses[addressIndex]
             if address is not None:
                 uniqueAddresses[address] = True
         return list(uniqueAddresses.keys())
 
-    def fetch_pairs_for_token_addresses(self, tokenAddresses: List[str], params={}) -> List[Any]:
-        addresses = self.get_unique_token_addresses(tokenAddresses)
-        maxBatchSize = self.safe_integer(self.options, 'maxTokenAddressesPerRequest', 30)
-        allPairs: List[dict] = []
-        offset = 0
-        while(offset < len(addresses)):
-            batch = addresses[offset:offset + maxBatchSize]
-            pairs = self.fetch_pairs_for_token_address_batch(batch, params)
-            for j in range(0, len(pairs)):
-                allPairs.append(pairs[j])
-            offset = offset + maxBatchSize
-        return allPairs
-
-    def fetch_pairs_for_tokens_v1_batch(self, tokenAddresses: List[str], params={}) -> List[Any]:
+    def fetch_pairs_for_tokens_v1_batch(self, tokenAddresses: List[str], chainId: str, params={}) -> List[Any]:
         if len(tokenAddresses) == 0:
             return []
-        chainId = self.get_configured_chain_id()
         request: dict = {
             'chainId': chainId,
             'tokenAddresses': ','.join(tokenAddresses),
@@ -332,112 +389,103 @@ class dexscreener(Exchange, ImplicitAPI):
         response = self.publicGetTokensV1ChainIdTokenAddresses(self.extend(request, params))
         return self.parse_token_pairs_response(response)
 
-    def fetch_pairs_for_tokens_v1(self, tokenAddresses: List[str], params={}) -> List[Any]:
+    def fetch_pairs_for_tokens_v1(self, tokenAddresses: List[str], chainId: str, params={}) -> List[Any]:
         addresses = self.get_unique_token_addresses(tokenAddresses)
         maxBatchSize = self.safe_integer(self.options, 'maxTokenAddressesPerRequest', 30)
         allPairs: List[dict] = []
         offset = 0
         while(offset < len(addresses)):
             batch = addresses[offset:offset + maxBatchSize]
-            pairs = self.fetch_pairs_for_tokens_v1_batch(batch, params)
-            for j in range(0, len(pairs)):
-                allPairs.append(pairs[j])
+            pairs = self.fetch_pairs_for_tokens_v1_batch(batch, chainId, params)
+            for pairIndex in range(0, len(pairs)):
+                allPairs.append(pairs[pairIndex])
             offset = offset + maxBatchSize
         return allPairs
 
-    def select_best_pairs(self, pairs: List[dict]) -> List[dict]:
-        bestBySymbol: dict = {}
-        for i in range(0, len(pairs)):
-            pair = pairs[i]
-            baseToken = self.safe_dict(pair, 'baseToken', {})
-            quoteToken = self.safe_dict(pair, 'quoteToken', {})
-            base = self.safe_currency_code(self.safe_string(baseToken, 'symbol'))
-            quote = self.safe_currency_code(self.safe_string(quoteToken, 'symbol'))
-            if (base is None) or (quote is None):
+    def merge_pairs_by_pair_address(self, pairs: List[dict]) -> List[dict]:
+        mergedByPairAddress: dict = {}
+        for pairIndex in range(0, len(pairs)):
+            pair = pairs[pairIndex]
+            pairAddress = self.safe_string(pair, 'pairAddress')
+            if pairAddress is None:
                 continue
-            symbol = base + '/' + quote
-            liquidityUsd = self.safe_liquidity_usd(pair)
-            existing = self.safe_dict(bestBySymbol, symbol)
-            if existing is None:
-                bestBySymbol[symbol] = pair
-            elif liquidityUsd > self.safe_liquidity_usd(existing):
-                bestBySymbol[symbol] = pair
-        return list(bestBySymbol.values())
+            mergedByPairAddress[pairAddress] = pair
+        return list(mergedByPairAddress.values())
 
-    def build_markets_from_pairs(self, pairs: List[dict]) -> List[Market]:
-        bestPairs = self.select_best_pairs(pairs)
-        result: List[Market] = []
-        for i in range(0, len(bestPairs)):
-            market = self.parse_market(bestPairs[i])
-            result.append(market)
-        return result
+    def pair_matches_ticker_symbol(self, pair: dict, base: str, quote: str) -> bool:
+        baseToken = self.safe_dict(pair, 'baseToken', {})
+        quoteToken = self.safe_dict(pair, 'quoteToken', {})
+        if self.is_token_address(base):
+            pairBase = self.normalize_token_address(self.safe_string(baseToken, 'address'))
+            if pairBase != self.normalize_token_address(base):
+                return False
+        else:
+            pairBase = self.safe_currency_code(self.safe_string(baseToken, 'symbol'))
+            if pairBase != self.safe_currency_code(base):
+                return False
+        if self.is_token_address(quote):
+            pairQuote = self.normalize_token_address(self.safe_string(quoteToken, 'address'))
+            if pairQuote != self.normalize_token_address(quote):
+                return False
+        else:
+            pairQuote = self.safe_currency_code(self.safe_string(quoteToken, 'symbol'))
+            if pairQuote != self.safe_currency_code(quote):
+                return False
+        return True
 
-    def index_address_pair_market_keys(self):
-        marketsList = list(self.markets.values())
-        for i in range(0, len(marketsList)):
-            market = marketsList[i]
-            baseId = self.safe_string(market, 'baseId')
-            quoteId = self.safe_string(market, 'quoteId')
-            if (baseId is None) or (quoteId is None):
-                continue
-            aliasSymbol = self.get_address_pair_symbol(baseId, quoteId)
-            unifiedSymbol = self.safe_string(market, 'symbol')
-            if (aliasSymbol != unifiedSymbol) and not (aliasSymbol in self.markets):
-                self.markets[aliasSymbol] = market
-        unifiedSymbols: dict = {}
-        for i in range(0, len(marketsList)):
-            unifiedSymbol = self.safe_string(marketsList[i], 'symbol')
-            if unifiedSymbol is not None:
-                unifiedSymbols[unifiedSymbol] = True
-        self.symbols = list(self.keysort(unifiedSymbols).keys())
+    def pair_matches_network_and_dex(self, pair: dict, networkCode, dexCode):
+        if networkCode is not None:
+            chainId = self.safe_string(pair, 'chainId')
+            pairNetworkCode = self.network_id_to_code(chainId)
+            if self.ob_sanitize_network_dex_token(pairNetworkCode) != self.ob_sanitize_network_dex_token(networkCode):
+                return False
+        if dexCode is None:
+            return True
+        if dexCode == '*':
+            return True
+        pairDexId = self.safe_string(pair, 'dexId')
+        return pairDexId == self.ob_dex_code_to_id(dexCode)
 
-    def set_markets(self, markets, currencies=None):
-        super(dexscreener, self).set_markets(markets, currencies)
-        self.index_address_pair_market_keys()
-        return self.markets
+    def pair_matches_address_combination(self, pair: dict, baseAddress: str, quoteAddress: str) -> bool:
+        baseToken = self.safe_dict(pair, 'baseToken', {})
+        quoteToken = self.safe_dict(pair, 'quoteToken', {})
+        pairBase = self.normalize_token_address(self.safe_string(baseToken, 'address'))
+        pairQuote = self.normalize_token_address(self.safe_string(quoteToken, 'address'))
+        return(pairBase == self.normalize_token_address(baseAddress)) and (pairQuote == self.normalize_token_address(quoteAddress))
 
-    def merge_markets(self, newMarkets: List[Market]):
-        existingMarkets = list(self.markets.values())
-        combined = self.array_concat(existingMarkets, newMarkets)
-        self.set_markets(combined)
+    def build_market_symbol(self, tradingSymbol: str, networkCode: str, dexCode) -> str:
+        if dexCode is not None:
+            return tradingSymbol + '@' + networkCode + '!' + dexCode
+        return tradingSymbol + '@' + networkCode
 
-    def fetch_markets(self, params={}) -> List[Market]:
-        """
-        fetches markets for configured token addresses on a chain and dex
+    def build_market_id(self, networkCode: str, dexCode, chainId: str, pairAddress: str) -> str:
+        unifiedDexCode = dexCode if (dexCode is not None) else ''
+        return networkCode + ':' + unifiedDexCode + ':' + chainId + ':' + pairAddress
 
-        https://docs.dexscreener.com/api/reference
-
-        :param dict [params]: extra parameters specific to the exchange API endpoint
-        :returns Market[]: an array of market structures
-        """
-        chainId = self.safe_string(self.options, 'chainId')
-        dexId = self.safe_string(self.options, 'dexId')
-        if (chainId is None) or (chainId == '') or (dexId is None) or (dexId == ''):
-            return []
-        baseAddresses = self.get_token_address_list('baseTokenAddresses')
-        quoteAddresses = self.get_token_address_list('quoteTokenAddresses')
-        if (len(baseAddresses) == 0) and (len(quoteAddresses) == 0):
-            return []
-        self.clear_discovery_pairs_cache()
-        rawPairs = self.fetch_discovery_pairs(params)
-        filteredPairs = []
-        for i in range(0, len(rawPairs)):
-            pair = rawPairs[i]
-            if self.pair_passes_filters(pair, baseAddresses, quoteAddresses):
-                filteredPairs.append(pair)
-        return self.build_markets_from_pairs(filteredPairs)
+    def parse_market_id(self, marketId: str) -> dict:
+        parts = marketId.split(':')
+        return {
+            'networkCode': self.safe_string(parts, 0),
+            'dexCode': self.safe_string(parts, 1),
+            'chainId': self.safe_string(parts, 2),
+            'pairAddress': self.safe_string(parts, 3),
+        }
 
     def parse_market(self, pair: dict) -> Market:
-        chainId = self.safe_string(pair, 'chainId', self.get_configured_chain_id())
+        chainId = self.safe_string(pair, 'chainId')
         pairAddress = self.safe_string(pair, 'pairAddress')
+        pairDexId = self.safe_string(pair, 'dexId')
+        networkCode = self.network_id_to_code(chainId)
+        dexCode = self.ob_dex_id_to_code(pairDexId)
         baseToken = self.safe_dict(pair, 'baseToken', {})
         quoteToken = self.safe_dict(pair, 'quoteToken', {})
         baseId = self.safe_string(baseToken, 'address')
         quoteId = self.safe_string(quoteToken, 'address')
         base = self.safe_currency_code(self.safe_string(baseToken, 'symbol'))
         quote = self.safe_currency_code(self.safe_string(quoteToken, 'symbol'))
-        symbol = base + '/' + quote
-        id = chainId + ':' + pairAddress
+        tradingSymbol = base + '/' + quote
+        symbol = self.build_market_symbol(tradingSymbol, networkCode, dexCode)
+        id = self.build_market_id(networkCode, dexCode, chainId, pairAddress)
         return {
             'id': id,
             'symbol': symbol,
@@ -481,6 +529,172 @@ class dexscreener(Exchange, ImplicitAPI):
             'info': pair,
         }
 
+    def parse_address_market(self, pair: dict, tradingSymbol: str, networkCode: str, dexCode) -> Market:
+        chainId = self.safe_string(pair, 'chainId')
+        pairAddress = self.safe_string(pair, 'pairAddress')
+        baseToken = self.safe_dict(pair, 'baseToken', {})
+        quoteToken = self.safe_dict(pair, 'quoteToken', {})
+        baseId = self.safe_string(baseToken, 'address')
+        quoteId = self.safe_string(quoteToken, 'address')
+        base = self.safe_currency_code(self.safe_string(baseToken, 'symbol'))
+        quote = self.safe_currency_code(self.safe_string(quoteToken, 'symbol'))
+        effectiveNetworkCode = networkCode
+        if effectiveNetworkCode is None:
+            effectiveNetworkCode = self.network_id_to_code(chainId)
+        effectiveDexCode = dexCode
+        if (effectiveDexCode is None) or (effectiveDexCode == '*'):
+            pairDexId = self.safe_string(pair, 'dexId')
+            effectiveDexCode = self.ob_dex_id_to_code(pairDexId)
+        symbol = self.build_market_symbol(tradingSymbol, effectiveNetworkCode, effectiveDexCode)
+        id = self.build_market_id(effectiveNetworkCode, effectiveDexCode, chainId, pairAddress)
+        return {
+            'id': id,
+            'symbol': symbol,
+            'base': base,
+            'quote': quote,
+            'settle': None,
+            'baseId': baseId,
+            'quoteId': quoteId,
+            'settleId': None,
+            'type': 'spot',
+            'spot': True,
+            'margin': False,
+            'swap': False,
+            'future': False,
+            'option': False,
+            'active': True,
+            'contract': False,
+            'linear': None,
+            'inverse': None,
+            'contractSize': None,
+            'expiry': None,
+            'expiryDatetime': None,
+            'strike': None,
+            'optionType': None,
+            'taker': None,
+            'maker': None,
+            'percentage': None,
+            'tierBased': None,
+            'feeSide': None,
+            'precision': {
+                'amount': None,
+                'price': None,
+            },
+            'limits': {
+                'leverage': {'min': None, 'max': None},
+                'amount': {'min': None, 'max': None},
+                'price': {'min': None, 'max': None},
+                'cost': {'min': None, 'max': None},
+            },
+            'created': None,
+            'info': pair,
+        }
+
+    def index_address_pair_market_keys(self):
+        marketsList = list(self.markets.values())
+        for marketIndex in range(0, len(marketsList)):
+            market = marketsList[marketIndex]
+            unifiedSymbol = self.safe_string(market, 'symbol')
+            if unifiedSymbol is None:
+                continue
+            if unifiedSymbol.find('@') < 0:
+                continue
+            parsed = self.ob_parse_network_dex_symbol(unifiedSymbol)
+            networkCode = self.safe_string(parsed, 'networkCode')
+            dexCode = self.safe_string(parsed, 'dexCode')
+            baseId = self.safe_string(market, 'baseId')
+            quoteId = self.safe_string(market, 'quoteId')
+            base = self.safe_string(market, 'base')
+            quote = self.safe_string(market, 'quote')
+            if (baseId is not None) and (quoteId is not None):
+                addressAliasSymbol = self.get_address_pair_symbol(baseId, quoteId, networkCode, dexCode)
+                if (addressAliasSymbol != unifiedSymbol) and not (addressAliasSymbol in self.markets):
+                    self.markets[addressAliasSymbol] = market
+            if (base is not None) and (quote is not None) and self.is_address_pair_symbol(unifiedSymbol):
+                tickerAliasSymbol = self.build_market_symbol(base + '/' + quote, networkCode, dexCode)
+                if (tickerAliasSymbol != unifiedSymbol) and not (tickerAliasSymbol in self.markets):
+                    self.markets[tickerAliasSymbol] = market
+        unifiedSymbols: dict = {}
+        for marketIndex in range(0, len(marketsList)):
+            unifiedSymbol = self.safe_string(marketsList[marketIndex], 'symbol')
+            if unifiedSymbol is not None:
+                unifiedSymbols[unifiedSymbol] = True
+        self.symbols = list(self.keysort(unifiedSymbols).keys())
+
+    def set_markets(self, markets, currencies=None):
+        super(dexscreener, self).set_markets(markets, currencies)
+        self.index_address_pair_market_keys()
+        return self.markets
+
+    def merge_markets(self, newMarkets: List[Market]):
+        existingMarkets = [] if (self.markets is None) else list(self.markets.values())
+        combined = self.array_concat(existingMarkets, newMarkets)
+        self.set_markets(combined)
+
+    def fetch_markets(self, params={}) -> List[Market]:
+        """
+        fetches markets; returns empty by default(markets loaded on demand)
+
+        https://docs.dexscreener.com/api/reference
+
+        :param dict [params]: extra parameters specific to the exchange API endpoint
+        :returns Market[]: an array of market structures
+        """
+        return []
+
+    def normalize_trading_symbol_part(self, part: str) -> str:
+        if self.is_token_address(part):
+            return self.normalize_token_address(part)
+        return self.safe_currency_code(part)
+
+    def build_search_query_from_trading_symbol(self, tradingSymbol: str) -> str:
+        parts = tradingSymbol.split('/')
+        if len(parts) != 2:
+            raise BadSymbol(self.id + ' buildSearchQueryFromTradingSymbol() requires a base/quote symbol')
+        basePart = self.safe_string(parts, 0)
+        quotePart = self.safe_string(parts, 1)
+        base = self.normalize_trading_symbol_part(basePart)
+        quote = self.normalize_trading_symbol_part(quotePart)
+        return base + '/' + quote
+
+    def fetch_markets_for_symbol(self, symbol: str, params={}) -> List[Market]:
+        """
+        fetches all markets matching a base/quote ticker symbol via search
+
+        https://docs.dexscreener.com/api/reference
+
+        :param str symbol: trading symbol without network suffix, e.g. WETH/USDC
+        :param dict [params]: extra parameters specific to the exchange API endpoint
+        :returns Market[]: an array of market structures
+        """
+        parts = symbol.split('/')
+        if len(parts) != 2:
+            raise BadSymbol(self.id + ' fetchMarketsForSymbol() requires a base/quote symbol')
+        basePart = self.safe_string(parts, 0)
+        quotePart = self.safe_string(parts, 1)
+        base = self.normalize_trading_symbol_part(basePart)
+        quote = self.normalize_trading_symbol_part(quotePart)
+        request: dict = {
+            'q': self.build_search_query_from_trading_symbol(symbol),
+        }
+        response = self.publicGetLatestDexSearch(self.extend(request, params))
+        rawPairs = self.parse_token_pairs_response(response)
+        filteredPairs = []
+        seenMarketIds: dict = {}
+        for pairIndex in range(0, len(rawPairs)):
+            pair = rawPairs[pairIndex]
+            if not self.pair_matches_ticker_symbol(pair, base, quote):
+                continue
+            market = self.parse_market(pair)
+            marketId = self.safe_string(market, 'id')
+            if marketId in seenMarketIds:
+                continue
+            seenMarketIds[marketId] = True
+            filteredPairs.append(market)
+        if len(filteredPairs) > 0:
+            self.merge_markets(filteredPairs)
+        return filteredPairs
+
     def extract_pair_from_response(self, response: dict) -> dict:
         pair = self.safe_dict(response, 'pair')
         if pair is not None:
@@ -493,148 +707,67 @@ class dexscreener(Exchange, ImplicitAPI):
         raise ExchangeError(self.id + ' invalid pair response')
 
     def get_pair_id_from_market(self, market: Market):
-        info = self.safe_dict(market, 'info', {})
-        pairAddress = self.safe_string_2(info, 'pairAddress', 'pair_address')
-        if pairAddress is not None:
-            return pairAddress
         marketId = self.safe_string(market, 'id')
-        if marketId is None:
-            return None
-        parts = marketId.split(':')
-        return self.safe_string(parts, 1)
+        if marketId is not None:
+            parsedMarketId = self.parse_market_id(marketId)
+            pairAddress = self.safe_string(parsedMarketId, 'pairAddress')
+            if pairAddress is not None:
+                return pairAddress
+        info = self.safe_dict(market, 'info', {})
+        return self.safe_string_2(info, 'pairAddress', 'pair_address')
 
-    def fetch_pair_ticker(self, market: Market, params={}) -> Ticker:
-        chainId = self.get_configured_chain_id()
-        pairId = self.get_pair_id_from_market(market)
-        if pairId is None:
-            raise BadSymbol(self.id + ' market has no pair address')
+    def get_chain_id_from_market(self, market: Market):
+        marketId = self.safe_string(market, 'id')
+        if marketId is not None:
+            parsedMarketId = self.parse_market_id(marketId)
+            chainId = self.safe_string(parsedMarketId, 'chainId')
+            if chainId is not None:
+                return chainId
+        info = self.safe_dict(market, 'info', {})
+        return self.safe_string(info, 'chainId')
+
+    def fetch_pair_for_market(self, market: Market, dexCode, params={}) -> dict:
+        symbol = self.safe_string(market, 'symbol')
+        parsed = self.ob_parse_network_dex_symbol(symbol)
+        tradingSymbol = self.safe_string(parsed, 'tradingSymbol')
+        networkCode = self.safe_string(parsed, 'networkCode')
+        effectiveDexCode = dexCode if (dexCode is not None) else self.safe_string(parsed, 'dexCode')
         request: dict = {
-            'chainId': chainId,
-            'pairId': pairId,
+            'q': self.build_search_query_from_trading_symbol(tradingSymbol),
         }
-        response = self.publicGetLatestDexPairsChainIdPairId(self.extend(request, params))
-        pair = self.extract_pair_from_response(response)
-        return self.parse_ticker(pair, market)
+        response = self.publicGetLatestDexSearch(self.extend(request, params))
+        rawPairs = self.parse_token_pairs_response(response)
+        filteredPairs = self.filter_pairs_for_resolved_symbol(rawPairs, symbol, networkCode, effectiveDexCode, tradingSymbol)
+        pair = self.select_best_filtered_pair(filteredPairs, effectiveDexCode)
+        if pair is None:
+            raise BadSymbol(self.id + ' no pair data for symbol ' + symbol)
+        return pair
 
-    def filter_pairs_for_unified_symbol(self, rawPairs: List[dict], symbol: str) -> List[dict]:
-        parts = symbol.split('/')
-        baseCode = self.safe_currency_code(self.safe_string(parts, 0))
-        quoteCode = self.safe_currency_code(self.safe_string(parts, 1))
-        baseAddresses = self.get_token_address_list('baseTokenAddresses')
-        quoteAddresses = self.get_token_address_list('quoteTokenAddresses')
-        filteredPairs = []
-        for i in range(0, len(rawPairs)):
-            pair = rawPairs[i]
-            if not self.pair_passes_filters(pair, baseAddresses, quoteAddresses):
-                continue
-            baseToken = self.safe_dict(pair, 'baseToken', {})
-            quoteToken = self.safe_dict(pair, 'quoteToken', {})
-            pairBase = self.safe_currency_code(self.safe_string(baseToken, 'symbol'))
-            pairQuote = self.safe_currency_code(self.safe_string(quoteToken, 'symbol'))
-            if (pairBase == baseCode) and (pairQuote == quoteCode):
-                filteredPairs.append(pair)
-        return filteredPairs
+    def get_pair_from_market_info(self, market: Market):
+        info = self.safe_dict(market, 'info', {})
+        pairAddress = self.safe_string(info, 'pairAddress')
+        if pairAddress is None:
+            return None
+        return info
 
-    def filter_pairs_for_address_symbol(self, rawPairs: List[dict], symbol: str) -> List[dict]:
-        parts = symbol.split('/')
-        baseAddress = self.safe_string(parts, 0)
-        quoteAddress = self.safe_string(parts, 1)
-        filteredPairs = []
-        for i in range(0, len(rawPairs)):
-            pair = rawPairs[i]
-            if not self.pair_passes_filters(pair, [baseAddress], [quoteAddress]):
-                continue
-            baseToken = self.safe_dict(pair, 'baseToken', {})
-            quoteToken = self.safe_dict(pair, 'quoteToken', {})
-            pairBase = self.normalize_token_address(self.safe_string(baseToken, 'address'))
-            pairQuote = self.normalize_token_address(self.safe_string(quoteToken, 'address'))
-            if (pairBase == self.normalize_token_address(baseAddress)) and (pairQuote == self.normalize_token_address(quoteAddress)):
-                filteredPairs.append(pair)
-        return filteredPairs
+    def fetch_pair_for_market_ticker(self, market: Market, pairs: List[dict], dexCode, params={}) -> dict:
+        pair = self.select_best_pair_for_market(pairs, market, dexCode)
+        if pair is not None:
+            return pair
+        return self.fetch_pair_for_market(market, dexCode, params)
 
-    def assign_resolved_market(self, marketsBySymbol: dict, symbol: str):
-        marketsBySymbol[symbol] = self.market(symbol)
-
-    def add_configured_token_addresses(self, tokenAddressesToFetch: dict):
-        baseAddresses = self.get_token_address_list('baseTokenAddresses')
-        quoteAddresses = self.get_token_address_list('quoteTokenAddresses')
-        for i in range(0, len(baseAddresses)):
-            tokenAddressesToFetch[baseAddresses[i]] = True
-        for i in range(0, len(quoteAddresses)):
-            tokenAddressesToFetch[quoteAddresses[i]] = True
-
-    def resolve_markets(self, symbols: List[str], params={}) -> dict:
-        marketsBySymbol: dict = {}
-        missingAddressSymbols = []
-        missingUnifiedSymbols = []
-        tokenAddressesToFetch: dict = {}
-        for i in range(0, len(symbols)):
-            symbol = symbols[i]
-            normalizedSymbol = self.normalize_address_pair_symbol(symbol)
-            if (symbol in self.markets) or ((normalizedSymbol != symbol) and (normalizedSymbol in self.markets)):
-                marketsBySymbol[symbol] = self.market(symbol)
-                continue
-            if not self.is_address_pair_symbol(symbol):
-                missingUnifiedSymbols.append(symbol)
-                self.add_configured_token_addresses(tokenAddressesToFetch)
-                continue
-            missingAddressSymbols.append(symbol)
-            parts = symbol.split('/')
-            baseAddress = self.safe_string(parts, 0)
-            quoteAddress = self.safe_string(parts, 1)
-            tokenAddressesToFetch[baseAddress] = True
-            tokenAddressesToFetch[quoteAddress] = True
-        symbolsToResolve = self.array_concat(missingAddressSymbols, missingUnifiedSymbols)
-        if len(symbolsToResolve) > 0:
-            addressList = list(tokenAddressesToFetch.keys())
-            if len(addressList) == 0:
-                raise BadSymbol(self.id + ' no token addresses configured to resolve markets')
-            rawPairs = self.fetch_discovery_pairs(params, addressList)
-            pairsToMerge = []
-            for i in range(0, len(missingAddressSymbols)):
-                symbol = missingAddressSymbols[i]
-                filteredPairs = self.filter_pairs_for_address_symbol(rawPairs, symbol)
-                if len(filteredPairs) == 0:
-                    raise BadSymbol(self.id + ' tokens are not supported for symbol ' + symbol)
-                for j in range(0, len(filteredPairs)):
-                    pairsToMerge.append(filteredPairs[j])
-            for i in range(0, len(missingUnifiedSymbols)):
-                symbol = missingUnifiedSymbols[i]
-                filteredPairs = self.filter_pairs_for_unified_symbol(rawPairs, symbol)
-                if len(filteredPairs) == 0:
-                    raise BadSymbol(self.id + ' tokens are not supported for symbol ' + symbol)
-                for j in range(0, len(filteredPairs)):
-                    pairsToMerge.append(filteredPairs[j])
-            newMarkets = self.build_markets_from_pairs(pairsToMerge)
-            self.merge_markets(newMarkets)
-            for i in range(0, len(symbolsToResolve)):
-                symbol = symbolsToResolve[i]
-                self.assign_resolved_market(marketsBySymbol, symbol)
-        return marketsBySymbol
-
-    def resolve_market(self, symbol: str, params={}) -> Market:
-        marketsBySymbol = self.resolve_markets([symbol], params)
-        return marketsBySymbol[symbol]
-
-    def get_markets_missing_pair(self, symbols: List[str], marketsBySymbol: dict, pairs: List[dict]):
-        missing = []
-        for i in range(0, len(symbols)):
-            symbol = symbols[i]
-            market = self.safe_value(marketsBySymbol, symbol)
-            if self.find_pair_for_market(pairs, market) is None:
-                missing.append(market)
-        return missing
-
-    def find_pair_for_market(self, pairs: List[dict], market: Market):
-        dexId = self.get_configured_dex_id()
+    def select_best_pair_for_market(self, pairs: List[dict], market: Market, dexCode):
         marketBaseId = self.normalize_token_address(self.safe_string(market, 'baseId'))
         marketQuoteId = self.normalize_token_address(self.safe_string(market, 'quoteId'))
+        marketId = self.safe_string(market, 'id')
+        parsedMarketId = self.parse_market_id(marketId)
+        targetNetworkCode = self.safe_string(parsedMarketId, 'networkCode')
+        targetDexCode = dexCode if (dexCode is not None) else self.safe_string(parsedMarketId, 'dexCode')
         bestPair = None
-        bestLiquidityUsd = 0
-        for i in range(0, len(pairs)):
-            pair = pairs[i]
-            pairDexId = self.safe_string(pair, 'dexId')
-            if pairDexId != dexId:
+        bestLiquidity = 0
+        for pairIndex in range(0, len(pairs)):
+            pair = pairs[pairIndex]
+            if not self.pair_matches_network_and_dex(pair, targetNetworkCode, targetDexCode):
                 continue
             baseToken = self.safe_dict(pair, 'baseToken', {})
             quoteToken = self.safe_dict(pair, 'quoteToken', {})
@@ -642,55 +775,262 @@ class dexscreener(Exchange, ImplicitAPI):
             pairQuote = self.normalize_token_address(self.safe_string(quoteToken, 'address'))
             if (pairBase != marketBaseId) or (pairQuote != marketQuoteId):
                 continue
-            liquidityUsd = self.safe_liquidity_usd(pair)
-            if (bestPair is None) or (liquidityUsd > bestLiquidityUsd):
+            liquidity = self.safe_liquidity_for_pair_selection(pair, targetDexCode)
+            if (bestPair is None) or (liquidity > bestLiquidity):
                 bestPair = pair
-                bestLiquidityUsd = liquidityUsd
+                bestLiquidity = liquidity
         return bestPair
 
-    def get_token_pair_fallback_addresses(self, markets: List[Market]) -> List[str]:
-        discoveryAddresses: dict = {}
-        for i in range(0, len(markets)):
-            market = markets[i]
-            baseId = self.safe_string(market, 'baseId')
-            if baseId is not None:
-                discoveryAddresses[baseId] = True
-        addressList = list(discoveryAddresses.keys())
-        if len(addressList) > 0:
-            return addressList
-        return self.get_market_discovery_addresses()
+    def filter_pairs_for_resolved_symbol(self, rawPairs: List[dict], symbol: str, networkCode: str, dexCode, tradingSymbol: str) -> List[dict]:
+        filteredPairs = []
+        for pairIndex in range(0, len(rawPairs)):
+            pair = rawPairs[pairIndex]
+            if not self.pair_matches_network_and_dex(pair, networkCode, dexCode):
+                continue
+            parts = tradingSymbol.split('/')
+            base = self.safe_string(parts, 0)
+            quote = self.safe_string(parts, 1)
+            if not self.pair_matches_ticker_symbol(pair, base, quote):
+                continue
+            filteredPairs.append(pair)
+        return filteredPairs
 
-    def fetch_tickers_from_tokens_v1(self, symbols: List[str], marketsBySymbol: dict, params={}) -> Tickers:
-        tokenAddressesToFetch: dict = {}
-        for i in range(0, len(symbols)):
-            symbol = symbols[i]
-            market = self.safe_value(marketsBySymbol, symbol)
-            baseId = self.safe_string(market, 'baseId')
-            quoteId = self.safe_string(market, 'quoteId')
-            if baseId is not None:
-                tokenAddressesToFetch[baseId] = True
-            if quoteId is not None:
-                tokenAddressesToFetch[quoteId] = True
-        tokenAddressList = list(tokenAddressesToFetch.keys())
-        if len(tokenAddressList) == 0:
-            raise BadSymbol(self.id + ' no token addresses available to refresh tickers')
-        allPairs = self.fetch_pairs_for_tokens_v1(tokenAddressList, params)
-        marketsMissingPair = self.get_markets_missing_pair(symbols, marketsBySymbol, allPairs)
-        if len(marketsMissingPair) > 0:
-            fallbackAddresses = self.get_token_pair_fallback_addresses(marketsMissingPair)
-            if len(fallbackAddresses) > 0:
-                extraPairs = self.fetch_pairs_for_token_addresses(fallbackAddresses, params)
-                allPairs = self.merge_pairs_by_pair_address(self.array_concat(allPairs, extraPairs))
+    def resolve_address_pair_from_raw_pairs(self, rawPairs: List[dict], symbol: str, networkCode: str, dexCode, tradingSymbol: str, params={}) -> dict:
+        filteredPairs = self.filter_pairs_for_resolved_symbol(rawPairs, symbol, networkCode, dexCode, tradingSymbol)
+        if len(filteredPairs) == 0:
+            request: dict = {
+                'q': self.build_search_query_from_trading_symbol(tradingSymbol),
+            }
+            response = self.publicGetLatestDexSearch(self.extend(request, params))
+            searchPairs = self.parse_token_pairs_response(response)
+            filteredPairs = self.filter_pairs_for_resolved_symbol(searchPairs, symbol, networkCode, dexCode, tradingSymbol)
+        return {
+            'pairs': filteredPairs,
+        }
+
+    def fetch_pairs_for_address_symbol(self, symbol: str, networkCode: str, dexCode, tradingSymbol: str, chainId: str, params={}) -> dict:
+        parts = tradingSymbol.split('/')
+        baseAddress = self.safe_string(parts, 0)
+        rawPairs = self.fetch_pairs_for_tokens_v1([baseAddress], chainId, params)
+        return self.resolve_address_pair_from_raw_pairs(rawPairs, symbol, networkCode, dexCode, tradingSymbol, params)
+
+    def select_best_filtered_pair(self, filteredPairs: List[dict], dexCode=None) -> dict:
+        bestPair = None
+        bestLiquidity = 0
+        for pairIndex in range(0, len(filteredPairs)):
+            pair = filteredPairs[pairIndex]
+            liquidity = self.safe_liquidity_for_pair_selection(pair, dexCode)
+            if (bestPair is None) or (liquidity > bestLiquidity):
+                bestPair = pair
+                bestLiquidity = liquidity
+        return bestPair
+
+    def register_wildcard_market_alias(self, wildcardSymbol: str, concreteSymbol: str):
+        concreteMarket = self.safe_value(self.markets, concreteSymbol)
+        if concreteMarket is not None:
+            self.markets[wildcardSymbol] = concreteMarket
+
+    def is_market_symbol_cached(self, symbol: str) -> bool:
+        if self.markets is None:
+            return False
+        normalizedSymbol = self.normalize_address_pair_symbol(symbol)
+        return(symbol in self.markets) or ((normalizedSymbol != symbol) and (normalizedSymbol in self.markets))
+
+    def remove_cached_market_symbol(self, symbol: str):
+        if self.markets is None:
+            return
+        if symbol in self.markets:
+            del self.markets[symbol]
+        normalizedSymbol = self.normalize_address_pair_symbol(symbol)
+        if (normalizedSymbol != symbol) and (normalizedSymbol in self.markets):
+            del self.markets[normalizedSymbol]
+
+    def resolve_market(self, symbol: str, params={}) -> Market:
+        resolveResult = self.resolve_markets([symbol], params)
+        return resolveResult['marketsBySymbol'][symbol]
+
+    def format_network_dex_resolution_details(self, networkCode, dexCode) -> str:
+        unifiedNetwork = networkCode if (networkCode is not None) else 'none'
+        localNetwork = self.network_code_to_id(networkCode) if (networkCode is not None) else 'none'
+        unifiedDex = 'none'
+        localDex = 'none'
+        if dexCode == '*':
+            unifiedDex = '*'
+            localDex = 'any'
+        elif dexCode is not None:
+            unifiedDex = dexCode
+            localDex = self.ob_dex_code_to_id(dexCode)
+        return 'network unified=' + unifiedNetwork + ' local=' + localNetwork + ', dex unified=' + unifiedDex + ' local=' + localDex
+
+    def resolve_markets(self, symbols: List[str], params={}) -> dict:
+        marketsBySymbol: dict = {}
+        justResolvedSymbols: dict = {}
+        tradingSymbolsToFetch: dict = {}
+        pendingSymbols = []
+        # 1) split cached markets from symbols that still need resolve
+        for symbolIndex in range(0, len(symbols)):
+            symbol = symbols[symbolIndex]
+            normalizedSymbol = self.normalize_address_pair_symbol(symbol)
+            if (symbol in self.markets) or ((normalizedSymbol != symbol) and (normalizedSymbol in self.markets)):
+                marketsBySymbol[symbol] = self.market(symbol)
+                continue
+            parsed = self.ob_parse_dex_pair_symbol_input(symbol)
+            tradingSymbol = self.safe_string(parsed, 'tradingSymbol')
+            pendingSymbols.append({
+                'symbol': symbol,
+                'parsed': parsed,
+            })
+            if not self.is_address_pair_symbol(symbol):
+                tradingSymbolsToFetch[tradingSymbol] = True
+        # 2) unified(non-address) symbols: load candidate markets via search
+        tradingSymbolList = list(tradingSymbolsToFetch.keys())
+        for tradingIndex in range(0, len(tradingSymbolList)):
+            self.fetch_markets_for_symbol(tradingSymbolList[tradingIndex], params)
+        # 3) address-pair symbols: batch tokens/v1 once per chain(base addresses only)
+        addressPairChainGroups: dict = {}
+        for pendingIndex in range(0, len(pendingSymbols)):
+            pending = pendingSymbols[pendingIndex]
+            symbol = self.safe_string(pending, 'symbol')
+            if not self.is_address_pair_symbol(symbol):
+                continue
+            parsed = self.safe_dict(pending, 'parsed', {})
+            tradingSymbol = self.safe_string(parsed, 'tradingSymbol')
+            networkCode = self.safe_string(parsed, 'networkCode')
+            normalizedSymbol = self.normalize_address_pair_symbol(symbol)
+            if (symbol in self.markets) or ((normalizedSymbol != symbol) and (normalizedSymbol in self.markets)):
+                continue
+            if networkCode is None:
+                continue
+            chainId = self.network_code_to_id(networkCode)
+            if not (chainId in addressPairChainGroups):
+                addressPairChainGroups[chainId] = {
+                    'baseAddresses': {},
+                }
+            parts = tradingSymbol.split('/')
+            baseAddress = self.normalize_token_address(self.safe_string(parts, 0))
+            if baseAddress is not None:
+                addressPairChainGroups[chainId]['baseAddresses'][baseAddress] = True
+        pairsByChain: dict = {}
+        addressPairChainIds = list(addressPairChainGroups.keys())
+        for chainIndex in range(0, len(addressPairChainIds)):
+            chainId = addressPairChainIds[chainIndex]
+            baseAddressList = list(addressPairChainGroups[chainId]['baseAddresses'].keys())
+            pairsByChain[chainId] = self.fetch_pairs_for_tokens_v1(baseAddressList, chainId, params)
+        # 4) resolve each pending symbol: filter batched pairs(or search fallback), merge market
+        pendingMarketAliases: dict = {}
+        for pendingIndex in range(0, len(pendingSymbols)):
+            pending = pendingSymbols[pendingIndex]
+            symbol = self.safe_string(pending, 'symbol')
+            parsed = self.safe_dict(pending, 'parsed', {})
+            tradingSymbol = self.safe_string(parsed, 'tradingSymbol')
+            networkCode = self.safe_string(parsed, 'networkCode')
+            dexCode = self.safe_string(parsed, 'dexCode')
+            normalizedSymbol = self.normalize_address_pair_symbol(symbol)
+            if (symbol in self.markets) or ((normalizedSymbol != symbol) and (normalizedSymbol in self.markets)):
+                marketsBySymbol[symbol] = self.market(symbol)
+                continue
+            filteredPairs = []
+            if self.is_address_pair_symbol(symbol):
+                if networkCode is None:
+                    addressResolveResult = self.resolve_address_pair_from_raw_pairs([], symbol, networkCode, dexCode, tradingSymbol, params)
+                    filteredPairs = self.safe_list(addressResolveResult, 'pairs', [])
+                else:
+                    chainId = self.network_code_to_id(networkCode)
+                    rawPairs = self.safe_list(pairsByChain, chainId, [])
+                    addressResolveResult = self.resolve_address_pair_from_raw_pairs(rawPairs, symbol, networkCode, dexCode, tradingSymbol, params)
+                    filteredPairs = self.safe_list(addressResolveResult, 'pairs', [])
+            else:
+                parts = tradingSymbol.split('/')
+                base = self.safe_currency_code(self.safe_string(parts, 0))
+                quote = self.safe_currency_code(self.safe_string(parts, 1))
+                marketSymbols = list(self.markets.keys())
+                for marketIndex in range(0, len(marketSymbols)):
+                    marketSymbol = marketSymbols[marketIndex]
+                    cachedMarket = self.markets[marketSymbol]
+                    marketTradingSymbol = cachedMarket['base'] + '/' + cachedMarket['quote']
+                    if marketTradingSymbol != (base + '/' + quote):
+                        continue
+                    marketId = self.safe_string(cachedMarket, 'id')
+                    parsedMarketId = self.parse_market_id(marketId)
+                    if networkCode is not None:
+                        if self.ob_sanitize_network_dex_token(self.safe_string(parsedMarketId, 'networkCode')) != self.ob_sanitize_network_dex_token(networkCode):
+                            continue
+                    if (dexCode is not None) and (dexCode != '*'):
+                        if self.ob_sanitize_network_dex_token(self.safe_string(parsedMarketId, 'dexCode')) != self.ob_sanitize_network_dex_token(dexCode):
+                            continue
+                    filteredPairs.append(self.safe_dict(cachedMarket, 'info', {}))
+            if len(filteredPairs) == 0:
+                raise BadSymbol(self.id + ' tokens are not supported for symbol ' + symbol + '(' + self.format_network_dex_resolution_details(networkCode, dexCode) + ')')
+            selectedPair = self.select_best_filtered_pair(filteredPairs, dexCode)
+            market = None
+            if self.is_address_pair_symbol(symbol):
+                market = self.parse_address_market(selectedPair, tradingSymbol, networkCode, dexCode)
+            else:
+                market = self.parse_market(selectedPair)
+            self.merge_markets([market])
+            if symbol != market['symbol']:
+                pendingMarketAliases[symbol] = market['symbol']
+                self.register_wildcard_market_alias(symbol, market['symbol'])
+            marketsBySymbol[symbol] = self.market(symbol)
+            justResolvedSymbols[symbol] = True
+        pendingAliasSymbols = list(pendingMarketAliases.keys())
+        for aliasIndex in range(0, len(pendingAliasSymbols)):
+            aliasSymbol = pendingAliasSymbols[aliasIndex]
+            self.register_wildcard_market_alias(aliasSymbol, pendingMarketAliases[aliasSymbol])
+        return {
+            'marketsBySymbol': marketsBySymbol,
+            'justResolvedSymbols': justResolvedSymbols,
+        }
+
+    def fetch_tickers_from_tokens_v1(self, symbols: List[str], marketsBySymbol: dict, justResolvedSymbols: dict = {}, params={}) -> Tickers:
+        chainGroups: dict = {}
         result: dict = {}
-        for i in range(0, len(symbols)):
-            symbol = symbols[i]
+        # 1) just-resolved symbols: reuse pair data already stored in market.info(no HTTP)
+        for symbolIndex in range(0, len(symbols)):
+            symbol = symbols[symbolIndex]
             market = self.safe_value(marketsBySymbol, symbol)
-            pair = self.find_pair_for_market(allPairs, market)
-            if pair is None:
-                raise BadSymbol(self.id + ' no pair data for symbol ' + symbol)
-            ticker = self.parse_ticker(pair, market)
-            ticker['symbol'] = symbol
-            result[symbol] = ticker
+            if self.safe_value(justResolvedSymbols, symbol, False):
+                pair = self.get_pair_from_market_info(market)
+                if pair is None:
+                    raise BadSymbol(self.id + ' no pair data for symbol ' + symbol)
+                ticker = self.parse_ticker(pair, market)
+                ticker['symbol'] = symbol
+                result[symbol] = ticker
+                continue
+            # 2) pre-existing symbols: group by chain and collect base token addresses for batch fetch
+            chainId = self.get_chain_id_from_market(market)
+            if chainId is None:
+                raise BadSymbol(self.id + ' market has no chain id for symbol ' + symbol)
+            if not (chainId in chainGroups):
+                chainGroups[chainId] = {
+                    'symbols': [],
+                    'tokenAddresses': {},
+                }
+            chainGroups[chainId]['symbols'].append(symbol)
+            baseId = self.safe_string(market, 'baseId')
+            if baseId is not None:
+                chainGroups[chainId]['tokenAddresses'][baseId] = True
+        # 3) fetch fresh pair data once per chain
+        pairsByChain: dict = {}
+        chainIds = list(chainGroups.keys())
+        for chainIndex in range(0, len(chainIds)):
+            chainId = chainIds[chainIndex]
+            tokenAddressList = list(chainGroups[chainId]['tokenAddresses'].keys())
+            pairsByChain[chainId] = self.fetch_pairs_for_tokens_v1(tokenAddressList, chainId, params)
+        # 4) match batched pairs to each symbol and parse tickers(search fallback on batch miss)
+        for chainIndex in range(0, len(chainIds)):
+            chainId = chainIds[chainIndex]
+            chainSymbols = chainGroups[chainId]['symbols']
+            allPairs = pairsByChain[chainId]
+            for symbolIndex in range(0, len(chainSymbols)):
+                symbol = chainSymbols[symbolIndex]
+                market = self.safe_value(marketsBySymbol, symbol)
+                parsed = self.ob_parse_network_dex_symbol(symbol)
+                dexCode = self.safe_string(parsed, 'dexCode')
+                pair = self.fetch_pair_for_market_ticker(market, allPairs, dexCode, params)
+                ticker = self.parse_ticker(pair, market)
+                ticker['symbol'] = symbol
+                result[symbol] = ticker
         return result
 
     def fetch_ticker(self, symbol: str, params={}) -> Ticker:
@@ -699,14 +1039,13 @@ class dexscreener(Exchange, ImplicitAPI):
 
         https://docs.dexscreener.com/api/reference
 
-        :param str symbol: unified market symbol
+        :param str symbol: unified market symbol with @networknot dex suffix
         :param dict [params]: extra parameters specific to the exchange API endpoint
         :returns dict: a `ticker structure <https://docs.ccxt.com/?id=ticker-structure>`
         """
-        self.check_required_options()
         self.load_markets()
-        marketsBySymbol = self.resolve_markets([symbol], params)
-        tickers = self.fetch_tickers_from_tokens_v1([symbol], marketsBySymbol, params)
+        resolveResult = self.resolve_markets([symbol], params)
+        tickers = self.fetch_tickers_from_tokens_v1([symbol], resolveResult['marketsBySymbol'], resolveResult['justResolvedSymbols'], params)
         return tickers[symbol]
 
     def fetch_tickers(self, symbols: Strings = None, params={}) -> Tickers:
@@ -715,95 +1054,49 @@ class dexscreener(Exchange, ImplicitAPI):
 
         https://docs.dexscreener.com/api/reference
 
-        :param str[] symbols: list of unified market symbols
+        :param str[] symbols: list of unified market symbols with @networknot dex suffix
         :param dict [params]: extra parameters specific to the exchange API endpoint
         :returns dict: a dictionary of `ticker structures <https://docs.ccxt.com/?id=ticker-structure>`
         """
-        self.check_required_options()
         if symbols is None:
             raise ArgumentsRequired(self.id + ' fetchTickers() requires a non-empty symbols argument')
         symbolsLength = len(symbols)
         if symbolsLength == 0:
             raise ArgumentsRequired(self.id + ' fetchTickers() requires a non-empty symbols argument')
         self.load_markets()
-        marketsBySymbol = self.resolve_markets(symbols, params)
-        return self.fetch_tickers_from_tokens_v1(symbols, marketsBySymbol, params)
+        resolveResult = self.resolve_markets(symbols, params)
+        return self.fetch_tickers_from_tokens_v1(symbols, resolveResult['marketsBySymbol'], resolveResult['justResolvedSymbols'], params)
+
+    def ob_load_markets_for_symbols(self, symbols: List[str], reload=False, params={}) -> List[dict]:
+        """
+        lazily resolves and populates self.markets for the given symbols
+
+        https://docs.dexscreener.com/api/reference
+
+        :param str[] symbols: list of base/quote symbols, optionally with @networknot dex suffix
+        :param boolean reload: when True, re-fetch symbols even if already cached in self.markets
+        :param dict params: extra parameters specific to the exchange API endpoint
+        :returns dict[]: empty list; subclasses may return fixed market status structures
+        """
+        if symbols is None:
+            raise ArgumentsRequired(self.id + ' obLoadMarketsForSymbols() requires a non-empty symbols argument')
+        symbolsLength = len(symbols)
+        if symbolsLength == 0:
+            raise ArgumentsRequired(self.id + ' obLoadMarketsForSymbols() requires a non-empty symbols argument')
+        self.load_markets()
+        symbolsToResolve = []
+        for symbolIndex in range(0, symbolsLength):
+            symbol = symbols[symbolIndex]
+            if reload:
+                self.remove_cached_market_symbol(symbol)
+                symbolsToResolve.append(symbol)
+            elif not self.is_market_symbol_cached(symbol):
+                symbolsToResolve.append(symbol)
+        if len(symbolsToResolve) > 0:
+            self.resolve_markets(symbolsToResolve, params)
+        return []
 
     def parse_ticker(self, pair: dict, market: Market = None) -> Ticker:
-        # {
-        #     "chainId": "solana",
-        #     "dexId": "raydium",
-        #     "url": "https://dexscreener.com/solana/3nmfwzxwy1s1m5s8vyahqd4wgs4isxxe4lroummyqegf",
-        #     "pairAddress": "3nMFwZXwY1s1M5s8vYAHqd4wGs4iSxXE4LRoUMMYqEgF",
-        #     "labels": [
-        #         "CLMM"
-        #     ],
-        #     "baseToken": {
-        #         "address": "So11111111111111111111111111111111111111112",
-        #         "name": "Wrapped SOL",
-        #         "symbol": "SOL"
-        #     },
-        #     "quoteToken": {
-        #         "address": "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB",
-        #         "name": "USDT",
-        #         "symbol": "USDT"
-        #     },
-        #     "priceNative": "87.4816",
-        #     "priceUsd": "87.48",
-        #     "txns": {
-        #         "m5": {
-        #         "buys": 133,
-        #         "sells": 154
-        #         },
-        #         "h1": {
-        #         "buys": 2005,
-        #         "sells": 1955
-        #         },
-        #         "h6": {
-        #         "buys": 10034,
-        #         "sells": 12583
-        #         },
-        #         "h24": {
-        #         "buys": 44952,
-        #         "sells": 47953
-        #         }
-        #     },
-        #     "volume": {
-        #         "h24": 32204203.35,
-        #         "h6": 6729764.11,
-        #         "h1": 1037755.64,
-        #         "m5": 91765.17
-        #     },
-        #     "priceChange": {
-        #         "m5": -0.05,
-        #         "h1": 0.73,
-        #         "h6": 0.91,
-        #         "h24": 2.24
-        #     },
-        #     "liquidity": {
-        #         "usd": 2544708.51,
-        #         "base": 16710,
-        #         "quote": 1082810
-        #     },
-        #     "pairCreatedAt": 1723699294000,
-        #     "info": {
-        #         "imageUrl": "https://cdn.dexscreener.com/cms/images/fcfb87378d3198fe753ca08ba51a5552a84f34cf48cd09d83971aa195bdf00d2?width=800&height=800&quality=95&format=auto",
-        #         "header": "https://cdn.dexscreener.com/cms/images/7a8b9d77ffff37a36144cdebff51443a7c35bd737e8f327fc03f1121357731dd?width=1500&height=500&quality=95&format=auto",
-        #         "openGraph": "https://cdn.dexscreener.com/token-images/og/solana/So11111111111111111111111111111111111111112?timestamp=1779452700000",
-        #         "websites": [
-        #         {
-        #             "url": "https://solana.com",
-        #             "label": "Website"
-        #         }
-        #         ],
-        #         "socials": [
-        #         {
-        #             "url": "https://x.com/solana",
-        #             "type": "twitter"
-        #         }
-        #         ]
-        #     }
-        # }
         symbol = self.safe_string(market, 'symbol')
         last = self.safe_string(pair, 'priceNative')
         timestamp = self.seconds()
@@ -831,6 +1124,168 @@ class dexscreener(Exchange, ImplicitAPI):
             'quoteVolume': quoteVolume,
             'info': pair,
         }, market)
+
+    def ob_parse_dex_pair_symbol_input(self, symbol: str) -> dict:
+        if symbol.find('@') >= 0:
+            return self.ob_parse_network_dex_symbol(symbol)
+        parts = symbol.split('/')
+        if len(parts) != 2:
+            raise BadSymbol(self.id + ' obParseDexPairSymbolInput() requires a base/quote symbol')
+        basePart = self.safe_string(parts, 0)
+        quotePart = self.safe_string(parts, 1)
+        if (basePart is None) or (basePart == '') or (quotePart is None) or (quotePart == ''):
+            raise BadSymbol(self.id + ' obParseDexPairSymbolInput() requires a base/quote symbol')
+        return {
+            'tradingSymbol': symbol,
+            'networkCode': None,
+            'dexCode': None,
+        }
+
+    def filter_pairs_for_ob_dex_pair_query(self, rawPairs: List[dict], tradingSymbol: str, networkCode, dexCode) -> List[dict]:
+        filteredPairs = []
+        parts = tradingSymbol.split('/')
+        base = self.safe_string(parts, 0)
+        quote = self.safe_string(parts, 1)
+        for pairIndex in range(0, len(rawPairs)):
+            pair = rawPairs[pairIndex]
+            if not self.pair_matches_network_and_dex(pair, networkCode, dexCode):
+                continue
+            if not self.pair_matches_ticker_symbol(pair, base, quote):
+                continue
+            filteredPairs.append(pair)
+        return filteredPairs
+
+    def parse_pair_to_ob_dex_pair(self, pair: dict) -> ObDexPair:
+        chainId = self.safe_string(pair, 'chainId')
+        pairDexId = self.safe_string(pair, 'dexId')
+        networkCode = self.network_id_to_code(chainId)
+        dexCode = self.ob_dex_id_to_code(pairDexId)
+        baseToken = self.safe_dict(pair, 'baseToken', {})
+        quoteToken = self.safe_dict(pair, 'quoteToken', {})
+        base = self.safe_currency_code(self.safe_string(baseToken, 'symbol'))
+        quote = self.safe_currency_code(self.safe_string(quoteToken, 'symbol'))
+        liquidityInfo = self.safe_dict(pair, 'liquidity', {})
+        return {
+            'symbol': base + '/' + quote,
+            'network': networkCode,
+            'dex': dexCode,
+            'baseTokenAddress': self.safe_string(baseToken, 'address'),
+            'quoteTokenAddress': self.safe_string(quoteToken, 'address'),
+            'price': self.safe_number(pair, 'priceNative'),
+            'quoteLiquidity': self.safe_number(liquidityInfo, 'quote'),
+        }
+
+    def select_best_pair_by_quote_liquidity(self, pairs: List[dict]) -> dict:
+        bestPair = None
+        bestQuoteLiquidity = 0
+        for pairIndex in range(0, len(pairs)):
+            pair = pairs[pairIndex]
+            liquidityInfo = self.safe_dict(pair, 'liquidity', {})
+            quoteLiquidity = self.safe_number(liquidityInfo, 'quote', 0)
+            if (bestPair is None) or (quoteLiquidity > bestQuoteLiquidity):
+                bestPair = pair
+                bestQuoteLiquidity = quoteLiquidity
+        return bestPair
+
+    def build_venue_key(self, networkCode: str, dexCode: str) -> str:
+        return networkCode + ':' + dexCode
+
+    def fetch_candidate_pairs_for_ob_dex_pair_input(self, parsedInput: dict, params={}, cache: dict = {}) -> List[dict]:
+        tradingSymbol = parsedInput['tradingSymbol']
+        networkCode = parsedInput['networkCode']
+        dexCode = parsedInput['dexCode']
+        rawPairs: List[dict] = []
+        parts = tradingSymbol.split('/')
+        basePart = self.safe_string(parts, 0)
+        if (networkCode is not None) and self.is_token_address(basePart):
+            chainId = self.network_code_to_id(networkCode)
+            baseAddress = self.normalize_token_address(basePart)
+            tokensCacheKey = chainId + ':' + baseAddress
+            if not ('tokensV1' in cache):
+                cache['tokensV1'] = {}
+            tokensV1Cache: dict = cache['tokensV1']
+            if not (tokensCacheKey in tokensV1Cache):
+                tokensV1Cache[tokensCacheKey] = self.fetch_pairs_for_tokens_v1([baseAddress], chainId, params)
+            tokensPairs = tokensV1Cache[tokensCacheKey]
+            for pairIndex in range(0, len(tokensPairs)):
+                rawPairs.append(tokensPairs[pairIndex])
+        searchQuery = self.build_search_query_from_trading_symbol(tradingSymbol)
+        if not ('search' in cache):
+            cache['search'] = {}
+        searchCache: dict = cache['search']
+        if not (searchQuery in searchCache):
+            request: dict = {
+                'q': searchQuery,
+            }
+            response = self.publicGetLatestDexSearch(self.extend(request, params))
+            searchCache[searchQuery] = self.parse_token_pairs_response(response)
+        searchPairs = searchCache[searchQuery]
+        for pairIndex in range(0, len(searchPairs)):
+            rawPairs.append(searchPairs[pairIndex])
+        return self.filter_pairs_for_ob_dex_pair_query(self.merge_pairs_by_pair_address(rawPairs), tradingSymbol, networkCode, dexCode)
+
+    def ob_fetch_dex_pairs(self, symbols: List[str], params={}) -> List[ObDexPair]:
+        """
+        discovers DEX pairs across venues that list every requested symbol
+
+        https://docs.dexscreener.com/api/reference
+
+        :param str[] symbols: list of base/quote symbols, optionally with @networknot dex suffix
+        :param dict [params]: extra parameters specific to the exchange API endpoint
+        :returns ObDexPair[]: list of DEX pair structures for venues listing all requested symbols
+        """
+        if symbols is None:
+            raise ArgumentsRequired(self.id + ' obFetchDexPairs() requires a non-empty symbols argument')
+        symbolsLength = len(symbols)
+        if symbolsLength == 0:
+            raise ArgumentsRequired(self.id + ' obFetchDexPairs() requires a non-empty symbols argument')
+        seenInputs: dict = {}
+        parsedInputs: List[dict] = []
+        for symbolIndex in range(0, symbolsLength):
+            symbol = symbols[symbolIndex]
+            if symbol in seenInputs:
+                continue
+            seenInputs[symbol] = True
+            parsedInputs.append(self.ob_parse_dex_pair_symbol_input(symbol))
+        cache: dict = {}
+        venues: dict = {}
+        requiredTradingSymbols: dict = {}
+        for inputIndex in range(0, len(parsedInputs)):
+            parsedInput = parsedInputs[inputIndex]
+            tradingSymbol = parsedInput['tradingSymbol']
+            requiredTradingSymbols[tradingSymbol] = True
+            candidatePairs = self.fetch_candidate_pairs_for_ob_dex_pair_input(parsedInput, params, cache)
+            for pairIndex in range(0, len(candidatePairs)):
+                pair = candidatePairs[pairIndex]
+                chainId = self.safe_string(pair, 'chainId')
+                pairNetworkCode = self.network_id_to_code(chainId)
+                pairDexCode = self.ob_dex_id_to_code(self.safe_string(pair, 'dexId'))
+                venueKey = self.build_venue_key(pairNetworkCode, pairDexCode)
+                if not (venueKey in venues):
+                    venues[venueKey] = {}
+                venueSymbols: dict = venues[venueKey]
+                if not (tradingSymbol in venueSymbols):
+                    venueSymbols[tradingSymbol] = pair
+                else:
+                    venueSymbols[tradingSymbol] = self.select_best_pair_by_quote_liquidity([venueSymbols[tradingSymbol], pair])
+        requiredSymbolsList = list(requiredTradingSymbols.keys())
+        result = []
+        venueKeys = list(venues.keys())
+        for venueKeyIndex in range(0, len(venueKeys)):
+            venueKey = venueKeys[venueKeyIndex]
+            venueSymbols: dict = venues[venueKey]
+            hasAllSymbols = True
+            for requiredIndex in range(0, len(requiredSymbolsList)):
+                requiredTradingSymbol = requiredSymbolsList[requiredIndex]
+                if not (requiredTradingSymbol in venueSymbols):
+                    hasAllSymbols = False
+                    break
+            if not hasAllSymbols:
+                continue
+            for requiredIndex in range(0, len(requiredSymbolsList)):
+                requiredTradingSymbol = requiredSymbolsList[requiredIndex]
+                result.append(self.parse_pair_to_ob_dex_pair(venueSymbols[requiredTradingSymbol]))
+        return result
 
     def sign(self, path, api='public', method='GET', params={}, headers=None, body=None):
         url = self.urls['api']['rest'] + '/' + self.implode_params(path, params)
