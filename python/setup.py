@@ -28,11 +28,11 @@ with open(package_json, encoding='utf-8') as f:
     package = json.load(f)
 
 project_urls = {
-    'Homepage': 'https://ccxt.com',
-    'Documentation': 'https://github.com/ccxt/ccxt/wiki',
-    'Discord': 'https://discord.gg/ccxt',
-    'Twitter': 'https://twitter.com/ccxt_official',
-    'Funding': 'https://opencollective.com/ccxt',
+    # 'Homepage': 'https://ccxt.com',
+    'Documentation': 'https://github.com/Drakkar-Software/ccxt',
+    # 'Discord': 'https://discord.gg/ccxt',
+    # 'Twitter': 'https://twitter.com/ccxt_official',
+    # 'Funding': 'https://opencollective.com/ccxt',
 }
 
 setup(

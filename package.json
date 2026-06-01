@@ -1,6 +1,6 @@
 {
-  "name": "ccxt",
-  "version": "4.5.51",
+  "name": "octobot_ccxt",
+  "version": "0.0.1",
   "description": "A cryptocurrency trading API with more than 100 exchanges in JavaScript / TypeScript / Python / C# / PHP / Go",
   "unpkg": "dist/ccxt.browser.min.js",
   "type": "module",
@@ -24,7 +24,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/ccxt/ccxt.git"
+    "url": "git+https://github.com/Drakkar-Software/ccxt.git"
   },
   "readme": "README.md",
   "scripts": {
@@ -66,6 +66,8 @@
     "force-build-slow": "npm run pre-transpile && npm run force-transpile && npm run post-transpile && npm run update-badges",
     "pre-transpile-js": "npm run export-exchanges && npm run vss && npm run emitAPITs && npm run tsBuild && npm run validate-types && npm run tsBuildExamples && npm run check-js-syntax && npm run bundle",
     "pre-transpile-py": "npm run export-exchanges && npm run emitAPIPy",
+    "pre-transpile-js-py": "npm run export-exchanges && npm run vss && npm run emitAPITs && npm run emitAPIPy && npm run tsBuild && npm run validate-types && npm run tsBuildExamples && npm run copy-python-files && npm run check-js-syntax && npm run bundle",
+    "force-build-js-py": "npm run pre-transpile-js-py && npm run force-transpile-fast-py && npm run check-python-syntax && npm run update-badges",
     "pre-transpile-php": "npm run export-exchanges && npm run emitAPIPhp",
     "pre-transpile-go": "npm run export-exchanges && npm run emitAPIGo",
     "pre-transpile-js-simple": "npm run export-exchanges && npm run emitAPITs && tsc && npm run validate-types",
@@ -154,6 +156,7 @@
     "request-cs": "npm run ti-cs  -- --requestTests",
     "request-go": "npm run ti-go -- --requestTests",
     "request-tests//withoutGo": "npm run request-js && npm run request-py && npm run request-php && npm run request-cs",
+    "request-tests-js-py": "npm run request-js && npm run request-py",
     "request-tests": "npm run request-js && npm run request-py && npm run request-php && npm run request-cs && npm run request-go",
     "response-ts": "npm run ti-ts  -- --responseTests",
     "response-js": "npm run ti-js  -- --responseTests",
@@ -167,6 +170,7 @@
     "response-php": "npm run response-php-sync && npm run response-php-async",
     "response-tests": "npm run response-js && npm run response-py && npm run response-php && npm run response-cs && npm run response-go",
     "response-tests//withoutGo": "npm run response-js && npm run response-py && npm run response-php && npm run response-cs",
+    "response-tests-js-py": "npm run response-js && npm run response-py",
     "static-updater": "tsx ./utils/update-static-json --update",
     "id-tests-js": "npm run ti-js  -- --idTests",
     "id-tests-py": "npm run ti-py  -- --idTests",
@@ -174,6 +178,7 @@
     "id-tests-cs": "npm run ti-cs  -- --idTests",
     "id-tests-go": "npm run ti-go  -- --idTests",
     "id-tests": "npm run id-tests-js && npm run id-tests-py && npm run id-tests-php && npm run id-tests-cs",
+    "id-tests-js-py": "npm run id-tests-js && npm run id-tests-py",
     "id-tests//withGO": "npm run id-tests-js && npm run id-tests-py && npm run id-tests-php && npm run id-tests-cs && npm run id-tests-go",
     "test-base-rest-ts": "npm run ti-ts  -- --baseTests",
     "test-ob-ts": "npm run ti-ts -- --obTests",
@@ -191,7 +196,9 @@
     "test-base-ws-cs": "npm run ti-cs  -- --baseTests --ws",
     "test-base-ws-go": "npm run ti-go  -- --baseTests --ws",
     "test-base-rest": "npm run test-base-rest-js && npm run test-base-rest-py && npm run test-base-rest-php && npm run test-base-rest-cs",
+    "test-base-rest-js-py": "npm run test-base-rest-js && npm run test-base-rest-py",
     "test-base-ws": "npm run test-base-ws-js   && npm run test-base-ws-py   && npm run test-base-ws-php   && npm run test-base-ws-cs && npm run test-base-ws-go",
+    "test-base-ws-js-py": "npm run test-base-ws-js && npm run test-base-ws-py",
     "test": "npm run build && npm run commonjs-test && npm run id-tests && npm run request-tests && npm run response-tests && npm run live-tests",
     "commonjs-test": "node ./utils/test-commonjs.cjs",
     "package-test": "./utils/package-test.sh",
@@ -241,15 +248,15 @@
     "webpack": "^5.76.2"
   },
   "author": {
-    "name": "Igor Kroitor",
-    "email": "igor.kroitor@gmail.com",
-    "url": "https://github.com/kroitor"
+    "name": "Drakkar-Software",
+    "email": "contact@drakkar.software",
+    "url": "https://github.com/Drakkar-Software"
   },
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/ccxt/ccxt/issues"
+    "url": "https://github.com/Drakkar-Software/ccxt/issues"
   },
-  "homepage": "https://ccxt.com",
+  "homepage": "https://github.com/Drakkar-Software/ccxt",
   "keywords": [
     "algorithmic",
     "algotrading",
@@ -331,8 +338,8 @@
   ],
   "collective": {
     "type": "opencollective",
-    "url": "https://opencollective.com/ccxt",
-    "logo": "https://opencollective.com/ccxt/logo.txt"
+    "url": "https://opencollective.com/octobot",
+    "logo": "https://opencollective.com/octobot/logo.txt"
   },
   "ethereum": "0x26a3CB49578F07000575405a57888681249c35Fd",
   "dependencies": {
