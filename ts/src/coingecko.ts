@@ -67,6 +67,7 @@ export default class coingecko extends Exchange {
                 'doc': [
                     'https://docs.coingecko.com/v3.0.1/reference/coins-list',
                     'https://docs.coingecko.com/v3.0.1/reference/coins-markets',
+                    'https://docs.coingecko.com/v3.0.1/reference/coins-id',
                 ],
             },
             'api': {
@@ -74,6 +75,7 @@ export default class coingecko extends Exchange {
                     'get': [
                         'coins/list',
                         'coins/markets',
+                        'coins/{id}',
                     ],
                 },
             },
