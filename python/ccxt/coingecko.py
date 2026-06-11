@@ -70,6 +70,7 @@ class coingecko(Exchange, ImplicitAPI):
                 'doc': [
                     'https://docs.coingecko.com/v3.0.1/reference/coins-list',
                     'https://docs.coingecko.com/v3.0.1/reference/coins-markets',
+                    'https://docs.coingecko.com/v3.0.1/reference/coins-id',
                 ],
             },
             'api': {
@@ -77,6 +78,7 @@ class coingecko(Exchange, ImplicitAPI):
                     'get': [
                         'coins/list',
                         'coins/markets',
+                        'coins/{id}',
                     ],
                 },
             },
