@@ -672,7 +672,7 @@ export default class defillama extends Exchange {
         return market;
     }
 
-    parseTicker (market: Market, coins: Dict, pairPrice: number): Ticker {
+    parseTickerFromCoins (market: Market, coins: Dict, pairPrice: number): Ticker {
         //
         // last/close are derived: price_base_usd / price_quote_usd (not returned directly by API)
         // API has no volume fields; baseVolume and quoteVolume stay unset
@@ -721,7 +721,7 @@ export default class defillama extends Exchange {
         const quoteUsd = this.getUsdPriceFromCoins (coins, quoteKey);
         const pairPrice = this.computePairPrice (baseUsd, quoteUsd);
         this.enrichMarketFromCoins (market, coins);
-        return this.parseTicker (market, coins, pairPrice);
+        return this.parseTickerFromCoins (market, coins, pairPrice);
     }
 
     collectCoinKeysForMarkets (marketsBySymbol: Dict, symbols: string[]): string[] {

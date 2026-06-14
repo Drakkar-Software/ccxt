@@ -586,7 +586,7 @@ class defillama(Exchange, ImplicitAPI):
             market['quote'] = quoteSymbol
         return market
 
-    def parse_ticker(self, market: Market, coins: dict, pairPrice: float) -> Ticker:
+    def parse_ticker_from_coins(self, market: Market, coins: dict, pairPrice: float) -> Ticker:
         #
         # last/close are derived: price_base_usd / price_quote_usd(not returned directly by API)
         # API has no volume fields; baseVolume and quoteVolume stay unset
@@ -634,7 +634,7 @@ class defillama(Exchange, ImplicitAPI):
         quoteUsd = self.get_usd_price_from_coins(coins, quoteKey)
         pairPrice = self.compute_pair_price(baseUsd, quoteUsd)
         self.enrich_market_from_coins(market, coins)
-        return self.parse_ticker(market, coins, pairPrice)
+        return self.parse_ticker_from_coins(market, coins, pairPrice)
 
     def collect_coin_keys_for_markets(self, marketsBySymbol: dict, symbols: List[str]) -> List[str]:
         allCoinKeys: List[str] = []
