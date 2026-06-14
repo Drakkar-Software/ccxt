@@ -144,6 +144,7 @@ from ccxt.deepcoin import deepcoin                                    # noqa: F4
 from ccxt.delta import delta                                          # noqa: F401
 from ccxt.deribit import deribit                                      # noqa: F401
 from ccxt.derive import derive                                        # noqa: F401
+from ccxt.defillama import defillama                                  # noqa: F401
 from ccxt.dexscreener import dexscreener                              # noqa: F401
 from ccxt.digifinex import digifinex                                  # noqa: F401
 from ccxt.dydx import dydx                                            # noqa: F401
@@ -195,6 +196,7 @@ from ccxt.ob_coinex import ob_coinex                                  # noqa: F4
 from ccxt.ob_coingecko import ob_coingecko                            # noqa: F401
 from ccxt.ob_cryptocom import ob_cryptocom                            # noqa: F401
 from ccxt.ob_dexscreener import ob_dexscreener                        # noqa: F401
+from ccxt.ob_defillama import ob_defillama                            # noqa: F401
 from ccxt.ob_gateio import ob_gateio                                  # noqa: F401
 from ccxt.ob_hitbtc import ob_hitbtc                                  # noqa: F401
 from ccxt.ob_hollaex import ob_hollaex                                # noqa: F401
@@ -290,6 +292,7 @@ exchanges = [
     'delta',
     'deribit',
     'derive',
+    'defillama',
     'dexscreener',
     'digifinex',
     'dydx',
@@ -341,6 +344,7 @@ exchanges = [
     'ob_coingecko',
     'ob_cryptocom',
     'ob_dexscreener',
+    'ob_defillama',
     'ob_gateio',
     'ob_hitbtc',
     'ob_hollaex',
