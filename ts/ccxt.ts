@@ -104,6 +104,7 @@ import deepcoin from  './src/deepcoin.js'
 import delta from  './src/delta.js'
 import deribit from  './src/deribit.js'
 import derive from  './src/derive.js'
+import defillama from  './src/defillama.js'
 import dexscreener from  './src/dexscreener.js'
 import digifinex from  './src/digifinex.js'
 import dydx from  './src/dydx.js'
@@ -154,6 +155,7 @@ import ob_coinex from  './src/ob_coinex.js'
 import ob_coingecko from  './src/ob_coingecko.js'
 import ob_cryptocom from  './src/ob_cryptocom.js'
 import ob_dexscreener from  './src/ob_dexscreener.js'
+import ob_defillama from  './src/ob_defillama.js'
 import ob_gateio from  './src/ob_gateio.js'
 import ob_hitbtc from  './src/ob_hitbtc.js'
 import ob_hollaex from  './src/ob_hollaex.js'
@@ -340,6 +342,7 @@ const exchanges = {
     'delta':                  delta,
     'deribit':                deribit,
     'derive':                 derive,
+    'defillama':              defillama,
     'dexscreener':            dexscreener,
     'digifinex':              digifinex,
     'dydx':                   dydx,
@@ -390,6 +393,7 @@ const exchanges = {
     'ob_coingecko':           ob_coingecko,
     'ob_cryptocom':           ob_cryptocom,
     'ob_dexscreener':         ob_dexscreener,
+    'ob_defillama':           ob_defillama,
     'ob_gateio':              ob_gateio,
     'ob_hitbtc':              ob_hitbtc,
     'ob_hollaex':             ob_hollaex,
@@ -726,6 +730,7 @@ export {
     delta,
     deribit,
     derive,
+    defillama,
     dexscreener,
     digifinex,
     dydx,
@@ -776,6 +781,7 @@ export {
     ob_coingecko,
     ob_cryptocom,
     ob_dexscreener,
+    ob_defillama,
     ob_gateio,
     ob_hitbtc,
     ob_hollaex,
