@@ -5,7 +5,9 @@
 
 from ccxt.kraken import kraken
 from ccxt.abstract.ob_kraken import ImplicitAPI
-from ccxt.base.types import Any, Market, Ticker
+from ccxt.base.types import Any, Market, Str, Ticker
+from typing import List
+from ccxt.base.errors import AuthenticationError
 
 
 class ob_kraken(kraken, ImplicitAPI):
@@ -13,6 +15,10 @@ class ob_kraken(kraken, ImplicitAPI):
     def describe(self) -> Any:
         return self.deep_extend(super(ob_kraken, self).describe(), {
             'id': 'ob_kraken',
+            'name': 'Kraken',
+            'certified': False,
+            'urls': {
+            },
             'has': {
                 'CORS': None,
                 'spot': True,
@@ -20,6 +26,8 @@ class ob_kraken(kraken, ImplicitAPI):
                 'swap': False,
                 'future': False,
                 'option': False,
+                'fetchAccountId': True,
+                'fetchPermissions': True,
             },
             'options': {
                 'octobot': {
@@ -38,6 +46,37 @@ class ob_kraken(kraken, ImplicitAPI):
                 },
             },
         })
+
+    def fetch_account_id(self, params={}, _ccxtTypesImportStr: Str = None) -> Str:
+        return 'default_account_id'
+
+    def fetch_permissions(self, params={}) -> List[str]:
+        try:
+            response = self.privatePostGetApiKeyInfo(params)
+            result = self.safe_dict(response, 'result', {})
+            permissions = self.safe_list(result, 'permissions', [])
+            rights: List[str] = []
+            readingPermissions = ['query-funds', 'query-open-trades', 'query-closed-trades', 'query-ledger', 'export-data', 'create-ws-token']
+            tradingPermissions = ['modify-trades', 'close-trades']
+            withdrawalPermissions = ['withdraw-funds', 'add-withdraw-address', 'update-withdraw-address']
+            for permIdx in range(0, len(permissions)):
+                permission = permissions[permIdx]
+                if self.in_array(permission, readingPermissions) and not self.in_array('reading', rights):
+                    rights.append('reading')
+                if self.in_array(permission, tradingPermissions):
+                    if not self.in_array('spotTrading', rights):
+                        rights.append('spotTrading')
+                    if not self.in_array('marginTrading', rights):
+                        rights.append('marginTrading')
+                if self.in_array(permission, withdrawalPermissions) and not self.in_array('withdrawals', rights):
+                    rights.append('withdrawals')
+            return rights
+        except Exception as caughtPermissionError:
+            messageTxt = str(caughtPermissionError)
+            messageLower = messageTxt.lower()
+            if messageLower.find('invalid') >= 0 and messageLower.find('key') >= 0:
+                raise AuthenticationError(self.id + ' ' + messageTxt)
+            raise caughtPermissionError
 
     def parse_ticker(self, ticker: dict, market: Market = None) -> Ticker:
         # override the standard parseTicker to apply OctoBot's KrakenCCXTAdapter.fix_ticker:
