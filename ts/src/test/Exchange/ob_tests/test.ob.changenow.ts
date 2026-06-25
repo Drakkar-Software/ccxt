@@ -7,6 +7,9 @@ async function testObChangenow () {
     {
         const ex = new ccxt.ob_changenow ();
         assertObExchangeId (ex, 'ob_changenow');
+        const octobotOptions = ex.options['octobot'];
+        assert.strictEqual (octobotOptions['lazyLoadMarkets'], true);
+        assert.strictEqual (ex.has['obLoadMarketsForSymbols'], true);
     }
     // parseOrder O1: info.payinAddress -> esov.address_from
     {
@@ -293,6 +296,115 @@ async function testObChangenow () {
         assert.throws (() => {
             ex.handleErrors (403, 'Forbidden', '', 'GET', {}, body, response, {}, undefined);
         }, ccxt.PermissionDenied);
+    }
+    // lazy markets L1: fetchMarkets returns [] without warming available pairs
+    {
+        const ex = new ccxt.changenow ();
+        let apiCallCount = 0;
+        const orig = ex.publicGetMarketInfoAvailablePairs;
+        ex.publicGetMarketInfoAvailablePairs = async () => {
+            apiCallCount++;
+            return [ 'btc_eth', 'eth_btc', 'ltc_btc' ];
+        };
+        try {
+            const markets: any = await ex.fetchMarkets ();
+            assert.deepStrictEqual (markets, []);
+            assert.strictEqual (apiCallCount, 0);
+            assert.deepStrictEqual (ex.safeList (ex.options, 'cachedAvailablePairs', []), []);
+            assert.deepStrictEqual (ex.safeList (ex.options, 'availablePairSymbols', []), []);
+            await ex.fetchAvailablePairs ();
+            assert.strictEqual (apiCallCount, 1);
+            assert.deepStrictEqual (ex.options['cachedAvailablePairs'], [ 'btc_eth', 'eth_btc', 'ltc_btc' ]);
+            assert.deepStrictEqual (ex.options['availablePairSymbols'], [ 'BTC/ETH', 'ETH/BTC', 'LTC/BTC' ]);
+            await ex.fetchAvailablePairs ();
+            assert.strictEqual (apiCallCount, 1);
+        } finally {
+            ex.publicGetMarketInfoAvailablePairs = orig;
+        }
+    }
+    // lazy markets L1b: resolveMarkets builds market without available-pairs fetch
+    {
+        const ex = new ccxt.changenow ();
+        let apiCallCount = 0;
+        const orig = ex.publicGetMarketInfoAvailablePairs;
+        ex.publicGetMarketInfoAvailablePairs = async () => {
+            apiCallCount++;
+            return [ 'btc_eth' ];
+        };
+        ex.markets = {};
+        try {
+            const resolveResult: any = await ex.resolveMarkets ([ 'BTC/ETH' ]);
+            assert.strictEqual (apiCallCount, 0);
+            const market = resolveResult['marketsBySymbol']['BTC/ETH'];
+            assert.strictEqual (market['id'], 'btc_eth');
+            assert.strictEqual (market['symbol'], 'BTC/ETH');
+        } finally {
+            ex.publicGetMarketInfoAvailablePairs = orig;
+        }
+    }
+    // lazy markets L2: resolveMarkets creates market from cached pair
+    {
+        const ex = new ccxt.changenow ();
+        ex.options['cachedAvailablePairs'] = [ 'btc_eth' ];
+        ex.options['cachedAvailablePairsLookup'] = { 'btc_eth': true };
+        ex.options['availablePairSymbols'] = [ 'BTC/ETH' ];
+        ex.markets = {};
+        const resolveResult: any = await ex.resolveMarkets ([ 'BTC/ETH' ]);
+        const market = resolveResult['marketsBySymbol']['BTC/ETH'];
+        assert.strictEqual (market['id'], 'btc_eth');
+        assert.strictEqual (market['symbol'], 'BTC/ETH');
+        assert.strictEqual (market['baseId'], 'btc');
+        assert.strictEqual (market['quoteId'], 'eth');
+        assert.strictEqual (market['spot'], true);
+        assert.strictEqual (market['taker'], 0.005);
+    }
+    // lazy markets L3: unknown symbol throws BadSymbol when pairs cache is warm
+    {
+        const ex = new ccxt.changenow ();
+        ex.options['cachedAvailablePairs'] = [ 'btc_eth' ];
+        ex.options['cachedAvailablePairsLookup'] = { 'btc_eth': true };
+        ex.markets = {};
+        let thrown = false;
+        try {
+            await ex.resolveMarkets ([ 'DOGE/SHIB' ]);
+        } catch (error: any) {
+            thrown = true;
+            assert (error instanceof ccxt.BadSymbol);
+        }
+        assert.strictEqual (thrown, true);
+    }
+    // lazy markets L3b: unknown symbol parses without pairs cache until API validates
+    {
+        const ex = new ccxt.changenow ();
+        ex.markets = {};
+        const resolveResult: any = await ex.resolveMarkets ([ 'DOGE/SHIB' ]);
+        const market = resolveResult['marketsBySymbol']['DOGE/SHIB'];
+        assert.strictEqual (market['id'], 'doge_shib');
+        assert.strictEqual (market['symbol'], 'DOGE/SHIB');
+    }
+    // lazy markets L4: obLoadMarketsForSymbols returns fixed market status
+    {
+        const ex = new ccxt.ob_changenow ();
+        ex.options['cachedAvailablePairs'] = [ 'btc_eth' ];
+        ex.options['cachedAvailablePairsLookup'] = { 'btc_eth': true };
+        ex.options['availablePairSymbols'] = [ 'BTC/ETH' ];
+        ex.markets = {};
+        ex.loadMarkets = async () => ex.markets;
+        const markets: any = await ex.obLoadMarketsForSymbols ([ 'BTC/ETH' ]);
+        assert.strictEqual (markets.length, 1);
+        assert.strictEqual (markets[0]['symbol'], 'BTC/ETH');
+        assert.strictEqual (markets[0]['id'], 'btc_eth');
+        assert.strictEqual (markets[0]['spot'], true);
+    }
+    // lazy markets L5: obLoadMarketsForSymbols resolves without pre-seeded pairs cache
+    {
+        const ex = new ccxt.ob_changenow ();
+        ex.markets = {};
+        ex.loadMarkets = async () => ex.markets;
+        const markets: any = await ex.obLoadMarketsForSymbols ([ 'BTC/ETH' ]);
+        assert.strictEqual (markets.length, 1);
+        assert.strictEqual (markets[0]['symbol'], 'BTC/ETH');
+        assert.strictEqual (markets[0]['id'], 'btc_eth');
     }
 }
 

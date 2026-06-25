@@ -12,6 +12,7 @@ from ccxt.base.errors import AuthenticationError
 from ccxt.base.errors import PermissionDenied
 from ccxt.base.errors import ArgumentsRequired
 from ccxt.base.errors import BadRequest
+from ccxt.base.errors import BadSymbol
 from ccxt.base.errors import InvalidOrder
 from ccxt.base.errors import OrderNotFound
 from ccxt.base.decimal_to_precision import TICK_SIZE
@@ -60,6 +61,7 @@ class changenow(Exchange, ImplicitAPI):
                 'fetchTrades': False,
                 'fetchTradingFee': False,
                 'fetchTradingFees': False,
+                'obLoadMarketsForSymbols': True,
                 'transfer': False,
             },
             'timeframes': {
@@ -267,15 +269,71 @@ class changenow(Exchange, ImplicitAPI):
                 })
         return result
 
-    async def fetch_markets(self, params={}) -> List[Market]:
-        """
-        fetches all available swap pairs on ChangeNOW and returns them market structures
+    def build_symbol_from_pair(self, pair: str) -> Str:
+        parts = pair.split('_')
+        baseId = self.safe_string(parts, 0)
+        quoteId = self.safe_string(parts, 1)
+        if baseId is None or quoteId is None:
+            return None
+        base = self.safe_currency_code(baseId)
+        quote = self.safe_currency_code(quoteId)
+        return base + '/' + quote
 
-        https://changenow.io/api/docs
+    def parse_market_from_pair(self, pair: str) -> Market:
+        parts = pair.split('_')
+        baseId = self.safe_string(parts, 0)
+        quoteId = self.safe_string(parts, 1)
+        base = self.safe_currency_code(baseId)
+        quote = self.safe_currency_code(quoteId)
+        symbol = base + '/' + quote
+        return {
+            'id': pair,
+            'symbol': symbol,
+            'base': base,
+            'quote': quote,
+            'settle': None,
+            'baseId': baseId,
+            'quoteId': quoteId,
+            'settleId': None,
+            'type': 'spot',
+            'spot': True,
+            'margin': False,
+            'swap': False,
+            'future': False,
+            'option': False,
+            'active': True,
+            'contract': False,
+            'linear': None,
+            'inverse': None,
+            'contractSize': None,
+            'expiry': None,
+            'expiryDatetime': None,
+            'strike': None,
+            'optionType': None,
+            'taker': self.parse_number('0.005'),
+            'maker': self.parse_number('0.005'),
+            'percentage': True,
+            'tierBased': False,
+            'feeSide': 'get',
+            'precision': {
+                'amount': None,
+                'price': None,
+            },
+            'limits': {
+                'leverage': {'min': None, 'max': None},
+                'amount': {'min': None, 'max': None},
+                'price': {'min': None, 'max': None},
+                'cost': {'min': None, 'max': None},
+            },
+            'created': None,
+            'info': pair,
+        }
 
-        :param dict [params]: extra parameters specific to the exchange API endpoint
-        :returns Market[]: an array of market structures
-        """
+    async def fetch_available_pairs(self, params={}, reload=False) -> List[str]:
+        if not reload:
+            cachedPairs = self.safe_list(self.options, 'cachedAvailablePairs', [])
+            if len(cachedPairs) > 0:
+                return cachedPairs
         response = await self.publicGetMarketInfoAvailablePairs(params)
         #
         #  [
@@ -285,60 +343,145 @@ class changenow(Exchange, ImplicitAPI):
         #      ...
         #  ]
         #
-        result = []
-        for i in range(0, len(response)):
-            pair = response[i]
-            parts = pair.split('_')
-            baseId = self.safe_string(parts, 0)
-            quoteId = self.safe_string(parts, 1)
-            if baseId is None or quoteId is None:
-                continue
-            base = self.safe_currency_code(baseId)
-            quote = self.safe_currency_code(quoteId)
-            symbol = base + '/' + quote
-            result.append({
-                'id': pair,
-                'symbol': symbol,
-                'base': base,
-                'quote': quote,
-                'settle': None,
-                'baseId': baseId,
-                'quoteId': quoteId,
-                'settleId': None,
-                'type': 'spot',
-                'spot': True,
-                'margin': False,
-                'swap': False,
-                'future': False,
-                'option': False,
-                'active': True,
-                'contract': False,
-                'linear': None,
-                'inverse': None,
-                'contractSize': None,
-                'expiry': None,
-                'expiryDatetime': None,
-                'strike': None,
-                'optionType': None,
-                'taker': self.parse_number('0.005'),
-                'maker': self.parse_number('0.005'),
-                'percentage': True,
-                'tierBased': False,
-                'feeSide': 'get',
-                'precision': {
-                    'amount': None,
-                    'price': None,
-                },
-                'limits': {
-                    'leverage': {'min': None, 'max': None},
-                    'amount': {'min': None, 'max': None},
-                    'price': {'min': None, 'max': None},
-                    'cost': {'min': None, 'max': None},
-                },
-                'created': None,
-                'info': pair,
-            })
+        pairs = self.to_array(response)
+        pairsLookup: dict = {}
+        unifiedSymbols: dict = {}
+        for pairIndex in range(0, len(pairs)):
+            pair = pairs[pairIndex]
+            pairsLookup[pair] = True
+            unifiedSymbol = self.build_symbol_from_pair(pair)
+            if unifiedSymbol is not None:
+                unifiedSymbols[unifiedSymbol] = True
+        self.options['cachedAvailablePairs'] = pairs
+        self.options['cachedAvailablePairsLookup'] = pairsLookup
+        self.options['availablePairSymbols'] = list(self.keysort(unifiedSymbols).keys())
+        return pairs
+
+    def symbol_to_pair_id(self, symbol: str) -> Str:
+        parts = symbol.split('/')
+        if len(parts) != 2:
+            return None
+        base = self.safe_string(parts, 0)
+        quote = self.safe_string(parts, 1)
+        baseId = base.lower()
+        quoteId = quote.lower()
+        if self.currencies is not None:
+            baseCurrency = self.safe_dict(self.currencies, base)
+            quoteCurrency = self.safe_dict(self.currencies, quote)
+            baseId = self.safe_string(baseCurrency, 'id', baseId)
+            quoteId = self.safe_string(quoteCurrency, 'id', quoteId)
+        return baseId + '_' + quoteId
+
+    def is_pair_available(self, pairId: str) -> bool:
+        pairsLookup = self.safe_dict(self.options, 'cachedAvailablePairsLookup', {})
+        return self.safe_bool(pairsLookup, pairId, False)
+
+    def has_available_pairs_cache(self) -> bool:
+        cachedPairs = self.safe_list(self.options, 'cachedAvailablePairs', [])
+        if len(cachedPairs) > 0:
+            return True
+        pairsLookup = self.safe_dict(self.options, 'cachedAvailablePairsLookup', {})
+        return not self.is_empty(pairsLookup)
+
+    def set_markets(self, markets, currencies=None):
+        result = super(changenow, self).set_markets(markets, currencies)
+        cachedSymbols = self.safe_list(self.options, 'availablePairSymbols', [])
+        if len(cachedSymbols) > 0:
+            self.symbols = cachedSymbols
         return result
+
+    def merge_markets(self, newMarkets: List[Market]):
+        existingMarkets = [] if (self.markets is None) else list(self.markets.values())
+        combined = self.array_concat(existingMarkets, newMarkets)
+        self.set_markets(combined)
+
+    def is_market_symbol_cached(self, symbol: str) -> bool:
+        if self.markets is None:
+            return False
+        return symbol in self.markets
+
+    def remove_cached_market_symbol(self, symbol: str):
+        if self.markets is None:
+            return
+        if symbol in self.markets:
+            del self.markets[symbol]
+
+    async def resolve_markets(self, symbols: List[str], params={}) -> dict:
+        marketsBySymbol: dict = {}
+        pendingSymbols = []
+        newMarkets: List[Market] = []
+        marketsDict = {} if (self.markets is None) else self.markets
+        for symbolIndex in range(0, len(symbols)):
+            symbol = symbols[symbolIndex]
+            if symbol in marketsDict:
+                marketsBySymbol[symbol] = self.market(symbol)
+                continue
+            pendingSymbols.append(symbol)
+        if len(pendingSymbols) > 0:
+            if self.has_available_pairs_cache():
+                await self.fetch_available_pairs(params)
+        for pendingIndex in range(0, len(pendingSymbols)):
+            symbol = pendingSymbols[pendingIndex]
+            pairId = self.symbol_to_pair_id(symbol)
+            if pairId is None:
+                raise BadSymbol(self.id + ' does not have market ' + symbol)
+            if self.has_available_pairs_cache() and not self.is_pair_available(pairId):
+                raise BadSymbol(self.id + ' does not have market ' + symbol)
+            market = self.parse_market_from_pair(pairId)
+            newMarkets.append(market)
+            marketsBySymbol[symbol] = market
+        if len(newMarkets) > 0:
+            self.merge_markets(newMarkets)
+            for pendingIndex in range(0, len(pendingSymbols)):
+                symbol = pendingSymbols[pendingIndex]
+                marketsBySymbol[symbol] = self.market(symbol)
+        return {
+            'marketsBySymbol': marketsBySymbol,
+        }
+
+    async def resolve_market(self, symbol: str, params={}) -> Market:
+        resolveResult = await self.resolve_markets([symbol], params)
+        return resolveResult['marketsBySymbol'][symbol]
+
+    async def fetch_markets(self, params={}) -> List[Market]:
+        """
+        fetches markets; returns empty by default(markets loaded on demand)
+
+        https://changenow.io/api/docs
+
+        :param dict [params]: extra parameters specific to the exchange API endpoint
+        :returns Market[]: an array of market structures
+        """
+        return []
+
+    async def ob_load_markets_for_symbols(self, symbols: List[str], reload=False, params={}) -> List[dict]:
+        """
+        lazily resolves and populates self.markets for the given symbols
+
+        https://changenow.io/api/docs
+
+        :param str[] symbols: list of unified market symbols
+        :param boolean reload: when True, re-fetch symbols even if already cached in self.markets
+        :param dict params: extra parameters specific to the exchange API endpoint
+        :returns dict[]: empty list; ob_changenow returns fixed market status structures
+        """
+        if symbols is None:
+            raise ArgumentsRequired(self.id + ' obLoadMarketsForSymbols() requires a non-empty symbols argument')
+        symbolsLength = len(symbols)
+        if symbolsLength == 0:
+            raise ArgumentsRequired(self.id + ' obLoadMarketsForSymbols() requires a non-empty symbols argument')
+        await self.load_markets()
+        symbolsToResolve = []
+        for symbolIndex in range(0, symbolsLength):
+            symbol = symbols[symbolIndex]
+            if reload:
+                self.remove_cached_market_symbol(symbol)
+                symbolsToResolve.append(symbol)
+            elif not self.is_market_symbol_cached(symbol):
+                symbolsToResolve.append(symbol)
+        if len(symbolsToResolve) > 0:
+            await self.resolve_markets(symbolsToResolve, params)
+        return []
 
     async def fetch_ticker(self, symbol: str, params={}) -> Ticker:
         """
@@ -353,7 +496,8 @@ class changenow(Exchange, ImplicitAPI):
         :returns dict: a `ticker structure <https://docs.ccxt.com/?id=ticker-structure>`
         """
         await self.load_markets()
-        market = self.market(symbol)
+        resolveResult = await self.resolve_markets([symbol], params)
+        market = resolveResult['marketsBySymbol'][symbol]
         baseId = self.safe_string(market, 'baseId')
         quoteId = self.safe_string(market, 'quoteId')
         amount = self.safe_string(params, 'amount', '1')
@@ -436,7 +580,8 @@ class changenow(Exchange, ImplicitAPI):
         """
         self.check_required_credentials()
         await self.load_markets()
-        market = self.market(symbol)
+        resolveResult = await self.resolve_markets([symbol], params)
+        market = resolveResult['marketsBySymbol'][symbol]
         baseId = self.safe_string(market, 'baseId')
         quoteId = self.safe_string(market, 'quoteId')
         addressTo = self.safe_string(params, 'address_to')
@@ -541,7 +686,8 @@ class changenow(Exchange, ImplicitAPI):
         }
         market = None
         if symbol is not None:
-            market = self.market(symbol)
+            resolveResult = await self.resolve_markets([symbol], params)
+            market = resolveResult['marketsBySymbol'][symbol]
             request['from'] = self.safe_string(market, 'baseId')
             request['to'] = self.safe_string(market, 'quoteId')
         if since is not None:

@@ -1,7 +1,7 @@
 //  ---------------------------------------------------------------------------
 
 import Exchange from './abstract/changenow.js';
-import { ExchangeError, BadRequest, ArgumentsRequired, AuthenticationError, OrderNotFound, InvalidOrder, PermissionDenied } from './base/errors.js';
+import { ExchangeError, BadRequest, ArgumentsRequired, AuthenticationError, OrderNotFound, InvalidOrder, PermissionDenied, BadSymbol } from './base/errors.js';
 import { TICK_SIZE } from './base/functions/number.js';
 import { Precise } from './base/Precise.js';
 import type { Market, Str, Dict, Ticker, Num, Currencies, int, Int, Order, OrderType, OrderSide, Trade } from './base/types.js';
@@ -57,6 +57,7 @@ export default class changenow extends Exchange {
                 'fetchTrades': false,
                 'fetchTradingFee': false,
                 'fetchTradingFees': false,
+                'obLoadMarketsForSymbols': true,
                 'transfer': false,
             },
             'timeframes': {
@@ -280,15 +281,76 @@ export default class changenow extends Exchange {
         return result;
     }
 
-    /**
-     * @method
-     * @name changenow#fetchMarkets
-     * @description fetches all available swap pairs on ChangeNOW and returns them as CCXT market structures
-     * @see https://changenow.io/api/docs
-     * @param {object} [params] extra parameters specific to the exchange API endpoint
-     * @returns {Market[]} an array of market structures
-     */
-    async fetchMarkets (params = {}): Promise<Market[]> {
+    buildSymbolFromPair (pair: string): Str {
+        const parts = pair.split ('_');
+        const baseId = this.safeString (parts, 0);
+        const quoteId = this.safeString (parts, 1);
+        if (baseId === undefined || quoteId === undefined) {
+            return undefined;
+        }
+        const base = this.safeCurrencyCode (baseId);
+        const quote = this.safeCurrencyCode (quoteId);
+        return base + '/' + quote;
+    }
+
+    parseMarketFromPair (pair: string): Market {
+        const parts = pair.split ('_');
+        const baseId = this.safeString (parts, 0);
+        const quoteId = this.safeString (parts, 1);
+        const base = this.safeCurrencyCode (baseId);
+        const quote = this.safeCurrencyCode (quoteId);
+        const symbol = base + '/' + quote;
+        return {
+            'id': pair,
+            'symbol': symbol,
+            'base': base,
+            'quote': quote,
+            'settle': undefined,
+            'baseId': baseId,
+            'quoteId': quoteId,
+            'settleId': undefined,
+            'type': 'spot',
+            'spot': true,
+            'margin': false,
+            'swap': false,
+            'future': false,
+            'option': false,
+            'active': true,
+            'contract': false,
+            'linear': undefined,
+            'inverse': undefined,
+            'contractSize': undefined,
+            'expiry': undefined,
+            'expiryDatetime': undefined,
+            'strike': undefined,
+            'optionType': undefined,
+            'taker': this.parseNumber ('0.005'),
+            'maker': this.parseNumber ('0.005'),
+            'percentage': true,
+            'tierBased': false,
+            'feeSide': 'get',
+            'precision': {
+                'amount': undefined,
+                'price': undefined,
+            },
+            'limits': {
+                'leverage': { 'min': undefined, 'max': undefined },
+                'amount': { 'min': undefined, 'max': undefined },
+                'price': { 'min': undefined, 'max': undefined },
+                'cost': { 'min': undefined, 'max': undefined },
+            },
+            'created': undefined,
+            'info': pair,
+        };
+    }
+
+    async fetchAvailablePairs (params = {}, reload = false): Promise<string[]> {
+        if (!reload) {
+            const cachedPairs = this.safeList (this.options, 'cachedAvailablePairs', []);
+            if (cachedPairs.length > 0) {
+                return cachedPairs;
+            }
+        }
         const response = await this.publicGetMarketInfoAvailablePairs (params);
         //
         //  [
@@ -298,62 +360,179 @@ export default class changenow extends Exchange {
         //      ...
         //  ]
         //
-        const result = [];
-        for (let i = 0; i < response.length; i++) {
-            const pair = response[i];
-            const parts = pair.split ('_');
-            const baseId = this.safeString (parts, 0);
-            const quoteId = this.safeString (parts, 1);
-            if (baseId === undefined || quoteId === undefined) {
-                continue;
+        const pairs = this.toArray (response);
+        const pairsLookup: Dict = {};
+        const unifiedSymbols: Dict = {};
+        for (let pairIndex = 0; pairIndex < pairs.length; pairIndex++) {
+            const pair = pairs[pairIndex];
+            pairsLookup[pair] = true;
+            const unifiedSymbol = this.buildSymbolFromPair (pair);
+            if (unifiedSymbol !== undefined) {
+                unifiedSymbols[unifiedSymbol] = true;
             }
-            const base = this.safeCurrencyCode (baseId);
-            const quote = this.safeCurrencyCode (quoteId);
-            const symbol = base + '/' + quote;
-            result.push ({
-                'id': pair,
-                'symbol': symbol,
-                'base': base,
-                'quote': quote,
-                'settle': undefined,
-                'baseId': baseId,
-                'quoteId': quoteId,
-                'settleId': undefined,
-                'type': 'spot',
-                'spot': true,
-                'margin': false,
-                'swap': false,
-                'future': false,
-                'option': false,
-                'active': true,
-                'contract': false,
-                'linear': undefined,
-                'inverse': undefined,
-                'contractSize': undefined,
-                'expiry': undefined,
-                'expiryDatetime': undefined,
-                'strike': undefined,
-                'optionType': undefined,
-                'taker': this.parseNumber ('0.005'),
-                'maker': this.parseNumber ('0.005'),
-                'percentage': true,
-                'tierBased': false,
-                'feeSide': 'get',
-                'precision': {
-                    'amount': undefined,
-                    'price': undefined,
-                },
-                'limits': {
-                    'leverage': { 'min': undefined, 'max': undefined },
-                    'amount': { 'min': undefined, 'max': undefined },
-                    'price': { 'min': undefined, 'max': undefined },
-                    'cost': { 'min': undefined, 'max': undefined },
-                },
-                'created': undefined,
-                'info': pair,
-            });
+        }
+        this.options['cachedAvailablePairs'] = pairs;
+        this.options['cachedAvailablePairsLookup'] = pairsLookup;
+        this.options['availablePairSymbols'] = Object.keys (this.keysort (unifiedSymbols));
+        return pairs;
+    }
+
+    symbolToPairId (symbol: string): Str {
+        const parts = symbol.split ('/');
+        if (parts.length !== 2) {
+            return undefined;
+        }
+        const base = this.safeString (parts, 0);
+        const quote = this.safeString (parts, 1);
+        let baseId = base.toLowerCase ();
+        let quoteId = quote.toLowerCase ();
+        if (this.currencies !== undefined) {
+            const baseCurrency = this.safeDict (this.currencies, base);
+            const quoteCurrency = this.safeDict (this.currencies, quote);
+            baseId = this.safeString (baseCurrency, 'id', baseId);
+            quoteId = this.safeString (quoteCurrency, 'id', quoteId);
+        }
+        return baseId + '_' + quoteId;
+    }
+
+    isPairAvailable (pairId: string): boolean {
+        const pairsLookup = this.safeDict (this.options, 'cachedAvailablePairsLookup', {});
+        return this.safeBool (pairsLookup, pairId, false);
+    }
+
+    hasAvailablePairsCache (): boolean {
+        const cachedPairs = this.safeList (this.options, 'cachedAvailablePairs', []);
+        if (cachedPairs.length > 0) {
+            return true;
+        }
+        const pairsLookup = this.safeDict (this.options, 'cachedAvailablePairsLookup', {});
+        return !this.isEmpty (pairsLookup);
+    }
+
+    setMarkets (markets, currencies = undefined) {
+        const result = super.setMarkets (markets, currencies);
+        const cachedSymbols = this.safeList (this.options, 'availablePairSymbols', []);
+        if (cachedSymbols.length > 0) {
+            this.symbols = cachedSymbols;
         }
         return result;
+    }
+
+    mergeMarkets (newMarkets: Market[]) {
+        const existingMarkets = (this.markets === undefined) ? [] : Object.values (this.markets);
+        const combined = this.arrayConcat (existingMarkets, newMarkets);
+        this.setMarkets (combined);
+    }
+
+    isMarketSymbolCached (symbol: string): boolean {
+        if (this.markets === undefined) {
+            return false;
+        }
+        return symbol in this.markets;
+    }
+
+    removeCachedMarketSymbol (symbol: string) {
+        if (this.markets === undefined) {
+            return;
+        }
+        if (symbol in this.markets) {
+            delete this.markets[symbol];
+        }
+    }
+
+    async resolveMarkets (symbols: string[], params = {}): Promise<Dict> {
+        const marketsBySymbol: Dict = {};
+        const pendingSymbols = [];
+        const newMarkets: Market[] = [];
+        const marketsDict = (this.markets === undefined) ? {} : this.markets;
+        for (let symbolIndex = 0; symbolIndex < symbols.length; symbolIndex++) {
+            const symbol = symbols[symbolIndex];
+            if (symbol in marketsDict) {
+                marketsBySymbol[symbol] = this.market (symbol);
+                continue;
+            }
+            pendingSymbols.push (symbol);
+        }
+        if (pendingSymbols.length > 0) {
+            if (this.hasAvailablePairsCache ()) {
+                await this.fetchAvailablePairs (params);
+            }
+        }
+        for (let pendingIndex = 0; pendingIndex < pendingSymbols.length; pendingIndex++) {
+            const symbol = pendingSymbols[pendingIndex];
+            const pairId = this.symbolToPairId (symbol);
+            if (pairId === undefined) {
+                throw new BadSymbol (this.id + ' does not have market ' + symbol);
+            }
+            if (this.hasAvailablePairsCache () && !this.isPairAvailable (pairId)) {
+                throw new BadSymbol (this.id + ' does not have market ' + symbol);
+            }
+            const market = this.parseMarketFromPair (pairId);
+            newMarkets.push (market);
+            marketsBySymbol[symbol] = market;
+        }
+        if (newMarkets.length > 0) {
+            this.mergeMarkets (newMarkets);
+            for (let pendingIndex = 0; pendingIndex < pendingSymbols.length; pendingIndex++) {
+                const symbol = pendingSymbols[pendingIndex];
+                marketsBySymbol[symbol] = this.market (symbol);
+            }
+        }
+        return {
+            'marketsBySymbol': marketsBySymbol,
+        };
+    }
+
+    async resolveMarket (symbol: string, params = {}): Promise<Market> {
+        const resolveResult = await this.resolveMarkets ([ symbol ], params);
+        return resolveResult['marketsBySymbol'][symbol];
+    }
+
+    /**
+     * @method
+     * @name changenow#fetchMarkets
+     * @description fetches markets; returns empty by default (markets loaded on demand)
+     * @see https://changenow.io/api/docs
+     * @param {object} [params] extra parameters specific to the exchange API endpoint
+     * @returns {Market[]} an array of market structures
+     */
+    async fetchMarkets (params = {}): Promise<Market[]> {
+        return [];
+    }
+
+    /**
+     * @method
+     * @name changenow#obLoadMarketsForSymbols
+     * @description lazily resolves and populates this.markets for the given symbols
+     * @see https://changenow.io/api/docs
+     * @param {string[]} symbols list of unified market symbols
+     * @param {boolean} reload when true, re-fetch symbols even if already cached in this.markets
+     * @param {object} params extra parameters specific to the exchange API endpoint
+     * @returns {object[]} empty list; ob_changenow returns fixed market status structures
+     */
+    async obLoadMarketsForSymbols (symbols: string[], reload = false, params = {}): Promise<Dict[]> {
+        if (symbols === undefined) {
+            throw new ArgumentsRequired (this.id + ' obLoadMarketsForSymbols() requires a non-empty symbols argument');
+        }
+        const symbolsLength = symbols.length;
+        if (symbolsLength === 0) {
+            throw new ArgumentsRequired (this.id + ' obLoadMarketsForSymbols() requires a non-empty symbols argument');
+        }
+        await this.loadMarkets ();
+        const symbolsToResolve = [];
+        for (let symbolIndex = 0; symbolIndex < symbolsLength; symbolIndex++) {
+            const symbol = symbols[symbolIndex];
+            if (reload) {
+                this.removeCachedMarketSymbol (symbol);
+                symbolsToResolve.push (symbol);
+            } else if (!this.isMarketSymbolCached (symbol)) {
+                symbolsToResolve.push (symbol);
+            }
+        }
+        if (symbolsToResolve.length > 0) {
+            await this.resolveMarkets (symbolsToResolve, params);
+        }
+        return [];
     }
 
     /**
@@ -369,7 +548,8 @@ export default class changenow extends Exchange {
      */
     async fetchTicker (symbol: string, params = {}): Promise<Ticker> {
         await this.loadMarkets ();
-        const market = this.market (symbol);
+        const resolveResult = await this.resolveMarkets ([ symbol ], params);
+        const market = resolveResult['marketsBySymbol'][symbol];
         const baseId = this.safeString (market, 'baseId');
         const quoteId = this.safeString (market, 'quoteId');
         const amount = this.safeString (params, 'amount', '1');
@@ -455,7 +635,8 @@ export default class changenow extends Exchange {
     async createOrder (symbol: string, type: OrderType, side: OrderSide, amount: number, price: Num = undefined, params = {}): Promise<Order> {
         this.checkRequiredCredentials ();
         await this.loadMarkets ();
-        const market = this.market (symbol);
+        const resolveResult = await this.resolveMarkets ([ symbol ], params);
+        const market = resolveResult['marketsBySymbol'][symbol];
         const baseId = this.safeString (market, 'baseId');
         const quoteId = this.safeString (market, 'quoteId');
         const addressTo = this.safeString (params, 'address_to');
@@ -568,7 +749,8 @@ export default class changenow extends Exchange {
         };
         let market = undefined;
         if (symbol !== undefined) {
-            market = this.market (symbol);
+            const resolveResult = await this.resolveMarkets ([ symbol ], params);
+            market = resolveResult['marketsBySymbol'][symbol];
             request['from'] = this.safeString (market, 'baseId');
             request['to'] = this.safeString (market, 'quoteId');
         }
