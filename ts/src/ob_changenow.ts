@@ -40,9 +40,30 @@ export default class ob_changenow extends changenow {
                     'supportFetchingCancelledOrders': false,
                     'requireClosedOrdersFromRecentTrades': false,
                     'createOhlcvFromTickers': true,
+                    'lazyLoadMarkets': true,
                 },
             },
         });
+    }
+
+    /**
+     * @method
+     * @name ob_changenow#obLoadMarketsForSymbols
+     * @description lazily loads and returns fixed market status structures for the given symbols
+     * @see https://changenow.io/api/docs
+     * @param {string[]} symbols list of unified market symbols
+     * @param {boolean} reload when true, re-fetch symbols even if already cached in this.markets
+     * @param {object} [params] extra parameters specific to the exchange API endpoint
+     * @returns {object[]} list of fixed market status structures
+     */
+    async obLoadMarketsForSymbols (symbols: string[], reload = false, params = {}): Promise<Dict[]> {
+        await super.obLoadMarketsForSymbols (symbols, reload, params);
+        const symbolsLength = symbols.length;
+        const result = [];
+        for (let symbolIndex = 0; symbolIndex < symbolsLength; symbolIndex++) {
+            result.push (this.obGetFixedMarketStatus (symbols[symbolIndex]));
+        }
+        return result;
     }
 
     parseOrder (order: Dict, market: Market = undefined): Order {

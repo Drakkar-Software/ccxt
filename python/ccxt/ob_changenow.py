@@ -6,6 +6,7 @@
 from ccxt.changenow import changenow
 from ccxt.abstract.ob_changenow import ImplicitAPI
 from ccxt.base.types import Any, Market, Order, Ticker
+from typing import List
 
 
 class ob_changenow(changenow, ImplicitAPI):
@@ -43,9 +44,28 @@ class ob_changenow(changenow, ImplicitAPI):
                     'supportFetchingCancelledOrders': False,
                     'requireClosedOrdersFromRecentTrades': False,
                     'createOhlcvFromTickers': True,
+                    'lazyLoadMarkets': True,
                 },
             },
         })
+
+    def ob_load_markets_for_symbols(self, symbols: List[str], reload=False, params={}) -> List[dict]:
+        """
+        lazily loads and returns fixed market status structures for the given symbols
+
+        https://changenow.io/api/docs
+
+        :param str[] symbols: list of unified market symbols
+        :param boolean reload: when True, re-fetch symbols even if already cached in self.markets
+        :param dict [params]: extra parameters specific to the exchange API endpoint
+        :returns dict[]: list of fixed market status structures
+        """
+        super(ob_changenow, self).ob_load_markets_for_symbols(symbols, reload, params)
+        symbolsLength = len(symbols)
+        result = []
+        for symbolIndex in range(0, symbolsLength):
+            result.append(self.ob_get_fixed_market_status(symbols[symbolIndex]))
+        return result
 
     def parse_order(self, order: dict, market: Market = None) -> Order:
         parsed = super(ob_changenow, self).parse_order(order, market)
