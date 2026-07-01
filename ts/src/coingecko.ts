@@ -324,7 +324,7 @@ export default class coingecko extends Exchange {
         const errorCode = this.safeInteger (status, 'error_code');
         const errorMessage = this.safeString (status, 'error_message');
         if (errorCode !== undefined) {
-            if (errorCode === 10005) {
+            if (errorCode === 10005 || errorCode === 429) {
                 throw new RateLimitExceeded (this.id + ' ' + errorMessage);
             }
             if (errorCode === 10002) {

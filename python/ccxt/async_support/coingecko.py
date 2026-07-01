@@ -306,7 +306,7 @@ class coingecko(Exchange, ImplicitAPI):
         errorCode = self.safe_integer(status, 'error_code')
         errorMessage = self.safe_string(status, 'error_message')
         if errorCode is not None:
-            if errorCode == 10005:
+            if errorCode == 10005 or errorCode == 429:
                 raise RateLimitExceeded(self.id + ' ' + errorMessage)
             if errorCode == 10002:
                 raise AuthenticationError(self.id + ' ' + errorMessage)
