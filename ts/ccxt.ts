@@ -109,6 +109,7 @@ import dexscreener from  './src/dexscreener.js'
 import digifinex from  './src/digifinex.js'
 import dydx from  './src/dydx.js'
 import exmo from  './src/exmo.js'
+import exolix from  './src/exolix.js'
 import fmfwio from  './src/fmfwio.js'
 import foxbit from  './src/foxbit.js'
 import gate from  './src/gate.js'
@@ -156,6 +157,7 @@ import ob_coingecko from  './src/ob_coingecko.js'
 import ob_cryptocom from  './src/ob_cryptocom.js'
 import ob_dexscreener from  './src/ob_dexscreener.js'
 import ob_defillama from  './src/ob_defillama.js'
+import ob_exolix from  './src/ob_exolix.js'
 import ob_gateio from  './src/ob_gateio.js'
 import ob_hitbtc from  './src/ob_hitbtc.js'
 import ob_hollaex from  './src/ob_hollaex.js'
@@ -172,6 +174,8 @@ import ob_okx from  './src/ob_okx.js'
 import ob_okxus from  './src/ob_okxus.js'
 import ob_phemex from  './src/ob_phemex.js'
 import ob_poloniex from  './src/ob_poloniex.js'
+import ob_simpleswap from  './src/ob_simpleswap.js'
+import ob_trocador from  './src/ob_trocador.js'
 import ob_upbit from  './src/ob_upbit.js'
 import ob_wavesexchange from  './src/ob_wavesexchange.js'
 import ob_wizardswap from  './src/ob_wizardswap.js'
@@ -185,8 +189,10 @@ import paradex from  './src/paradex.js'
 import paymium from  './src/paymium.js'
 import phemex from  './src/phemex.js'
 import poloniex from  './src/poloniex.js'
+import simpleswap from  './src/simpleswap.js'
 import tokocrypto from  './src/tokocrypto.js'
 import toobit from  './src/toobit.js'
+import trocador from  './src/trocador.js'
 import upbit from  './src/upbit.js'
 import wavesexchange from  './src/wavesexchange.js'
 import weex from  './src/weex.js'
@@ -347,6 +353,7 @@ const exchanges = {
     'digifinex':              digifinex,
     'dydx':                   dydx,
     'exmo':                   exmo,
+    'exolix':                 exolix,
     'fmfwio':                 fmfwio,
     'foxbit':                 foxbit,
     'gate':                   gate,
@@ -394,6 +401,7 @@ const exchanges = {
     'ob_cryptocom':           ob_cryptocom,
     'ob_dexscreener':         ob_dexscreener,
     'ob_defillama':           ob_defillama,
+    'ob_exolix':              ob_exolix,
     'ob_gateio':              ob_gateio,
     'ob_hitbtc':              ob_hitbtc,
     'ob_hollaex':             ob_hollaex,
@@ -410,6 +418,8 @@ const exchanges = {
     'ob_okxus':               ob_okxus,
     'ob_phemex':              ob_phemex,
     'ob_poloniex':            ob_poloniex,
+    'ob_simpleswap':          ob_simpleswap,
+    'ob_trocador':            ob_trocador,
     'ob_upbit':               ob_upbit,
     'ob_wavesexchange':       ob_wavesexchange,
     'ob_wizardswap':          ob_wizardswap,
@@ -423,8 +433,10 @@ const exchanges = {
     'paymium':                paymium,
     'phemex':                 phemex,
     'poloniex':               poloniex,
+    'simpleswap':             simpleswap,
     'tokocrypto':             tokocrypto,
     'toobit':                 toobit,
+    'trocador':               trocador,
     'upbit':                  upbit,
     'wavesexchange':          wavesexchange,
     'weex':                   weex,
@@ -735,6 +747,7 @@ export {
     digifinex,
     dydx,
     exmo,
+    exolix,
     fmfwio,
     foxbit,
     gate,
@@ -782,6 +795,7 @@ export {
     ob_cryptocom,
     ob_dexscreener,
     ob_defillama,
+    ob_exolix,
     ob_gateio,
     ob_hitbtc,
     ob_hollaex,
@@ -798,6 +812,8 @@ export {
     ob_okxus,
     ob_phemex,
     ob_poloniex,
+    ob_simpleswap,
+    ob_trocador,
     ob_upbit,
     ob_wavesexchange,
     ob_wizardswap,
@@ -811,8 +827,10 @@ export {
     paymium,
     phemex,
     poloniex,
+    simpleswap,
     tokocrypto,
     toobit,
+    trocador,
     upbit,
     wavesexchange,
     weex,

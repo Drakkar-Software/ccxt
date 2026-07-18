@@ -153,6 +153,7 @@ from ccxt.dexscreener import dexscreener                              # noqa: F4
 from ccxt.digifinex import digifinex                                  # noqa: F401
 from ccxt.dydx import dydx                                            # noqa: F401
 from ccxt.exmo import exmo                                            # noqa: F401
+from ccxt.exolix import exolix                                        # noqa: F401
 from ccxt.fmfwio import fmfwio                                        # noqa: F401
 from ccxt.foxbit import foxbit                                        # noqa: F401
 from ccxt.gate import gate                                            # noqa: F401
@@ -200,6 +201,7 @@ from ccxt.ob_coingecko import ob_coingecko                            # noqa: F4
 from ccxt.ob_cryptocom import ob_cryptocom                            # noqa: F401
 from ccxt.ob_dexscreener import ob_dexscreener                        # noqa: F401
 from ccxt.ob_defillama import ob_defillama                            # noqa: F401
+from ccxt.ob_exolix import ob_exolix                                  # noqa: F401
 from ccxt.ob_gateio import ob_gateio                                  # noqa: F401
 from ccxt.ob_hitbtc import ob_hitbtc                                  # noqa: F401
 from ccxt.ob_hollaex import ob_hollaex                                # noqa: F401
@@ -216,6 +218,8 @@ from ccxt.ob_okx import ob_okx                                        # noqa: F4
 from ccxt.ob_okxus import ob_okxus                                    # noqa: F401
 from ccxt.ob_phemex import ob_phemex                                  # noqa: F401
 from ccxt.ob_poloniex import ob_poloniex                              # noqa: F401
+from ccxt.ob_simpleswap import ob_simpleswap                          # noqa: F401
+from ccxt.ob_trocador import ob_trocador                              # noqa: F401
 from ccxt.ob_upbit import ob_upbit                                    # noqa: F401
 from ccxt.ob_wavesexchange import ob_wavesexchange                    # noqa: F401
 from ccxt.ob_wizardswap import ob_wizardswap                          # noqa: F401
@@ -229,8 +233,10 @@ from ccxt.paradex import paradex                                      # noqa: F4
 from ccxt.paymium import paymium                                      # noqa: F401
 from ccxt.phemex import phemex                                        # noqa: F401
 from ccxt.poloniex import poloniex                                    # noqa: F401
+from ccxt.simpleswap import simpleswap                                # noqa: F401
 from ccxt.tokocrypto import tokocrypto                                # noqa: F401
 from ccxt.toobit import toobit                                        # noqa: F401
+from ccxt.trocador import trocador                                    # noqa: F401
 from ccxt.upbit import upbit                                          # noqa: F401
 from ccxt.wavesexchange import wavesexchange                          # noqa: F401
 from ccxt.weex import weex                                            # noqa: F401
@@ -308,6 +314,7 @@ exchanges = [
     'digifinex',
     'dydx',
     'exmo',
+    'exolix',
     'fmfwio',
     'foxbit',
     'gate',
@@ -355,6 +362,7 @@ exchanges = [
     'ob_cryptocom',
     'ob_dexscreener',
     'ob_defillama',
+    'ob_exolix',
     'ob_gateio',
     'ob_hitbtc',
     'ob_hollaex',
@@ -371,6 +379,8 @@ exchanges = [
     'ob_okxus',
     'ob_phemex',
     'ob_poloniex',
+    'ob_simpleswap',
+    'ob_trocador',
     'ob_upbit',
     'ob_wavesexchange',
     'ob_wizardswap',
@@ -384,8 +394,10 @@ exchanges = [
     'paymium',
     'phemex',
     'poloniex',
+    'simpleswap',
     'tokocrypto',
     'toobit',
+    'trocador',
     'upbit',
     'wavesexchange',
     'weex',

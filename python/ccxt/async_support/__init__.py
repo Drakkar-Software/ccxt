@@ -133,6 +133,7 @@ from ccxt.async_support.dexscreener import dexscreener                          
 from ccxt.async_support.digifinex import digifinex                              # noqa: F401
 from ccxt.async_support.dydx import dydx                                        # noqa: F401
 from ccxt.async_support.exmo import exmo                                        # noqa: F401
+from ccxt.async_support.exolix import exolix                                    # noqa: F401
 from ccxt.async_support.fmfwio import fmfwio                                    # noqa: F401
 from ccxt.async_support.foxbit import foxbit                                    # noqa: F401
 from ccxt.async_support.gate import gate                                        # noqa: F401
@@ -180,6 +181,7 @@ from ccxt.async_support.ob_coingecko import ob_coingecko                        
 from ccxt.async_support.ob_cryptocom import ob_cryptocom                        # noqa: F401
 from ccxt.async_support.ob_dexscreener import ob_dexscreener                  # noqa: F401
 from ccxt.async_support.ob_defillama import ob_defillama                      # noqa: F401
+from ccxt.async_support.ob_exolix import ob_exolix                            # noqa: F401
 from ccxt.async_support.ob_gateio import ob_gateio                              # noqa: F401
 from ccxt.async_support.ob_hitbtc import ob_hitbtc                              # noqa: F401
 from ccxt.async_support.ob_hollaex import ob_hollaex                            # noqa: F401
@@ -196,6 +198,8 @@ from ccxt.async_support.ob_okx import ob_okx                                    
 from ccxt.async_support.ob_okxus import ob_okxus                                # noqa: F401
 from ccxt.async_support.ob_phemex import ob_phemex                              # noqa: F401
 from ccxt.async_support.ob_poloniex import ob_poloniex                          # noqa: F401
+from ccxt.async_support.ob_simpleswap import ob_simpleswap                      # noqa: F401
+from ccxt.async_support.ob_trocador import ob_trocador                          # noqa: F401
 from ccxt.async_support.ob_upbit import ob_upbit                                # noqa: F401
 from ccxt.async_support.ob_wavesexchange import ob_wavesexchange                # noqa: F401
 from ccxt.async_support.ob_wizardswap import ob_wizardswap                      # noqa: F401
@@ -209,8 +213,10 @@ from ccxt.async_support.paradex import paradex                                  
 from ccxt.async_support.paymium import paymium                                  # noqa: F401
 from ccxt.async_support.phemex import phemex                                    # noqa: F401
 from ccxt.async_support.poloniex import poloniex                                # noqa: F401
+from ccxt.async_support.simpleswap import simpleswap                            # noqa: F401
 from ccxt.async_support.tokocrypto import tokocrypto                            # noqa: F401
 from ccxt.async_support.toobit import toobit                                    # noqa: F401
+from ccxt.async_support.trocador import trocador                                # noqa: F401
 from ccxt.async_support.upbit import upbit                                      # noqa: F401
 from ccxt.async_support.wavesexchange import wavesexchange                      # noqa: F401
 from ccxt.async_support.weex import weex                                        # noqa: F401
@@ -288,6 +294,7 @@ exchanges = [
     'digifinex',
     'dydx',
     'exmo',
+    'exolix',
     'fmfwio',
     'foxbit',
     'gate',
@@ -335,6 +342,7 @@ exchanges = [
     'ob_cryptocom',
     'ob_dexscreener',
     'ob_defillama',
+    'ob_exolix',
     'ob_gateio',
     'ob_hitbtc',
     'ob_hollaex',
@@ -351,6 +359,8 @@ exchanges = [
     'ob_okxus',
     'ob_phemex',
     'ob_poloniex',
+    'ob_simpleswap',
+    'ob_trocador',
     'ob_upbit',
     'ob_wavesexchange',
     'ob_wizardswap',
@@ -364,8 +374,10 @@ exchanges = [
     'paymium',
     'phemex',
     'poloniex',
+    'simpleswap',
     'tokocrypto',
     'toobit',
+    'trocador',
     'upbit',
     'wavesexchange',
     'weex',

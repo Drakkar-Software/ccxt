@@ -25,6 +25,9 @@ import testObLbank from './test.ob.lbank.js';
 import testObMexc from './test.ob.mexc.js';
 import testObOkx from './test.ob.okx.js';
 import testObPhemex from './test.ob.phemex.js';
+import testObTrocador from './test.ob.trocador.js';
+import testObSimpleswap from './test.ob.simpleswap.js';
+import testObExolix from './test.ob.exolix.js';
 import testObWizardswap from './test.ob.wizardswap.js';
 
 async function obTestsInit () {
@@ -55,6 +58,9 @@ async function obTestsInit () {
     await testObMexc ();
     await testObOkx ();
     await testObPhemex ();
+    await testObSimpleswap ();
+    await testObTrocador ();
+    await testObExolix ();
     await testObWizardswap ();
 }
 
