@@ -21,6 +21,7 @@ export default class ob_trocador extends trocador {
                 'swap': false,
                 'future': false,
                 'option': false,
+                'obGetExchangeTradingProviders': true,
             },
             'options': {
                 'octobot': {
@@ -64,6 +65,18 @@ export default class ob_trocador extends trocador {
             result.push (this.obGetFixedMarketStatus (symbols[symbolIndex]));
         }
         return result;
+    }
+
+    /**
+     * @method
+     * @name ob_trocador#obGetExchangeTradingProviders
+     * @description fetch the list of integrated partner exchanges / providers
+     * @see https://trocador.app/en/docs/
+     * @param {object} [params] extra parameters specific to the exchange API endpoint
+     * @returns {object} raw exchanges response from GET /exchanges
+     */
+    async obGetExchangeTradingProviders (params = {}): Promise<any> {
+        return await this.publicGetExchanges (params);
     }
 
     parseOrder (order: Dict, market: Market = undefined): Order {

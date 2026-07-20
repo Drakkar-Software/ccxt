@@ -11,6 +11,7 @@ async function testObTrocador () {
         const octobotOptions = ex.options['octobot'];
         assert.strictEqual (octobotOptions['lazyLoadMarkets'], true);
         assert.strictEqual (ex.has['obLoadMarketsForSymbols'], true);
+        assert.strictEqual (ex.has['obGetExchangeTradingProviders'], true);
     }
     // parseSymbolPart S1: valid TICKER@NETWORK
     {
@@ -284,6 +285,24 @@ async function testObTrocador () {
             assert.strictEqual (fetched['status'], 'open');
         } finally {
             ex.publicGetTrade = orig;
+        }
+    }
+    // obGetExchangeTradingProviders E1: delegates to publicGetExchanges
+    {
+        const ex = new ccxt.ob_trocador ();
+        ex.apiKey = 'test-api-key';
+        const orig = ex.publicGetExchanges;
+        let called = false;
+        ex.publicGetExchanges = async (params = {}) => {
+            called = true;
+            return { 'list': [ { 'name': 'Exolix', 'rating': 'A' } ] };
+        };
+        try {
+            const response: any = await ex.obGetExchangeTradingProviders ();
+            assert.strictEqual (called, true);
+            assert.strictEqual (response['list'][0]['name'], 'Exolix');
+        } finally {
+            ex.publicGetExchanges = orig;
         }
     }
 }

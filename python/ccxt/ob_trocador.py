@@ -25,6 +25,7 @@ class ob_trocador(trocador, ImplicitAPI):
                 'swap': False,
                 'future': False,
                 'option': False,
+                'obGetExchangeTradingProviders': True,
             },
             'options': {
                 'octobot': {
@@ -66,6 +67,17 @@ class ob_trocador(trocador, ImplicitAPI):
         for symbolIndex in range(0, symbolsLength):
             result.append(self.ob_get_fixed_market_status(symbols[symbolIndex]))
         return result
+
+    def ob_get_exchange_trading_providers(self, params={}) -> Any:
+        """
+        fetch the list of integrated partner exchanges / providers
+
+        https://trocador.app/en/docs/
+
+        :param dict [params]: extra parameters specific to the exchange API endpoint
+        :returns dict: raw exchanges response from GET /exchanges
+        """
+        return self.publicGetExchanges(params)
 
     def parse_order(self, order: dict, market: Market = None) -> Order:
         parsed = super(ob_trocador, self).parse_order(order, market)
