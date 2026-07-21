@@ -1,6 +1,6 @@
 {
   "name": "octobot_ccxt",
-  "version": "0.0.4",
+  "version": "0.0.5",
   "description": "A cryptocurrency trading API with more than 100 exchanges in JavaScript / TypeScript / Python / C# / PHP / Go",
   "unpkg": "dist/ccxt.browser.min.js",
   "type": "module",
@@ -238,6 +238,9 @@
     "id-tests": "npm run id-tests-js && npm run id-tests-py && npm run id-tests-php && npm run id-tests-cs && npm run id-tests-go && npm run id-tests-java",
     "id-tests//withGO": "npm run id-tests-js && npm run id-tests-py && npm run id-tests-php && npm run id-tests-cs && npm run id-tests-go",
     "test-base-rest-ts": "npm run ti-ts  -- --baseTests",
+    "test-ob-ts": "npm run ti-ts -- --obTests",
+    "test-ob-py": "python -m pytest python/ccxt/test/exchange/octobot/",
+    "test-ob": "npm run test-ob-ts && npm run test-ob-py",
     "test-base-rest-js": "npm run ti-js  -- --baseTests",
     "test-base-rest-py": "npm run ti-py  -- --baseTests",
     "test-base-rest-php": "npm run ti-php -- --baseTests",

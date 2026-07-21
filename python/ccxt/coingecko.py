@@ -10,6 +10,7 @@ from typing import List
 from ccxt.base.errors import ExchangeError
 from ccxt.base.errors import AuthenticationError
 from ccxt.base.errors import BadRequest
+from ccxt.base.errors import BadSymbol
 from ccxt.base.errors import RateLimitExceeded
 from ccxt.base.errors import NullResponse
 
@@ -110,13 +111,19 @@ class coingecko(Exchange, ImplicitAPI):
         response = self.publicGetCoinsList(self.extend(request, params))
         result = []
         for i in range(0, len(response)):
-            result.append(self.parse_market(response[i]))
+            coin = response[i]
+            # Skip incomplete catalog rows(CoinGecko can return null symbols)
+            if self.safe_string(coin, 'symbol') is None:
+                continue
+            result.append(self.parse_market(coin))
         return result
 
     def parse_market(self, coin: dict) -> Market:
         vsCurrency = self.safe_string(self.options, 'vsCurrency', 'usd').lower()
         coinId = self.safe_string(coin, 'id')
         rawSymbol = self.safe_string(coin, 'symbol')
+        if rawSymbol is None:
+            raise BadSymbol(self.id + ' parseMarket() requires a non-None symbol')
         base = self.safe_currency_code(rawSymbol)
         quote = self.safe_currency_code(vsCurrency)
         symbol = base + '/' + quote
@@ -195,6 +202,9 @@ class coingecko(Exchange, ImplicitAPI):
             coinId = self.safe_string(row, 'id')
             market = self.safe_value(marketByCoinId, coinId) if (marketByCoinId is not None) else None
             if market is None:
+                # Skip incomplete markets-API rows(null symbol cannot be unified)
+                if self.safe_string(row, 'symbol') is None:
+                    continue
                 market = self.parse_market(row)
             ticker = self.parse_ticker(row, market)
             tickerSymbol = self.safe_string(ticker, 'symbol')
