@@ -1,7 +1,7 @@
 //  ---------------------------------------------------------------------------
 
 import Exchange from './abstract/coingecko.js';
-import { AuthenticationError, BadRequest, ExchangeError, NullResponse, RateLimitExceeded } from './base/errors.js';
+import { AuthenticationError, BadRequest, BadSymbol, ExchangeError, NullResponse, RateLimitExceeded } from './base/errors.js';
 import type { Market, Dict, Ticker, int, Strings, Tickers } from './base/types.js';
 
 //  ---------------------------------------------------------------------------
@@ -108,7 +108,12 @@ export default class coingecko extends Exchange {
         const response = await this.publicGetCoinsList (this.extend (request, params));
         const result = [];
         for (let i = 0; i < response.length; i++) {
-            result.push (this.parseMarket (response[i]));
+            const coin = response[i];
+            // Skip incomplete catalog rows (CoinGecko can return null symbols)
+            if (this.safeString (coin, 'symbol') === undefined) {
+                continue;
+            }
+            result.push (this.parseMarket (coin));
         }
         return result;
     }
@@ -117,6 +122,9 @@ export default class coingecko extends Exchange {
         const vsCurrency = this.safeString (this.options, 'vsCurrency', 'usd').toLowerCase ();
         const coinId = this.safeString (coin, 'id');
         const rawSymbol = this.safeString (coin, 'symbol');
+        if (rawSymbol === undefined) {
+            throw new BadSymbol (this.id + ' parseMarket() requires a non-null symbol');
+        }
         const base = this.safeCurrencyCode (rawSymbol);
         const quote = this.safeCurrencyCode (vsCurrency);
         const symbol = base + '/' + quote;
@@ -198,6 +206,10 @@ export default class coingecko extends Exchange {
             const coinId = this.safeString (row, 'id');
             let market = (marketByCoinId !== undefined) ? this.safeValue (marketByCoinId, coinId) : undefined;
             if (market === undefined) {
+                // Skip incomplete markets-API rows (null symbol cannot be unified)
+                if (this.safeString (row, 'symbol') === undefined) {
+                    continue;
+                }
                 market = this.parseMarket (row);
             }
             const ticker = this.parseTicker (row, market);
