@@ -22,6 +22,50 @@ async function testCoingecko () {
         assert.strictEqual (market['quoteId'], 'usd');
         assert.strictEqual (market['info']['platforms']['ethereum'], '0x2260fac5e5542a773aa44fbcfedf7c193bc2c599');
     }
+    // parseMarket M2: null symbol -> BadSymbol
+    {
+        const exchange = new ccxt.coingecko ();
+        let threw = false;
+        try {
+            exchange.parseMarket ({
+                'id': 'broken-coin',
+                'symbol': null,
+                'name': 'Broken Coin',
+            });
+        } catch (error) {
+            threw = true;
+            assert (error instanceof ccxt.BadSymbol);
+        }
+        assert.strictEqual (threw, true);
+    }
+    // fetchMarkets F1: coins list with null-symbol entry -> skip incomplete row
+    {
+        const exchange: any = new ccxt.coingecko ();
+        const origPublicGetCoinsList = exchange.publicGetCoinsList;
+        exchange.publicGetCoinsList = async function () {
+            return [
+                {
+                    'id': 'bitcoin',
+                    'symbol': 'btc',
+                    'name': 'Bitcoin',
+                },
+                {
+                    'id': 'broken-coin',
+                    'symbol': null,
+                    'name': 'Broken Coin',
+                },
+            ];
+        };
+        try {
+            const markets: any = await exchange.fetchMarkets ();
+            assert.strictEqual (markets.length, 1);
+            assert.strictEqual (markets[0]['id'], 'bitcoin');
+            assert.strictEqual (markets[0]['symbol'], 'BTC/USD');
+            assert.strictEqual (markets[0]['base'], 'BTC');
+        } finally {
+            exchange.publicGetCoinsList = origPublicGetCoinsList;
+        }
+    }
     // parseTicker T1: markets row -> price, change, extra name/logoUrl
     {
         const exchange = new ccxt.coingecko ();
