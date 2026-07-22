@@ -6,6 +6,10 @@ import type { Dict } from './base/types.js';
 
 //  ---------------------------------------------------------------------------
 
+/**
+ * @class ob_defillama
+ * @augments defillama
+ */
 export default class ob_defillama extends defillama {
     describe (): any {
         return this.deepExtend (super.describe (), {
@@ -51,7 +55,7 @@ export default class ob_defillama extends defillama {
      * @name ob_defillama#obLoadMarketsForSymbols
      * @description lazily loads and returns fixed market status structures for the given symbols
      * @see https://api-docs.defillama.com/#tag/coins
-     * @param {string[]} symbols list of base/quote symbols with @network!* suffix
+     * @param {string[]} symbols list of base/quote symbols with @network wildcard dex suffix
      * @param {boolean} reload when true, re-fetch symbols even if already cached in this.markets
      * @param {object} [params] extra parameters specific to the exchange API endpoint
      * @returns {object[]} list of fixed market status structures

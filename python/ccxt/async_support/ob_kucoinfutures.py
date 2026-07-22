@@ -138,8 +138,8 @@ class ob_kucoinfutures(kucoinfutures, ImplicitAPI):
             subAccounts = await self.privateGetSubAccounts(params)
             dataDict = self.safe_dict(subAccounts, 'data')
             accounts = self.safe_list(dataDict, 'items', [])
-            accountId: Str = None
-            probingSubaccount: Str = None
+            accountId = None
+            probingSubaccount = None
             hasSubs = len(accounts) > 0
             if not hasSubs:
                 return 'default_account_id'

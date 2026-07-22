@@ -55,6 +55,7 @@ class ob_lbank(lbank, ImplicitAPI):
         })
 
     def convert_secret_to_pem(self, secret):
+        # include it here to avoid missing snake-case conversion in other languages
         lineLength = 64
         secretLength = len(secret) - 0
         numLines = self.parse_to_int(secretLength / lineLength)
@@ -96,9 +97,10 @@ class ob_lbank(lbank, ImplicitAPI):
             signatureMethod = 'RSA'
         else:
             signatureMethod = 'HmacSHA256'
+        finalSig = signatureMethod  # java req
         auth = self.rawencode(self.keysort(self.extend({
             'echostr': echostr,
-            'signature_method': signatureMethod,
+            'signature_method': finalSig,
             'timestamp': timestamp,
         }, query)))
         encoded = self.encode(auth)
@@ -137,7 +139,7 @@ class ob_lbank(lbank, ImplicitAPI):
     def fetch_permissions(self, params={}) -> List[str]:
         restrictions = self.spotPrivatePostSupplementApiRestrictions(params)
         dataDict = self.safe_dict(restrictions, 'data', {})
-        rights: List[str] = []
+        rights = []
         if self.safe_bool(dataDict, 'enableReading', False):
             rights.append('reading')
         if self.safe_bool(dataDict, 'enableSpotTrading', False):

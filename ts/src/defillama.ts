@@ -754,7 +754,7 @@ export default class defillama extends Exchange {
      * @name defillama#fetchTicker
      * @description fetches a price ticker for a market
      * @see https://api-docs.defillama.com/#tag/coins/get/coins/prices/current/{coins}
-     * @param {string} symbol unified market symbol with @network or @network!* suffix
+     * @param {string} symbol unified market symbol with @network suffix, or @network with wildcard dex
      * @param {object} [params] extra parameters specific to the exchange API endpoint
      * @returns {object} a [ticker structure]{@link https://docs.ccxt.com/?id=ticker-structure}
      */
@@ -774,7 +774,7 @@ export default class defillama extends Exchange {
      * @name defillama#fetchTickers
      * @description fetches price tickers for multiple markets; batches coin keys in one request
      * @see https://api-docs.defillama.com/#tag/coins/get/coins/prices/current/{coins}
-     * @param {string[]} symbols list of unified market symbols with @network or @network!* suffix
+     * @param {string[]} symbols list of unified market symbols with @network suffix, or @network with wildcard dex
      * @param {object} [params] extra parameters specific to the exchange API endpoint
      * @returns {object} a dictionary of [ticker structures]{@link https://docs.ccxt.com/?id=ticker-structure}
      */
@@ -807,7 +807,7 @@ export default class defillama extends Exchange {
      * @name defillama#obLoadMarketsForSymbols
      * @description lazily resolves and populates this.markets for the given symbols
      * @see https://api-docs.defillama.com/#tag/coins
-     * @param {string[]} symbols list of base/quote symbols with @network or @network!* suffix
+     * @param {string[]} symbols list of base/quote symbols with @network suffix, or @network with wildcard dex
      * @param {boolean} reload when true, re-fetch symbols even if already cached in this.markets
      * @param {object} params extra parameters specific to the exchange API endpoint
      * @returns {object[]} empty list; ob_defillama returns fixed market status structures
@@ -879,7 +879,7 @@ export default class defillama extends Exchange {
      * @name defillama#obFetchDexPairs
      * @description returns DEX pair structures for DefiLlama (single venue per network, dex=*)
      * @see https://api-docs.defillama.com/#tag/coins
-     * @param {string[]} symbols list of symbols with @network or @network!* suffix
+     * @param {string[]} symbols list of symbols with @network suffix, or @network with wildcard dex
      * @param {object} [params] extra parameters specific to the exchange API endpoint
      * @returns {ObDexPair[]} list of pair structures
      */

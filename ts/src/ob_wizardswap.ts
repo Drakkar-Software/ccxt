@@ -6,6 +6,10 @@ import type { Dict, Market, Order, Ticker } from './base/types.js';
 
 //  ---------------------------------------------------------------------------
 
+/**
+ * @class ob_wizardswap
+ * @augments wizardswap
+ */
 export default class ob_wizardswap extends wizardswap {
     describe (): any {
         return this.deepExtend (super.describe (), {

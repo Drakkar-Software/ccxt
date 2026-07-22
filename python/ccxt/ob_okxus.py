@@ -72,7 +72,7 @@ class ob_okxus(okxus, ImplicitAPI):
 
     def fetch_permissions(self, params={}) -> List[str]:
         accounts = self.fetch_accounts(params)
-        rights: List[str] = []
+        rights = []
         if len(accounts) == 0:
             return rights
         firstAccount = accounts[0]

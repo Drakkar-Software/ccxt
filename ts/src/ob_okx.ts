@@ -7,6 +7,10 @@ import type { Bool, Dict, FundingRate, Market, Order, Str } from './base/types.j
 
 //  ---------------------------------------------------------------------------
 
+/**
+ * @class ob_okx
+ * @augments okx
+ */
 export default class ob_okx extends okx {
     describe (): any {
         return this.deepExtend (super.describe (), {

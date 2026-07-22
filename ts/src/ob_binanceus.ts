@@ -7,6 +7,10 @@ import type { Bool, Dict, Int, Str } from './base/types.js';
 
 //  ---------------------------------------------------------------------------
 
+/**
+ * @class ob_binanceus
+ * @augments binanceus
+ */
 export default class ob_binanceus extends binanceus {
     describe (): any {
         return this.deepExtend (super.describe (), {

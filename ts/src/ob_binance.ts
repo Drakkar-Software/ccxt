@@ -7,6 +7,10 @@ import type { Bool, Dict, FundingRate, Int, Market, Num, Order, OrderSide, Order
 
 //  ---------------------------------------------------------------------------
 
+/**
+ * @class ob_binance
+ * @augments binance
+ */
 export default class ob_binance extends binance {
     describe (): any {
         return this.deepExtend (super.describe (), {

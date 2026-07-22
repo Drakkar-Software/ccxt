@@ -8,8 +8,8 @@ from ccxt.abstract.ob_binanceus import ImplicitAPI
 from ccxt.base.types import Any, Bool, Int, Str
 from typing import List
 from ccxt.base.errors import PermissionDenied
-from ccxt.base.errors import OrderImmediatelyFillable
 from ccxt.base.errors import OBOrderUncancellableError
+from ccxt.base.errors import OrderImmediatelyFillable
 
 
 class ob_binanceus(binanceus, ImplicitAPI):
@@ -17,6 +17,10 @@ class ob_binanceus(binanceus, ImplicitAPI):
     def describe(self) -> Any:
         return self.deep_extend(super(ob_binanceus, self).describe(), {
             'id': 'ob_binanceus',
+            'name': 'Binance US',
+            'certified': False,
+            'urls': {
+            },
             'exceptions': {
                 'exact': {
                     'Order would immediately trigger.': OrderImmediatelyFillable,

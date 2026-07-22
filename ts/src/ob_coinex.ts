@@ -7,6 +7,10 @@ import type { Bool, Dict, Market, Order, Str, Ticker, Trade } from './base/types
 
 //  ---------------------------------------------------------------------------
 
+/**
+ * @class ob_coinex
+ * @augments coinex
+ */
 export default class ob_coinex extends coinex {
     describe (): any {
         return this.deepExtend (super.describe (), {

@@ -5,6 +5,10 @@ import upbit from './upbit.js';
 
 //  ---------------------------------------------------------------------------
 
+/**
+ * @class ob_upbit
+ * @augments upbit
+ */
 export default class ob_upbit extends upbit {
     describe (): any {
         return this.deepExtend (super.describe (), {

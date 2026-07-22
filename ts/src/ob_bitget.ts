@@ -6,6 +6,10 @@ import type { Dict, Market, Order, Trade } from './base/types.js';
 
 //  ---------------------------------------------------------------------------
 
+/**
+ * @class ob_bitget
+ * @augments bitget
+ */
 export default class ob_bitget extends bitget {
     describe (): any {
         return this.deepExtend (super.describe (), {

@@ -13,6 +13,10 @@ class ob_bitfinex(bitfinex, ImplicitAPI):
     def describe(self) -> Any:
         return self.deep_extend(super(ob_bitfinex, self).describe(), {
             'id': 'ob_bitfinex',
+            'name': 'Bitfinex',
+            'certified': False,
+            'urls': {
+            },
             'has': {
                 'CORS': None,
                 'spot': True,

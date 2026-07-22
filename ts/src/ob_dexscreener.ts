@@ -6,6 +6,10 @@ import type { Dict } from './base/types.js';
 
 //  ---------------------------------------------------------------------------
 
+/**
+ * @class ob_dexscreener
+ * @augments dexscreener
+ */
 export default class ob_dexscreener extends dexscreener {
     describe (): any {
         return this.deepExtend (super.describe (), {
@@ -50,7 +54,7 @@ export default class ob_dexscreener extends dexscreener {
      * @name ob_dexscreener#obLoadMarketsForSymbols
      * @description lazily loads and returns fixed market status structures for the given symbols
      * @see https://docs.dexscreener.com/api/reference
-     * @param {string[]} symbols list of base/quote symbols, optionally with @network!dex suffix
+     * @param {string[]} symbols list of base/quote symbols, optionally with @network dex suffix
      * @param {boolean} reload when true, re-fetch symbols even if already cached in this.markets
      * @param {object} [params] extra parameters specific to the exchange API endpoint
      * @returns {object[]} list of fixed market status structures

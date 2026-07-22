@@ -5,6 +5,10 @@ import hitbtc from './hitbtc.js';
 
 //  ---------------------------------------------------------------------------
 
+/**
+ * @class ob_hitbtc
+ * @augments hitbtc
+ */
 export default class ob_hitbtc extends hitbtc {
     describe (): any {
         return this.deepExtend (super.describe (), {

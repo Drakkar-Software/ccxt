@@ -6,6 +6,10 @@ import type { Dict, Market, Order, Ticker } from './base/types.js';
 
 //  ---------------------------------------------------------------------------
 
+/**
+ * @class ob_changenow
+ * @augments changenow
+ */
 export default class ob_changenow extends changenow {
     describe (): any {
         return this.deepExtend (super.describe (), {

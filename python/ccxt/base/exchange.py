@@ -7728,6 +7728,67 @@ class BaseExchange(object):
     def is_uta_enabled(self, params={}):
         return False  # stub
 
+    def ob_resolve_rights_from_imaginary_cancel_catch(self, e: Any, rights: List[str], authPermissionMatch: Str):
+        # octobot specific
+        if isinstance(e, AuthenticationError):
+            authenticationErrorLower = str(e).lower()
+            if authPermissionMatch == 'pair':
+                if authenticationErrorLower.find('permission') >= 0 and authenticationErrorLower.find('denied') >= 0:
+                    return rights
+            else:
+                if authenticationErrorLower.find('permission') >= 0 or authenticationErrorLower.find('denied') >= 0:
+                    return rights
+            raise e
+        if isinstance(e, NetworkError):
+            raise e
+        if (isinstance(e, BadSymbol)) or (isinstance(e, OperationFailed)):
+            raise e
+        if isinstance(e, ArgumentsRequired):
+            raise AuthenticationError(self.id + ' ' + str(e.message))
+        if not (isinstance(e, ExchangeError)):
+            raise e
+        low = str(e).lower()
+        if low.find('permission') >= 0 and (low.find('denied') >= 0 or low.find('trading') >= 0):
+            return rights
+        rights.append('spotTrading')
+        rights.append('marginTrading')
+        rights.append('futuresTrading')
+        return rights
+
+    def ob_is_authenticated_request(self, url: Str, method: Str, headers: dict, body, probe: Str, probeParams: dict = {}):
+        if probe == 'urlBodySignature':
+            needle = probeParams['needle'] if ('needle' in probeParams) else 'signature='
+            urlStr = ''
+            if url:
+                urlStr = str(url)
+            bodyStr = ''
+            if body:
+                bodyStr = str(body)
+            return(urlStr.find(needle) >= 0) or (bodyStr.find(needle) >= 0)
+        if probe == 'headersJsonAny':
+            needles = probeParams['needles'] if ('needles' in probeParams) else []
+            hdrTxt = json.dumps(headers) if headers else ''
+            for needleIdx in range(0, len(needles)):
+                needleEntry = needles[needleIdx]
+                if hdrTxt.find(needleEntry) >= 0:
+                    return True
+            return False
+        if probe == 'restSignatureInHeadersJsonOrInUrl':
+            hdrsStr = json.dumps(headers) if headers else ''
+            hdrMatches = hdrsStr.find('Signature') >= 0
+            urlTxt = ''
+            if url:
+                urlTxt = str(url)
+            urlMatches = urlTxt.find('signature=') >= 0
+            return hdrMatches or urlMatches
+        if probe == 'signatureMethodInHeadersJsonOrSignInBody':
+            hdrsStr = json.dumps(headers).lower() if headers else ''
+            signatureMethodHit = hdrsStr.find('signature_method') >= 0
+            bodyStr = str(body).lower() if body else ''
+            bodyHit = bodyStr.find('sign=') >= 0
+            return signatureMethodHit or bodyHit
+        return False
+
 
 class Exchange(BaseExchange):
 
@@ -8399,6 +8460,14 @@ class Exchange(BaseExchange):
     def cancel_order(self, id: str, symbol: Str = None, params={}):
         raise NotSupported(self.id + ' cancelOrder() is not supported yet')
 
+    def ob_fetch_permissions_imaginary_cancel(self, orderId: Str, symbol: Str, params={}, authPermissionMatch: Str = 'either'):
+        rights = ['reading']
+        try:
+            self.cancel_order(orderId, symbol, params)
+            return rights
+        except Exception as e:
+            return self.ob_resolve_rights_from_imaginary_cancel_catch(e, rights, authPermissionMatch)
+
     def cancel_order_with_client_order_id(self, clientOrderId: str, symbol: Str = None, params={}):
         """
         create a market order by providing the symbol, side and cost
@@ -8517,72 +8586,3 @@ class Exchange(BaseExchange):
             raise NotSupported(self.id + ' fetchTradingFee() is not supported yet')
         fees = self.fetch_trading_fees(params)
         return self.safe_dict(fees, symbol)
-
-    def ob_resolve_rights_from_imaginary_cancel_catch(self, e: Any, rights: List[str], authPermissionMatch: Str):
-        # octobot specific
-        if isinstance(e, AuthenticationError):
-            authenticationErrorLower = str(e).lower()
-            if authPermissionMatch == 'pair':
-                if authenticationErrorLower.find('permission') >= 0 and authenticationErrorLower.find('denied') >= 0:
-                    return rights
-            else:
-                if authenticationErrorLower.find('permission') >= 0 or authenticationErrorLower.find('denied') >= 0:
-                    return rights
-            raise e
-        if isinstance(e, NetworkError):
-            raise e
-        if (isinstance(e, BadSymbol)) or (isinstance(e, OperationFailed)):
-            raise e
-        if isinstance(e, ArgumentsRequired):
-            raise AuthenticationError(self.id + ' ' + str(e.message))
-        if not (isinstance(e, ExchangeError)):
-            raise e
-        low = str(e).lower()
-        if low.find('permission') >= 0 and (low.find('denied') >= 0 or low.find('trading') >= 0):
-            return rights
-        rights.append('spotTrading')
-        rights.append('marginTrading')
-        rights.append('futuresTrading')
-        return rights
-
-    def ob_fetch_permissions_imaginary_cancel(self, orderId: Str, symbol: Str, params={}, authPermissionMatch: Str = 'either'):
-        rights: List[str] = ['reading']
-        try:
-            self.cancel_order(orderId, symbol, params)
-            return rights
-        except Exception as e:
-            return self.ob_resolve_rights_from_imaginary_cancel_catch(e, rights, authPermissionMatch)
-
-    def ob_is_authenticated_request(self, url: Str, method: Str, headers: dict, body, probe: Str, probeParams: dict = {}):
-        if probe == 'urlBodySignature':
-            needle = probeParams['needle'] if ('needle' in probeParams) else 'signature='
-            urlStr = ''
-            if url:
-                urlStr = str(url)
-            bodyStr = ''
-            if body:
-                bodyStr = str(body)
-            return(urlStr.find(needle) >= 0) or (bodyStr.find(needle) >= 0)
-        if probe == 'headersJsonAny':
-            needles = probeParams['needles'] if ('needles' in probeParams) else []
-            hdrTxt = json.dumps(headers) if headers else ''
-            for needleIdx in range(0, len(needles)):
-                needleEntry = needles[needleIdx]
-                if hdrTxt.find(needleEntry) >= 0:
-                    return True
-            return False
-        if probe == 'restSignatureInHeadersJsonOrInUrl':
-            hdrsStr = json.dumps(headers) if headers else ''
-            hdrMatches = hdrsStr.find('Signature') >= 0
-            urlTxt = ''
-            if url:
-                urlTxt = str(url)
-            urlMatches = urlTxt.find('signature=') >= 0
-            return hdrMatches or urlMatches
-        if probe == 'signatureMethodInHeadersJsonOrSignInBody':
-            hdrsStr = json.dumps(headers).lower() if headers else ''
-            signatureMethodHit = hdrsStr.find('signature_method') >= 0
-            bodyStr = str(body).lower() if body else ''
-            bodyHit = bodyStr.find('sign=') >= 0
-            return signatureMethodHit or bodyHit
-        return False

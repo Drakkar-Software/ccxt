@@ -97,9 +97,10 @@ class ob_lbank(lbank, ImplicitAPI):
             signatureMethod = 'RSA'
         else:
             signatureMethod = 'HmacSHA256'
+        finalSig = signatureMethod  # java req
         auth = self.rawencode(self.keysort(self.extend({
             'echostr': echostr,
-            'signature_method': signatureMethod,
+            'signature_method': finalSig,
             'timestamp': timestamp,
         }, query)))
         encoded = self.encode(auth)
@@ -138,7 +139,7 @@ class ob_lbank(lbank, ImplicitAPI):
     async def fetch_permissions(self, params={}) -> List[str]:
         restrictions = await self.spotPrivatePostSupplementApiRestrictions(params)
         dataDict = self.safe_dict(restrictions, 'data', {})
-        rights: List[str] = []
+        rights = []
         if self.safe_bool(dataDict, 'enableReading', False):
             rights.append('reading')
         if self.safe_bool(dataDict, 'enableSpotTrading', False):

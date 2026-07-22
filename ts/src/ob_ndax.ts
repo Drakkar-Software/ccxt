@@ -5,6 +5,10 @@ import ndax from './ndax.js';
 
 //  ---------------------------------------------------------------------------
 
+/**
+ * @class ob_ndax
+ * @augments ndax
+ */
 export default class ob_ndax extends ndax {
     describe (): any {
         return this.deepExtend (super.describe (), {

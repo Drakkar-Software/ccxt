@@ -2,13 +2,17 @@
 //  ---------------------------------------------------------------------------
 
 import lbank from './lbank.js';
-import { md5 } from './static_dependencies/noble-hashes/md5.js';
-import { sha256 } from './static_dependencies/noble-hashes/sha256.js';
+import { md5 } from '@noble/hashes/legacy.js';
+import { sha256 } from '@noble/hashes/sha2.js';
 import { rsa } from './base/functions/rsa.js';
 import type { Bool, Dict, Str } from './base/types.js';
 
 //  ---------------------------------------------------------------------------
 
+/**
+ * @class ob_lbank
+ * @augments lbank
+ */
 export default class ob_lbank extends lbank {
     describe (): any {
         return this.deepExtend (super.describe (), {
@@ -95,24 +99,25 @@ export default class ob_lbank extends lbank {
         query = this.extend ({
             'api_key': this.apiKey,
         }, query);
-        let signatureMethod = undefined;
+        let signatureMethod: Str = undefined;
         if (this.secret.length > 32) {
             signatureMethod = 'RSA';
         } else {
             signatureMethod = 'HmacSHA256';
         }
+        const finalSig = signatureMethod; // java req
         const auth = this.rawencode (this.keysort (this.extend ({
             'echostr': echostr,
-            'signature_method': signatureMethod,
+            'signature_method': finalSig,
             'timestamp': timestamp,
         }, query)));
         const encoded = this.encode (auth);
         const hash = this.hash (encoded, md5);
         const uppercaseHash = hash.toUpperCase ();
-        let sign = undefined;
+        let sign: Str = undefined;
         if (signatureMethod === 'RSA') {
             const cacheSecretAsPem = this.safeBool (this.options, 'cacheSecretAsPem', true);
-            let pem = undefined;
+            let pem: Str = undefined;
             if (cacheSecretAsPem) {
                 pem = this.safeValue (this.options, 'pem');
                 if (pem === undefined) {

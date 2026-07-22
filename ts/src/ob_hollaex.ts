@@ -7,6 +7,10 @@ import type { Bool, Dict, Int, Market, Order, Str, Ticker } from './base/types.j
 
 //  ---------------------------------------------------------------------------
 
+/**
+ * @class ob_hollaex
+ * @augments hollaex
+ */
 export default class ob_hollaex extends hollaex {
     describe (): any {
         return this.deepExtend (super.describe (), {

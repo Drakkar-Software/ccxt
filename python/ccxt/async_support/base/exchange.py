@@ -1646,6 +1646,7 @@ class BaseExchange(SyncExchange):
     async def is_uta_enabled(self, params={}):
         return False  # stub
 
+
 class Exchange(BaseExchange):
 
     async def close_position(self, symbol: str, side: OrderSide = None, params={}):
@@ -2316,6 +2317,14 @@ class Exchange(BaseExchange):
     async def cancel_order(self, id: str, symbol: Str = None, params={}):
         raise NotSupported(self.id + ' cancelOrder() is not supported yet')
 
+    async def ob_fetch_permissions_imaginary_cancel(self, orderId: Str, symbol: Str, params={}, authPermissionMatch: Str = 'either'):
+        rights = ['reading']
+        try:
+            await self.cancel_order(orderId, symbol, params)
+            return rights
+        except Exception as e:
+            return self.ob_resolve_rights_from_imaginary_cancel_catch(e, rights, authPermissionMatch)
+
     async def cancel_order_with_client_order_id(self, clientOrderId: str, symbol: Str = None, params={}):
         """
         create a market order by providing the symbol, side and cost
@@ -2434,11 +2443,3 @@ class Exchange(BaseExchange):
             raise NotSupported(self.id + ' fetchTradingFee() is not supported yet')
         fees = await self.fetch_trading_fees(params)
         return self.safe_dict(fees, symbol)
-
-    async def ob_fetch_permissions_imaginary_cancel(self, orderId: Str, symbol: Str, params={}, authPermissionMatch: Str = 'either'):
-        rights: List[str] = ['reading']
-        try:
-            await self.cancel_order(orderId, symbol, params)
-            return rights
-        except Exception as e:
-            return self.ob_resolve_rights_from_imaginary_cancel_catch(e, rights, authPermissionMatch)

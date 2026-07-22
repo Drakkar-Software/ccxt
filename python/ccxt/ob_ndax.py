@@ -13,6 +13,10 @@ class ob_ndax(ndax, ImplicitAPI):
     def describe(self) -> Any:
         return self.deep_extend(super(ob_ndax, self).describe(), {
             'id': 'ob_ndax',
+            'name': 'NDAX',
+            'certified': False,
+            'urls': {
+            },
             'has': {
                 'CORS': None,
                 'spot': True,

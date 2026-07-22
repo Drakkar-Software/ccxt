@@ -7,6 +7,10 @@ import type { Dict, Market, Str, Ticker } from './base/types.js';
 
 //  ---------------------------------------------------------------------------
 
+/**
+ * @class ob_kraken
+ * @augments kraken
+ */
 export default class ob_kraken extends kraken {
     describe (): any {
         return this.deepExtend (super.describe (), {

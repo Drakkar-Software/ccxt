@@ -13,6 +13,10 @@ class ob_wizardswap(wizardswap, ImplicitAPI):
     def describe(self) -> Any:
         return self.deep_extend(super(ob_wizardswap, self).describe(), {
             'id': 'ob_wizardswap',
+            'name': 'WizardSwap',
+            'certified': False,
+            'urls': {
+            },
             'has': {
                 'CORS': None,
                 'spot': True,

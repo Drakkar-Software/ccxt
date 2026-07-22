@@ -14,6 +14,10 @@ class ob_bitget(bitget, ImplicitAPI):
     def describe(self) -> Any:
         return self.deep_extend(super(ob_bitget, self).describe(), {
             'id': 'ob_bitget',
+            'name': 'Bitget',
+            'certified': False,
+            'urls': {
+            },
             'has': {
                 'CORS': None,
                 'spot': True,
@@ -41,6 +45,7 @@ class ob_bitget(bitget, ImplicitAPI):
                     'fixMarketStatus': True,
                     'removeMarketStatusPriceLimits': True,
                     'enableSpotBuyMarketWithCost': True,
+                    'hasBroker': True,
                 },
             },
         })

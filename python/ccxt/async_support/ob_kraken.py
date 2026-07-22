@@ -55,7 +55,7 @@ class ob_kraken(kraken, ImplicitAPI):
             response = await self.privatePostGetApiKeyInfo(params)
             result = self.safe_dict(response, 'result', {})
             permissions = self.safe_list(result, 'permissions', [])
-            rights: List[str] = []
+            rights = []
             readingPermissions = ['query-funds', 'query-open-trades', 'query-closed-trades', 'query-ledger', 'export-data', 'create-ws-token']
             tradingPermissions = ['modify-trades', 'close-trades']
             withdrawalPermissions = ['withdraw-funds', 'add-withdraw-address', 'update-withdraw-address']

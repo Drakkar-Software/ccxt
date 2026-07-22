@@ -5,6 +5,10 @@ import coingecko from './coingecko.js';
 
 //  ---------------------------------------------------------------------------
 
+/**
+ * @class ob_coingecko
+ * @augments coingecko
+ */
 export default class ob_coingecko extends coingecko {
     describe (): any {
         return this.deepExtend (super.describe (), {

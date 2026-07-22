@@ -13,6 +13,10 @@ class ob_bitmex(bitmex, ImplicitAPI):
     def describe(self) -> Any:
         return self.deep_extend(super(ob_bitmex, self).describe(), {
             'id': 'ob_bitmex',
+            'name': 'BitMEX',
+            'certified': False,
+            'urls': {
+            },
             'has': {
                 'CORS': None,
                 'spot': True,

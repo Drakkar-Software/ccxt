@@ -13,6 +13,10 @@ class ob_bitso(bitso, ImplicitAPI):
     def describe(self) -> Any:
         return self.deep_extend(super(ob_bitso, self).describe(), {
             'id': 'ob_bitso',
+            'name': 'Bitso',
+            'certified': False,
+            'urls': {
+            },
             'has': {
                 'CORS': None,
                 'spot': True,

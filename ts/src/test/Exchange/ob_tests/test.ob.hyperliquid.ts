@@ -90,20 +90,26 @@ async function testObHyperliquid () {
             ex.approveBuilderFee = origApprove;
         }
     }
-    // handleBuilderFeeApproval: skip when builderFee is disabled
+    // handleBuilderFeeApproval: still approves at 0% when builderFee is disabled (stats attribution only)
     {
         const ex = new ccxt.ob_hyperliquid ();
         ex.options['builderFee'] = false;
+        let capturedBuilder: string | undefined = undefined;
+        let capturedFeeRate: string | undefined = undefined;
         let approveCalls = 0;
         const origApprove = ex.approveBuilderFee;
-        ex.approveBuilderFee = async () => {
+        ex.approveBuilderFee = async (builder: string, maxFeeRate: string) => {
             approveCalls++;
+            capturedBuilder = builder;
+            capturedFeeRate = maxFeeRate;
             return { 'status': 'ok' };
         };
         try {
             await ex.handleBuilderFeeApproval ();
-            assert.strictEqual (approveCalls, 0);
-            assert.notStrictEqual (ex.options['approvedBuilderFee'], true);
+            assert.strictEqual (approveCalls, 1);
+            assert.strictEqual (capturedBuilder, OB_BUILDER);
+            assert.strictEqual (capturedFeeRate, '0%');
+            assert.strictEqual (ex.options['approvedBuilderFee'], true);
         } finally {
             ex.approveBuilderFee = origApprove;
         }
@@ -157,6 +163,39 @@ async function testObHyperliquid () {
             const builder = request['action']['builder'];
             assert.strictEqual (builder['b'], OB_BUILDER_LOWER);
             assert.strictEqual (builder['f'], 10);
+        } finally {
+            ex.checkRequiredCredentials = origCheckCreds;
+            ex.market = origMarket;
+            ex.priceToPrecision = origPriceToPrecision;
+            ex.amountToPrecision = origAmountToPrecision;
+            ex.signL1Action = origSignL1;
+        }
+    }
+    // createOrdersRequest: attaches builder with f=0 when builderFee is disabled
+    {
+        const ex = new ccxt.ob_hyperliquid ();
+        ex.options['approvedBuilderFee'] = true;
+        ex.options['builderFee'] = false;
+        const origCheckCreds = ex.checkRequiredCredentials;
+        const origMarket = ex.market;
+        const origPriceToPrecision = ex.priceToPrecision;
+        const origAmountToPrecision = ex.amountToPrecision;
+        const origSignL1 = ex.signL1Action;
+        ex.checkRequiredCredentials = () => true;
+        ex.market = ((symbol: string) => ({
+            'symbol': symbol,
+            'baseId': '1',
+        })) as typeof ex.market;
+        ex.priceToPrecision = ((_symbol: string, price: string) => price) as typeof ex.priceToPrecision;
+        ex.amountToPrecision = ((_symbol: string, amount: string) => amount) as typeof ex.amountToPrecision;
+        ex.signL1Action = () => ({ 'r': '0x1', 's': '0x2', 'v': 27 });
+        try {
+            const request = ex.createOrdersRequest ([
+                { 'symbol': 'ETH/USDC', 'type': 'limit', 'side': 'buy', 'amount': '1', 'price': '100' },
+            ]);
+            const builder = request['action']['builder'];
+            assert.strictEqual (builder['b'], OB_BUILDER_LOWER);
+            assert.strictEqual (builder['f'], 0);
         } finally {
             ex.checkRequiredCredentials = origCheckCreds;
             ex.market = origMarket;

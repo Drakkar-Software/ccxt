@@ -8951,16 +8951,6 @@ export class BaseExchange {
         return rights;
     }
 
-    async obFetchPermissionsImaginaryCancel (orderId: Str, symbol: Str, params = {}, authPermissionMatch: Str = 'either'): Promise<string[]> {
-        const rights: string[] = [ 'reading' ];
-        try {
-            await this.cancelOrder (orderId, symbol, params);
-            return rights;
-        } catch (e) {
-            return this.obResolveRightsFromImaginaryCancelCatch (e, rights, authPermissionMatch);
-        }
-    }
-
     obIsAuthenticatedRequest (url: Str, method: Str, headers: Dict, body, probe: Str, probeParams: Dict = {}): Bool {
         if (probe === 'urlBodySignature') {
             const needle = ('needle' in probeParams) ? probeParams['needle'] : 'signature=';
@@ -9897,6 +9887,16 @@ export default class Exchange extends BaseExchange {
 
     async cancelOrder (id: string, symbol: Str = undefined, params = {}): Promise<Order> {
         throw new NotSupported (this.id + ' cancelOrder() is not supported yet');
+    }
+
+    async obFetchPermissionsImaginaryCancel (orderId: Str, symbol: Str, params = {}, authPermissionMatch: Str = 'either'): Promise<string[]> {
+        const rights: string[] = [ 'reading' ];
+        try {
+            await this.cancelOrder (orderId, symbol, params);
+            return rights;
+        } catch (e) {
+            return this.obResolveRightsFromImaginaryCancelCatch (e, rights, authPermissionMatch);
+        }
     }
 
     /**

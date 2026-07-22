@@ -5,6 +5,10 @@ import cryptocom from './cryptocom.js';
 
 //  ---------------------------------------------------------------------------
 
+/**
+ * @class ob_cryptocom
+ * @augments cryptocom
+ */
 export default class ob_cryptocom extends cryptocom {
     describe (): any {
         return this.deepExtend (super.describe (), {

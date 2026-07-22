@@ -7,6 +7,10 @@ import type { Bool, Dict, Market, Order, Str } from './base/types.js';
 
 //  ---------------------------------------------------------------------------
 
+/**
+ * @class ob_myokx
+ * @augments myokx
+ */
 export default class ob_myokx extends myokx {
     describe (): any {
         return this.deepExtend (super.describe (), {
