@@ -3,10 +3,11 @@ name: OB Release workflow
 on:
   workflow_dispatch:
     inputs:
-      example_input:
-        description: 'An example input value'
+      skip_request_tests:
+        description: 'Skip request and response tests'
         required: false
-        default: 'default-value'
+        type: boolean
+        default: false
   # workflow_dispatch:
   # push:
   #   branches: [ main, master ]
@@ -67,8 +68,10 @@ jobs:
       - name: Id tests
         run: npm run id-tests-js-py
       - name: Request tests
+        if: ${{ !inputs.skip_request_tests }}
         run: npm run request-tests-js-py
       - name: Response tests
+        if: ${{ !inputs.skip_request_tests }}
         run: npm run response-tests-js-py
       - name: CommonJs tests
         run: npm run commonjs-test
