@@ -7356,12 +7356,57 @@ export default class Exchange {
         marketStatus['precision']['amount'] = this.obPrecisionStepToDigitCount (floatSize);
     }
 
+    obIsMarketStatusLimitValid (value: Num, zeroValid: boolean = false): boolean {
+        if (!this.obIsStrictFiniteNumber (value)) {
+            return false;
+        }
+        return zeroValid ? value >= 0 : value > 0;
+    }
+
+    obComputeMarketStatusCostLimits (marketStatus: Dict) {
+        const limits = marketStatus['limits'];
+        if (!this.isDictionary (limits)) {
+            return;
+        }
+        const limitCost = limits['cost'];
+        const limitPrice = limits['price'];
+        const limitAmount = limits['amount'];
+        if (!this.isDictionary (limitCost) || !this.isDictionary (limitPrice) || !this.isDictionary (limitAmount)) {
+            return;
+        }
+        if (!this.obIsMarketStatusLimitValid (limitCost['max'])) {
+            if (this.obIsMarketStatusLimitValid (limitAmount['max']) && this.obIsMarketStatusLimitValid (limitPrice['max'])) {
+                limitCost['max'] = limitAmount['max'] * limitPrice['max'];
+            }
+        }
+        if (!this.obIsMarketStatusLimitValid (limitCost['min'])) {
+            if (this.obIsMarketStatusLimitValid (limitAmount['min']) && this.obIsMarketStatusLimitValid (limitPrice['min'])) {
+                limitCost['min'] = limitAmount['min'] * limitPrice['min'];
+            }
+        }
+    }
+
+    obEnsureMarketStatusMinCost (marketStatus: Dict) {
+        const limits = marketStatus['limits'];
+        if (!this.isDictionary (limits)) {
+            return;
+        }
+        const limitCost = limits['cost'];
+        if (!this.isDictionary (limitCost)) {
+            return;
+        }
+        if (!this.obIsMarketStatusLimitValid (limitCost['min'], true)) {
+            limitCost['min'] = 0;
+        }
+    }
+
     obGetFixedMarketStatus (symbol: string): Dict {
         const base = this.market (symbol) as Dict;
         const octobotCfg = this.safeDict (this.options, 'octobot', {});
         const fixMarketStatus = this.safeBool (octobotCfg, 'fixMarketStatus', false) === true;
         const removeMarketStatusPriceLimits = this.safeBool (octobotCfg, 'removeMarketStatusPriceLimits', false) === true;
         const adaptMarketStatusForContractSize = this.safeBool (octobotCfg, 'adaptMarketStatusForContractSize', false) === true;
+        const computeMarketStatusCostLimits = this.safeBool (octobotCfg, 'computeMarketStatusCostLimits', false) === true;
         // Step build: selective shallow copy so untouched nested refs stay shared (.info unchanged by reference swap on top clone only when we omit deep copy)
         const out = this.obObtainMutablePrecisionAndLimits (base);
         // Step coerce: unify whitelist fields to floats; non-convertible -> undefined (OctoBot _fix_typing parity + failures explicit)
@@ -7385,6 +7430,10 @@ export default class Exchange {
         if (adaptMarketStatusForContractSize) {
             this.obApplyAdaptMarketStatusForContractSize (out);
         }
+        if (computeMarketStatusCostLimits) {
+            this.obComputeMarketStatusCostLimits (out);
+        }
+        this.obEnsureMarketStatusMinCost (out);
         return out;
     }
 

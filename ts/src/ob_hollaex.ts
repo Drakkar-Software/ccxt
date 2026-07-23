@@ -50,6 +50,7 @@ export default class ob_hollaex extends hollaex {
                         },
                     },
                     'fixMarketStatus': true,
+                    'computeMarketStatusCostLimits': true,
                     'requireOrderFeesFromTrades': true,
                     'supportFetchingCancelledOrders': false,
                     'isSkippingEmptyCandlesInOhlcvFetch': true,
