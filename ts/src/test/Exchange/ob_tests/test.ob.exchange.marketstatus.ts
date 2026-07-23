@@ -106,7 +106,7 @@ async function testObExchangeMarketStatus () {
         assert.strictEqual (fixed['precision']['price'], 2);
         assert.strictEqual (fixed['precision']['amount'], 2);
     }
-    // coercion failure -> undefined
+    // coercion failure -> 0 for cost.min
     {
         const infoMarker = {};
         const m = syntheticMarket (infoMarker);
@@ -116,8 +116,62 @@ async function testObExchangeMarketStatus () {
             'options': {},
         });
         const fixed: any = ex.obGetFixedMarketStatus ('BTC/USDT');
-        assert.strictEqual (fixed['limits']['cost']['min'], undefined);
+        assert.strictEqual (fixed['limits']['cost']['min'], 0);
         assert.strictEqual (fixed['limits']['cost']['max'], 1000000);
+    }
+    // computeMarketStatusCostLimits: derive cost.min from amount.min * price.min
+    {
+        const infoMarker = {};
+        const m = syntheticMarket (infoMarker);
+        m['limits']['cost']['min'] = undefined;
+        const ex = new ccxt.Exchange ({
+            'id': 'ob_ms_test',
+            'markets': { 'BTC/USDT': m },
+            'options': {
+                'octobot': {
+                    'computeMarketStatusCostLimits': true,
+                },
+            },
+        });
+        const fixed: any = ex.obGetFixedMarketStatus ('BTC/USDT');
+        assert.strictEqual (fixed['limits']['cost']['min'], 100);
+        assert.strictEqual (fixed['limits']['cost']['max'], 1000000);
+    }
+    // computeMarketStatusCostLimits: fallback cost.min to 0 when amount/price mins missing
+    {
+        const infoMarker = {};
+        const m = syntheticMarket (infoMarker);
+        m['limits']['cost']['min'] = undefined;
+        m['limits']['amount']['min'] = undefined;
+        m['limits']['price']['min'] = undefined;
+        const ex = new ccxt.Exchange ({
+            'id': 'ob_ms_test',
+            'markets': { 'BTC/USDT': m },
+            'options': {
+                'octobot': {
+                    'computeMarketStatusCostLimits': true,
+                },
+            },
+        });
+        const fixed: any = ex.obGetFixedMarketStatus ('BTC/USDT');
+        assert.strictEqual (fixed['limits']['cost']['min'], 0);
+    }
+    // computeMarketStatusCostLimits disabled: cost.min still becomes 0 when absent
+    {
+        const infoMarker = {};
+        const m = syntheticMarket (infoMarker);
+        m['limits']['cost']['min'] = undefined;
+        const ex = new ccxt.Exchange ({
+            'id': 'ob_ms_test',
+            'markets': { 'BTC/USDT': m },
+            'options': {
+                'octobot': {
+                    'fixMarketStatus': true,
+                },
+            },
+        });
+        const fixed: any = ex.obGetFixedMarketStatus ('BTC/USDT');
+        assert.strictEqual (fixed['limits']['cost']['min'], 0);
     }
     // immutability: shared info ref; cached market precision/limits unchanged
     {

@@ -17,6 +17,10 @@ class ob_hollaex(hollaex, ImplicitAPI):
     def describe(self) -> Any:
         return self.deep_extend(super(ob_hollaex, self).describe(), {
             'id': 'ob_hollaex',
+            'name': 'HollaEx',
+            'certified': False,
+            'urls': {
+            },
             'exceptions': {
                 'broad': {
                     # hollaex_exchange.py quoted message examples
@@ -52,6 +56,7 @@ class ob_hollaex(hollaex, ImplicitAPI):
                         },
                     },
                     'fixMarketStatus': True,
+                    'computeMarketStatusCostLimits': True,
                     'requireOrderFeesFromTrades': True,
                     'supportFetchingCancelledOrders': False,
                     'isSkippingEmptyCandlesInOhlcvFetch': True,
