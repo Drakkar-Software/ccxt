@@ -12,6 +12,7 @@ interface Exchange {
     publicGetCoinsList (params?: {}): Promise<implicitReturnType>;
     publicGetCoinsMarkets (params?: {}): Promise<implicitReturnType>;
     publicGetCoinsId (params?: {}): Promise<implicitReturnType>;
+    publicGetOnchainNetworksNetworkTokensAddress (params?: {}): Promise<implicitReturnType>;
 }
 abstract class Exchange extends _Exchange {}
 

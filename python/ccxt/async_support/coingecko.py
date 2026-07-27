@@ -5,12 +5,14 @@
 
 from ccxt.async_support.base.exchange import Exchange
 from ccxt.abstract.coingecko import ImplicitAPI
-from ccxt.base.types import Any, Market, Strings, Ticker, Tickers
+from ccxt.base.types import Any, Market, Strings, Ticker, Tickers, MarketInterface
 from typing import List
 from ccxt.base.errors import ExchangeError
 from ccxt.base.errors import AuthenticationError
+from ccxt.base.errors import ArgumentsRequired
 from ccxt.base.errors import BadRequest
 from ccxt.base.errors import BadSymbol
+from ccxt.base.errors import NotSupported
 from ccxt.base.errors import RateLimitExceeded
 from ccxt.base.errors import NullResponse
 
@@ -18,6 +20,74 @@ from ccxt.base.errors import NullResponse
 class coingecko(Exchange, ImplicitAPI):
 
     def describe(self) -> Any:
+        networks: dict = {
+            'ETH': 'eth',
+            'ERC20': 'eth',
+            'BSC': 'bsc',
+            'BEP20': 'bsc',
+            'BASE': 'base',
+            'MATIC': 'polygon_pos',
+            'POLYGON': 'polygon_pos',
+            'ARBITRUM': 'arbitrum',
+            'OPTIMISM': 'optimism',
+            'AVAX': 'avax',
+            'AVAXC': 'avax',
+            'SOL': 'solana',
+            'FTM': 'ftm',
+            'ZKSYNC': 'zksync',
+            'ZKSYNCERA': 'zksync',
+            'LINEA': 'linea',
+            'BLAST': 'blast',
+            'MANTLE': 'mnt',
+            'MNT': 'mnt',
+            'SCROLL': 'scroll',
+            'CELO': 'celo',
+            'CRONOS': 'cro',
+            'GNOSIS': 'xdai',
+            'MOONBEAM': 'glmr',
+            'MOONRIVER': 'movr',
+            'AURORA': 'aurora',
+            'HARMONY': 'one',
+            'ZORA': 'zora',
+            'SONIC': 'sonic',
+            'BERACHAIN': 'berachain',
+            'UNICHAIN': 'unichain',
+            'WORLDCHAIN': 'world-chain',
+            'ABSTRACT': 'abstract',
+            'INK': 'ink',
+            'TRX': 'tron',
+            'TRC20': 'tron',
+            'TON': 'ton',
+            'SUI': 'sui',
+            'APT': 'aptos',
+            'SEI': 'sei',
+            'NEAR': 'near',
+            'OSMO': 'osmosis',
+            'KAVA': 'kava',
+            'PULSECHAIN': 'pulsechain',
+            'BOBA': 'boba',
+            'METIS': 'metis',
+            'MODE': 'mode',
+            'CORE': 'core',
+            'TAIKO': 'taiko',
+        }
+        networksById: dict = {}
+        networkKeys = list(networks.keys())
+        for networkIndex in range(0, len(networkKeys)):
+            networkCode = networkKeys[networkIndex]
+            networksById[networks[networkCode]] = networkCode
+        preferredNetworkCodeByChainId: dict = {
+            'eth': 'ETH',
+            'tron': 'TRX',
+            'bsc': 'BEP20',
+            'avax': 'AVAX',
+            'mnt': 'MANTLE',
+            'base': 'BASE',
+        }
+        preferredChainIds = list(preferredNetworkCodeByChainId.keys())
+        for chainIndex in range(0, len(preferredChainIds)):
+            chainId = preferredChainIds[chainIndex]
+            networksById[chainId] = preferredNetworkCodeByChainId[chainId]
         return self.deep_extend(super(coingecko, self).describe(), {
             'id': 'coingecko',
             'name': 'CoinGecko',
@@ -57,6 +127,7 @@ class coingecko(Exchange, ImplicitAPI):
                 'fetchTrades': False,
                 'fetchTradingFee': False,
                 'fetchTradingFees': False,
+                'obLoadMarketsForSymbols': True,
                 'transfer': False,
             },
             'timeframes': {
@@ -72,6 +143,7 @@ class coingecko(Exchange, ImplicitAPI):
                     'https://docs.coingecko.com/v3.0.1/reference/coins-list',
                     'https://docs.coingecko.com/v3.0.1/reference/coins-markets',
                     'https://docs.coingecko.com/v3.0.1/reference/coins-id',
+                    'https://docs.coingecko.com/demo/reference/token-data-contract-address',
                 ],
             },
             'api': {
@@ -80,6 +152,7 @@ class coingecko(Exchange, ImplicitAPI):
                         'coins/list',
                         'coins/markets',
                         'coins/{id}',
+                        'onchain/networks/{network}/tokens/{address}',
                     ],
                 },
             },
@@ -90,8 +163,495 @@ class coingecko(Exchange, ImplicitAPI):
             'options': {
                 'vsCurrency': 'usd',
                 'fetchMarketsIncludePlatform': True,
+                'defaultAPIKey': '',
+                'forceDefaultAPIKey': False,
+                'networks': networks,
+                'networksById': networksById,
             },
         })
+
+    def resolve_api_key(self):
+        if self.safe_bool(self.options, 'forceDefaultAPIKey', False):
+            return self.safe_string(self.options, 'defaultAPIKey')
+        if self.apiKey:
+            return self.apiKey
+        return self.safe_string(self.options, 'defaultAPIKey')
+
+    def normalize_token_address(self, address):
+        if address is None:
+            return None
+        return address.lower()
+
+    def is_token_address(self, value):
+        return(value is not None) and (len(value) > 5)
+
+    def get_trading_symbol_part(self, symbol: str) -> str:
+        separatorIndex = symbol.find('@')
+        if separatorIndex >= 0:
+            return symbol[0:separatorIndex]
+        return symbol
+
+    def is_onchain_symbol(self, symbol: str) -> bool:
+        return symbol.find('@') >= 0
+
+    def is_address_pair_symbol(self, symbol: str) -> bool:
+        tradingSymbol = self.get_trading_symbol_part(symbol)
+        parts = tradingSymbol.split('/')
+        if len(parts) != 2:
+            return False
+        basePart = self.safe_string(parts, 0)
+        quotePart = self.safe_string(parts, 1)
+        return self.is_token_address(basePart) and self.is_token_address(quotePart)
+
+    def is_single_token_onchain_symbol(self, symbol: str) -> bool:
+        if not self.is_onchain_symbol(symbol):
+            return False
+        if self.is_address_pair_symbol(symbol):
+            return False
+        tradingSymbol = self.get_trading_symbol_part(symbol)
+        parts = tradingSymbol.split('/')
+        if len(parts) != 2:
+            return False
+        basePart = self.safe_string(parts, 0)
+        quotePart = self.safe_string(parts, 1)
+        if not self.is_token_address(basePart):
+            return False
+        vsCurrency = self.safe_string(self.options, 'vsCurrency', 'usd').lower()
+        return quotePart.lower() == vsCurrency
+
+    def get_address_pair_symbol(self, baseAddress, quoteAddress, networkCode, dexCode):
+        suffix = '@' + networkCode
+        if dexCode is not None:
+            suffix = suffix + '!' + dexCode
+        return self.normalize_token_address(baseAddress) + '/' + self.normalize_token_address(quoteAddress) + suffix
+
+    def normalize_address_pair_symbol(self, symbol: str) -> str:
+        if not self.is_address_pair_symbol(symbol):
+            return symbol
+        parsed = self.ob_parse_dex_pair_symbol_input(symbol)
+        tradingSymbol = self.safe_string(parsed, 'tradingSymbol')
+        networkCode = self.safe_string(parsed, 'networkCode')
+        dexCode = self.safe_string(parsed, 'dexCode')
+        parts = tradingSymbol.split('/')
+        baseAddress = self.safe_string(parts, 0)
+        quoteAddress = self.safe_string(parts, 1)
+        if networkCode is None:
+            return self.normalize_token_address(baseAddress) + '/' + self.normalize_token_address(quoteAddress)
+        return self.get_address_pair_symbol(baseAddress, quoteAddress, networkCode, dexCode)
+
+    def assert_supported_dex_code(self, dexCode):
+        if (dexCode is not None) and (dexCode != '*'):
+            raise NotSupported(self.id + ' does not support dex filter ' + dexCode + '; only wildcard * is allowed')
+
+    def get_effective_dex_code(self, dexCode):
+        return dexCode if (dexCode is not None) else '*'
+
+    def require_network_code(self, networkCode, symbol: str):
+        if (networkCode is None) or (networkCode == ''):
+            raise BadSymbol(self.id + ' symbol must include a network suffix using @ for ' + symbol)
+
+    def market_with_requested_symbol(self, market: Market, requestedSymbol: str) -> MarketInterface:
+        marketSymbol = self.safe_string(market, 'symbol')
+        if marketSymbol == requestedSymbol:
+            return market
+        return self.extend(market, {'symbol': requestedSymbol})
+
+    def market(self, symbol: str) -> MarketInterface:
+        if self.markets is None:
+            raise ExchangeError(self.id + ' markets not loaded')
+        if symbol in self.markets:
+            return self.market_with_requested_symbol(self.markets[symbol], symbol)
+        normalizedSymbol = self.normalize_address_pair_symbol(symbol)
+        if (normalizedSymbol != symbol) and (normalizedSymbol in self.markets):
+            return self.market_with_requested_symbol(self.markets[normalizedSymbol], symbol)
+        return super(coingecko, self).market(symbol)
+
+    def build_market_symbol(self, tradingSymbol: str, networkCode: str, dexCode) -> str:
+        if dexCode is not None:
+            return tradingSymbol + '@' + networkCode + '!' + dexCode
+        return tradingSymbol + '@' + networkCode
+
+    def build_market_id(self, networkCode: str, dexCode, chainSlug: str, baseId: str, quoteId: str) -> str:
+        unifiedDexCode = dexCode if (dexCode is not None) else ''
+        return networkCode + ':' + unifiedDexCode + ':' + chainSlug + ':' + baseId + ':' + quoteId
+
+    def parse_market_id(self, marketId: str) -> dict:
+        parts = marketId.split(':')
+        return {
+            'networkCode': self.safe_string(parts, 0),
+            'dexCode': self.safe_string(parts, 1),
+            'chainSlug': self.safe_string(parts, 2),
+            'baseId': self.safe_string(parts, 3),
+            'quoteId': self.safe_string(parts, 4),
+        }
+
+    def get_chain_slug_from_market(self, market: Market):
+        marketId = self.safe_string(market, 'id')
+        if marketId is not None:
+            parsedMarketId = self.parse_market_id(marketId)
+            chainSlug = self.safe_string(parsedMarketId, 'chainSlug')
+            if chainSlug is not None:
+                return chainSlug
+        symbol = self.safe_string(market, 'symbol')
+        parsed = self.ob_parse_network_dex_symbol(symbol)
+        networkCode = self.safe_string(parsed, 'networkCode')
+        return self.network_code_to_id(networkCode)
+
+    def parse_synthetic_market(self, tradingSymbol: str, networkCode: str, dexCode, baseId: str, quoteId: str, base: str = None, quote: str = None) -> Market:
+        chainSlug = self.network_code_to_id(networkCode)
+        effectiveDexCode = self.get_effective_dex_code(dexCode)
+        symbol = self.build_market_symbol(tradingSymbol, networkCode, dexCode)
+        id = self.build_market_id(networkCode, effectiveDexCode, chainSlug, baseId, quoteId)
+        effectiveBase = base if (base is not None) else baseId
+        effectiveQuote = quote if (quote is not None) else quoteId
+        return {
+            'id': id,
+            'symbol': symbol,
+            'base': effectiveBase,
+            'quote': effectiveQuote,
+            'settle': None,
+            'baseId': baseId,
+            'quoteId': quoteId,
+            'settleId': None,
+            'type': 'spot',
+            'spot': True,
+            'margin': False,
+            'swap': False,
+            'future': False,
+            'option': False,
+            'active': True,
+            'contract': False,
+            'linear': None,
+            'inverse': None,
+            'contractSize': None,
+            'expiry': None,
+            'expiryDatetime': None,
+            'strike': None,
+            'optionType': None,
+            'taker': None,
+            'maker': None,
+            'percentage': None,
+            'tierBased': None,
+            'feeSide': None,
+            'precision': {
+                'amount': None,
+                'price': None,
+            },
+            'limits': {
+                'leverage': {'min': None, 'max': None},
+                'amount': {'min': None, 'max': None},
+                'price': {'min': None, 'max': None},
+                'cost': {'min': None, 'max': None},
+            },
+            'created': None,
+            'info': {},
+        }
+
+    def parse_synthetic_market_from_symbol(self, symbol: str, base: str = None, quote: str = None) -> Market:
+        parsed = self.ob_parse_dex_pair_symbol_input(symbol)
+        tradingSymbol = self.safe_string(parsed, 'tradingSymbol')
+        networkCode = self.safe_string(parsed, 'networkCode')
+        dexCode = self.safe_string(parsed, 'dexCode')
+        self.require_network_code(networkCode, symbol)
+        self.assert_supported_dex_code(dexCode)
+        parts = tradingSymbol.split('/')
+        basePart = self.normalize_token_address(self.safe_string(parts, 0))
+        quotePart = self.safe_string(parts, 1)
+        if self.is_address_pair_symbol(symbol):
+            quoteId = self.normalize_token_address(quotePart)
+            return self.parse_synthetic_market(tradingSymbol, networkCode, dexCode, basePart, quoteId, base, quote)
+        if self.is_single_token_onchain_symbol(symbol):
+            vsCurrency = self.safe_string(self.options, 'vsCurrency', 'usd').lower()
+            effectiveQuote = quote if (quote is not None) else self.safe_currency_code(vsCurrency)
+            return self.parse_synthetic_market(tradingSymbol, networkCode, dexCode, basePart, vsCurrency, base, effectiveQuote)
+        raise BadSymbol(self.id + ' onchain symbol must be an address pair or token/' + self.safe_string(self.options, 'vsCurrency', 'usd') + ' for ' + symbol)
+
+    def index_address_pair_market_keys(self):
+        marketsList = list(self.markets.values())
+        for marketIndex in range(0, len(marketsList)):
+            market = marketsList[marketIndex]
+            unifiedSymbol = self.safe_string(market, 'symbol')
+            if unifiedSymbol is None:
+                continue
+            if unifiedSymbol.find('@') < 0:
+                continue
+            parsed = self.ob_parse_network_dex_symbol(unifiedSymbol)
+            networkCode = self.safe_string(parsed, 'networkCode')
+            dexCode = self.safe_string(parsed, 'dexCode')
+            effectiveDexCode = self.get_effective_dex_code(dexCode)
+            baseId = self.safe_string(market, 'baseId')
+            quoteId = self.safe_string(market, 'quoteId')
+            base = self.safe_string(market, 'base')
+            quote = self.safe_string(market, 'quote')
+            if (baseId is not None) and (quoteId is not None) and self.is_address_pair_symbol(unifiedSymbol):
+                addressAliasSymbol = self.get_address_pair_symbol(baseId, quoteId, networkCode, dexCode)
+                if (addressAliasSymbol != unifiedSymbol) and not (addressAliasSymbol in self.markets):
+                    self.markets[addressAliasSymbol] = market
+                if effectiveDexCode == '*':
+                    tradingSymbol = self.safe_string(parsed, 'tradingSymbol')
+                    if tradingSymbol is not None:
+                        noDexTradingSymbolAlias = self.build_market_symbol(tradingSymbol, networkCode, None)
+                        if (noDexTradingSymbolAlias != unifiedSymbol) and not (noDexTradingSymbolAlias in self.markets):
+                            self.markets[noDexTradingSymbolAlias] = market
+                        wildcardDexTradingSymbolAlias = self.build_market_symbol(tradingSymbol, networkCode, '*')
+                        if (wildcardDexTradingSymbolAlias != unifiedSymbol) and not (wildcardDexTradingSymbolAlias in self.markets):
+                            self.markets[wildcardDexTradingSymbolAlias] = market
+                    noDexAddressAliasSymbol = self.get_address_pair_symbol(baseId, quoteId, networkCode, None)
+                    if (noDexAddressAliasSymbol != unifiedSymbol) and not (noDexAddressAliasSymbol in self.markets):
+                        self.markets[noDexAddressAliasSymbol] = market
+                    wildcardDexAddressAliasSymbol = self.get_address_pair_symbol(baseId, quoteId, networkCode, '*')
+                    if (wildcardDexAddressAliasSymbol != unifiedSymbol) and not (wildcardDexAddressAliasSymbol in self.markets):
+                        self.markets[wildcardDexAddressAliasSymbol] = market
+            if (base is not None) and (quote is not None) and self.is_address_pair_symbol(unifiedSymbol):
+                tickerAliasSymbol = self.build_market_symbol(base + '/' + quote, networkCode, dexCode)
+                if (tickerAliasSymbol != unifiedSymbol) and not (tickerAliasSymbol in self.markets):
+                    self.markets[tickerAliasSymbol] = market
+                if effectiveDexCode == '*':
+                    noDexTickerAliasSymbol = self.build_market_symbol(base + '/' + quote, networkCode, None)
+                    if (noDexTickerAliasSymbol != unifiedSymbol) and not (noDexTickerAliasSymbol in self.markets):
+                        self.markets[noDexTickerAliasSymbol] = market
+                    wildcardDexTickerAliasSymbol = self.build_market_symbol(base + '/' + quote, networkCode, '*')
+                    if (wildcardDexTickerAliasSymbol != unifiedSymbol) and not (wildcardDexTickerAliasSymbol in self.markets):
+                        self.markets[wildcardDexTickerAliasSymbol] = market
+        unifiedSymbols: dict = {}
+        for marketIndex in range(0, len(marketsList)):
+            unifiedSymbol = self.safe_string(marketsList[marketIndex], 'symbol')
+            if unifiedSymbol is not None:
+                unifiedSymbols[unifiedSymbol] = True
+        self.symbols = list(self.keysort(unifiedSymbols).keys())
+
+    def set_markets(self, markets, currencies=None):
+        super(coingecko, self).set_markets(markets, currencies)
+        self.index_address_pair_market_keys()
+        return self.markets
+
+    def merge_markets(self, newMarkets: List[Market]):
+        existingMarkets = [] if (self.markets is None) else list(self.markets.values())
+        combined = self.array_concat(existingMarkets, newMarkets)
+        self.set_markets(combined)
+
+    def is_market_symbol_cached(self, symbol: str) -> bool:
+        if self.markets is None:
+            return False
+        normalizedSymbol = self.normalize_address_pair_symbol(symbol)
+        return(symbol in self.markets) or ((normalizedSymbol != symbol) and (normalizedSymbol in self.markets))
+
+    def remove_cached_market_symbol(self, symbol: str):
+        if self.markets is None:
+            return
+        if symbol in self.markets:
+            del self.markets[symbol]
+        normalizedSymbol = self.normalize_address_pair_symbol(symbol)
+        if (normalizedSymbol != symbol) and (normalizedSymbol in self.markets):
+            del self.markets[normalizedSymbol]
+
+    def ob_parse_dex_pair_symbol_input(self, symbol: str) -> dict:
+        if symbol.find('@') >= 0:
+            parsed = self.ob_parse_network_dex_symbol(symbol)
+            dexCode = self.safe_string(parsed, 'dexCode')
+            self.assert_supported_dex_code(dexCode)
+            return parsed
+        raise BadSymbol(self.id + ' symbol must include a network suffix using @ for ' + symbol)
+
+    async def resolve_markets(self, symbols: List[str], params={}) -> dict:
+        marketsBySymbol: dict = {}
+        pendingSymbols = []
+        marketsDict = {} if (self.markets is None) else self.markets
+        for symbolIndex in range(0, len(symbols)):
+            symbol = symbols[symbolIndex]
+            normalizedSymbol = self.normalize_address_pair_symbol(symbol)
+            if (symbol in marketsDict) or ((normalizedSymbol != symbol) and (normalizedSymbol in marketsDict)):
+                marketsBySymbol[symbol] = self.market(symbol)
+                continue
+            pendingSymbols.append(symbol)
+        newMarkets = []
+        for pendingIndex in range(0, len(pendingSymbols)):
+            symbol = pendingSymbols[pendingIndex]
+            market = self.parse_synthetic_market_from_symbol(symbol)
+            newMarkets.append(market)
+            marketsBySymbol[symbol] = market
+        if len(newMarkets) > 0:
+            self.merge_markets(newMarkets)
+            for pendingIndex in range(0, len(pendingSymbols)):
+                symbol = pendingSymbols[pendingIndex]
+                marketsBySymbol[symbol] = self.market(symbol)
+        return {
+            'marketsBySymbol': marketsBySymbol,
+        }
+
+    def build_onchain_token_key(self, networkId: str, address: str) -> str:
+        return networkId + ':' + self.normalize_token_address(address)
+
+    def get_onchain_token_addresses_for_market(self, market: Market) -> List[str]:
+        chainSlug = self.get_chain_slug_from_market(market)
+        baseId = self.safe_string(market, 'baseId')
+        quoteId = self.safe_string(market, 'quoteId')
+        addresses = []
+        if (chainSlug is not None) and (baseId is not None):
+            addresses.append(self.build_onchain_token_key(chainSlug, baseId))
+        if (chainSlug is not None) and (quoteId is not None) and self.is_token_address(quoteId):
+            addresses.append(self.build_onchain_token_key(chainSlug, quoteId))
+        return addresses
+
+    async def fetch_onchain_token(self, networkId: str, address: str, params={}) -> dict:
+        request: dict = {
+            'network': networkId,
+            'address': self.normalize_token_address(address),
+        }
+        response = await self.publicGetOnchainNetworksNetworkTokensAddress(self.extend(request, params))
+        return self.parse_onchain_token_attributes(response)
+
+    def parse_onchain_token_attributes(self, response: dict) -> dict:
+        data = self.safe_dict(response, 'data', {})
+        attributes = self.safe_dict(data, 'attributes', {})
+        volumeUsd = self.safe_dict(attributes, 'volume_usd', {})
+        return {
+            'address': self.safe_string(attributes, 'address'),
+            'name': self.safe_string(attributes, 'name'),
+            'symbol': self.safe_string(attributes, 'symbol'),
+            'priceUsd': self.safe_string(attributes, 'price_usd'),
+            'imageUrl': self.safe_string(attributes, 'image_url'),
+            'lastTradeTimestamp': self.safe_integer(attributes, 'last_trade_timestamp'),
+            'volumeUsdH24': self.safe_string(volumeUsd, 'h24'),
+            'info': response,
+        }
+
+    async def fetch_onchain_tokens_for_markets(self, markets: List[Market], params={}) -> dict:
+        tokenKeys: dict = {}
+        for marketIndex in range(0, len(markets)):
+            market = markets[marketIndex]
+            chainSlug = self.get_chain_slug_from_market(market)
+            baseId = self.safe_string(market, 'baseId')
+            quoteId = self.safe_string(market, 'quoteId')
+            if (chainSlug is not None) and (baseId is not None):
+                tokenKeys[self.build_onchain_token_key(chainSlug, baseId)] = {'networkId': chainSlug, 'address': baseId}
+            if (chainSlug is not None) and (quoteId is not None) and self.is_token_address(quoteId):
+                tokenKeys[self.build_onchain_token_key(chainSlug, quoteId)] = {'networkId': chainSlug, 'address': quoteId}
+        uniqueKeys = list(tokenKeys.keys())
+        result: dict = {}
+        for keyIndex in range(0, len(uniqueKeys)):
+            tokenKey = uniqueKeys[keyIndex]
+            tokenRequest = tokenKeys[tokenKey]
+            tokenData = await self.fetch_onchain_token(tokenRequest['networkId'], tokenRequest['address'], params)
+            result[tokenKey] = tokenData
+        return result
+
+    def get_usd_price_from_onchain_token(self, tokenDataByAddress: dict, tokenKey: str) -> float:
+        tokenData = self.safe_dict(tokenDataByAddress, tokenKey)
+        priceUsd = self.safe_number(tokenData, 'priceUsd')
+        if priceUsd is None:
+            raise BadSymbol(self.id + ' no USD price for onchain token ' + tokenKey)
+        return priceUsd
+
+    def compute_pair_price(self, baseUsd: float, quoteUsd: float) -> float:
+        if (baseUsd is None) or (quoteUsd is None) or (quoteUsd == 0):
+            raise BadSymbol(self.id + ' cannot compute pair price from USD prices')
+        return baseUsd / quoteUsd
+
+    def enrich_market_from_onchain_tokens(self, market: Market, tokenDataByAddress: dict) -> Market:
+        chainSlug = self.get_chain_slug_from_market(market)
+        baseId = self.safe_string(market, 'baseId')
+        quoteId = self.safe_string(market, 'quoteId')
+        baseKey = self.build_onchain_token_key(chainSlug, baseId)
+        baseTokenData = self.safe_dict(tokenDataByAddress, baseKey, {})
+        baseSymbol = self.safe_currency_code(self.safe_string(baseTokenData, 'symbol'))
+        if (baseSymbol is not None) and (baseSymbol != market['base']):
+            market['base'] = baseSymbol
+        if self.is_token_address(quoteId):
+            quoteKey = self.build_onchain_token_key(chainSlug, quoteId)
+            quoteTokenData = self.safe_dict(tokenDataByAddress, quoteKey, {})
+            quoteSymbol = self.safe_currency_code(self.safe_string(quoteTokenData, 'symbol'))
+            if (quoteSymbol is not None) and (quoteSymbol != market['quote']):
+                market['quote'] = quoteSymbol
+        return market
+
+    def parse_onchain_ticker(self, market: Market, last: str, baseTokenData: dict, quoteTokenData: dict = None) -> Ticker:
+        symbol = self.safe_string(market, 'symbol')
+        lastTradeTimestamp = self.safe_integer(baseTokenData, 'lastTradeTimestamp')
+        name = self.safe_string(baseTokenData, 'name')
+        imageUrl = self.safe_string(baseTokenData, 'imageUrl')
+        timestamp = None
+        datetime = None
+        if lastTradeTimestamp is not None:
+            timestamp = lastTradeTimestamp * 1000
+            datetime = self.iso8601(timestamp)
+        return self.safe_ticker({
+            'symbol': symbol,
+            'timestamp': timestamp,
+            'datetime': datetime,
+            'high': None,
+            'low': None,
+            'bid': last,
+            'bidVolume': None,
+            'ask': last,
+            'askVolume': None,
+            'vwap': None,
+            'open': None,
+            'close': last,
+            'last': last,
+            'previousClose': None,
+            'change': None,
+            'percentage': None,
+            'average': None,
+            'baseVolume': None,
+            'quoteVolume': None,
+            'extra': {
+                'name': name,
+                'logoUrl': imageUrl,
+            },
+            'info': {
+                'baseToken': baseTokenData,
+                'quoteToken': quoteTokenData,
+            },
+        }, market)
+
+    def build_onchain_ticker(self, market: Market, tokenDataByAddress: dict) -> Ticker:
+        chainSlug = self.get_chain_slug_from_market(market)
+        baseId = self.safe_string(market, 'baseId')
+        quoteId = self.safe_string(market, 'quoteId')
+        baseKey = self.build_onchain_token_key(chainSlug, baseId)
+        baseTokenData = self.safe_dict(tokenDataByAddress, baseKey, {})
+        last: str
+        quoteTokenData = None
+        if self.is_token_address(quoteId):
+            quoteKey = self.build_onchain_token_key(chainSlug, quoteId)
+            quoteTokenData = self.safe_dict(tokenDataByAddress, quoteKey, {})
+            baseUsd = self.get_usd_price_from_onchain_token(tokenDataByAddress, baseKey)
+            quoteUsd = self.get_usd_price_from_onchain_token(tokenDataByAddress, quoteKey)
+            pairPrice = self.compute_pair_price(baseUsd, quoteUsd)
+            last = self.number_to_string(pairPrice)
+        else:
+            last = self.safe_string(baseTokenData, 'priceUsd')
+            if last is None:
+                raise BadSymbol(self.id + ' no USD price for onchain token ' + baseKey)
+        self.enrich_market_from_onchain_tokens(market, tokenDataByAddress)
+        return self.parse_onchain_ticker(market, last, baseTokenData, quoteTokenData)
+
+    async def fetch_onchain_ticker(self, symbol: str, params={}) -> Ticker:
+        resolveResult = await self.resolve_markets([symbol], params)
+        market = resolveResult['marketsBySymbol'][symbol]
+        tokenDataByAddress = await self.fetch_onchain_tokens_for_markets([market], params)
+        ticker = self.build_onchain_ticker(market, tokenDataByAddress)
+        ticker['symbol'] = symbol
+        return ticker
+
+    async def fetch_onchain_tickers(self, symbols: List[str], params={}) -> Tickers:
+        symbolsLength = len(symbols)
+        resolveResult = await self.resolve_markets(symbols, params)
+        marketsBySymbol = resolveResult['marketsBySymbol']
+        markets = []
+        for symbolIndex in range(0, symbolsLength):
+            symbol = symbols[symbolIndex]
+            markets.append(self.safe_value(marketsBySymbol, symbol))
+        tokenDataByAddress = await self.fetch_onchain_tokens_for_markets(markets, params)
+        result: dict = {}
+        for symbolIndex in range(0, symbolsLength):
+            symbol = symbols[symbolIndex]
+            market = self.safe_value(marketsBySymbol, symbol)
+            ticker = self.build_onchain_ticker(market, tokenDataByAddress)
+            ticker['symbol'] = symbol
+            result[symbol] = ticker
+        return result
 
     async def fetch_markets(self, params={}) -> List[Market]:
         """
@@ -175,6 +735,7 @@ class coingecko(Exchange, ImplicitAPI):
         fetches a price ticker for a market
 
         https://docs.coingecko.com/v3.0.1/reference/coins-markets
+        https://docs.coingecko.com/demo/reference/token-data-contract-address
 
         :param str symbol: unified market symbol
         :param dict [params]: extra parameters specific to the exchange API endpoint
@@ -182,6 +743,8 @@ class coingecko(Exchange, ImplicitAPI):
         :returns dict: a `ticker structure <https://docs.ccxt.com/?id=ticker-structure>`
         """
         await self.load_markets()
+        if self.is_onchain_symbol(symbol):
+            return await self.fetch_onchain_ticker(symbol, params)
         market = self.market(symbol)
         vsCurrency = self.safe_string_2(params, 'vs_currency', 'vsCurrency', self.safe_string(self.options, 'vsCurrency', 'usd')).lower()
         params = self.omit(params, ['vs_currency', 'vsCurrency'])
@@ -216,6 +779,7 @@ class coingecko(Exchange, ImplicitAPI):
         fetches price tickers for the requested symbols, or the first page of top markets when no symbols are provided
 
         https://docs.coingecko.com/v3.0.1/reference/coins-markets
+        https://docs.coingecko.com/demo/reference/token-data-contract-address
 
         :param str[] [symbols]: unified market symbols
         :param dict [params]: extra parameters specific to the exchange API endpoint
@@ -225,13 +789,25 @@ class coingecko(Exchange, ImplicitAPI):
         :returns dict: a dictionary of `ticker structures <https://docs.ccxt.com/?id=ticker-structure>`
         """
         await self.load_markets()
+        symbolsLength = 0 if (symbols is None) else len(symbols)
+        onchainSymbols = []
+        coinIdSymbols = []
+        for symbolIndex in range(0, symbolsLength):
+            symbol = symbols[symbolIndex]
+            if self.is_onchain_symbol(symbol):
+                onchainSymbols.append(symbol)
+            else:
+                coinIdSymbols.append(symbol)
+        result: dict = {}
+        if len(onchainSymbols) > 0:
+            onchainTickers = await self.fetch_onchain_tickers(onchainSymbols, params)
+            result = self.extend(result, onchainTickers)
         vsCurrency = self.safe_string_2(params, 'vs_currency', 'vsCurrency', self.safe_string(self.options, 'vsCurrency', 'usd')).lower()
         maxBatchSize = 250
         page = self.safe_integer_2(params, 'page', None, 1)
         perPage = self.safe_integer_2(params, 'per_page', 'perPage', maxBatchSize)
         params = self.omit(params, ['vs_currency', 'vsCurrency', 'page', 'per_page', 'perPage'])
-        symbolsLength = 0 if (symbols is None) else len(symbols)
-        if symbolsLength == 0:
+        if (symbolsLength == 0) and (len(coinIdSymbols) == 0):
             request: dict = {
                 'vs_currency': vsCurrency,
                 'page': page,
@@ -239,25 +815,56 @@ class coingecko(Exchange, ImplicitAPI):
             }
             response = await self.publicGetCoinsMarkets(self.extend(request, params))
             return self.parse_tickers_from_markets_rows(response)
-        marketIds = []
-        marketByCoinId: dict = {}
-        for i in range(0, symbolsLength):
-            symbol = symbols[i]
-            market = self.market(symbol)
-            coinId = self.safe_string(market, 'baseId')
-            marketIds.append(coinId)
-            marketByCoinId[coinId] = market
-        result: dict = {}
-        for offset in range(0, len(marketIds)):
-            batch = marketIds[offset:offset + maxBatchSize]
-            request: dict = {
-                'vs_currency': vsCurrency,
-                'ids': ','.join(batch),
-            }
-            response = await self.publicGetCoinsMarkets(self.extend(request, params))
-            tickers = self.parse_tickers_from_markets_rows(response, marketByCoinId)
-            result = self.extend(result, tickers)
+        if len(coinIdSymbols) > 0:
+            marketIds = []
+            marketByCoinId: dict = {}
+            for coinSymbolIndex in range(0, len(coinIdSymbols)):
+                symbol = coinIdSymbols[coinSymbolIndex]
+                market = self.market(symbol)
+                coinId = self.safe_string(market, 'baseId')
+                marketIds.append(coinId)
+                marketByCoinId[coinId] = market
+            for offset in range(0, len(marketIds)):
+                batch = marketIds[offset:offset + maxBatchSize]
+                request: dict = {
+                    'vs_currency': vsCurrency,
+                    'ids': ','.join(batch),
+                }
+                response = await self.publicGetCoinsMarkets(self.extend(request, params))
+                tickers = self.parse_tickers_from_markets_rows(response, marketByCoinId)
+                result = self.extend(result, tickers)
         return result
+
+    async def ob_load_markets_for_symbols(self, symbols: List[str], reload=False, params={}) -> List[dict]:
+        """
+        lazily resolves and populates self.markets for the given onchain symbols
+
+        https://docs.coingecko.com/demo/reference/token-data-contract-address
+
+        :param str[] symbols: list of symbols with @network or @networknot * suffix
+        :param boolean reload: when True, re-fetch symbols even if already cached in self.markets
+        :param dict [params]: extra parameters specific to the exchange API endpoint
+        :returns dict[]: empty list; subclasses may return fixed market status structures
+        """
+        if symbols is None:
+            raise ArgumentsRequired(self.id + ' obLoadMarketsForSymbols() requires a non-empty symbols argument')
+        symbolsLength = len(symbols)
+        if symbolsLength == 0:
+            raise ArgumentsRequired(self.id + ' obLoadMarketsForSymbols() requires a non-empty symbols argument')
+        await self.load_markets()
+        symbolsToResolve = []
+        for symbolIndex in range(0, symbolsLength):
+            symbol = symbols[symbolIndex]
+            if not self.is_onchain_symbol(symbol):
+                continue
+            if reload:
+                self.remove_cached_market_symbol(symbol)
+                symbolsToResolve.append(symbol)
+            elif not self.is_market_symbol_cached(symbol):
+                symbolsToResolve.append(symbol)
+        if len(symbolsToResolve) > 0:
+            await self.resolve_markets(symbolsToResolve, params)
+        return []
 
     def parse_ticker(self, ticker: dict, market: Market = None) -> Ticker:
         marketDefined = (market is not None)
@@ -301,10 +908,11 @@ class coingecko(Exchange, ImplicitAPI):
         if method == 'GET':
             if query:
                 url += '?' + self.urlencode(query)
-        if (self.apiKey is not None) and (self.apiKey != ''):
+        apiKey = self.resolve_api_key()
+        if (apiKey is not None) and (apiKey != ''):
             if headers is None:
                 headers = {}
-            headers['x-cg-demo-api-key'] = self.apiKey
+            headers['x-cg-demo-api-key'] = apiKey
         return {'url': url, 'method': method, 'body': body, 'headers': headers}
 
     def handle_errors(self, httpCode: int, reason: str, url: str, method: str, headers: dict, body: str, response, requestHeaders, requestBody):
@@ -319,6 +927,8 @@ class coingecko(Exchange, ImplicitAPI):
             if errorCode == 10005 or errorCode == 429:
                 raise RateLimitExceeded(self.id + ' ' + errorMessage)
             if errorCode == 10002:
+                raise AuthenticationError(self.id + ' ' + errorMessage)
+            if errorCode == 401:
                 raise AuthenticationError(self.id + ' ' + errorMessage)
             raise ExchangeError(self.id + ' ' + body)
         if httpCode == 429:

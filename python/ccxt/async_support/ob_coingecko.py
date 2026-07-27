@@ -5,7 +5,8 @@
 
 from ccxt.async_support.coingecko import coingecko
 from ccxt.abstract.ob_coingecko import ImplicitAPI
-from ccxt.base.types import Any
+from ccxt.base.types import Any, Market, Ticker
+from typing import List
 
 
 class ob_coingecko(coingecko, ImplicitAPI):
@@ -37,6 +38,46 @@ class ob_coingecko(coingecko, ImplicitAPI):
                             'bundled_orders': {},
                         },
                     },
+                    'fixMarketStatus': True,
+                    'createOhlcvFromTickers': True,
+                    'supportsMarketsCache': False,
+                    'supportsAllSymbolsListing': True,
+                    'lazyLoadMarkets': True,
+                    'noVolumeInTicker': True,
                 },
             },
         })
+
+    def parse_ticker(self, ticker: dict, market: Market = None) -> Ticker:
+        parsed = super(ob_coingecko, self).parse_ticker(ticker, market)
+        if not self.safe_integer(parsed, 'timestamp'):
+            parsed['timestamp'] = self.milliseconds()
+            parsed['datetime'] = self.iso8601(parsed['timestamp'])
+        return parsed
+
+    def parse_onchain_ticker(self, market: Market, last: str, baseTokenData: dict, quoteTokenData: dict = None) -> Ticker:
+        parsed = super(ob_coingecko, self).parse_onchain_ticker(market, last, baseTokenData, quoteTokenData)
+        if not self.safe_integer(parsed, 'timestamp'):
+            parsed['timestamp'] = self.milliseconds()
+            parsed['datetime'] = self.iso8601(parsed['timestamp'])
+        return parsed
+
+    async def ob_load_markets_for_symbols(self, symbols: List[str], reload=False, params={}) -> List[dict]:
+        """
+        lazily loads and returns fixed market status structures for the given symbols
+
+        https://docs.coingecko.com/demo/reference/token-data-contract-address
+
+        :param str[] symbols: list of symbols with @network or @networknot * suffix
+        :param boolean reload: when True, re-fetch symbols even if already cached in self.markets
+        :param dict [params]: extra parameters specific to the exchange API endpoint
+        :returns dict[]: list of fixed market status structures
+        """
+        await super(ob_coingecko, self).ob_load_markets_for_symbols(symbols, reload, params)
+        symbolsLength = len(symbols)
+        result = []
+        for symbolIndex in range(0, symbolsLength):
+            symbol = symbols[symbolIndex]
+            if self.isOnchainSymbol(symbol):
+                result.append(self.ob_get_fixed_market_status(symbol))
+        return result
