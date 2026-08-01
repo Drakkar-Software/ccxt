@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 
 """CCXT: CryptoCurrency eXchange Trading Library"""
 
@@ -91,6 +91,7 @@ from ccxt.base.errors import UnsubscribeError                         # noqa: F4
 from ccxt.base.errors import error_hierarchy                          # noqa: F401
 
 from ccxt.aftermath import aftermath                                  # noqa: F401
+from ccxt.alchemy import alchemy                                      # noqa: F401
 from ccxt.alpaca import alpaca                                        # noqa: F401
 from ccxt.apex import apex                                            # noqa: F401
 from ccxt.arkham import arkham                                        # noqa: F401
@@ -182,6 +183,7 @@ from ccxt.modetrade import modetrade                                  # noqa: F4
 from ccxt.myokx import myokx                                          # noqa: F401
 from ccxt.ndax import ndax                                            # noqa: F401
 from ccxt.novadax import novadax                                      # noqa: F401
+from ccxt.ob_alchemy import ob_alchemy                                # noqa: F401
 from ccxt.ob_ascendex import ob_ascendex                              # noqa: F401
 from ccxt.ob_binance import ob_binance                                # noqa: F401
 from ccxt.ob_binanceus import ob_binanceus                            # noqa: F401
@@ -246,6 +248,7 @@ from ccxt.zonda import zonda                                          # noqa: F4
 
 exchanges = [
     'aftermath',
+    'alchemy',
     'alpaca',
     'apex',
     'arkham',
@@ -337,6 +340,7 @@ exchanges = [
     'myokx',
     'ndax',
     'novadax',
+    'ob_alchemy',
     'ob_ascendex',
     'ob_binance',
     'ob_binanceus',

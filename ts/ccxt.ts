@@ -1,4 +1,4 @@
-/*
+﻿/*
 
 MIT License
 
@@ -48,6 +48,7 @@ const version = '4.5.51';
 
 import aftermath from  './src/aftermath.js'
 import alpaca from  './src/alpaca.js'
+import alchemy from  './src/alchemy.js'
 import apex from  './src/apex.js'
 import arkham from  './src/arkham.js'
 import ascendex from  './src/ascendex.js'
@@ -138,6 +139,7 @@ import modetrade from  './src/modetrade.js'
 import myokx from  './src/myokx.js'
 import ndax from  './src/ndax.js'
 import novadax from  './src/novadax.js'
+import ob_alchemy from  './src/ob_alchemy.js'
 import ob_ascendex from  './src/ob_ascendex.js'
 import ob_binance from  './src/ob_binance.js'
 import ob_binanceus from  './src/ob_binanceus.js'
@@ -285,6 +287,7 @@ import xtPro from  './src/pro/xt.js'
 
 const exchanges = {
     'aftermath':              aftermath,
+    'alchemy':                alchemy,
     'alpaca':                 alpaca,
     'apex':                   apex,
     'arkham':                 arkham,
@@ -376,6 +379,7 @@ const exchanges = {
     'myokx':                  myokx,
     'ndax':                   ndax,
     'novadax':                novadax,
+    'ob_alchemy':             ob_alchemy,
     'ob_ascendex':            ob_ascendex,
     'ob_binance':             ob_binance,
     'ob_binanceus':           ob_binanceus,
@@ -674,6 +678,7 @@ export {
     LeverageTiers,
     aftermath,
     alpaca,
+    alchemy,
     apex,
     arkham,
     ascendex,
@@ -764,6 +769,7 @@ export {
     myokx,
     ndax,
     novadax,
+    ob_alchemy,
     ob_ascendex,
     ob_binance,
     ob_binanceus,

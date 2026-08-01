@@ -1,0 +1,58 @@
+[
+  {
+    "network": "BASE",
+    "chainId": 8453,
+    "dex": "HYDREX",
+    "quoter": "0x08b46265643a5389529D6f6616FA4a0d66F13Fdb",
+    "engine": "algebra",
+    "deployer": "0x0000000000000000000000000000000000000000"
+  },
+  {
+    "network": "BASE",
+    "chainId": 8453,
+    "dex": "UNISWAPV3",
+    "quoter": "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a",
+    "engine": "uniswapv3",
+    "fee": 3000
+  },
+  {
+    "network": "BASE",
+    "chainId": 8453,
+    "dex": "UNISWAPV3_500",
+    "quoter": "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a",
+    "engine": "uniswapv3",
+    "fee": 500
+  },
+  {
+    "network": "BASE",
+    "chainId": 8453,
+    "dex": "UNISWAPV3_10000",
+    "quoter": "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a",
+    "engine": "uniswapv3",
+    "fee": 10000
+  },
+  {
+    "network": "ETH",
+    "chainId": 1,
+    "dex": "UNISWAPV3",
+    "quoter": "0x61fFE014bA17989E743c5F6cB21bF9697530B21e",
+    "engine": "uniswapv3",
+    "fee": 3000
+  },
+  {
+    "network": "ETH",
+    "chainId": 1,
+    "dex": "UNISWAPV3_500",
+    "quoter": "0x61fFE014bA17989E743c5F6cB21bF9697530B21e",
+    "engine": "uniswapv3",
+    "fee": 500
+  },
+  {
+    "network": "ETH",
+    "chainId": 1,
+    "dex": "UNISWAPV3_10000",
+    "quoter": "0x61fFE014bA17989E743c5F6cB21bF9697530B21e",
+    "engine": "uniswapv3",
+    "fee": 10000
+  }
+]

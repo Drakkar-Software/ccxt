@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 
 """CCXT: CryptoCurrency eXchange Trading Library (Async)"""
 
@@ -71,6 +71,7 @@ from ccxt.base.errors import error_hierarchy                          # noqa: F4
 
 
 from ccxt.async_support.aftermath import aftermath                              # noqa: F401
+from ccxt.async_support.alchemy import alchemy                                  # noqa: F401
 from ccxt.async_support.alpaca import alpaca                                    # noqa: F401
 from ccxt.async_support.apex import apex                                        # noqa: F401
 from ccxt.async_support.arkham import arkham                                    # noqa: F401
@@ -162,6 +163,7 @@ from ccxt.async_support.modetrade import modetrade                              
 from ccxt.async_support.myokx import myokx                                      # noqa: F401
 from ccxt.async_support.ndax import ndax                                        # noqa: F401
 from ccxt.async_support.novadax import novadax                                  # noqa: F401
+from ccxt.async_support.ob_alchemy import ob_alchemy                            # noqa: F401
 from ccxt.async_support.ob_ascendex import ob_ascendex                          # noqa: F401
 from ccxt.async_support.ob_binance import ob_binance                            # noqa: F401
 from ccxt.async_support.ob_binanceus import ob_binanceus                        # noqa: F401
@@ -226,6 +228,7 @@ from ccxt.async_support.zonda import zonda                                      
 
 exchanges = [
     'aftermath',
+    'alchemy',
     'alpaca',
     'apex',
     'arkham',
@@ -317,6 +320,7 @@ exchanges = [
     'myokx',
     'ndax',
     'novadax',
+    'ob_alchemy',
     'ob_ascendex',
     'ob_binance',
     'ob_binanceus',
