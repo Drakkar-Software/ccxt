@@ -46,6 +46,7 @@ const version = '4.5.68';
 //-----------------------------------------------------------------------------
 
 import alpaca from  './src/alpaca.js'
+import alchemy from  './src/alchemy.js'
 import apex from  './src/apex.js'
 import aster from  './src/aster.js'
 import backpack from  './src/backpack.js'
@@ -134,6 +135,7 @@ import modetrade from  './src/modetrade.js'
 import mudrex from  './src/mudrex.js'
 import myokx from  './src/myokx.js'
 import ndax from  './src/ndax.js'
+import ob_alchemy from  './src/ob_alchemy.js'
 import ob_binance from  './src/ob_binance.js'
 import ob_binanceus from  './src/ob_binanceus.js'
 import ob_bingx from  './src/ob_bingx.js'
@@ -278,6 +280,7 @@ import myriadPrediction from  './src/prediction/myriad.js'
 import polymarketPrediction from  './src/prediction/polymarket.js'
 
 const exchanges = {
+    'alchemy':                alchemy,
     'alpaca':                 alpaca,
     'apex':                   apex,
     'aster':                  aster,
@@ -367,6 +370,7 @@ const exchanges = {
     'mudrex':                 mudrex,
     'myokx':                  myokx,
     'ndax':                   ndax,
+    'ob_alchemy':             ob_alchemy,
     'ob_binance':             ob_binance,
     'ob_binanceus':           ob_binanceus,
     'ob_bingx':               ob_bingx,
@@ -690,6 +694,7 @@ export {
     CrossBorrowRates,
     LeverageTiers,
     alpaca,
+    alchemy,
     apex,
     aster,
     backpack,
@@ -778,6 +783,7 @@ export {
     mudrex,
     myokx,
     ndax,
+    ob_alchemy,
     ob_binance,
     ob_binanceus,
     ob_bingx,
