@@ -132,7 +132,7 @@ class TestExchangeObGetFixedMarketStatus:
         assert fixed['precision']['price'] == 2
         assert fixed['precision']['amount'] == 2
 
-    def test_coercion_failure_sets_none(self):
+    def test_coercion_failure_sets_min_cost_to_zero(self):
         info_marker = {}
         market = _synthetic_market(info_marker)
         ex = ccxt.Exchange(
@@ -143,7 +143,7 @@ class TestExchangeObGetFixedMarketStatus:
             }
         )
         fixed = ex.ob_get_fixed_market_status('BTC/USDT')
-        assert fixed['limits']['cost']['min'] is None
+        assert fixed['limits']['cost']['min'] == 0
         assert fixed['limits']['cost']['max'] == 1_000_000
 
     def test_does_not_mutate_cached_market_shares_info(self):

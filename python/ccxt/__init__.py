@@ -90,6 +90,7 @@ from ccxt.base.errors import CancelPending                            # noqa: F4
 from ccxt.base.errors import UnsubscribeError                         # noqa: F401
 from ccxt.base.errors import error_hierarchy                          # noqa: F401
 
+from ccxt.alchemy import alchemy                                      # noqa: F401
 from ccxt.alpaca import alpaca                                        # noqa: F401
 from ccxt.apex import apex                                            # noqa: F401
 from ccxt.aster import aster                                          # noqa: F401
@@ -179,6 +180,7 @@ from ccxt.modetrade import modetrade                                  # noqa: F4
 from ccxt.mudrex import mudrex                                        # noqa: F401
 from ccxt.myokx import myokx                                          # noqa: F401
 from ccxt.ndax import ndax                                            # noqa: F401
+from ccxt.ob_alchemy import ob_alchemy                                # noqa: F401
 from ccxt.ob_binance import ob_binance                                # noqa: F401
 from ccxt.ob_binanceus import ob_binanceus                            # noqa: F401
 from ccxt.ob_bingx import ob_bingx                                    # noqa: F401
@@ -236,6 +238,7 @@ from ccxt.zaif import zaif                                            # noqa: F4
 from ccxt.zebpay import zebpay                                        # noqa: F401
 
 exchanges = [
+    'alchemy',
     'alpaca',
     'apex',
     'aster',
@@ -325,6 +328,7 @@ exchanges = [
     'mudrex',
     'myokx',
     'ndax',
+    'ob_alchemy',
     'ob_binance',
     'ob_binanceus',
     'ob_bingx',
