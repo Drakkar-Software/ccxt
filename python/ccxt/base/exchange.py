@@ -6224,12 +6224,44 @@ class BaseExchange(object):
         amountLimits['max'] = self.ob_scale_limit_by_contract_size(amountLimits['max'], floatSize)
         marketStatus['precision']['amount'] = self.ob_precision_step_to_digit_count(floatSize)
 
+    def ob_is_market_status_limit_valid(self, value: Num, zeroValid: bool = False):
+        if not self.ob_is_strict_finite_number(value):
+            return False
+        return value >= 0 if zeroValid else value > 0
+
+    def ob_compute_market_status_cost_limits(self, marketStatus: dict):
+        limits = marketStatus['limits']
+        if not self.is_dictionary(limits):
+            return
+        limitCost = limits['cost']
+        limitPrice = limits['price']
+        limitAmount = limits['amount']
+        if not self.is_dictionary(limitCost) or not self.is_dictionary(limitPrice) or not self.is_dictionary(limitAmount):
+            return
+        if not self.ob_is_market_status_limit_valid(limitCost['max']):
+            if self.ob_is_market_status_limit_valid(limitAmount['max']) and self.ob_is_market_status_limit_valid(limitPrice['max']):
+                limitCost['max'] = limitAmount['max'] * limitPrice['max']
+        if not self.ob_is_market_status_limit_valid(limitCost['min']):
+            if self.ob_is_market_status_limit_valid(limitAmount['min']) and self.ob_is_market_status_limit_valid(limitPrice['min']):
+                limitCost['min'] = limitAmount['min'] * limitPrice['min']
+
+    def ob_ensure_market_status_min_cost(self, marketStatus: dict):
+        limits = marketStatus['limits']
+        if not self.is_dictionary(limits):
+            return
+        limitCost = limits['cost']
+        if not self.is_dictionary(limitCost):
+            return
+        if not self.ob_is_market_status_limit_valid(limitCost['min'], True):
+            limitCost['min'] = 0
+
     def ob_get_fixed_market_status(self, symbol: str):
         base = self.market(symbol)
         octobotCfg = self.safe_dict(self.options, 'octobot', {})
         fixMarketStatus = self.safe_bool(octobotCfg, 'fixMarketStatus', False) is True
         removeMarketStatusPriceLimits = self.safe_bool(octobotCfg, 'removeMarketStatusPriceLimits', False) is True
         adaptMarketStatusForContractSize = self.safe_bool(octobotCfg, 'adaptMarketStatusForContractSize', False) is True
+        computeMarketStatusCostLimits = self.safe_bool(octobotCfg, 'computeMarketStatusCostLimits', False) is True
         # Step build: selective shallow copy so untouched nested refs stay shared(.info unchanged by reference swap on top clone only when we omit deep copy)
         out = self.ob_obtain_mutable_precision_and_limits(base)
         # Step coerce: unify whitelist fields to floats; non-convertible -> None(OctoBot _fix_typing parity + failures explicit)
@@ -6248,6 +6280,9 @@ class BaseExchange(object):
                 priceLm['max'] = None
         if adaptMarketStatusForContractSize:
             self.ob_apply_adapt_market_status_for_contract_size(out)
+        if computeMarketStatusCostLimits:
+            self.ob_compute_market_status_cost_limits(out)
+        self.ob_ensure_market_status_min_cost(out)
         return out
 
     def ob_sanitize_network_dex_token(self, token: Str):

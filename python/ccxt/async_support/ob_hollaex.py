@@ -56,6 +56,7 @@ class ob_hollaex(hollaex, ImplicitAPI):
                         },
                     },
                     'fixMarketStatus': True,
+                    'computeMarketStatusCostLimits': True,
                     'requireOrderFeesFromTrades': True,
                     'supportFetchingCancelledOrders': False,
                     'isSkippingEmptyCandlesInOhlcvFetch': True,
