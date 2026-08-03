@@ -135,37 +135,42 @@ export default class ob_bingx extends bingx {
         }
         const orderCreationPrice = this.parseNumber (creationPriceString);
         const isSelling = this.safeStringLower (parsed, 'side') === 'sell';
-        // use stop price as order price to parse it properly
+        // use stop price price to parse it properly
         parsed['price'] = stopPrice;
         const currentType = this.safeStringLower (parsed, 'type');
-        // Step 3: take_stop_limit cannot be classified as SL vs TP here
+        // Step 3: take_stop_limit cannot be classified vs TP here
         if (currentType === 'take_stop_limit') {
-            // unsupported: no way to tell stop loss vs take profit from take_stop_limit (trigger above or below)
+            // unsupported: no way to tell stop loss vs take profit from take_stop_limit(trigger above or below)
             parsed['type'] = 'unsupported';
             this.log (logContext, 'Unsupported order fetched: ' + this.json (parsed));
             return;
         }
         // Step 4: infer trigger direction and unified type from stop vs creation and side
-        if (orderCreationPrice === undefined) {
-            return;
-        }
         let triggerAbove = false;
         let orderType = 'limit';
-        if (stopPrice <= orderCreationPrice) {
-            triggerAbove = false;
-            if (isSelling) {
-                orderType = 'stop_loss';
-                parsed['stopPrice'] = stopPrice;
-            } else {
-                orderType = 'limit';
-            }
+        if (currentType === 'take_stop_market') {
+            orderType = 'stop_loss';
+            triggerAbove = !isSelling; // for stop orders, trigger above when buying
         } else {
-            triggerAbove = true;
-            if (isSelling) {
-                orderType = 'limit';
+            if (orderCreationPrice === undefined) {
+                return;
+            }
+            if (stopPrice <= orderCreationPrice) {
+                triggerAbove = false;
+                if (isSelling) {
+                    orderType = 'stop_loss';
+                    parsed['stopPrice'] = stopPrice;
+                } else {
+                    orderType = 'limit';
+                }
             } else {
-                orderType = 'stop_loss';
-                parsed['stopPrice'] = stopPrice;
+                triggerAbove = true;
+                if (isSelling) {
+                    orderType = 'limit';
+                } else {
+                    orderType = 'stop_loss';
+                    parsed['stopPrice'] = stopPrice;
+                }
             }
         }
         parsed['triggerAbove'] = triggerAbove;

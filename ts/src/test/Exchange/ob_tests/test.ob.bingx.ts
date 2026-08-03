@@ -175,6 +175,42 @@ async function testObBingx () {
             parentProto.parseOrder = orig;
         }
     }
+    // parseOrder branch P7: take_stop_market + sell -> stop_loss, triggerAbove=false (no creation price required)
+    {
+        const ex = new ccxt.ob_bingx ();
+        const parentProto = Object.getPrototypeOf (Object.getPrototypeOf (ex));
+        const orig = parentProto.parseOrder;
+        parentProto.parseOrder = function () {
+            return { 'info': {}, 'type': 'take_stop_market', 'side': 'sell', 'price': 40000, 'stopLossPrice': 39000 };
+        };
+        try {
+            const parsed = ex.parseOrder ({});
+            assert.strictEqual (parsed['type'], 'stop_loss');
+            assert.strictEqual (parsed['price'], 39000);
+            assert.strictEqual (parsed['triggerAbove'], false);
+            assert.strictEqual (parsed['stopPrice'], undefined);
+        } finally {
+            parentProto.parseOrder = orig;
+        }
+    }
+    // parseOrder branch P8: take_stop_market + buy -> stop_loss, triggerAbove=true (no creation price required)
+    {
+        const ex = new ccxt.ob_bingx ();
+        const parentProto = Object.getPrototypeOf (Object.getPrototypeOf (ex));
+        const orig = parentProto.parseOrder;
+        parentProto.parseOrder = function () {
+            return { 'info': {}, 'type': 'take_stop_market', 'side': 'buy', 'price': 40000, 'stopLossPrice': 41000 };
+        };
+        try {
+            const parsed = ex.parseOrder ({});
+            assert.strictEqual (parsed['type'], 'stop_loss');
+            assert.strictEqual (parsed['price'], 41000);
+            assert.strictEqual (parsed['triggerAbove'], true);
+            assert.strictEqual (parsed['stopPrice'], undefined);
+        } finally {
+            parentProto.parseOrder = orig;
+        }
+    }
     // parseTrade branch T1: mirror P1 (no stopLossPrice -> no override)
     {
         const ex = new ccxt.ob_bingx ();
@@ -274,6 +310,42 @@ async function testObBingx () {
             assert.strictEqual (parsed['price'], 41000);
             assert.strictEqual (parsed['stopPrice'], 41000);
             assert.strictEqual (parsed['triggerAbove'], true);
+        } finally {
+            parentProto.parseTrade = orig;
+        }
+    }
+    // parseTrade branch T7: mirror P7
+    {
+        const ex = new ccxt.ob_bingx ();
+        const parentProto = Object.getPrototypeOf (Object.getPrototypeOf (ex));
+        const orig = parentProto.parseTrade;
+        parentProto.parseTrade = function () {
+            return { 'info': {}, 'type': 'take_stop_market', 'side': 'sell', 'price': 40000, 'stopLossPrice': 39000 };
+        };
+        try {
+            const parsed = ex.parseTrade ({}, undefined);
+            assert.strictEqual (parsed['type'], 'stop_loss');
+            assert.strictEqual (parsed['price'], 39000);
+            assert.strictEqual (parsed['triggerAbove'], false);
+            assert.strictEqual (parsed['stopPrice'], undefined);
+        } finally {
+            parentProto.parseTrade = orig;
+        }
+    }
+    // parseTrade branch T8: mirror P8
+    {
+        const ex = new ccxt.ob_bingx ();
+        const parentProto = Object.getPrototypeOf (Object.getPrototypeOf (ex));
+        const orig = parentProto.parseTrade;
+        parentProto.parseTrade = function () {
+            return { 'info': {}, 'type': 'take_stop_market', 'side': 'buy', 'price': 40000, 'stopLossPrice': 41000 };
+        };
+        try {
+            const parsed = ex.parseTrade ({}, undefined);
+            assert.strictEqual (parsed['type'], 'stop_loss');
+            assert.strictEqual (parsed['price'], 41000);
+            assert.strictEqual (parsed['triggerAbove'], true);
+            assert.strictEqual (parsed['stopPrice'], undefined);
         } finally {
             parentProto.parseTrade = orig;
         }
