@@ -134,24 +134,28 @@ class ob_bingx(bingx, ImplicitAPI):
             self.log(logContext, 'Unsupported order fetched: ' + self.json(parsed))
             return
         # Step 4: infer trigger direction and unified type from stop vs creation and side
-        if orderCreationPrice is None:
-            return
         triggerAbove = False
         orderType = 'limit'
-        if stopPrice <= orderCreationPrice:
-            triggerAbove = False
-            if isSelling:
-                orderType = 'stop_loss'
-                parsed['stopPrice'] = stopPrice
-            else:
-                orderType = 'limit'
+        if currentType == 'take_stop_market':
+            orderType = 'stop_loss'
+            triggerAbove = not isSelling  # for stop orders, trigger above when buying
         else:
-            triggerAbove = True
-            if isSelling:
-                orderType = 'limit'
+            if orderCreationPrice is None:
+                return
+            if stopPrice <= orderCreationPrice:
+                triggerAbove = False
+                if isSelling:
+                    orderType = 'stop_loss'
+                    parsed['stopPrice'] = stopPrice
+                else:
+                    orderType = 'limit'
             else:
-                orderType = 'stop_loss'
-                parsed['stopPrice'] = stopPrice
+                triggerAbove = True
+                if isSelling:
+                    orderType = 'limit'
+                else:
+                    orderType = 'stop_loss'
+                    parsed['stopPrice'] = stopPrice
         parsed['triggerAbove'] = triggerAbove
         parsed['type'] = orderType
 
