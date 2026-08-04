@@ -43,7 +43,9 @@ classifiers = [
 # all dependencies are pinned to exact versions to protect against
 # malicious or vulnerable releases of downstream dependencies
 dependencies = [
-    "setuptools==83.0.0",
+    # local override
+    # "setuptools==83.0.0",
+    "setuptools==79.0.1",
     "certifi==2026.6.17",
     "requests==2.34.2",
     "cryptography==49.0.0",
