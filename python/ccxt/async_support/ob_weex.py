@@ -37,6 +37,7 @@ class ob_weex(weex, ImplicitAPI):
                             'bundled_orders': {},
                         },
                     },
+                    'adjustForTimeDifference': True,
                     'fixMarketStatus': True,
                     'requireOrderFeesFromTrades': True,
                 },
