@@ -37,6 +37,7 @@ export default class ob_weex extends weex {
                             'bundled_orders': {},
                         },
                     },
+                    'adjustForTimeDifference': true,
                     'fixMarketStatus': true,
                     'requireOrderFeesFromTrades': true,
                 },
