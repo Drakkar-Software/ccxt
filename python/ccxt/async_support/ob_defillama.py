@@ -55,7 +55,7 @@ class ob_defillama(defillama, ImplicitAPI):
 
         https://api-docs.defillama.com/#tag/coins
 
-        :param str[] symbols: list of base/quote symbols with @networknot * suffix
+        :param str[] symbols: list of base/quote symbols with @network wildcard dex suffix
         :param boolean reload: when True, re-fetch symbols even if already cached in self.markets
         :param dict [params]: extra parameters specific to the exchange API endpoint
         :returns dict[]: list of fixed market status structures

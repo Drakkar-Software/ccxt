@@ -54,7 +54,7 @@ class ob_dexscreener(dexscreener, ImplicitAPI):
 
         https://docs.dexscreener.com/api/reference
 
-        :param str[] symbols: list of base/quote symbols, optionally with @networknot dex suffix
+        :param str[] symbols: list of base/quote symbols, optionally with @network dex suffix
         :param boolean reload: when True, re-fetch symbols even if already cached in self.markets
         :param dict [params]: extra parameters specific to the exchange API endpoint
         :returns dict[]: list of fixed market status structures

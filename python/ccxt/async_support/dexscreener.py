@@ -17,7 +17,7 @@ from ccxt.base.errors import RateLimitExceeded
 class dexscreener(Exchange, ImplicitAPI):
 
     def describe(self) -> Any:
-        dexes: dict = {
+        dexes = {
             'uniswap': 'UNISWAP',
             'uniswapv2': 'UNISWAPV2',
             'uniswapv3': 'UNISWAPV3',
@@ -104,12 +104,12 @@ class dexscreener(Exchange, ImplicitAPI):
             'meteoradlmm': 'METEORADLMM',
             'meteoradamm': 'METEORADAMM',
         }
-        dexesById: dict = {}
+        dexesById = {}
         dexKeys = list(dexes.keys())
         for dexIndex in range(0, len(dexKeys)):
             dexId = dexKeys[dexIndex]
             dexesById[dexes[dexId]] = dexId
-        networks: dict = {
+        networks = {
             # CCXT unified
             'BTC': 'bitcoin',
             'ETH': 'ethereum',
@@ -203,12 +203,12 @@ class dexscreener(Exchange, ImplicitAPI):
             'UNICHAIN': 'unichain',
             'INK': 'ink',
         }
-        networksById: dict = {}
+        networksById = {}
         networkKeys = list(networks.keys())
         for networkIndex in range(0, len(networkKeys)):
             networkCode = networkKeys[networkIndex]
             networksById[networks[networkCode]] = networkCode
-        preferredNetworkCodeByChainId: dict = {
+        preferredNetworkCodeByChainId = {
             'ethereum': 'ETH',
             'tron': 'TRX',
             'bsc': 'BEP20',
@@ -372,7 +372,7 @@ class dexscreener(Exchange, ImplicitAPI):
         return self.safe_list(response, 'pairs', [])
 
     def get_unique_token_addresses(self, tokenAddresses: List[str]) -> List[str]:
-        uniqueAddresses: dict = {}
+        uniqueAddresses = {}
         for addressIndex in range(0, len(tokenAddresses)):
             address = tokenAddresses[addressIndex]
             if address is not None:
@@ -382,7 +382,7 @@ class dexscreener(Exchange, ImplicitAPI):
     async def fetch_pairs_for_tokens_v1_batch(self, tokenAddresses: List[str], chainId: str, params={}) -> List[Any]:
         if len(tokenAddresses) == 0:
             return []
-        request: dict = {
+        request = {
             'chainId': chainId,
             'tokenAddresses': ','.join(tokenAddresses),
         }
@@ -392,7 +392,7 @@ class dexscreener(Exchange, ImplicitAPI):
     async def fetch_pairs_for_tokens_v1(self, tokenAddresses: List[str], chainId: str, params={}) -> List[Any]:
         addresses = self.get_unique_token_addresses(tokenAddresses)
         maxBatchSize = self.safe_integer(self.options, 'maxTokenAddressesPerRequest', 30)
-        allPairs: List[dict] = []
+        allPairs = []
         offset = 0
         while(offset < len(addresses)):
             batch = addresses[offset:offset + maxBatchSize]
@@ -403,7 +403,7 @@ class dexscreener(Exchange, ImplicitAPI):
         return allPairs
 
     def merge_pairs_by_pair_address(self, pairs: List[dict]) -> List[dict]:
-        mergedByPairAddress: dict = {}
+        mergedByPairAddress = {}
         for pairIndex in range(0, len(pairs)):
             pair = pairs[pairIndex]
             pairAddress = self.safe_string(pair, 'pairAddress')
@@ -614,7 +614,7 @@ class dexscreener(Exchange, ImplicitAPI):
                 tickerAliasSymbol = self.build_market_symbol(base + '/' + quote, networkCode, dexCode)
                 if (tickerAliasSymbol != unifiedSymbol) and not (tickerAliasSymbol in self.markets):
                     self.markets[tickerAliasSymbol] = market
-        unifiedSymbols: dict = {}
+        unifiedSymbols = {}
         for marketIndex in range(0, len(marketsList)):
             unifiedSymbol = self.safe_string(marketsList[marketIndex], 'symbol')
             if unifiedSymbol is not None:
@@ -674,13 +674,13 @@ class dexscreener(Exchange, ImplicitAPI):
         quotePart = self.safe_string(parts, 1)
         base = self.normalize_trading_symbol_part(basePart)
         quote = self.normalize_trading_symbol_part(quotePart)
-        request: dict = {
+        request = {
             'q': self.build_search_query_from_trading_symbol(symbol),
         }
         response = await self.publicGetLatestDexSearch(self.extend(request, params))
         rawPairs = self.parse_token_pairs_response(response)
         filteredPairs = []
-        seenMarketIds: dict = {}
+        seenMarketIds = {}
         for pairIndex in range(0, len(rawPairs)):
             pair = rawPairs[pairIndex]
             if not self.pair_matches_ticker_symbol(pair, base, quote):
@@ -732,7 +732,7 @@ class dexscreener(Exchange, ImplicitAPI):
         tradingSymbol = self.safe_string(parsed, 'tradingSymbol')
         networkCode = self.safe_string(parsed, 'networkCode')
         effectiveDexCode = dexCode if (dexCode is not None) else self.safe_string(parsed, 'dexCode')
-        request: dict = {
+        request = {
             'q': self.build_search_query_from_trading_symbol(tradingSymbol),
         }
         response = await self.publicGetLatestDexSearch(self.extend(request, params))
@@ -798,7 +798,7 @@ class dexscreener(Exchange, ImplicitAPI):
     async def resolve_address_pair_from_raw_pairs(self, rawPairs: List[dict], symbol: str, networkCode: str, dexCode, tradingSymbol: str, params={}) -> dict:
         filteredPairs = self.filter_pairs_for_resolved_symbol(rawPairs, symbol, networkCode, dexCode, tradingSymbol)
         if len(filteredPairs) == 0:
-            request: dict = {
+            request = {
                 'q': self.build_search_query_from_trading_symbol(tradingSymbol),
             }
             response = await self.publicGetLatestDexSearch(self.extend(request, params))
@@ -863,9 +863,9 @@ class dexscreener(Exchange, ImplicitAPI):
         return 'network unified=' + unifiedNetwork + ' local=' + localNetwork + ', dex unified=' + unifiedDex + ' local=' + localDex
 
     async def resolve_markets(self, symbols: List[str], params={}) -> dict:
-        marketsBySymbol: dict = {}
-        justResolvedSymbols: dict = {}
-        tradingSymbolsToFetch: dict = {}
+        marketsBySymbol = {}
+        justResolvedSymbols = {}
+        tradingSymbolsToFetch = {}
         pendingSymbols = []
         # 1) split cached markets from symbols that still need resolve
         for symbolIndex in range(0, len(symbols)):
@@ -887,7 +887,7 @@ class dexscreener(Exchange, ImplicitAPI):
         for tradingIndex in range(0, len(tradingSymbolList)):
             await self.fetch_markets_for_symbol(tradingSymbolList[tradingIndex], params)
         # 3) address-pair symbols: batch tokens/v1 once per chain(base addresses only)
-        addressPairChainGroups: dict = {}
+        addressPairChainGroups = {}
         for pendingIndex in range(0, len(pendingSymbols)):
             pending = pendingSymbols[pendingIndex]
             symbol = self.safe_string(pending, 'symbol')
@@ -910,14 +910,14 @@ class dexscreener(Exchange, ImplicitAPI):
             baseAddress = self.normalize_token_address(self.safe_string(parts, 0))
             if baseAddress is not None:
                 addressPairChainGroups[chainId]['baseAddresses'][baseAddress] = True
-        pairsByChain: dict = {}
+        pairsByChain = {}
         addressPairChainIds = list(addressPairChainGroups.keys())
         for chainIndex in range(0, len(addressPairChainIds)):
             chainId = addressPairChainIds[chainIndex]
             baseAddressList = list(addressPairChainGroups[chainId]['baseAddresses'].keys())
             pairsByChain[chainId] = await self.fetch_pairs_for_tokens_v1(baseAddressList, chainId, params)
         # 4) resolve each pending symbol: filter batched pairs(or search fallback), merge market
-        pendingMarketAliases: dict = {}
+        pendingMarketAliases = {}
         for pendingIndex in range(0, len(pendingSymbols)):
             pending = pendingSymbols[pendingIndex]
             symbol = self.safe_string(pending, 'symbol')
@@ -983,8 +983,8 @@ class dexscreener(Exchange, ImplicitAPI):
         }
 
     async def fetch_tickers_from_tokens_v1(self, symbols: List[str], marketsBySymbol: dict, justResolvedSymbols: dict = {}, params={}) -> Tickers:
-        chainGroups: dict = {}
-        result: dict = {}
+        chainGroups = {}
+        result = {}
         # 1) just-resolved symbols: reuse pair data already stored in market.info(no HTTP)
         for symbolIndex in range(0, len(symbols)):
             symbol = symbols[symbolIndex]
@@ -1011,7 +1011,7 @@ class dexscreener(Exchange, ImplicitAPI):
             if baseId is not None:
                 chainGroups[chainId]['tokenAddresses'][baseId] = True
         # 3) fetch fresh pair data once per chain
-        pairsByChain: dict = {}
+        pairsByChain = {}
         chainIds = list(chainGroups.keys())
         for chainIndex in range(0, len(chainIds)):
             chainId = chainIds[chainIndex]
@@ -1039,7 +1039,7 @@ class dexscreener(Exchange, ImplicitAPI):
 
         https://docs.dexscreener.com/api/reference
 
-        :param str symbol: unified market symbol with @networknot dex suffix
+        :param str symbol: unified market symbol with @network dex suffix
         :param dict [params]: extra parameters specific to the exchange API endpoint
         :returns dict: a `ticker structure <https://docs.ccxt.com/?id=ticker-structure>`
         """
@@ -1054,7 +1054,7 @@ class dexscreener(Exchange, ImplicitAPI):
 
         https://docs.dexscreener.com/api/reference
 
-        :param str[] symbols: list of unified market symbols with @networknot dex suffix
+        :param str[] symbols: list of unified market symbols with @network dex suffix
         :param dict [params]: extra parameters specific to the exchange API endpoint
         :returns dict: a dictionary of `ticker structures <https://docs.ccxt.com/?id=ticker-structure>`
         """
@@ -1073,7 +1073,7 @@ class dexscreener(Exchange, ImplicitAPI):
 
         https://docs.dexscreener.com/api/reference
 
-        :param str[] symbols: list of base/quote symbols, optionally with @networknot dex suffix
+        :param str[] symbols: list of base/quote symbols, optionally with @network dex suffix
         :param boolean reload: when True, re-fetch symbols even if already cached in self.markets
         :param dict params: extra parameters specific to the exchange API endpoint
         :returns dict[]: empty list; subclasses may return fixed market status structures
@@ -1194,7 +1194,7 @@ class dexscreener(Exchange, ImplicitAPI):
         tradingSymbol = parsedInput['tradingSymbol']
         networkCode = parsedInput['networkCode']
         dexCode = parsedInput['dexCode']
-        rawPairs: List[dict] = []
+        rawPairs = []
         parts = tradingSymbol.split('/')
         basePart = self.safe_string(parts, 0)
         if (networkCode is not None) and self.is_token_address(basePart):
@@ -1203,7 +1203,7 @@ class dexscreener(Exchange, ImplicitAPI):
             tokensCacheKey = chainId + ':' + baseAddress
             if not ('tokensV1' in cache):
                 cache['tokensV1'] = {}
-            tokensV1Cache: dict = cache['tokensV1']
+            tokensV1Cache = cache['tokensV1']
             if not (tokensCacheKey in tokensV1Cache):
                 tokensV1Cache[tokensCacheKey] = await self.fetch_pairs_for_tokens_v1([baseAddress], chainId, params)
             tokensPairs = tokensV1Cache[tokensCacheKey]
@@ -1212,9 +1212,9 @@ class dexscreener(Exchange, ImplicitAPI):
         searchQuery = self.build_search_query_from_trading_symbol(tradingSymbol)
         if not ('search' in cache):
             cache['search'] = {}
-        searchCache: dict = cache['search']
+        searchCache = cache['search']
         if not (searchQuery in searchCache):
-            request: dict = {
+            request = {
                 'q': searchQuery,
             }
             response = await self.publicGetLatestDexSearch(self.extend(request, params))
@@ -1230,7 +1230,7 @@ class dexscreener(Exchange, ImplicitAPI):
 
         https://docs.dexscreener.com/api/reference
 
-        :param str[] symbols: list of base/quote symbols, optionally with @networknot dex suffix
+        :param str[] symbols: list of base/quote symbols, optionally with @network dex suffix
         :param dict [params]: extra parameters specific to the exchange API endpoint
         :returns ObDexPair[]: list of DEX pair structures for venues listing all requested symbols
         """
@@ -1239,17 +1239,17 @@ class dexscreener(Exchange, ImplicitAPI):
         symbolsLength = len(symbols)
         if symbolsLength == 0:
             raise ArgumentsRequired(self.id + ' obFetchDexPairs() requires a non-empty symbols argument')
-        seenInputs: dict = {}
-        parsedInputs: List[dict] = []
+        seenInputs = {}
+        parsedInputs = []
         for symbolIndex in range(0, symbolsLength):
             symbol = symbols[symbolIndex]
             if symbol in seenInputs:
                 continue
             seenInputs[symbol] = True
             parsedInputs.append(self.ob_parse_dex_pair_symbol_input(symbol))
-        cache: dict = {}
-        venues: dict = {}
-        requiredTradingSymbols: dict = {}
+        cache = {}
+        venues = {}
+        requiredTradingSymbols = {}
         for inputIndex in range(0, len(parsedInputs)):
             parsedInput = parsedInputs[inputIndex]
             tradingSymbol = parsedInput['tradingSymbol']
@@ -1263,7 +1263,7 @@ class dexscreener(Exchange, ImplicitAPI):
                 venueKey = self.build_venue_key(pairNetworkCode, pairDexCode)
                 if not (venueKey in venues):
                     venues[venueKey] = {}
-                venueSymbols: dict = venues[venueKey]
+                venueSymbols = venues[venueKey]
                 if not (tradingSymbol in venueSymbols):
                     venueSymbols[tradingSymbol] = pair
                 else:
@@ -1273,7 +1273,7 @@ class dexscreener(Exchange, ImplicitAPI):
         venueKeys = list(venues.keys())
         for venueKeyIndex in range(0, len(venueKeys)):
             venueKey = venueKeys[venueKeyIndex]
-            venueSymbols: dict = venues[venueKey]
+            venueSymbols = venues[venueKey]
             hasAllSymbols = True
             for requiredIndex in range(0, len(requiredSymbolsList)):
                 requiredTradingSymbol = requiredSymbolsList[requiredIndex]

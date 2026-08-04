@@ -13,6 +13,10 @@ class ob_hitbtc(hitbtc, ImplicitAPI):
     def describe(self) -> Any:
         return self.deep_extend(super(ob_hitbtc, self).describe(), {
             'id': 'ob_hitbtc',
+            'name': 'HitBTC',
+            'certified': False,
+            'urls': {
+            },
             'has': {
                 'CORS': False,
                 'spot': True,

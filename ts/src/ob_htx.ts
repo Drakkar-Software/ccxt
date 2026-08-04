@@ -6,6 +6,10 @@ import type { Dict, Market, Order, Ticker } from './base/types.js';
 
 //  ---------------------------------------------------------------------------
 
+/**
+ * @class ob_htx
+ * @augments htx
+ */
 export default class ob_htx extends htx {
     describe (): any {
         return this.deepExtend (super.describe (), {

@@ -8,6 +8,10 @@ import type { Balances, Bool, Dict, Market, Num, Order, OrderSide, OrderType, St
 
 //  ---------------------------------------------------------------------------
 
+/**
+ * @class ob_coinbase
+ * @augments coinbase
+ */
 export default class ob_coinbase extends coinbase {
     describe (): any {
         return this.deepExtend (super.describe (), {

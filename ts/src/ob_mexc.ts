@@ -3,11 +3,15 @@
 
 import mexc from './mexc.js';
 import { AuthenticationError, OBIPWhitelistError, OrderNotFound, PermissionDenied, OBUntradableSymbol } from './base/errors.js';
-import { sha256 } from './static_dependencies/noble-hashes/sha256.js';
+import { sha256 } from '@noble/hashes/sha2.js';
 import type { Bool, Dict, Market, Order, Str } from './base/types.js';
 
 //  ---------------------------------------------------------------------------
 
+/**
+ * @class ob_mexc
+ * @augments mexc
+ */
 export default class ob_mexc extends mexc {
     describe (): any {
         return this.deepExtend (super.describe (), {

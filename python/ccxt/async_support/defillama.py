@@ -18,7 +18,7 @@ class defillama(Exchange, ImplicitAPI):
 
     def describe(self) -> Any:
         # Slugs default to /v2/chains name.lower(); manual overrides(e.g. OP Mainnet -> optimism).
-        networks: dict = {
+        networks = {
             'BTC': 'bitcoin',
             'ETH': 'ethereum',
             'BSC': 'bsc',
@@ -109,12 +109,12 @@ class defillama(Exchange, ImplicitAPI):
             'UNICHAIN': 'unichain',
             'INK': 'ink',
         }
-        networksById: dict = {}
+        networksById = {}
         networkKeys = list(networks.keys())
         for networkIndex in range(0, len(networkKeys)):
             networkCode = networkKeys[networkIndex]
             networksById[networks[networkCode]] = networkCode
-        preferredNetworkCodeByChainId: dict = {
+        preferredNetworkCodeByChainId = {
             'ethereum': 'ETH',
             'tron': 'TRX',
             'bsc': 'BEP20',
@@ -430,7 +430,7 @@ class defillama(Exchange, ImplicitAPI):
                     wildcardDexTickerAliasSymbol = self.build_market_symbol(base + '/' + quote, networkCode, '*')
                     if (wildcardDexTickerAliasSymbol != unifiedSymbol) and not (wildcardDexTickerAliasSymbol in self.markets):
                         self.markets[wildcardDexTickerAliasSymbol] = market
-        unifiedSymbols: dict = {}
+        unifiedSymbols = {}
         for marketIndex in range(0, len(marketsList)):
             unifiedSymbol = self.safe_string(marketsList[marketIndex], 'symbol')
             if unifiedSymbol is not None:
@@ -471,7 +471,7 @@ class defillama(Exchange, ImplicitAPI):
         raise BadSymbol(self.id + ' symbol must include a network suffix using @ for ' + symbol)
 
     async def resolve_markets(self, symbols: List[str], params={}) -> dict:
-        marketsBySymbol: dict = {}
+        marketsBySymbol = {}
         pendingSymbols = []
         marketsDict = {} if (self.markets is None) else self.markets
         for symbolIndex in range(0, len(symbols)):
@@ -481,7 +481,7 @@ class defillama(Exchange, ImplicitAPI):
                 marketsBySymbol[symbol] = self.market(symbol)
                 continue
             pendingSymbols.append(symbol)
-        newMarkets: List[Market] = []
+        newMarkets = []
         for pendingIndex in range(0, len(pendingSymbols)):
             symbol = pendingSymbols[pendingIndex]
             market = self.parse_synthetic_market_from_symbol(symbol)
@@ -507,7 +507,7 @@ class defillama(Exchange, ImplicitAPI):
         chainSlug = self.get_chain_slug_from_market(market)
         baseId = self.safe_string(market, 'baseId')
         quoteId = self.safe_string(market, 'quoteId')
-        keys: List[str] = []
+        keys = []
         if (chainSlug is not None) and (baseId is not None):
             keys.append(self.build_coin_key(chainSlug, baseId))
         if (chainSlug is not None) and (quoteId is not None):
@@ -515,7 +515,7 @@ class defillama(Exchange, ImplicitAPI):
         return keys
 
     def get_unique_coin_keys(self, coinKeys: List[str]) -> List[str]:
-        uniqueKeys: dict = {}
+        uniqueKeys = {}
         for keyIndex in range(0, len(coinKeys)):
             coinKey = coinKeys[keyIndex]
             if coinKey is not None:
@@ -550,7 +550,7 @@ class defillama(Exchange, ImplicitAPI):
         uniqueKeys = self.get_unique_coin_keys(coinKeys)
         if len(uniqueKeys) == 0:
             return {}
-        request: dict = {
+        request = {
             'coins': ','.join(uniqueKeys),
         }
         response = await self.publicGetPricesCurrentCoins(self.extend(request, params))
@@ -637,7 +637,7 @@ class defillama(Exchange, ImplicitAPI):
         return self.parse_ticker_from_coins(market, coins, pairPrice)
 
     def collect_coin_keys_for_markets(self, marketsBySymbol: dict, symbols: List[str]) -> List[str]:
-        allCoinKeys: List[str] = []
+        allCoinKeys = []
         for symbolIndex in range(0, len(symbols)):
             symbol = symbols[symbolIndex]
             market = self.safe_value(marketsBySymbol, symbol)
@@ -663,7 +663,7 @@ class defillama(Exchange, ImplicitAPI):
 
         https://api-docs.defillama.com/#tag/coins/get/coins/prices/current/{coins}
 
-        :param str symbol: unified market symbol with @network or @networknot * suffix
+        :param str symbol: unified market symbol with @network suffix, or @network with wildcard dex
         :param dict [params]: extra parameters specific to the exchange API endpoint
         :returns dict: a `ticker structure <https://docs.ccxt.com/?id=ticker-structure>`
         """
@@ -682,7 +682,7 @@ class defillama(Exchange, ImplicitAPI):
 
         https://api-docs.defillama.com/#tag/coins/get/coins/prices/current/{coins}
 
-        :param str[] symbols: list of unified market symbols with @network or @networknot * suffix
+        :param str[] symbols: list of unified market symbols with @network suffix, or @network with wildcard dex
         :param dict [params]: extra parameters specific to the exchange API endpoint
         :returns dict: a dictionary of `ticker structures <https://docs.ccxt.com/?id=ticker-structure>`
         """
@@ -696,7 +696,7 @@ class defillama(Exchange, ImplicitAPI):
         marketsBySymbol = resolveResult['marketsBySymbol']
         coinKeys = self.collect_coin_keys_for_markets(marketsBySymbol, symbols)
         coins = await self.fetch_current_prices(coinKeys, params)
-        result: dict = {}
+        result = {}
         for symbolIndex in range(0, symbolsLength):
             symbol = symbols[symbolIndex]
             market = self.safe_value(marketsBySymbol, symbol)
@@ -711,7 +711,7 @@ class defillama(Exchange, ImplicitAPI):
 
         https://api-docs.defillama.com/#tag/coins
 
-        :param str[] symbols: list of base/quote symbols with @network or @networknot * suffix
+        :param str[] symbols: list of base/quote symbols with @network suffix, or @network with wildcard dex
         :param boolean reload: when True, re-fetch symbols even if already cached in self.markets
         :param dict params: extra parameters specific to the exchange API endpoint
         :returns dict[]: empty list; ob_defillama returns fixed market status structures
@@ -775,7 +775,7 @@ class defillama(Exchange, ImplicitAPI):
 
         https://api-docs.defillama.com/#tag/coins
 
-        :param str[] symbols: list of symbols with @network or @networknot * suffix
+        :param str[] symbols: list of symbols with @network suffix, or @network with wildcard dex
         :param dict [params]: extra parameters specific to the exchange API endpoint
         :returns ObDexPair[]: list of pair structures
         """
@@ -784,15 +784,15 @@ class defillama(Exchange, ImplicitAPI):
         symbolsLength = len(symbols)
         if symbolsLength == 0:
             raise ArgumentsRequired(self.id + ' obFetchDexPairs() requires a non-empty symbols argument')
-        seenInputs: dict = {}
-        parsedInputs: List[dict] = []
+        seenInputs = {}
+        parsedInputs = []
         for symbolIndex in range(0, symbolsLength):
             symbol = symbols[symbolIndex]
             if symbol in seenInputs:
                 continue
             seenInputs[symbol] = True
             parsedInputs.append(self.ob_parse_dex_pair_symbol_input(symbol))
-        requiredTradingSymbols: dict = {}
+        requiredTradingSymbols = {}
         for inputIndex in range(0, len(parsedInputs)):
             parsedInput = parsedInputs[inputIndex]
             requiredTradingSymbols[parsedInput['tradingSymbol']] = True
@@ -802,7 +802,7 @@ class defillama(Exchange, ImplicitAPI):
         marketsBySymbol = resolveResult['marketsBySymbol']
         coinKeys = self.collect_coin_keys_for_markets(marketsBySymbol, resolveSymbols)
         coins = await self.fetch_current_prices(coinKeys, params)
-        venues: dict = {}
+        venues = {}
         for symbolIndex in range(0, len(resolveSymbols)):
             symbol = resolveSymbols[symbolIndex]
             parsedInput = self.ob_parse_dex_pair_symbol_input(symbol)
@@ -828,7 +828,7 @@ class defillama(Exchange, ImplicitAPI):
         venueKeys = list(venues.keys())
         for venueKeyIndex in range(0, len(venueKeys)):
             venueKey = venueKeys[venueKeyIndex]
-            venueSymbols: dict = venues[venueKey]
+            venueSymbols = venues[venueKey]
             hasAllSymbols = True
             for requiredIndex in range(0, len(requiredSymbolsList)):
                 requiredTradingSymbol = requiredSymbolsList[requiredIndex]

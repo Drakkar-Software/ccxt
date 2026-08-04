@@ -1937,14 +1937,6 @@ class Exchange(BaseExchange):
             return await self.createOrderWs(symbol, type, side, amount, price, params)
         raise NotSupported(self.id + ' createTrailingAmountOrderWs() is not supported yet')
 
-    async def ob_fetch_permissions_imaginary_cancel(self, orderId: Str, symbol: Str, params={}, authPermissionMatch: Str = 'either'):
-        rights: List[str] = ['reading']
-        try:
-            await self.cancel_order(orderId, symbol, params)
-            return rights
-        except Exception as e:
-            return self.ob_resolve_rights_from_imaginary_cancel_catch(e, rights, authPermissionMatch)
-
     async def create_trailing_percent_order_ws(self, symbol: str, type: OrderType, side: OrderSide, amount: float, price: Num = None, trailingPercent: Num = None, trailingTriggerPrice: Num = None, params={}):
         """
         create a trailing order by providing the symbol, type, side, amount, price and trailingPercent
@@ -2324,6 +2316,14 @@ class Exchange(BaseExchange):
 
     async def cancel_order(self, id: str, symbol: Str = None, params={}):
         raise NotSupported(self.id + ' cancelOrder() is not supported yet')
+
+    async def ob_fetch_permissions_imaginary_cancel(self, orderId: Str, symbol: Str, params={}, authPermissionMatch: Str = 'either'):
+        rights = ['reading']
+        try:
+            await self.cancel_order(orderId, symbol, params)
+            return rights
+        except Exception as e:
+            return self.ob_resolve_rights_from_imaginary_cancel_catch(e, rights, authPermissionMatch)
 
     async def cancel_order_with_client_order_id(self, clientOrderId: str, symbol: Str = None, params={}):
         """

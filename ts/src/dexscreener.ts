@@ -1194,7 +1194,7 @@ export default class dexscreener extends Exchange {
      * @name dexscreener#fetchTicker
      * @description fetches a price ticker for a market
      * @see https://docs.dexscreener.com/api/reference
-     * @param {string} symbol unified market symbol with @network!dex suffix
+     * @param {string} symbol unified market symbol with @network dex suffix
      * @param {object} [params] extra parameters specific to the exchange API endpoint
      * @returns {object} a [ticker structure]{@link https://docs.ccxt.com/?id=ticker-structure}
      */
@@ -1210,7 +1210,7 @@ export default class dexscreener extends Exchange {
      * @name dexscreener#fetchTickers
      * @description fetches price tickers for multiple markets
      * @see https://docs.dexscreener.com/api/reference
-     * @param {string[]} symbols list of unified market symbols with @network!dex suffix
+     * @param {string[]} symbols list of unified market symbols with @network dex suffix
      * @param {object} [params] extra parameters specific to the exchange API endpoint
      * @returns {object} a dictionary of [ticker structures]{@link https://docs.ccxt.com/?id=ticker-structure}
      */
@@ -1232,7 +1232,7 @@ export default class dexscreener extends Exchange {
      * @name dexscreener#obLoadMarketsForSymbols
      * @description lazily resolves and populates this.markets for the given symbols
      * @see https://docs.dexscreener.com/api/reference
-     * @param {string[]} symbols list of base/quote symbols, optionally with @network!dex suffix
+     * @param {string[]} symbols list of base/quote symbols, optionally with @network dex suffix
      * @param {boolean} reload when true, re-fetch symbols even if already cached in this.markets
      * @param {object} params extra parameters specific to the exchange API endpoint
      * @returns {object[]} empty list; subclasses may return fixed market status structures
@@ -1417,7 +1417,7 @@ export default class dexscreener extends Exchange {
      * @name dexscreener#obFetchDexPairs
      * @description discovers DEX pairs across venues that list every requested symbol
      * @see https://docs.dexscreener.com/api/reference
-     * @param {string[]} symbols list of base/quote symbols, optionally with @network!dex suffix
+     * @param {string[]} symbols list of base/quote symbols, optionally with @network dex suffix
      * @param {object} [params] extra parameters specific to the exchange API endpoint
      * @returns {ObDexPair[]} list of DEX pair structures for venues listing all requested symbols
      */

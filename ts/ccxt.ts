@@ -134,7 +134,6 @@ import modetrade from  './src/modetrade.js'
 import mudrex from  './src/mudrex.js'
 import myokx from  './src/myokx.js'
 import ndax from  './src/ndax.js'
-import ob_ascendex from  './src/ob_ascendex.js'
 import ob_binance from  './src/ob_binance.js'
 import ob_binanceus from  './src/ob_binanceus.js'
 import ob_bingx from  './src/ob_bingx.js'
@@ -152,7 +151,7 @@ import ob_coingecko from  './src/ob_coingecko.js'
 import ob_cryptocom from  './src/ob_cryptocom.js'
 import ob_defillama from  './src/ob_defillama.js'
 import ob_dexscreener from  './src/ob_dexscreener.js'
-import ob_gateio from  './src/ob_gateio.js'
+import ob_gate from  './src/ob_gate.js'
 import ob_hitbtc from  './src/ob_hitbtc.js'
 import ob_hollaex from  './src/ob_hollaex.js'
 import ob_htx from  './src/ob_htx.js'
@@ -169,7 +168,6 @@ import ob_okxus from  './src/ob_okxus.js'
 import ob_phemex from  './src/ob_phemex.js'
 import ob_poloniex from  './src/ob_poloniex.js'
 import ob_upbit from  './src/ob_upbit.js'
-import ob_wavesexchange from  './src/ob_wavesexchange.js'
 import ob_wizardswap from  './src/ob_wizardswap.js'
 import okx from  './src/okx.js'
 import okxus from  './src/okxus.js'
@@ -369,7 +367,6 @@ const exchanges = {
     'mudrex':                 mudrex,
     'myokx':                  myokx,
     'ndax':                   ndax,
-    'ob_ascendex':            ob_ascendex,
     'ob_binance':             ob_binance,
     'ob_binanceus':           ob_binanceus,
     'ob_bingx':               ob_bingx,
@@ -387,7 +384,7 @@ const exchanges = {
     'ob_cryptocom':           ob_cryptocom,
     'ob_defillama':           ob_defillama,
     'ob_dexscreener':         ob_dexscreener,
-    'ob_gateio':              ob_gateio,
+    'ob_gate':                ob_gate,
     'ob_hitbtc':              ob_hitbtc,
     'ob_hollaex':             ob_hollaex,
     'ob_htx':                 ob_htx,
@@ -404,7 +401,6 @@ const exchanges = {
     'ob_phemex':              ob_phemex,
     'ob_poloniex':            ob_poloniex,
     'ob_upbit':               ob_upbit,
-    'ob_wavesexchange':       ob_wavesexchange,
     'ob_wizardswap':          ob_wizardswap,
     'okx':                    okx,
     'okxus':                  okxus,
@@ -782,7 +778,6 @@ export {
     mudrex,
     myokx,
     ndax,
-    ob_ascendex,
     ob_binance,
     ob_binanceus,
     ob_bingx,
@@ -800,7 +795,7 @@ export {
     ob_cryptocom,
     ob_defillama,
     ob_dexscreener,
-    ob_gateio,
+    ob_gate,
     ob_hitbtc,
     ob_hollaex,
     ob_htx,
@@ -817,7 +812,6 @@ export {
     ob_phemex,
     ob_poloniex,
     ob_upbit,
-    ob_wavesexchange,
     ob_wizardswap,
     okx,
     okxus,

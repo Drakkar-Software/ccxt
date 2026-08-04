@@ -5,6 +5,10 @@ import bitmex from './bitmex.js';
 
 //  ---------------------------------------------------------------------------
 
+/**
+ * @class ob_bitmex
+ * @augments bitmex
+ */
 export default class ob_bitmex extends bitmex {
     describe (): any {
         return this.deepExtend (super.describe (), {

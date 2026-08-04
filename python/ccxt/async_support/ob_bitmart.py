@@ -14,6 +14,10 @@ class ob_bitmart(bitmart, ImplicitAPI):
     def describe(self) -> Any:
         return self.deep_extend(super(ob_bitmart, self).describe(), {
             'id': 'ob_bitmart',
+            'name': 'BitMart',
+            'certified': False,
+            'urls': {
+            },
             'has': {
                 'CORS': None,
                 'spot': True,

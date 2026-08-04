@@ -13,6 +13,10 @@ class ob_poloniex(poloniex, ImplicitAPI):
     def describe(self) -> Any:
         return self.deep_extend(super(ob_poloniex, self).describe(), {
             'id': 'ob_poloniex',
+            'name': 'Poloniex',
+            'certified': False,
+            'urls': {
+            },
             'has': {
                 'CORS': None,
                 'spot': True,

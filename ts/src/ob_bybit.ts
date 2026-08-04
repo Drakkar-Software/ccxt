@@ -6,6 +6,10 @@ import type { Dict, Market, Ticker } from './base/types.js';
 
 //  ---------------------------------------------------------------------------
 
+/**
+ * @class ob_bybit
+ * @augments bybit
+ */
 export default class ob_bybit extends bybit {
     describe (): any {
         return this.deepExtend (super.describe (), {

@@ -15,6 +15,10 @@ class ob_coinex(coinex, ImplicitAPI):
     def describe(self) -> Any:
         return self.deep_extend(super(ob_coinex, self).describe(), {
             'id': 'ob_coinex',
+            'name': 'CoinEx',
+            'certified': False,
+            'urls': {
+            },
             'exceptions': {
                 'broad': {
                     'Order not found': OrderNotFound,

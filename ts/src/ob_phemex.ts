@@ -6,6 +6,10 @@ import type { Dict, Market, Num, Order, OrderSide, OrderType, Str } from './base
 
 //  ---------------------------------------------------------------------------
 
+/**
+ * @class ob_phemex
+ * @augments phemex
+ */
 export default class ob_phemex extends phemex {
     describe (): any {
         return this.deepExtend (super.describe (), {

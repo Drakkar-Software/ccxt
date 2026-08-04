@@ -7,6 +7,10 @@ import type { Bool, Dict, Market, Order, Str, Trade } from './base/types.js';
 
 //  ---------------------------------------------------------------------------
 
+/**
+ * @class ob_bingx
+ * @augments bingx
+ */
 export default class ob_bingx extends bingx {
     describe (): any {
         return this.deepExtend (super.describe (), {

@@ -1,18 +1,22 @@
 
 //  ---------------------------------------------------------------------------
 
-import gateio from './gateio.js';
+import gate from './gate.js';
 import { OBIPWhitelistError } from './base/errors.js';
 import type { Dict, int, Market, Ticker } from './base/types.js';
 
 //  ---------------------------------------------------------------------------
 
-export default class ob_gateio extends gateio {
+/**
+ * @class ob_gate
+ * @augments gate
+ */
+export default class ob_gate extends gate {
     describe (): any {
         const base = super.describe ();
         const parentHeaders = this.safeDict (base, 'headers');
         return this.deepExtend (base, {
-            'id': 'ob_gateio',
+            'id': 'ob_gate',
             'name': 'Gate',
             'certified': false,
             'urls': {

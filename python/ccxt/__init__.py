@@ -179,7 +179,6 @@ from ccxt.modetrade import modetrade                                  # noqa: F4
 from ccxt.mudrex import mudrex                                        # noqa: F401
 from ccxt.myokx import myokx                                          # noqa: F401
 from ccxt.ndax import ndax                                            # noqa: F401
-from ccxt.ob_ascendex import ob_ascendex                              # noqa: F401
 from ccxt.ob_binance import ob_binance                                # noqa: F401
 from ccxt.ob_binanceus import ob_binanceus                            # noqa: F401
 from ccxt.ob_bingx import ob_bingx                                    # noqa: F401
@@ -197,7 +196,7 @@ from ccxt.ob_coingecko import ob_coingecko                            # noqa: F4
 from ccxt.ob_cryptocom import ob_cryptocom                            # noqa: F401
 from ccxt.ob_defillama import ob_defillama                            # noqa: F401
 from ccxt.ob_dexscreener import ob_dexscreener                        # noqa: F401
-from ccxt.ob_gateio import ob_gateio                                  # noqa: F401
+from ccxt.ob_gate import ob_gate                                  # noqa: F401
 from ccxt.ob_hitbtc import ob_hitbtc                                  # noqa: F401
 from ccxt.ob_hollaex import ob_hollaex                                # noqa: F401
 from ccxt.ob_htx import ob_htx                                        # noqa: F401
@@ -214,7 +213,6 @@ from ccxt.ob_okxus import ob_okxus                                    # noqa: F4
 from ccxt.ob_phemex import ob_phemex                                  # noqa: F401
 from ccxt.ob_poloniex import ob_poloniex                              # noqa: F401
 from ccxt.ob_upbit import ob_upbit                                    # noqa: F401
-from ccxt.ob_wavesexchange import ob_wavesexchange                    # noqa: F401
 from ccxt.ob_wizardswap import ob_wizardswap                          # noqa: F401
 from ccxt.okx import okx                                              # noqa: F401
 from ccxt.okxus import okxus                                          # noqa: F401
@@ -327,7 +325,6 @@ exchanges = [
     'mudrex',
     'myokx',
     'ndax',
-    'ob_ascendex',
     'ob_binance',
     'ob_binanceus',
     'ob_bingx',
@@ -345,7 +342,7 @@ exchanges = [
     'ob_cryptocom',
     'ob_defillama',
     'ob_dexscreener',
-    'ob_gateio',
+    'ob_gate',
     'ob_hitbtc',
     'ob_hollaex',
     'ob_htx',
@@ -362,7 +359,6 @@ exchanges = [
     'ob_phemex',
     'ob_poloniex',
     'ob_upbit',
-    'ob_wavesexchange',
     'ob_wizardswap',
     'okx',
     'okxus',

@@ -159,7 +159,6 @@ from ccxt.async_support.modetrade import modetrade                              
 from ccxt.async_support.mudrex import mudrex                                    # noqa: F401
 from ccxt.async_support.myokx import myokx                                      # noqa: F401
 from ccxt.async_support.ndax import ndax                                        # noqa: F401
-from ccxt.async_support.ob_ascendex import ob_ascendex                          # noqa: F401
 from ccxt.async_support.ob_binance import ob_binance                            # noqa: F401
 from ccxt.async_support.ob_binanceus import ob_binanceus                        # noqa: F401
 from ccxt.async_support.ob_bingx import ob_bingx                                # noqa: F401
@@ -175,9 +174,9 @@ from ccxt.async_support.ob_coinbase import ob_coinbase                          
 from ccxt.async_support.ob_coinex import ob_coinex                              # noqa: F401
 from ccxt.async_support.ob_coingecko import ob_coingecko                        # noqa: F401
 from ccxt.async_support.ob_cryptocom import ob_cryptocom                        # noqa: F401
-from ccxt.async_support.ob_defillama import ob_defillama                        # noqa: F401
-from ccxt.async_support.ob_dexscreener import ob_dexscreener                    # noqa: F401
-from ccxt.async_support.ob_gateio import ob_gateio                              # noqa: F401
+from ccxt.async_support.ob_dexscreener import ob_dexscreener                  # noqa: F401
+from ccxt.async_support.ob_defillama import ob_defillama                      # noqa: F401
+from ccxt.async_support.ob_gate import ob_gate                                  # noqa: F401
 from ccxt.async_support.ob_hitbtc import ob_hitbtc                              # noqa: F401
 from ccxt.async_support.ob_hollaex import ob_hollaex                            # noqa: F401
 from ccxt.async_support.ob_htx import ob_htx                                    # noqa: F401
@@ -194,7 +193,6 @@ from ccxt.async_support.ob_okxus import ob_okxus                                
 from ccxt.async_support.ob_phemex import ob_phemex                              # noqa: F401
 from ccxt.async_support.ob_poloniex import ob_poloniex                          # noqa: F401
 from ccxt.async_support.ob_upbit import ob_upbit                                # noqa: F401
-from ccxt.async_support.ob_wavesexchange import ob_wavesexchange                # noqa: F401
 from ccxt.async_support.ob_wizardswap import ob_wizardswap                      # noqa: F401
 from ccxt.async_support.okx import okx                                          # noqa: F401
 from ccxt.async_support.okxus import okxus                                      # noqa: F401
@@ -307,7 +305,6 @@ exchanges = [
     'mudrex',
     'myokx',
     'ndax',
-    'ob_ascendex',
     'ob_binance',
     'ob_binanceus',
     'ob_bingx',
@@ -325,7 +322,7 @@ exchanges = [
     'ob_cryptocom',
     'ob_defillama',
     'ob_dexscreener',
-    'ob_gateio',
+    'ob_gate',
     'ob_hitbtc',
     'ob_hollaex',
     'ob_htx',
@@ -342,7 +339,6 @@ exchanges = [
     'ob_phemex',
     'ob_poloniex',
     'ob_upbit',
-    'ob_wavesexchange',
     'ob_wizardswap',
     'okx',
     'okxus',

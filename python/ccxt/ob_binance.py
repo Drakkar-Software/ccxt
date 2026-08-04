@@ -120,7 +120,7 @@ class ob_binance(binance, ImplicitAPI):
     def fetch_permissions(self, params={}) -> List[str]:
         try:
             restrictions = self.sapiGetAccountApiRestrictions(params)
-            rights: List[str] = []
+            rights = []
             if self.safe_bool(restrictions, 'enableReading'):
                 rights.append('reading')
             if self.safe_bool(restrictions, 'enableSpotAndMarginTrading'):
@@ -257,7 +257,7 @@ class ob_binance(binance, ImplicitAPI):
             )
             return parsed
         selling = self.safe_string_lower(parsed, 'side') == 'sell'
-        updatedType: Str = 'unknown'
+        updatedType = 'unknown'
         triggerAbove = False
         if isStop:
             updatedType = 'stop_loss'

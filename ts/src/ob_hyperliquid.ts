@@ -6,6 +6,10 @@ import type { Dict, Market, Ticker } from './base/types.js';
 
 //  ---------------------------------------------------------------------------
 
+/**
+ * @class ob_hyperliquid
+ * @augments hyperliquid
+ */
 export default class ob_hyperliquid extends hyperliquid {
     describe (): any {
         return this.deepExtend (super.describe (), {

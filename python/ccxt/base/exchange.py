@@ -7790,14 +7790,6 @@ class BaseExchange(object):
         rights.append('futuresTrading')
         return rights
 
-    def ob_fetch_permissions_imaginary_cancel(self, orderId: Str, symbol: Str, params={}, authPermissionMatch: Str = 'either'):
-        rights: List[str] = ['reading']
-        try:
-            self.cancel_order(orderId, symbol, params)
-            return rights
-        except Exception as e:
-            return self.ob_resolve_rights_from_imaginary_cancel_catch(e, rights, authPermissionMatch)
-
     def ob_is_authenticated_request(self, url: Str, method: Str, headers: dict, body, probe: Str, probeParams: dict = {}):
         if probe == 'urlBodySignature':
             needle = probeParams['needle'] if ('needle' in probeParams) else 'signature='
@@ -8502,6 +8494,14 @@ class Exchange(BaseExchange):
 
     def cancel_order(self, id: str, symbol: Str = None, params={}):
         raise NotSupported(self.id + ' cancelOrder() is not supported yet')
+
+    def ob_fetch_permissions_imaginary_cancel(self, orderId: Str, symbol: Str, params={}, authPermissionMatch: Str = 'either'):
+        rights = ['reading']
+        try:
+            self.cancel_order(orderId, symbol, params)
+            return rights
+        except Exception as e:
+            return self.ob_resolve_rights_from_imaginary_cancel_catch(e, rights, authPermissionMatch)
 
     def cancel_order_with_client_order_id(self, clientOrderId: str, symbol: Str = None, params={}):
         """

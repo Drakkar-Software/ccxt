@@ -82,7 +82,7 @@ class ob_coinbase(coinbase, ImplicitAPI):
         })
 
     async def fetch_permissions(self, params={}) -> List[str]:
-        rights: List[str] = ['reading']
+        rights = ['reading']
         try:
             await self.cancel_order('8bb80a81-27f7-4415-aa50-911ea46d841c', 'BTC/USDT')
             return rights
@@ -203,7 +203,7 @@ class ob_coinbase(coinbase, ImplicitAPI):
         if self.safe_string(parsed, 'type') is None:
             stopPrice = self.safe_number(parsed, 'stopPrice')
             price = self.safe_number(parsed, 'price')
-            inferredType: Str = 'limit'
+            inferredType = 'limit'
             if stopPrice is not None and stopPrice != 0:
                 # stop price set: stop order
                 inferredType = 'stop_loss'
@@ -269,7 +269,7 @@ class ob_coinbase(coinbase, ImplicitAPI):
             return parsed
         # use stop price price to parse it properly
         parsed['price'] = stopPrice
-        orderType: Str = 'stop_loss'
+        orderType = 'stop_loss'
         triggerAbove = False
         orderInfo = self.safe_dict(parsed, 'info', {})
         orderConfig = self.safe_dict(orderInfo, 'order_configuration', {})

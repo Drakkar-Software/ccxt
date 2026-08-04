@@ -204,7 +204,7 @@ class wizardswap(Exchange, ImplicitAPI):
         return self.parse_simple_currencies(defaultIds)
 
     def parse_rich_currencies(self, response):
-        result: dict = {}
+        result = {}
         for i in range(0, len(response)):
             entry = response[i]
             rawSymbol = self.safe_string(entry, 'symbol')
@@ -238,7 +238,7 @@ class wizardswap(Exchange, ImplicitAPI):
         return result
 
     def parse_simple_currencies(self, currencyIds):
-        result: dict = {}
+        result = {}
         for i in range(0, len(currencyIds)):
             currencyId = currencyIds[i]
             code = self.safe_currency_code(currencyId)
@@ -373,7 +373,7 @@ class wizardswap(Exchange, ImplicitAPI):
         market = self.market(symbol)
         amountFrom = self.safe_string(params, 'amount_from', '1')
         params = self.omit(params, 'amount_from')
-        request: dict = {
+        request = {
             'currency_from': market['baseId'],
             'currency_to': market['quoteId'],
             'amount_from': amountFrom,
@@ -437,7 +437,7 @@ class wizardswap(Exchange, ImplicitAPI):
         addressTo = self.safe_string(params, 'address_to')
         if addressTo is None:
             raise ArgumentsRequired(self.id + ' createOrder() requires params.address_to – the destination address for the received currency')
-        request: dict = {
+        request = {
             'currency_from': market['baseId'],
             'currency_to': market['quoteId'],
             'amount_from': self.number_to_string(amount),
@@ -486,7 +486,7 @@ class wizardswap(Exchange, ImplicitAPI):
         :param dict [params]: extra parameters specific to the exchange API endpoint
         :returns dict: an `order structure <https://docs.ccxt.com/?id=order-structure>`
         """
-        request: dict = {
+        request = {
             'id': id,
         }
         response = None
@@ -581,7 +581,7 @@ class wizardswap(Exchange, ImplicitAPI):
         }, market)
 
     def parse_order_status(self, status: Str) -> Str:
-        statuses: dict = self.safe_dict(self.options, 'statusMapping', {})
+        statuses = self.safe_dict(self.options, 'statusMapping', {})
         return self.safe_string(statuses, status, status)
 
     def sign(self, path, api='public', method='GET', params={}, headers=None, body=None):

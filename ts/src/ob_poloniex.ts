@@ -5,6 +5,10 @@ import poloniex from './poloniex.js';
 
 //  ---------------------------------------------------------------------------
 
+/**
+ * @class ob_poloniex
+ * @augments poloniex
+ */
 export default class ob_poloniex extends poloniex {
     describe (): any {
         return this.deepExtend (super.describe (), {

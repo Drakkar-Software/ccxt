@@ -5,6 +5,10 @@ import bitso from './bitso.js';
 
 //  ---------------------------------------------------------------------------
 
+/**
+ * @class ob_bitso
+ * @augments bitso
+ */
 export default class ob_bitso extends bitso {
     describe (): any {
         return this.deepExtend (super.describe (), {

@@ -13,6 +13,10 @@ class ob_bitstamp(bitstamp, ImplicitAPI):
     def describe(self) -> Any:
         return self.deep_extend(super(ob_bitstamp, self).describe(), {
             'id': 'ob_bitstamp',
+            'name': 'Bitstamp',
+            'certified': False,
+            'urls': {
+            },
             'has': {
                 'CORS': True,
                 'spot': True,

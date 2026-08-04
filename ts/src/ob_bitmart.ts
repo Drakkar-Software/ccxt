@@ -6,6 +6,10 @@ import type { Dict, Market, Order, Str } from './base/types.js';
 
 //  ---------------------------------------------------------------------------
 
+/**
+ * @class ob_bitmart
+ * @augments bitmart
+ */
 export default class ob_bitmart extends bitmart {
     describe (): any {
         return this.deepExtend (super.describe (), {

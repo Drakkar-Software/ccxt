@@ -11,8 +11,8 @@ from ccxt.base.errors import ExchangeError
 from ccxt.base.errors import AuthenticationError
 from ccxt.base.errors import PermissionDenied
 from ccxt.base.errors import OBIPWhitelistError
-from ccxt.base.errors import OrderNotFound
 from ccxt.base.errors import OBOrderUncancellableError
+from ccxt.base.errors import OrderNotFound
 
 
 class ob_bingx(bingx, ImplicitAPI):
@@ -75,7 +75,7 @@ class ob_bingx(bingx, ImplicitAPI):
         })
 
     async def fetch_permissions(self, params={}) -> List[str]:
-        rights: List[str] = ['reading']
+        rights = ['reading']
         try:
             await self.cancel_order('12345', 'BTC/USDT')
             return rights
@@ -110,6 +110,8 @@ class ob_bingx(bingx, ImplicitAPI):
     def adapt_bingx_stop_order_or_trade_type_and_price(self, parsed: dict, logContext: Str = 'ob_bingx.parseOrder'):
         """
  OctoBot BingxCCXTAdapter._update_stop_order_or_trade_type_and_price(orders and trades).
+ @param parsed
+ @param logContext
         """
         # Step 1: only adjust when BingX stop-loss quote field is present
         stopPrice = self.safe_number(parsed, 'stopLossPrice')

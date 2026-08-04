@@ -6,6 +6,10 @@ import type { Dict, Market, Ticker } from './base/types.js';
 
 //  ---------------------------------------------------------------------------
 
+/**
+ * @class ob_bitfinex
+ * @augments bitfinex
+ */
 export default class ob_bitfinex extends bitfinex {
     describe (): any {
         return this.deepExtend (super.describe (), {

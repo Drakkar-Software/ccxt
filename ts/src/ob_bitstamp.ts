@@ -5,6 +5,10 @@ import bitstamp from './bitstamp.js';
 
 //  ---------------------------------------------------------------------------
 
+/**
+ * @class ob_bitstamp
+ * @augments bitstamp
+ */
 export default class ob_bitstamp extends bitstamp {
     describe (): any {
         return this.deepExtend (super.describe (), {

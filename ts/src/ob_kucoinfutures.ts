@@ -7,6 +7,10 @@ import type { Bool, Dict, FundingRate, Int, Market, Order, Str, Ticker, Trade } 
 
 //  ---------------------------------------------------------------------------
 
+/**
+ * @class ob_kucoinfutures
+ * @augments kucoinfutures
+ */
 export default class ob_kucoinfutures extends kucoinfutures {
     describe (): any {
         return this.deepExtend (super.describe (), {

@@ -1,4 +1,3 @@
-import testObAscendex from './test.ob.ascendex.js';
 import testObBinance from './test.ob.binance.js';
 import testObBinanceus from './test.ob.binanceus.js';
 import testObBingx from './test.ob.bingx.js';
@@ -14,7 +13,7 @@ import testObCoinbase from './test.ob.coinbase.js';
 import testObCoinex from './test.ob.coinex.js';
 import testObExchangeMarketStatus from './test.ob.exchange.marketstatus.js';
 import testObCryptocom from './test.ob.cryptocom.js';
-import testObGateio from './test.ob.gateio.js';
+import testObGate from './test.ob.gate.js';
 import testObHollaex from './test.ob.hollaex.js';
 import testObHyperliquid from './test.ob.hyperliquid.js';
 import testObHtx from './test.ob.htx.js';
@@ -28,7 +27,6 @@ import testObPhemex from './test.ob.phemex.js';
 import testObWizardswap from './test.ob.wizardswap.js';
 
 async function obTestsInit () {
-    await testObAscendex ();
     await testObBinance ();
     await testObBinanceus ();
     await testObBingx ();
@@ -44,7 +42,7 @@ async function obTestsInit () {
     await testObCoinex ();
     await testObExchangeMarketStatus ();
     await testObCryptocom ();
-    await testObGateio ();
+    await testObGate ();
     await testObHollaex ();
     await testObHyperliquid ();
     await testObHtx ();

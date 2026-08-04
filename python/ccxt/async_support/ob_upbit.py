@@ -13,6 +13,10 @@ class ob_upbit(upbit, ImplicitAPI):
     def describe(self) -> Any:
         return self.deep_extend(super(ob_upbit, self).describe(), {
             'id': 'ob_upbit',
+            'name': 'Upbit',
+            'certified': False,
+            'urls': {
+            },
             'has': {
                 'CORS': True,
                 'spot': True,

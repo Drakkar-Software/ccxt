@@ -7,6 +7,10 @@ import type { Bool, Dict, Market, Order, Str } from './base/types.js';
 
 //  ---------------------------------------------------------------------------
 
+/**
+ * @class ob_okxus
+ * @augments okxus
+ */
 export default class ob_okxus extends okxus {
     describe (): any {
         return this.deepExtend (super.describe (), {
