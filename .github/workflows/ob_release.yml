@@ -57,8 +57,8 @@ jobs:
       #   run: composer install
       - name: Install python dependencies
         run: pip install -r build/ci-requirements.txt
-      - name: Install Wheel
-        run: pip install wheel twine
+      - name: Install Python build tools
+        run: pip install build twine
       - name: Transpile and Build (JS + Python only)
         run: npm run force-build-js-py
       - name: Base tests Rest
@@ -138,10 +138,15 @@ jobs:
       #   env:
       #     NUGGET_TOKEN: ${{ secrets.NUGET_PROD }}
       #   run: ./cs/deploy.sh;
-      - name: Deploy Python
-        env:
-          PYPI_TOKEN: ${{ secrets.PYPI_TOKEN }}
-        run: cd python && ./deploy.sh && cd ..;
+      - name: Deploy Python Package
+        run: python -m build --outdir python/dist
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: 'python/dist'
+          print_hash: true
+          username: __token__
+          password: ${{ secrets.PYPI_TOKEN }}
 # todo restore npm publish later on
 #       - uses: JS-DevTools/npm-publish@v3
 #         with:
