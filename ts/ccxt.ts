@@ -1,4 +1,4 @@
-/*
+﻿/*
 
 MIT License
 
@@ -170,6 +170,7 @@ import ob_okxus from  './src/ob_okxus.js'
 import ob_phemex from  './src/ob_phemex.js'
 import ob_poloniex from  './src/ob_poloniex.js'
 import ob_upbit from  './src/ob_upbit.js'
+import ob_weex from  './src/ob_weex.js'
 import ob_wizardswap from  './src/ob_wizardswap.js'
 import okx from  './src/okx.js'
 import okxus from  './src/okxus.js'
@@ -405,6 +406,7 @@ const exchanges = {
     'ob_phemex':              ob_phemex,
     'ob_poloniex':            ob_poloniex,
     'ob_upbit':               ob_upbit,
+    'ob_weex':                ob_weex,
     'ob_wizardswap':          ob_wizardswap,
     'okx':                    okx,
     'okxus':                  okxus,
@@ -818,6 +820,7 @@ export {
     ob_phemex,
     ob_poloniex,
     ob_upbit,
+    ob_weex,
     ob_wizardswap,
     okx,
     okxus,
