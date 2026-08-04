@@ -117,6 +117,7 @@ from ccxt.async_support.coinex import coinex                                    
 from ccxt.async_support.coingecko import coingecko                              # noqa: F401
 from ccxt.async_support.coinmate import coinmate                                # noqa: F401
 from ccxt.async_support.coinone import coinone                                  # noqa: F401
+from ccxt.async_support.coinrabbit import coinrabbit                            # noqa: F401
 from ccxt.async_support.coinsph import coinsph                                  # noqa: F401
 from ccxt.async_support.coinspot import coinspot                                # noqa: F401
 from ccxt.async_support.cryptocom import cryptocom                              # noqa: F401
@@ -175,9 +176,10 @@ from ccxt.async_support.ob_changenow import ob_changenow                        
 from ccxt.async_support.ob_coinbase import ob_coinbase                          # noqa: F401
 from ccxt.async_support.ob_coinex import ob_coinex                              # noqa: F401
 from ccxt.async_support.ob_coingecko import ob_coingecko                        # noqa: F401
+from ccxt.async_support.ob_coinrabbit import ob_coinrabbit                      # noqa: F401
 from ccxt.async_support.ob_cryptocom import ob_cryptocom                        # noqa: F401
-from ccxt.async_support.ob_dexscreener import ob_dexscreener                  # noqa: F401
-from ccxt.async_support.ob_defillama import ob_defillama                      # noqa: F401
+from ccxt.async_support.ob_defillama import ob_defillama                        # noqa: F401
+from ccxt.async_support.ob_dexscreener import ob_dexscreener                    # noqa: F401
 from ccxt.async_support.ob_gate import ob_gate                                  # noqa: F401
 from ccxt.async_support.ob_hitbtc import ob_hitbtc                              # noqa: F401
 from ccxt.async_support.ob_hollaex import ob_hollaex                            # noqa: F401
@@ -266,6 +268,7 @@ exchanges = [
     'coingecko',
     'coinmate',
     'coinone',
+    'coinrabbit',
     'coinsph',
     'coinspot',
     'cryptocom',
@@ -324,6 +327,7 @@ exchanges = [
     'ob_coinbase',
     'ob_coinex',
     'ob_coingecko',
+    'ob_coinrabbit',
     'ob_cryptocom',
     'ob_defillama',
     'ob_dexscreener',

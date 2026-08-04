@@ -34,7 +34,7 @@ import PredictionExchange from './src/base/PredictionExchange.js'
 import { Precise }   from './src/base/Precise.js'
 import * as functions from './src/base/functions.js'
 import * as errors   from './src/base/errors.js'
-import type { Int, int, Str, Strings, Num, Bool, IndexType, OrderSide, OrderType, MarketType, SubType, Dict, NullableDict, List, NullableList, Fee, OHLCV, OHLCVC, implicitReturnType, Market, Currency, Dictionary, NestedDictionary, MinMax, FeeInterface, TradingFeeInterface, MarketInterface, Precision, PredictionEvent, PredictionOutcome, PredictionMarket, PredictionSettlement, PredictionFees, PredictionOrder, PredictionTrade, PredictionPosition, PredictionTicker, PredictionOrderBook, PredictionTickers, PredictionTradingFee, PredictionOpenInterest, PredictionOrderRequest, fetchEventsParams, Trade, Order, OrderBook, Ticker, Transaction, Tickers, CurrencyInterface, Balance, BalanceAccount, Account, PartialBalances, Balances, DepositAddress, WithdrawalResponse, FundingRate, FundingRates, Position, BorrowInterest, LeverageTier, LedgerEntry, DepositWithdrawFeeNetwork, DepositWithdrawFee, TransferEntry, ObDexPair, CrossBorrowRate, IsolatedBorrowRate, FundingRateHistory, OpenInterest, Liquidation, OrderRequest, CancellationRequest, FundingHistory, MarketMarginModes, MarginMode, Greeks, Conversion, Option, LastPrice, Leverage, MarginModification, Leverages, LastPrices, Currencies, TradingFees, MarginModes, OptionChain, IsolatedBorrowRates, CrossBorrowRates, LeverageTiers, LongShortRatio, OrderBooks, OpenInterests, ConstructorArgs, ADL } from './src/base/types.js'
+import type {Int, int, Str, Strings, Num, Bool, IndexType, OrderSide, OrderType, MarketType, SubType, Dict, NullableDict, List, NullableList, Fee, OHLCV, OHLCVC, implicitReturnType, Market, Currency, ConstructorArgs, Dictionary, NestedDictionary, MinMax, FeeInterface, TradingFeeInterface, MarketMarginModes, Precision, MarketInterface, PredictionFees, PredictionEvent, PredictionMarket, PredictionOutcome, PredictionOrder, PredictionTrade, PredictionPosition, PredictionTicker, PredictionOrderBook, PredictionTickers, PredictionTradingFee, PredictionOpenInterest, PredictionSettlement, fetchEventsParams, Trade, Order, OrderBook, OrderBooks, Ticker, Transaction, Tickers, CurrencyInterface, Balance, BalanceAccount, Account, PartialBalances, Balances, DepositAddress, WithdrawalResponse, FundingRate, FundingRates, Position, BorrowInterest, LeverageTier, LedgerEntry, DepositWithdrawFeeNetwork, DepositWithdrawFee, TransferEntry, ObDexPair, CrossBorrowRate, IsolatedBorrowRate, FundingRateHistory, OpenInterest, OpenInterests, Liquidation, OrderRequest, PredictionOrderRequest, CancellationRequest, FundingHistory, MarginMode, Greeks, Conversion, Option, LastPrice, Leverage, LongShortRatio, ADL, MarginModification, Leverages, LastPrices, Currencies, TradingFees, MarginModes, OptionChain, IsolatedBorrowRates, CrossBorrowRates, LeverageTiers} from './src/base/types.js'
 import {BaseError, ExchangeError, AuthenticationError, PermissionDenied, AccountNotEnabled, AccountSuspended, OBIPWhitelistError, ArgumentsRequired, BadRequest, BadSymbol, OBUntradableSymbol, OBClosedPositionError, OBOrderUncancellableError, OBInternalSyncError, OBMaxOpenOrdersReached, OperationRejected, NoChange, MarginModeAlreadySet, MarketClosed, ManualInteractionNeeded, RestrictedLocation, InsufficientFunds, InvalidAddress, AddressPending, InvalidOrder, OrderNotFound, OrderNotCached, OrderImmediatelyFillable, OrderNotFillable, DuplicateOrderId, ContractUnavailable, NotSupported, InvalidProxySettings, ExchangeClosedByUser, OperationFailed, NetworkError, DDoSProtection, RateLimitExceeded, ExchangeNotAvailable, OnMaintenance, InvalidNonce, ChecksumError, RequestTimeout, BadResponse, NullResponse, CancelPending, UnsubscribeError}  from './src/base/errors.js'
 
 
@@ -45,8 +45,8 @@ const version = '4.5.68';
 
 //-----------------------------------------------------------------------------
 
-import alpaca from  './src/alpaca.js'
 import alchemy from  './src/alchemy.js'
+import alpaca from  './src/alpaca.js'
 import apex from  './src/apex.js'
 import aster from  './src/aster.js'
 import backpack from  './src/backpack.js'
@@ -92,6 +92,7 @@ import coinex from  './src/coinex.js'
 import coingecko from  './src/coingecko.js'
 import coinmate from  './src/coinmate.js'
 import coinone from  './src/coinone.js'
+import coinrabbit from  './src/coinrabbit.js'
 import coinsph from  './src/coinsph.js'
 import coinspot from  './src/coinspot.js'
 import cryptocom from  './src/cryptocom.js'
@@ -150,6 +151,7 @@ import ob_changenow from  './src/ob_changenow.js'
 import ob_coinbase from  './src/ob_coinbase.js'
 import ob_coinex from  './src/ob_coinex.js'
 import ob_coingecko from  './src/ob_coingecko.js'
+import ob_coinrabbit from  './src/ob_coinrabbit.js'
 import ob_cryptocom from  './src/ob_cryptocom.js'
 import ob_defillama from  './src/ob_defillama.js'
 import ob_dexscreener from  './src/ob_dexscreener.js'
@@ -328,6 +330,7 @@ const exchanges = {
     'coingecko':              coingecko,
     'coinmate':               coinmate,
     'coinone':                coinone,
+    'coinrabbit':             coinrabbit,
     'coinsph':                coinsph,
     'coinspot':               coinspot,
     'cryptocom':              cryptocom,
@@ -386,6 +389,7 @@ const exchanges = {
     'ob_coinbase':            ob_coinbase,
     'ob_coinex':              ob_coinex,
     'ob_coingecko':           ob_coingecko,
+    'ob_coinrabbit':          ob_coinrabbit,
     'ob_cryptocom':           ob_cryptocom,
     'ob_defillama':           ob_defillama,
     'ob_dexscreener':         ob_dexscreener,
@@ -695,8 +699,8 @@ export {
     IsolatedBorrowRates,
     CrossBorrowRates,
     LeverageTiers,
-    alpaca,
     alchemy,
+    alpaca,
     apex,
     aster,
     backpack,
@@ -742,6 +746,7 @@ export {
     coingecko,
     coinmate,
     coinone,
+    coinrabbit,
     coinsph,
     coinspot,
     cryptocom,
@@ -800,6 +805,7 @@ export {
     ob_coinbase,
     ob_coinex,
     ob_coingecko,
+    ob_coinrabbit,
     ob_cryptocom,
     ob_defillama,
     ob_dexscreener,
