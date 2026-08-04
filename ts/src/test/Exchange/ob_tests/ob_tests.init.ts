@@ -1,3 +1,5 @@
+import testAlchemy from './test.alchemy.js';
+import testObAlchemy from './test.ob.alchemy.js';
 import testObBinance from './test.ob.binance.js';
 import testObBinanceus from './test.ob.binanceus.js';
 import testObBingx from './test.ob.bingx.js';
@@ -27,6 +29,8 @@ import testObPhemex from './test.ob.phemex.js';
 import testObWizardswap from './test.ob.wizardswap.js';
 
 async function obTestsInit () {
+    await testAlchemy ();
+    await testObAlchemy ();
     await testObBinance ();
     await testObBinanceus ();
     await testObBingx ();
