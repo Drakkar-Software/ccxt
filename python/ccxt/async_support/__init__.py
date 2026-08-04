@@ -195,6 +195,7 @@ from ccxt.async_support.ob_okxus import ob_okxus                                
 from ccxt.async_support.ob_phemex import ob_phemex                              # noqa: F401
 from ccxt.async_support.ob_poloniex import ob_poloniex                          # noqa: F401
 from ccxt.async_support.ob_upbit import ob_upbit                                # noqa: F401
+from ccxt.async_support.ob_weex import ob_weex                                  # noqa: F401
 from ccxt.async_support.ob_wizardswap import ob_wizardswap                      # noqa: F401
 from ccxt.async_support.okx import okx                                          # noqa: F401
 from ccxt.async_support.okxus import okxus                                      # noqa: F401
@@ -343,6 +344,7 @@ exchanges = [
     'ob_phemex',
     'ob_poloniex',
     'ob_upbit',
+    'ob_weex',
     'ob_wizardswap',
     'okx',
     'okxus',
