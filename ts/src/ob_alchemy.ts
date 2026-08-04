@@ -6,6 +6,10 @@ import type { Dict } from './base/types.js';
 
 //  ---------------------------------------------------------------------------
 
+/**
+ * @class ob_alchemy
+ * @augments alchemy
+ */
 export default class ob_alchemy extends alchemy {
     describe (): any {
         return this.deepExtend (super.describe (), {
