@@ -9,6 +9,8 @@ import testObBybit from './test.ob.bybit.js';
 import testCoingecko from './test.coingecko.js';
 import testDexscreener from './test.dexscreener.js';
 import testObChangenow from './test.ob.changenow.js';
+import testCoinrabbit from './test.coinrabbit.js';
+import testObCoinrabbit from './test.ob.coinrabbit.js';
 import testObCoingecko from './test.ob.coingecko.js';
 import testObDexscreener from './test.ob.dexscreener.js';
 import testObCoinbase from './test.ob.coinbase.js';
@@ -41,6 +43,8 @@ async function obTestsInit () {
     await testCoingecko ();
     await testDexscreener ();
     await testObChangenow ();
+    await testCoinrabbit ();
+    await testObCoinrabbit ();
     await testObCoingecko ();
     await testObDexscreener ();
     await testObCoinbase ();

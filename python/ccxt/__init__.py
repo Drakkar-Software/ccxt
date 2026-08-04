@@ -137,6 +137,7 @@ from ccxt.coinex import coinex                                        # noqa: F4
 from ccxt.coingecko import coingecko                                  # noqa: F401
 from ccxt.coinmate import coinmate                                    # noqa: F401
 from ccxt.coinone import coinone                                      # noqa: F401
+from ccxt.coinrabbit import coinrabbit                                # noqa: F401
 from ccxt.coinsph import coinsph                                      # noqa: F401
 from ccxt.coinspot import coinspot                                    # noqa: F401
 from ccxt.cryptocom import cryptocom                                  # noqa: F401
@@ -195,10 +196,11 @@ from ccxt.ob_changenow import ob_changenow                            # noqa: F4
 from ccxt.ob_coinbase import ob_coinbase                              # noqa: F401
 from ccxt.ob_coinex import ob_coinex                                  # noqa: F401
 from ccxt.ob_coingecko import ob_coingecko                            # noqa: F401
+from ccxt.ob_coinrabbit import ob_coinrabbit                          # noqa: F401
 from ccxt.ob_cryptocom import ob_cryptocom                            # noqa: F401
 from ccxt.ob_defillama import ob_defillama                            # noqa: F401
 from ccxt.ob_dexscreener import ob_dexscreener                        # noqa: F401
-from ccxt.ob_gate import ob_gate                                  # noqa: F401
+from ccxt.ob_gate import ob_gate                                      # noqa: F401
 from ccxt.ob_hitbtc import ob_hitbtc                                  # noqa: F401
 from ccxt.ob_hollaex import ob_hollaex                                # noqa: F401
 from ccxt.ob_htx import ob_htx                                        # noqa: F401
@@ -286,6 +288,7 @@ exchanges = [
     'coingecko',
     'coinmate',
     'coinone',
+    'coinrabbit',
     'coinsph',
     'coinspot',
     'cryptocom',
@@ -344,6 +347,7 @@ exchanges = [
     'ob_coinbase',
     'ob_coinex',
     'ob_coingecko',
+    'ob_coinrabbit',
     'ob_cryptocom',
     'ob_defillama',
     'ob_dexscreener',
