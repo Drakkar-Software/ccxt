@@ -144,8 +144,8 @@ jobs:
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: 'python/dist'
-          print_hash: true
-          username: __token__
+          print-hash: true
+          user: __token__
           password: ${{ secrets.PYPI_TOKEN }}
 # todo restore npm publish later on
 #       - uses: JS-DevTools/npm-publish@v3
