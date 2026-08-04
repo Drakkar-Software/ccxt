@@ -193,7 +193,7 @@ class bydfi(Exchange, ImplicitAPI):
                 'ws': True,
             },
             'urls': {
-                'logo': 'https://github.com/user-attachments/assets/bfffb73d-29bd-465d-b75b-98e210491769',
+                'logo': 'https://github.com/user-attachments/assets/0e9319dc-b5f5-458b-bcfd-b21b50e162ea',
                 'api': {
                     'public': 'https://api.bydfi.com/api',
                     'private': 'https://api.bydfi.com/api',
@@ -574,7 +574,8 @@ class bydfi(Exchange, ImplicitAPI):
         :param str [params.loc]: crypto location, default: us
         :returns dict: A dictionary of `order book structures <https://github.com/ccxt/ccxt/wiki/Manual#order-book-structure>` indexed by market symbols
         """
-        self.load_markets()
+        if self.markets is None:
+            self.load_markets()
         market = self.market(symbol)
         request = {
             'symbol': market['id'],
@@ -636,13 +637,14 @@ class bydfi(Exchange, ImplicitAPI):
         :param int [params.fromId]: retrieve from which trade ID to start. Default to retrieve the most recent trade records
         :returns Trade[]: a list of `trade structures <https://docs.ccxt.com/?id=public-trades>`
         """
-        self.load_markets()
+        if self.markets is None:
+            self.load_markets()
         market = self.market(symbol)
         request = {
             'symbol': market['id'],
         }
         if limit is not None:
-            request['limit'] = limit
+            request['limit'] = min(limit, 1000)
         response = self.publicGetV1FapiMarketTrades(self.extend(request, params))
         #
         #     {
@@ -680,7 +682,8 @@ class bydfi(Exchange, ImplicitAPI):
         :param str [params.orderType]: order type('LIMIT', 'MARKET', 'LIQ', 'LIMIT_CLOSE', 'MARKET_CLOSE', 'STOP', 'TAKE_PROFIT', 'STOP_MARKET', 'TAKE_PROFIT_MARKET' or 'TRAILING_STOP_MARKET')
         :returns Trade[]: a list of `trade structures <https://docs.ccxt.com/?id=trade-structure>`
         """
-        self.load_markets()
+        if self.markets is None:
+            self.load_markets()
         paginate = self.safe_bool(params, 'paginate', False)
         if paginate:
             maxLimit = 500
@@ -690,7 +693,7 @@ class bydfi(Exchange, ImplicitAPI):
             return self.sort_by(paginatedResponse, 'timestamp')
         contractType = 'FUTURE'
         contractType, params = self.handle_option_and_params(params, 'fetchMyTrades', 'contractType', contractType)
-        request: dict = {
+        request = {
             'contractType': contractType,
         }
         market = None
@@ -773,7 +776,7 @@ class bydfi(Exchange, ImplicitAPI):
                 'currency': market['settle'],
             }
         orderId = self.safe_string(trade, 'orderId')
-        side: Str = None  # fetchMyTrades always returns side BUY
+        side = None  # fetchMyTrades always returns side BUY
         if orderId is None:
             # from fetchTrades
             side = self.safe_string_lower(trade, 'side')
@@ -815,7 +818,8 @@ class bydfi(Exchange, ImplicitAPI):
         :param int [params.until]: timestamp in ms of the latest candle to fetch
         :returns int[][]: A list of candles ordered, open, high, low, close, volume
         """
-        self.load_markets()
+        if self.markets is None:
+            self.load_markets()
         maxLimit = 500  # docs says max 1500, but in practice only 500 works
         paginate = False
         paginate, params = self.handle_option_and_params(params, 'fetchOHLCV', 'paginate')
@@ -901,7 +905,8 @@ class bydfi(Exchange, ImplicitAPI):
         :param dict [params]: extra parameters specific to the exchange API endpoint
         :returns dict: a dictionary of `ticker structures <https://docs.ccxt.com/?id=ticker-structure>`
         """
-        self.load_markets()
+        if self.markets is None:
+            self.load_markets()
         response = self.publicGetV1FapiMarketTicker24hr(params)
         #
         #     {
@@ -934,9 +939,10 @@ class bydfi(Exchange, ImplicitAPI):
         :param dict [params]: extra parameters specific to the exchange API endpoint
         :returns dict: a `ticker structure <https://docs.ccxt.com/?id=ticker-structure>`
         """
-        self.load_markets()
+        if self.markets is None:
+            self.load_markets()
         market = self.market(symbol)
-        request: dict = {
+        request = {
             'symbol': market['id'],
         }
         response = self.publicGetV1FapiMarketTicker24hr(self.extend(request, params))
@@ -996,9 +1002,10 @@ class bydfi(Exchange, ImplicitAPI):
         :param dict [params]: extra parameters specific to the exchange API endpoint
         :returns dict: a `funding rate structure <https://docs.ccxt.com/?id=funding-rate-structure>`
         """
-        self.load_markets()
+        if self.markets is None:
+            self.load_markets()
         market = self.market(symbol)
-        request: dict = {
+        request = {
             'symbol': market['id'],
         }
         response = self.publicGetV1FapiMarketFundingRate(self.extend(request, params))
@@ -1067,9 +1074,10 @@ class bydfi(Exchange, ImplicitAPI):
         """
         if symbol is None:
             raise ArgumentsRequired(self.id + ' fetchFundingRateHistory() requires a symbol argument')
-        self.load_markets()
+        if self.markets is None:
+            self.load_markets()
         market = self.market(symbol)
-        request: dict = {
+        request = {
             'symbol': market['id'],
         }
         if since is not None:
@@ -1144,7 +1152,8 @@ class bydfi(Exchange, ImplicitAPI):
         :param bool [params.closePosition]: True or False, whether to close all positions after triggering, only supported in STOP_MARKET and TAKE_PROFIT_MARKET; not used with quantity
         :returns dict: an `order structure <https://docs.ccxt.com/?id=order-structure>`
         """
-        self.load_markets()
+        if self.markets is None:
+            self.load_markets()
         market = self.market(symbol)
         orderRequest = self.create_order_request(symbol, type, side, amount, price, params)
         wallet = 'W001'
@@ -1186,7 +1195,7 @@ class bydfi(Exchange, ImplicitAPI):
 
     def create_order_request(self, symbol: str, type: OrderType, side: OrderSide, amount: float, price: Num = None, params={}):
         market = self.market(symbol)
-        request: dict = {
+        request = {
             'symbol': market['id'],
             'side': side.upper(),
             # 'positionSide': STRING Position direction, not required in single position mode, default and can only be BOTH; required in dual position mode, and can only choose LONG or SHORT
@@ -1293,7 +1302,8 @@ class bydfi(Exchange, ImplicitAPI):
         :param str [params.wallet]: The unique code of a sub-wallet. W001 is the default wallet and the main wallet code of the contract
         :returns dict: an `order structure <https://docs.ccxt.com/?id=order-structure>`
         """
-        self.load_markets()
+        if self.markets is None:
+            self.load_markets()
         length = len(orders)
         if length > 5:
             raise BadRequest(self.id + ' createOrders() accepts a maximum of 5 orders')
@@ -1310,7 +1320,7 @@ class bydfi(Exchange, ImplicitAPI):
             ordersRequests.append(orderRequest)
         wallet = 'W001'
         wallet, params = self.handle_option_and_params(params, 'createOrder', 'wallet', wallet)
-        request: dict = {
+        request = {
             'wallet': wallet,
             'orders': ordersRequests,
         }
@@ -1335,7 +1345,8 @@ class bydfi(Exchange, ImplicitAPI):
         :param str [params.wallet]: The unique code of a sub-wallet. W001 is the default wallet and the main wallet code of the contract
         :returns dict: an `order structure <https://docs.ccxt.com/?id=order-structure>`
         """
-        self.load_markets()
+        if self.markets is None:
+            self.load_markets()
         request = self.create_edit_order_request(id, symbol, 'limit', side, amount, price, params)
         wallet = 'W001'
         wallet, params = self.handle_option_and_params(params, 'editOrder', 'wallet', wallet)
@@ -1355,7 +1366,8 @@ class bydfi(Exchange, ImplicitAPI):
         :param str [params.wallet]: The unique code of a sub-wallet. W001 is the default wallet and the main wallet code of the contract
         :returns dict: an `order structure <https://docs.ccxt.com/?id=order-structure>`
         """
-        self.load_markets()
+        if self.markets is None:
+            self.load_markets()
         length = len(orders)
         if length > 5:
             raise BadRequest(self.id + ' editOrders() accepts a maximum of 5 orders')
@@ -1372,7 +1384,7 @@ class bydfi(Exchange, ImplicitAPI):
             ordersRequests.append(orderRequest)
         wallet = 'W001'
         wallet, params = self.handle_option_and_params(params, 'editOrder', 'wallet', wallet)
-        request: dict = {
+        request = {
             'wallet': wallet,
             'editOrders': ordersRequests,
         }
@@ -1382,7 +1394,7 @@ class bydfi(Exchange, ImplicitAPI):
 
     def create_edit_order_request(self, id: str, symbol: str, type: OrderType, side: OrderSide, amount: Num = None, price: Num = None, params={}):
         clientOrderId = self.safe_string(params, 'clientOrderId')
-        request: dict = {}
+        request = {}
         if (id is None) and (clientOrderId is None):
             raise ArgumentsRequired(self.id + ' editOrder() requires an id argument or a clientOrderId parameter')
         elif id is not None:
@@ -1410,11 +1422,12 @@ class bydfi(Exchange, ImplicitAPI):
         """
         if symbol is None:
             raise ArgumentsRequired(self.id + ' cancelAllOrders() requires a symbol argument')
-        self.load_markets()
+        if self.markets is None:
+            self.load_markets()
         market = self.market(symbol)
         wallet = 'W001'
         wallet, params = self.handle_option_and_params(params, 'cancelAllOrders', 'wallet', wallet)
-        request: dict = {
+        request = {
             'symbol': market['id'],
             'wallet': wallet,
         }
@@ -1471,15 +1484,16 @@ class bydfi(Exchange, ImplicitAPI):
         """
         if symbol is None:
             raise ArgumentsRequired(self.id + ' fetchOpenOrders() requires a symbol argument')
-        self.load_markets()
+        if self.markets is None:
+            self.load_markets()
         market = self.market(symbol)
         wallet = 'W001'
         wallet, params = self.handle_option_and_params(params, 'fetchOpenOrders', 'wallet', wallet)
-        request: dict = {
+        request = {
             'symbol': market['id'],
             'wallet': wallet,
         }
-        response = None
+        response: dict
         trigger = False
         trigger, params = self.handle_option_and_params(params, 'fetchOpenOrders', 'trigger', trigger)
         if not trigger:
@@ -1538,9 +1552,10 @@ class bydfi(Exchange, ImplicitAPI):
         """
         if symbol is None:
             raise ArgumentsRequired(self.id + ' fetchOpenOrder() requires a symbol argument')
-        self.load_markets()
+        if self.markets is None:
+            self.load_markets()
         market = self.market(symbol)
-        request: dict = {
+        request = {
             'symbol': market['id'],
         }
         clientOrderId = self.safe_string(params, 'clientOrderId')
@@ -1551,7 +1566,7 @@ class bydfi(Exchange, ImplicitAPI):
         wallet = 'W001'
         wallet, params = self.handle_option_and_params(params, 'fetchOpenOrder', 'wallet', wallet)
         request['wallet'] = wallet
-        response = None
+        response: dict
         trigger = False
         trigger, params = self.handle_option_and_params(params, 'fetchOpenOrder', 'trigger', trigger)
         if not trigger:
@@ -1578,7 +1593,8 @@ class bydfi(Exchange, ImplicitAPI):
         :param str [params.orderType]: order type('LIMIT', 'MARKET', 'LIQ', 'LIMIT_CLOSE', 'MARKET_CLOSE', 'STOP', 'TAKE_PROFIT', 'STOP_MARKET', 'TAKE_PROFIT_MARKET' or 'TRAILING_STOP_MARKET')
         :returns dict[]: a list of `order structures <https://docs.ccxt.com/?id=order-structure>`
         """
-        self.load_markets()
+        if self.markets is None:
+            self.load_markets()
         paginate = self.safe_bool(params, 'paginate', False)
         if paginate:
             maxLimit = 500
@@ -1588,7 +1604,7 @@ class bydfi(Exchange, ImplicitAPI):
             return self.sort_by(paginatedResponse, 'timestamp')
         contractType = 'FUTURE'
         contractType, params = self.handle_option_and_params(params, 'fetchCanceledAndClosedOrders', 'contractType', contractType)
-        request: dict = {
+        request = {
             'contractType': contractType,
         }
         market = None
@@ -1668,7 +1684,7 @@ class bydfi(Exchange, ImplicitAPI):
                 until = startTime + sevenDays
             else:
                 until = now
-        request: dict = {
+        request = {
             'startTime': startTime,
             'endTime': until,
         }
@@ -1834,11 +1850,12 @@ class bydfi(Exchange, ImplicitAPI):
         """
         if symbol is None:
             raise ArgumentsRequired(self.id + ' setLeverage() requires a symbol argument')
-        self.load_markets()
+        if self.markets is None:
+            self.load_markets()
         market = self.market(symbol)
         wallet = 'W001'
         wallet, params = self.handle_option_and_params(params, 'setLeverage', 'wallet', wallet)
-        request: dict = {
+        request = {
             'symbol': market['id'],
             'leverage': leverage,
             'wallet': wallet,
@@ -1860,11 +1877,12 @@ class bydfi(Exchange, ImplicitAPI):
         """
         if symbol is None:
             raise ArgumentsRequired(self.id + ' fetchLeverage() requires a symbol argument')
-        self.load_markets()
+        if self.markets is None:
+            self.load_markets()
         market = self.market(symbol)
         wallet = 'W001'
         wallet, params = self.handle_option_and_params(params, 'fetchLeverage', 'wallet', wallet)
-        request: dict = {
+        request = {
             'symbol': market['id'],
             'wallet': wallet,
         }
@@ -1906,10 +1924,11 @@ class bydfi(Exchange, ImplicitAPI):
         :param str [params.settleCoin]: the settlement currency(USDT or USDC or USD)
         :returns dict[]: a list of `position structure <https://docs.ccxt.com/?id=position-structure>`
         """
-        self.load_markets()
+        if self.markets is None:
+            self.load_markets()
         contractType = 'FUTURE'
         contractType, params = self.handle_option_and_params(params, 'fetchPositions', 'contractType', contractType)
-        request: dict = {
+        request = {
             'contractType': contractType,
         }
         response = self.privateGetV1FapiTradePositions(self.extend(request, params))
@@ -1950,11 +1969,12 @@ class bydfi(Exchange, ImplicitAPI):
         :param str [params.contractType]: FUTURE or DELIVERY, default is FUTURE
         :returns dict[]: a list of `position structure <https://docs.ccxt.com/?id=position-structure>`
         """
-        self.load_markets()
+        if self.markets is None:
+            self.load_markets()
         market = self.market(symbol)
         contractType = 'FUTURE'
         contractType, params = self.handle_option_and_params(params, 'fetchPositions', 'contractType', contractType)
-        request: dict = {
+        request = {
             'contractType': contractType,
             'symbol': market['id'],
         }
@@ -2085,11 +2105,12 @@ class bydfi(Exchange, ImplicitAPI):
         :param str [params.wallet]: The unique code of a sub-wallet. W001 is the default wallet and the main wallet code of the contract
         :returns dict[]: a list of `position structures <https://docs.ccxt.com/?id=position-structure>`
         """
-        self.load_markets()
+        if self.markets is None:
+            self.load_markets()
         market = self.market(symbol)
         contractType = 'FUTURE'
         contractType, params = self.handle_option_and_params(params, 'fetchPositionsHistory', 'contractType', contractType)
-        request: dict = {
+        request = {
             'symbol': market['id'],
             'contractType': contractType,
         }
@@ -2118,10 +2139,11 @@ class bydfi(Exchange, ImplicitAPI):
         :param str [params.wallet]: The unique code of a sub-wallet. W001 is the default wallet and the main wallet code of the contract
         :returns dict[]: a list of `position structures <https://docs.ccxt.com/?id=position-structure>`
         """
-        self.load_markets()
+        if self.markets is None:
+            self.load_markets()
         contractType = 'FUTURE'
         contractType, params = self.handle_option_and_params(params, 'fetchPositionsHistory', 'contractType', contractType)
-        request: dict = {
+        request = {
             'contractType': contractType,
         }
         params = self.handle_since_and_until('fetchPositionsHistory', since, params)
@@ -2186,13 +2208,14 @@ class bydfi(Exchange, ImplicitAPI):
         :param str [params.wallet]: The unique code of a sub-wallet. W001 is the default wallet and the main wallet code of the contract
         :returns dict: a `margin mode structure <https://docs.ccxt.com/?id=margin-mode-structure>`
         """
-        self.load_markets()
+        if self.markets is None:
+            self.load_markets()
         market = self.market(symbol)
         contractType = 'FUTURE'
         contractType, params = self.handle_option_and_params(params, 'fetchMarginMode', 'contractType', contractType)
         wallet = 'W001'
         wallet, params = self.handle_option_and_params(params, 'fetchMarginMode', 'wallet', wallet)
-        request: dict = {
+        request = {
             'contractType': contractType,
             'symbol': market['id'],
             'wallet': wallet,
@@ -2239,13 +2262,14 @@ class bydfi(Exchange, ImplicitAPI):
         marginMode = marginMode.lower()
         if marginMode != 'isolated' and marginMode != 'cross':
             raise BadRequest(self.id + ' setMarginMode() marginMode argument should be isolated or cross')
-        self.load_markets()
+        if self.markets is None:
+            self.load_markets()
         market = self.market(symbol)
         contractType = 'FUTURE'
         contractType, params = self.handle_option_and_params(params, 'fetchMarginMode', 'contractType', contractType)
         wallet = 'W001'
         wallet, params = self.handle_option_and_params(params, 'fetchMarginMode', 'wallet', wallet)
-        request: dict = {
+        request = {
             'contractType': contractType,
             'symbol': market['id'],
             'marginType': marginMode.upper(),
@@ -2269,7 +2293,8 @@ class bydfi(Exchange, ImplicitAPI):
         """
         if symbol is not None:
             raise NotSupported(self.id + ' setPositionMode() does not support a symbol argument. The position mode is set identically for all markets with same settle currency')
-        self.load_markets()
+        if self.markets is None:
+            self.load_markets()
         positionType = 'HEDGE' if hedged else 'ONEWAY'
         wallet = 'W001'
         wallet, params = self.handle_option_and_params(params, 'setPositionMode', 'wallet', wallet)
@@ -2277,7 +2302,7 @@ class bydfi(Exchange, ImplicitAPI):
         contractType, params = self.handle_option_and_params(params, 'setPositionMode', 'contractType', contractType)
         settleCoin = 'USDT'
         settleCoin, params = self.handle_option_and_params(params, 'setPositionMode', 'settleCoin', settleCoin)
-        request: dict = {
+        request = {
             'contractType': contractType,
             'wallet': wallet,
             'positionType': positionType,
@@ -2305,7 +2330,8 @@ class bydfi(Exchange, ImplicitAPI):
         :param str [params.settleCoin]: The settlement currency - USDT or USDC or USD(default is USDT or settle currency of the market if market is provided)
         :returns dict: an object detailing whether the market is in hedged or one-way mode
         """
-        self.load_markets()
+        if self.markets is None:
+            self.load_markets()
         wallet = 'W001'
         wallet, params = self.handle_option_and_params(params, 'fetchPositionMode', 'wallet', wallet)
         contractType = 'FUTURE'
@@ -2316,7 +2342,7 @@ class bydfi(Exchange, ImplicitAPI):
         else:
             market = self.market(symbol)
             settleCoin = market['settleId']
-        request: dict = {
+        request = {
             'contractType': contractType,
             'settleCoin': settleCoin,
             'wallet': wallet,
@@ -2359,13 +2385,14 @@ class bydfi(Exchange, ImplicitAPI):
         :param str [params.asset]: currency id for the balance to fetch
         :returns dict: a `balance structure <https://docs.ccxt.com/?id=balance-structure>`
         """
-        self.load_markets()
+        if self.markets is None:
+            self.load_markets()
         type = None
         type, params = self.handle_market_type_and_params('fetchBalance', None, params)
         wallet = None
         wallet, params = self.handle_option_and_params(params, 'fetchBalance', 'wallet')
-        request: dict = {}
-        response = None
+        request = {}
+        response: dict
         if wallet is None:
             options = self.safe_dict(self.options, 'accountsByType', {})
             parsedAccountType = self.safe_string_upper(options, type, type)
@@ -2423,7 +2450,7 @@ class bydfi(Exchange, ImplicitAPI):
 
     def parse_balance(self, response) -> Balances:
         timestamp = self.milliseconds()
-        result: dict = {
+        result = {
             'info': response,
             'timestamp': timestamp,
             'datetime': self.iso8601(timestamp),
@@ -2451,12 +2478,13 @@ class bydfi(Exchange, ImplicitAPI):
         :param dict [params]: extra parameters specific to the exchange API endpoint
         :returns dict: a `transfer structure <https://docs.ccxt.com/?id=transfer-structure>`
         """
-        self.load_markets()
+        if self.markets is None:
+            self.load_markets()
         currency = self.currency(code)
         accountsByType = self.safe_dict(self.options, 'accountsByType', {})
         fromId = self.safe_string(accountsByType, fromAccount, fromAccount)
         toId = self.safe_string(accountsByType, toAccount, toAccount)
-        request: dict = {
+        request = {
             'asset': currency['id'],
             'amount': self.currency_to_precision(code, amount),
             'fromType': fromId,
@@ -2498,7 +2526,8 @@ class bydfi(Exchange, ImplicitAPI):
         """
         if code is None:
             raise ArgumentsRequired(self.id + ' fetchTransfers() requires a code argument')
-        self.load_markets()
+        if self.markets is None:
+            self.load_markets()
         currency = self.currency(code)
         paginate = self.safe_bool(params, 'paginate', False)
         if paginate:
@@ -2507,7 +2536,7 @@ class bydfi(Exchange, ImplicitAPI):
             params = self.extend(params, {'paginationDirection': 'backward'})
             paginatedResponse = self.fetch_paginated_call_dynamic('fetchTransfers', currency['code'], since, limit, params, maxLimit, True)
             return self.sort_by(paginatedResponse, 'timestamp')
-        request: dict = {
+        request = {
             'asset': currency['id'],
         }
         until = None
@@ -2624,7 +2653,8 @@ class bydfi(Exchange, ImplicitAPI):
         methodName = 'fetchDeposits' if (type == 'deposit') else 'fetchWithdrawals'
         if code is None:
             raise ArgumentsRequired(self.id + ' ' + methodName + '() requires a code argument')
-        self.load_markets()
+        if self.markets is None:
+            self.load_markets()
         currency = self.currency(code)
         paginate = self.safe_bool(params, 'paginate', False)
         if paginate:
@@ -2633,7 +2663,7 @@ class bydfi(Exchange, ImplicitAPI):
             params = self.extend(params, {'paginationDirection': 'backward'})
             paginatedResponse = self.fetch_paginated_call_dynamic(methodName, currency['code'], since, limit, params, maxLimit, True)
             return self.sort_by(paginatedResponse, 'timestamp')
-        request: dict = {
+        request = {
             'asset': currency['id'],
         }
         until = None
@@ -2660,7 +2690,7 @@ class bydfi(Exchange, ImplicitAPI):
         request['endTime'] = until
         if limit is not None:
             request['limit'] = limit
-        response = None
+        response: dict
         if type == 'deposit':
             #
             #     {
@@ -2690,7 +2720,7 @@ class bydfi(Exchange, ImplicitAPI):
             #
             response = self.privateGetV1SpotWithdrawRecords(self.extend(request, params))
         data = self.safe_list(response, 'data', [])
-        transactionParams: dict = {
+        transactionParams = {
             'type': type,
         }
         params = self.extend(params, transactionParams)
@@ -2729,7 +2759,7 @@ class bydfi(Exchange, ImplicitAPI):
             'txid': self.safe_string(transaction, 'txId'),
             'type': None,
             'currency': code,
-            'network': self.network_id_to_code(self.safe_string(transaction, 'network')),
+            'network': self.network_id_to_code(self.safe_string(transaction, 'network'), code),
             'amount': self.safe_number(transaction, 'amount'),
             'status': self.parse_transaction_status(rawStatus),
             'timestamp': timestamp,
