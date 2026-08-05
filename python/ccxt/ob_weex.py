@@ -5,7 +5,9 @@
 
 from ccxt.weex import weex
 from ccxt.abstract.ob_weex import ImplicitAPI
-from ccxt.base.types import Any
+from ccxt.base.types import Any, Bool, Str
+from typing import List
+from ccxt.base.errors import ExchangeError
 
 
 class ob_weex(weex, ImplicitAPI):
@@ -24,6 +26,9 @@ class ob_weex(weex, ImplicitAPI):
                 'swap': True,
                 'future': False,
                 'option': False,
+                'fetchAccountId': True,
+                'fetchPermissions': True,
+                'isAuthenticatedRequest': True,
             },
             'options': {
                 'octobot': {
@@ -42,4 +47,44 @@ class ob_weex(weex, ImplicitAPI):
                     'requireOrderFeesFromTrades': True,
                 },
             },
+        })
+
+    def ob_fetch_spot_account(self, params={}) -> dict:
+        return self.privateGetApiV3Account(params)
+
+    def fetch_account_id(self, params={}, _ccxtTypesImportStr: Str = None) -> Str:
+        response = self.ob_fetch_spot_account(params)
+        uid = self.safe_string(response, 'uid')
+        if uid is None:
+            raise ExchangeError(self.id + ' missing uid')
+        return uid
+
+    def fetch_permissions(self, params={}) -> List[str]:
+        response = self.ob_fetch_spot_account(params)
+        rights = []
+        permissions = self.safe_list(response, 'permissions', [])
+        for permIdx in range(0, len(permissions)):
+            permission = str(permissions[permIdx]).upper()
+            if permission == 'SPOT' or permission == 'SPOT_TRADING':
+                if not self.in_array('reading', rights):
+                    rights.append('reading')
+                if not self.in_array('spotTrading', rights):
+                    rights.append('spotTrading')
+            elif permission == 'READONLY' or permission == 'READ_ONLY':
+                if not self.in_array('reading', rights):
+                    rights.append('reading')
+            elif permission == 'FUTURES' or permission == 'FUTURES_TRADING' or permission == 'CONTRACT':
+                if not self.in_array('reading', rights):
+                    rights.append('reading')
+                if not self.in_array('futuresTrading', rights):
+                    rights.append('futuresTrading')
+        if len(rights) == 0:
+            rights.append('reading')
+        if self.safe_bool(response, 'canWithdraw') and not self.in_array('withdrawals', rights):
+            rights.append('withdrawals')
+        return rights
+
+    def is_authenticated_request(self, url: Str, method: Str, headers: dict, body, _ccxtTypesImportStr: Str = None) -> Bool:
+        return self.ob_is_authenticated_request(url, method, headers, body, 'headersJsonAny', {
+            'needles': ['ACCESS-SIGN', 'ACCESS-KEY'],
         })
