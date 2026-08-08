@@ -81,6 +81,15 @@ class ob_coinbase(coinbase, ImplicitAPI):
             },
         })
 
+    def sign(self, path, api: Any = [], method='GET', params={}, headers: dict = None, body: Str = None):
+        try:
+            return super(ob_coinbase, self).sign(path, api, method, params, headers, body)
+        except Exception as e:
+            errorMessage = str(e)
+            if errorMessage.find('Unable to load PEM') >= 0 or errorMessage.find('MalformedFraming') >= 0:
+                raise AuthenticationError(self.id + ' invalid key format: ' + errorMessage)
+            raise e
+
     def fetch_permissions(self, params={}) -> List[str]:
         rights = ['reading']
         try:

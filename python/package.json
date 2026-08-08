@@ -1,6 +1,6 @@
 {
   "name": "octobot_ccxt",
-  "version": "0.0.9",
+  "version": "0.0.10",
   "description": "A cryptocurrency trading API with more than 100 exchanges in JavaScript / TypeScript / Python / C# / PHP / Go",
   "unpkg": "dist/ccxt.browser.min.js",
   "type": "module",
