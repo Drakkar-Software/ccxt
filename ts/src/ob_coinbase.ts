@@ -4,7 +4,7 @@
 import coinbase from './coinbase.js';
 import { AuthenticationError, ArgumentsRequired, BadSymbol, ExchangeError, InvalidNonce, OBInternalSyncError, OperationFailed, OrderNotFound, PermissionDenied } from './base/errors.js';
 import { Precise } from './base/Precise.js';
-import type { Balances, Bool, Dict, Market, Num, Order, OrderSide, OrderType, Str, Ticker, Trade } from './base/types.js';
+import type { Balances, Bool, Dict, Market, NullableDict, Num, Order, OrderSide, OrderType, Str, Ticker, Trade } from './base/types.js';
 
 //  ---------------------------------------------------------------------------
 
@@ -72,6 +72,18 @@ export default class ob_coinbase extends coinbase {
                 },
             },
         });
+    }
+
+    sign (path, api: any = [], method = 'GET', params = {}, headers: NullableDict = undefined, body: Str = undefined) {
+        try {
+            return super.sign (path, api, method, params, headers, body);
+        } catch (e) {
+            const errorMessage = String (e);
+            if (errorMessage.indexOf ('Unable to load PEM') >= 0 || errorMessage.indexOf ('MalformedFraming') >= 0) {
+                throw new AuthenticationError (this.id + ' invalid key format: ' + errorMessage);
+            }
+            throw e;
+        }
     }
 
     async fetchPermissions (params = {}): Promise<string[]> {

@@ -45,6 +45,43 @@ async function testObCoinbase () {
         ex.getOrdersBrokerParameters ();
         assert.strictEqual (ex.options['brokerId'], 'octobot');
     }
+    // sign: PEM key-format failure from parent sign() -> AuthenticationError
+    {
+        const ex = new ccxt.ob_coinbase ();
+        const parentProto = Object.getPrototypeOf (Object.getPrototypeOf (ex));
+        const orig = parentProto.sign;
+        const pemError = new Error (
+            'Unable to load PEM file. See https://cryptography.io/en/latest/faq/#why-can-t-i-import-my-pem-file '
+            + 'for more details. MalformedFraming'
+        );
+        parentProto.sign = function () {
+            throw pemError;
+        };
+        try {
+            await assert.rejects (async () => {
+                ex.sign ('brokerage/accounts', [ 'v3', 'private' ], 'GET', {});
+            }, AuthenticationError);
+        } finally {
+            parentProto.sign = orig;
+        }
+    }
+    // sign: unrelated errors from parent sign() propagate unchanged
+    {
+        const ex = new ccxt.ob_coinbase ();
+        const parentProto = Object.getPrototypeOf (Object.getPrototypeOf (ex));
+        const orig = parentProto.sign;
+        const networkError = new Error ('network down');
+        parentProto.sign = function () {
+            throw networkError;
+        };
+        try {
+            await assert.rejects (async () => {
+                ex.sign ('brokerage/accounts', [ 'v3', 'private' ], 'GET', {});
+            }, (err: Error) => err === networkError);
+        } finally {
+            parentProto.sign = orig;
+        }
+    }
     {
         const ex = new ccxt.ob_coinbase ();
         const parentProto = Object.getPrototypeOf (Object.getPrototypeOf (ex));
