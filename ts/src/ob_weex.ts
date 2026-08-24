@@ -3,7 +3,7 @@
 
 import weex from './weex.js';
 import { ExchangeError } from './base/errors.js';
-import type { Bool, Dict, Str } from './base/types.js';
+import type { Bool, Dict, Num, OrderSide, OrderType, Str } from './base/types.js';
 
 //  ---------------------------------------------------------------------------
 
@@ -31,6 +31,7 @@ export default class ob_weex extends weex {
                 'isAuthenticatedRequest': true,
             },
             'options': {
+                'partner': 'b-WEEX111174',
                 'octobot': {
                     'supportedElements': {
                         'spot': {
@@ -45,6 +46,7 @@ export default class ob_weex extends weex {
                     'adjustForTimeDifference': true,
                     'fixMarketStatus': true,
                     'requireOrderFeesFromTrades': true,
+                    'hasBroker': true,
                 },
             },
         });
@@ -102,5 +104,33 @@ export default class ob_weex extends weex {
         return this.obIsAuthenticatedRequest (url, method, headers, body, 'headersJsonAny', {
             'needles': [ 'ACCESS-SIGN', 'ACCESS-KEY' ],
         });
+    }
+
+    obExtendParamsWithDefaultPartner (params = {}) {
+        const defaultPartner = this.safeString (this.options, 'partner');
+        if (this.safeString (params, 'partner') !== undefined || defaultPartner === undefined) {
+            return params;
+        }
+        return this.extend ({ 'partner': defaultPartner }, params);
+    }
+
+    createSpotOrderRequest (symbol: string, type: OrderType, side: OrderSide, amount: number, price: Num = undefined, params = {}): Dict {
+        const userPartner = this.safeString (params, 'partner');
+        const extendedParams = this.obExtendParamsWithDefaultPartner (params);
+        const request = super.createSpotOrderRequest (symbol, type, side, amount, price, extendedParams);
+        if (userPartner === undefined) {
+            return this.omit (request, 'partner');
+        }
+        return request;
+    }
+
+    createContractOrderRequest (symbol: string, type: OrderType, side: OrderSide, amount: number, price: Num = undefined, params = {}): Dict {
+        const userPartner = this.safeString (params, 'partner');
+        const extendedParams = this.obExtendParamsWithDefaultPartner (params);
+        const request = super.createContractOrderRequest (symbol, type, side, amount, price, extendedParams);
+        if (userPartner === undefined) {
+            return this.omit (request, 'partner');
+        }
+        return request;
     }
 }

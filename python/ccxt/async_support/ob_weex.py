@@ -5,7 +5,7 @@
 
 from ccxt.async_support.weex import weex
 from ccxt.abstract.ob_weex import ImplicitAPI
-from ccxt.base.types import Any, Bool, Str
+from ccxt.base.types import Any, Bool, Num, OrderSide, OrderType, Str
 from typing import List
 from ccxt.base.errors import ExchangeError
 
@@ -31,6 +31,7 @@ class ob_weex(weex, ImplicitAPI):
                 'isAuthenticatedRequest': True,
             },
             'options': {
+                'partner': 'b-WEEX111174',
                 'octobot': {
                     'supportedElements': {
                         'spot': {
@@ -45,6 +46,7 @@ class ob_weex(weex, ImplicitAPI):
                     'adjustForTimeDifference': True,
                     'fixMarketStatus': True,
                     'requireOrderFeesFromTrades': True,
+                    'hasBroker': True,
                 },
             },
         })
@@ -88,3 +90,25 @@ class ob_weex(weex, ImplicitAPI):
         return self.ob_is_authenticated_request(url, method, headers, body, 'headersJsonAny', {
             'needles': ['ACCESS-SIGN', 'ACCESS-KEY'],
         })
+
+    def ob_extend_params_with_default_partner(self, params={}):
+        defaultPartner = self.safe_string(self.options, 'partner')
+        if self.safe_string(params, 'partner') is not None or defaultPartner is None:
+            return params
+        return self.extend({'partner': defaultPartner}, params)
+
+    def create_spot_order_request(self, symbol: str, type: OrderType, side: OrderSide, amount: float, price: Num = None, params={}) -> dict:
+        userPartner = self.safe_string(params, 'partner')
+        extendedParams = self.ob_extend_params_with_default_partner(params)
+        request = super(ob_weex, self).create_spot_order_request(symbol, type, side, amount, price, extendedParams)
+        if userPartner is None:
+            return self.omit(request, 'partner')
+        return request
+
+    def create_contract_order_request(self, symbol: str, type: OrderType, side: OrderSide, amount: float, price: Num = None, params={}) -> dict:
+        userPartner = self.safe_string(params, 'partner')
+        extendedParams = self.ob_extend_params_with_default_partner(params)
+        request = super(ob_weex, self).create_contract_order_request(symbol, type, side, amount, price, extendedParams)
+        if userPartner is None:
+            return self.omit(request, 'partner')
+        return request
