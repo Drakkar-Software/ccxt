@@ -184,15 +184,71 @@ class coinrabbit(Exchange, ImplicitAPI):
         return self.safe_value(response, 'response')
 
     def coinrabbit_resolve_market(self, symbol: str, params={}) -> Market:
+        tickerWise = self.coinrabbit_parse_ticker_wise_symbol(symbol)
+        if tickerWise is not None:
+            return self.market(symbol)
         baseNetwork = self.safe_string_2(params, 'base_network', 'baseNetwork')
         quoteNetwork = self.safe_string_2(params, 'quote_network', 'quoteNetwork')
         if baseNetwork is not None and quoteNetwork is not None:
-            marketId = self.coinrabbit_market_id(baseNetwork, quoteNetwork, symbol)
-            return self.market(marketId)
+            qualifiedSymbol = self.coinrabbit_network_qualified_symbol(symbol, baseNetwork, quoteNetwork)
+            return self.market(qualifiedSymbol)
         return self.market(symbol)
 
+    def coinrabbit_parse_ticker_wise_symbol(self, symbol: str):
+        marketSeparatorIndex = symbol.find('/')
+        if marketSeparatorIndex < 0:
+            return None
+        baseLeg = symbol[0:marketSeparatorIndex]
+        quoteLeg = symbol[marketSeparatorIndex + 1:]
+        baseSeparatorIndex = baseLeg.find('@')
+        quoteSeparatorIndex = quoteLeg.find('@')
+        if baseSeparatorIndex < 0 or quoteSeparatorIndex < 0:
+            return None
+        base = baseLeg[0:baseSeparatorIndex]
+        baseNetwork = baseLeg[baseSeparatorIndex + 1:]
+        quote = quoteLeg[0:quoteSeparatorIndex]
+        quoteNetwork = quoteLeg[quoteSeparatorIndex + 1:]
+        if not base or not baseNetwork or not quote or not quoteNetwork:
+            return None
+        return {
+            'base': base,
+            'quote': quote,
+            'baseNetwork': baseNetwork.lower(),
+            'quoteNetwork': quoteNetwork.lower(),
+        }
+
     def coinrabbit_network_qualified_symbol(self, symbol: Str, baseNetwork: Str, quoteNetwork: Str) -> Str:
-        return symbol + '@' + baseNetwork + '-' + quoteNetwork
+        symbolParts = symbol.split('/')
+        base = symbolParts[0]
+        quote = symbolParts[1]
+        return base + '@' + baseNetwork.upper() + '/' + quote + '@' + quoteNetwork.upper()
+
+    def coinrabbit_network_qualified_currency_code(self, currencyId: Str, networkId: Str) -> Str:
+        return self.safe_currency_code(currencyId) + '@' + networkId.upper()
+
+    def coinrabbit_is_flat_currency_balance(self, currencyBalance: dict) -> bool:
+        return(
+            self.safe_string(currencyBalance, 'free') is not None
+            or self.safe_string(currencyBalance, 'used') is not None
+            or self.safe_string(currencyBalance, 'total') is not None
+        )
+
+    def coinrabbit_expand_network_balances(self, balanceDict: dict) -> dict:
+        result = {}
+        currencyIds = list(balanceDict.keys())
+        for currencyIndex in range(0, len(currencyIds)):
+            currencyId = currencyIds[currencyIndex]
+            currencyBalance = self.safe_dict(balanceDict, currencyId, {})
+            if self.coinrabbit_is_flat_currency_balance(currencyBalance):
+                result[currencyId] = currencyBalance
+                continue
+            networkIds = list(currencyBalance.keys())
+            for networkIndex in range(0, len(networkIds)):
+                networkId = networkIds[networkIndex]
+                networkBalance = self.safe_dict(currencyBalance, networkId, {})
+                code = self.coinrabbit_network_qualified_currency_code(currencyId, networkId)
+                result[code] = networkBalance
+        return result
 
     def coinrabbit_flatten_balance_array(self, balanceArray: List[Any]) -> dict:
         result = {}
@@ -348,11 +404,12 @@ class coinrabbit(Exchange, ImplicitAPI):
             balanceDict = self.coinrabbit_flatten_balance_array(balancePayload)
         else:
             balanceDict = balancePayload
-        return self.parse_balance(balanceDict)
+        expandedBalanceDict = self.coinrabbit_expand_network_balances(balanceDict)
+        return self.parse_balance(expandedBalanceDict, balanceDict)
 
-    def parse_balance(self, response: dict) -> Balances:
+    def parse_balance(self, response: dict, rawResponse: dict = None) -> Balances:
         result = {
-            'info': response,
+            'info': rawResponse if (rawResponse is not None) else response,
             'timestamp': None,
             'datetime': None,
         }
@@ -364,7 +421,11 @@ class coinrabbit(Exchange, ImplicitAPI):
             account['free'] = self.safe_string(currencyBalance, 'free')
             account['used'] = self.safe_string(currencyBalance, 'used')
             account['total'] = self.safe_string(currencyBalance, 'total')
-            code = self.safe_currency_code(currencyId)
+            code = None
+            if currencyId.find('@') >= 0:
+                code = currencyId
+            else:
+                code = self.safe_currency_code(currencyId)
             result[code] = account
         return self.safe_balance(result)
 
@@ -540,6 +601,7 @@ class coinrabbit(Exchange, ImplicitAPI):
         url = self.urls['api']['rest'] + signedPath
         if api == 'private':
             self.check_required_credentials()
+            headers = headers if (headers is not None) else {}
             timestamp = str(self.milliseconds())
             rawBody = ''
             if method == 'POST':
@@ -576,7 +638,7 @@ class coinrabbit(Exchange, ImplicitAPI):
                 raise InvalidOrder(feedback)
             raise ExchangeError(feedback)
         envelopeResult = self.safe_bool(response, 'result', None)
-        if envelopeResult == False:
+        if envelopeResult is not None and not envelopeResult:
             raise ExchangeError(self.id + ' ' + body)
         if httpCode == 401 or httpCode == 403:
             raise AuthenticationError(self.id + ' ' + body)

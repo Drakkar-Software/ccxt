@@ -50,6 +50,7 @@ class ob_lbank(lbank, ImplicitAPI):
                     'requireOrderFeesFromTrades': True,
                     'supportsForcedSigningAllRequests': True,
                     'enableForcedSigningAllRequests': False,
+                    'myTradesFetchUseCcxtPaginate': True,
                 },
             },
         })

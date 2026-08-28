@@ -47,6 +47,7 @@ export default class ob_weex extends weex {
                     'fixMarketStatus': true,
                     'requireOrderFeesFromTrades': true,
                     'hasBroker': true,
+                    'myTradesFetchUseCcxtPaginate': true,
                 },
             },
         });

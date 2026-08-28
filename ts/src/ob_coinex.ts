@@ -53,10 +53,16 @@ export default class ob_coinex extends coinex {
                     'fixMarketStatus': true,
                     'supportFetchingCancelledOrders': false,
                     'enableSpotBuyMarketWithCost': true,
+                    'adjustForTimeDifference': true,
                     'hasBroker': true,
+                    'myTradesFetchUseCcxtPaginate': true,
                 },
             },
         });
+    }
+
+    nonce () {
+        return this.milliseconds () - this.safeInteger (this.options, 'timeDifference', 0);
     }
 
     async fetchPermissions (params = {}): Promise<string[]> {

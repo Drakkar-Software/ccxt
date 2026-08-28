@@ -64,6 +64,8 @@ export default class ob_bingx extends bingx {
                     'fixMarketStatus': true,
                     'canHaveDelayedCancelledOrders': true,
                     'requireRecentTradesFromClosedOrders': true,
+                    'closedOrdersFetchUseCcxtPaginate': true,
+                    'adjustForTimeDifference': true,
                     'hasBroker': true,
                 },
             },

@@ -5,7 +5,9 @@
 
 from ccxt.async_support.coinrabbit import coinrabbit
 from ccxt.abstract.ob_coinrabbit import ImplicitAPI
-from ccxt.base.types import Any
+from ccxt.base.types import Any, Num, Str
+from ccxt.base.errors import AuthenticationError
+from ccxt.base.errors import ArgumentsRequired
 
 
 class ob_coinrabbit(coinrabbit, ImplicitAPI):
@@ -16,6 +18,9 @@ class ob_coinrabbit(coinrabbit, ImplicitAPI):
             'name': 'CoinRabbit',
             'certified': False,
             'urls': {
+                'api': {
+                    'wallet': 'https://api.coinrabbit.io',
+                },
             },
             'has': {
                 'CORS': None,
@@ -43,3 +48,43 @@ class ob_coinrabbit(coinrabbit, ImplicitAPI):
                 },
             },
         })
+
+    async def ob_top_up_trading_cell(self, code: Str, amount: Num, network: Str, params={}) -> dict:
+        """
+        top up a CoinRabbit trading cell via the wallet API
+        :param str code: currency code(e.g. usdt)
+        :param float amount: amount to top up
+        :param str network: blockchain network identifier
+        :param dict [params]: extra parameters
+        :param str [params.userToken]: CoinRabbit website JWT for x-user-token header
+        :param str [params.xApiKey]: OctoBot settings API key for x-api-key header
+        :returns dict: top-up response payload
+        """
+        if self.apiKey is None:
+            raise AuthenticationError(self.id + ' requires "apiKey" credential')
+        userToken = self.safe_string_2(params, 'userToken', 'user_token')
+        if userToken is None:
+            raise ArgumentsRequired(self.id + ' obTopUpTradingCell() requires a userToken parameter')
+        xApiKey = self.safe_string_2(params, 'xApiKey', 'x_api_key')
+        if xApiKey is None:
+            raise ArgumentsRequired(self.id + ' obTopUpTradingCell() requires an xApiKey parameter')
+        if code is None:
+            raise ArgumentsRequired(self.id + ' obTopUpTradingCell() requires a code argument')
+        if amount is None:
+            raise ArgumentsRequired(self.id + ' obTopUpTradingCell() requires an amount argument')
+        if network is None:
+            raise ArgumentsRequired(self.id + ' obTopUpTradingCell() requires a network argument')
+        requestBody = {
+            'code': code.lower(),
+            'network': network,
+            'amount': self.number_to_string(amount),
+            'apiKey': self.apiKey,
+        }
+        url = self.urls['api']['wallet'] + '/v2/trading/top-up'
+        headers = {
+            'Content-Type': 'application/json',
+            'x-user-token': userToken,
+            'x-api-key': xApiKey,
+        }
+        response = await self.fetch(url, 'POST', headers, self.json(requestBody))
+        return self.coinrabbitUnwrapResponse(response)

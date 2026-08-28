@@ -2,7 +2,7 @@
 //  ---------------------------------------------------------------------------
 
 import htx from './htx.js';
-import type { Dict, Market, Order, Ticker } from './base/types.js';
+import type { Dict, Int, Market, Order, Str, Ticker, Transaction } from './base/types.js';
 
 //  ---------------------------------------------------------------------------
 
@@ -30,6 +30,7 @@ export default class ob_htx extends htx {
             },
             'options': {
                 'createMarketBuyOrderRequiresPrice': false, // disable quote conversion
+                'marketHelperProps': [ 'networkNamesByChainIds', 'networkChainIdsByNames' ],
                 'broker': {
                     'id': 'AAc4ccb049',
                 },
@@ -49,6 +50,7 @@ export default class ob_htx extends htx {
                     'enableSpotBuyMarketWithCost': true,
                     'adjustForTimeDifference': true,
                     'hasBroker': true,
+                    'myTradesFetchUseCcxtPaginate': true,
                 },
             },
         });
@@ -61,6 +63,23 @@ export default class ob_htx extends htx {
 
     getOrdersBrokerParameters (params = {}): any {
         return this.extend ({}, params);
+    }
+
+    async ensureNetworkChainMaps () {
+        const chainIds = this.safeDict (this.options, 'networkNamesByChainIds', {});
+        if (Object.keys (chainIds).length === 0) {
+            await this.fetchCurrencies ();
+        }
+    }
+
+    async fetchDeposits (code: Str = undefined, since: Int = undefined, limit: Int = undefined, params = {}): Promise<Transaction[]> {
+        await this.ensureNetworkChainMaps ();
+        return await super.fetchDeposits (code, since, limit, params);
+    }
+
+    async fetchWithdrawals (code: Str = undefined, since: Int = undefined, limit: Int = undefined, params = {}): Promise<Transaction[]> {
+        await this.ensureNetworkChainMaps ();
+        return await super.fetchWithdrawals (code, since, limit, params);
     }
 
     parseOrder (order: Dict, market: Market = undefined): Order {

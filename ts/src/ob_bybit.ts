@@ -51,6 +51,7 @@ export default class ob_bybit extends bybit {
                     'canHaveDelayedCancelledOrders': true,
                     'adjustForTimeDifference': true,
                     'hasBroker': true,
+                    'myTradesFetchUseCcxtPaginate': true,
                 },
             },
         });

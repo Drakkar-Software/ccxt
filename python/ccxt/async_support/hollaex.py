@@ -1424,6 +1424,11 @@ class hollaex(Exchange, ImplicitAPI):
         """
         if self.markets is None:
             await self.load_markets()
+        paginate = False
+        paginate, params = self.handle_option_and_params(params, 'fetchMyTrades', 'paginate')
+        if paginate:
+            maxLimit = 100
+            return await self.fetch_paginated_call_dynamic('fetchMyTrades', symbol, since, limit, params, maxLimit)
         request = {
             # 'symbol': market['id'],
             # 'limit': 50,  # default 50, max 100

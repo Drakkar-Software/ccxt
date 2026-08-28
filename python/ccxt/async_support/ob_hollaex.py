@@ -62,6 +62,7 @@ class ob_hollaex(hollaex, ImplicitAPI):
                     'isSkippingEmptyCandlesInOhlcvFetch': True,
                     'stopLossEditPriceParam': 'stopPrice',
                     'stopLossCreatePriceParam': 'stopPrice',
+                    'myTradesFetchUseCcxtPaginate': True,
                 },
             },
         })

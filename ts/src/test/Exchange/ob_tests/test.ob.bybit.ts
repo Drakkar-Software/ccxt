@@ -14,6 +14,10 @@ async function testObBybit () {
     }
     {
         const ex = new ccxt.ob_bybit ();
+        assert.strictEqual (ex.options.octobot.myTradesFetchUseCcxtPaginate, true);
+    }
+    {
+        const ex = new ccxt.ob_bybit ();
         ex.fetchBalance = async () => ({ 'info': {} } as any);
         const rights = await ex.fetchPermissions ();
         const expected = [ 'reading', 'spotTrading', 'futuresTrading', 'marginTrading' ];

@@ -3,7 +3,7 @@
 
 import kraken from './kraken.js';
 import { AuthenticationError } from './base/errors.js';
-import type { Dict, Market, Str, Ticker } from './base/types.js';
+import type { Dict, Market, Order, Str, Ticker, Trade } from './base/types.js';
 
 //  ---------------------------------------------------------------------------
 
@@ -43,9 +43,47 @@ export default class ob_kraken extends kraken {
                     },
                     'fixMarketStatus': true,
                     'adjustForTimeDifference': true,
+                    'myTradesSymbolFilterIsClientSide': true,
+                    'myTradesFetchPaginationOffset': 'ofs',
                 },
             },
         });
+    }
+
+    obKrakenLastNonceByApiKeyMap (): Dict {
+        const classRef = ob_kraken as any;
+        let lastNonceByApiKey: Dict;
+        try {
+            lastNonceByApiKey = classRef.obKrakenLastNonceByApiKey;
+        } catch (caughtObKrakenNonceMapError) {
+            lastNonceByApiKey = undefined;
+        }
+        if (lastNonceByApiKey === undefined) {
+            lastNonceByApiKey = {};
+            classRef.obKrakenLastNonceByApiKey = lastNonceByApiKey;
+        }
+        return lastNonceByApiKey;
+    }
+
+    /**
+     * @method
+     * @name ob_kraken#nonce
+     * @description Process-wide monotonic nonce per API key. Kraken requires strictly
+     *   increasing nonces across all clients using the same key in one process.
+     * @returns {number} monotonic nonce
+     */
+    nonce () {
+        const apiKey = this.apiKey;
+        if (apiKey === undefined) {
+            return this.milliseconds () - this.options['timeDifference'];
+        }
+        const candidate = this.milliseconds () - this.options['timeDifference'];
+        const lastNonceByApiKey = this.obKrakenLastNonceByApiKeyMap ();
+        const storedNonce = this.safeInteger (lastNonceByApiKey, apiKey);
+        const previousNonce = (storedNonce === undefined) ? 0 : storedNonce;
+        const nextNonce = Math.max (candidate, previousNonce + 1);
+        lastNonceByApiKey[apiKey] = nextNonce;
+        return nextNonce;
     }
 
     async fetchAccountId (params = {}, _ccxtTypesImportStr: Str = undefined): Promise<Str> {
@@ -97,5 +135,71 @@ export default class ob_kraken extends kraken {
             parsed['timestamp'] = this.milliseconds ();
         }
         return parsed as Ticker;
+    }
+
+    /**
+     * OctoBot Kraken adapter: normalize conditional order/trade types for portfolio history.
+     * @name ob_kraken#adaptKrakenOrderOrTradeType
+     * @param {object} parsed parsed order/trade dict (mutated in place)
+     */
+    adaptKrakenOrderOrTradeType (parsed: Dict) {
+        const orderInfo = this.safeDict (parsed, 'info', {});
+        let rawType = this.safeString (orderInfo, 'tradeordertype');
+        if (rawType === undefined) {
+            rawType = this.safeString (parsed, 'type');
+        }
+        if (rawType === undefined) {
+            return;
+        }
+        let normalizedKey = '';
+        const rawTypeLower = rawType.toLowerCase ();
+        for (let charIndex = 0; charIndex < rawTypeLower.length; charIndex++) {
+            const currentChar = rawTypeLower[charIndex];
+            if (currentChar === ' ' || currentChar === '_') {
+                normalizedKey += '-';
+            } else {
+                normalizedKey += currentChar;
+            }
+        }
+        const krakenTypeMap: Dict = {
+            'stop-loss-limit': 'stop_loss_limit',
+            'stop-limit': 'stop_loss_limit',
+            'stop-loss': 'stop_loss',
+            'take-profit-limit': 'take_profit_limit',
+            'take-profit': 'take_profit',
+            'trailing-stop-limit': 'stop_loss_limit',
+            'liquidation-market': 'market',
+        };
+        const mappedType = this.safeString (krakenTypeMap, normalizedKey);
+        if (mappedType !== undefined) {
+            parsed['type'] = mappedType;
+            return;
+        }
+        const parseOrderTypeResult = this.parseOrderType (rawType);
+        if (parseOrderTypeResult !== rawType) {
+            parsed['type'] = parseOrderTypeResult;
+        }
+    }
+
+    parseOrder (order: Dict, market: Market = undefined): Order {
+        const parsed = super.parseOrder (order, market) as Dict;
+        this.adaptKrakenOrderOrTradeType (parsed);
+        return parsed as Order;
+    }
+
+    /**
+     * @method
+     * @name ob_kraken#parseTrade
+     * @description Inherits kraken.parseTrade fee parsing (fee.currency=quote). TradesHistory
+     *   does not expose oflags/fciq/fcib; base-fee trades can mislabel fee currency. See
+     *   OctoBot kraken_exchange.py for portfolio-history replay impact.
+     * @param {object} trade trade structure from the exchange
+     * @param {object} [market] market structure
+     * @returns {object} parsed trade
+     */
+    parseTrade (trade: Dict, market: Market = undefined): Trade {
+        const parsed = super.parseTrade (trade, market) as Dict;
+        this.adaptKrakenOrderOrTradeType (parsed);
+        return parsed as Trade;
     }
 }

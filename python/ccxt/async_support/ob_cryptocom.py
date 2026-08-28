@@ -45,6 +45,7 @@ class ob_cryptocom(cryptocom, ImplicitAPI):
                     'expectPossibleNotFoundOrderDuringOrderCreation': True,
                     'supportFetchingCancelledOrders': False,
                     'hasBroker': True,
+                    'myTradesFetchUseCcxtPaginate': True,
                 },
             },
         })

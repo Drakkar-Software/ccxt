@@ -51,6 +51,7 @@ class ob_bybit(bybit, ImplicitAPI):
                     'canHaveDelayedCancelledOrders': True,
                     'adjustForTimeDifference': True,
                     'hasBroker': True,
+                    'myTradesFetchUseCcxtPaginate': True,
                 },
             },
         })

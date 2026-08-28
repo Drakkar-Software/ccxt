@@ -44,6 +44,7 @@ export default class ob_cryptocom extends cryptocom {
                     'expectPossibleNotFoundOrderDuringOrderCreation': true,
                     'supportFetchingCancelledOrders': false,
                     'hasBroker': true,
+                    'myTradesFetchUseCcxtPaginate': true,
                 },
             },
         });

@@ -1,7 +1,7 @@
 
 import assert from 'assert';
 import ccxt from '../../../../ccxt.js';
-import { OBIPWhitelistError, PermissionDenied } from '../../../base/errors.js';
+import { OBIPWhitelistError, PermissionDenied, InvalidNonce, BadSymbol } from '../../../base/errors.js';
 import { AuthenticationError, ExchangeError } from '../../tests.helpers.js';
 import assertObExchangeId from './obTestUtil.js';
 
@@ -13,6 +13,10 @@ async function testObBingx () {
     {
         const ex = new ccxt.ob_bingx ();
         assertObExchangeId (ex, 'ob_bingx');
+    }
+    {
+        const ex = new ccxt.ob_bingx ();
+        assert.strictEqual (ex.options.octobot.closedOrdersFetchUseCcxtPaginate, true);
     }
     {
         const ex = new ccxt.ob_bingx ();
@@ -366,6 +370,146 @@ async function testObBingx () {
         } finally {
             parentProto.parseMarket = orig;
         }
+    }
+    // fetchClosedOrders paginate delegates to fetchPaginatedCallDynamic for spot
+    {
+        const ex = new ccxt.bingx ({ 'options': { 'defaultType': 'spot' } });
+        const parentProto = Object.getPrototypeOf (ex);
+        const orig = parentProto.fetchPaginatedCallDynamic;
+        let paginateDelegated = false;
+        parentProto.fetchPaginatedCallDynamic = async function (method, symbol, since, limit, params, maxLimit) {
+            paginateDelegated = true;
+            assert.strictEqual (method, 'fetchClosedOrders');
+            assert.strictEqual (symbol, 'SOL/USDT');
+            return [
+                {
+                    'symbol': 'SOL/USDT',
+                    'id': '1',
+                    'timestamp': 1700000000000,
+                    'datetime': ex.iso8601 (1700000000000),
+                    'type': 'limit',
+                    'side': 'buy',
+                    'amount': 1,
+                    'price': 50,
+                    'cost': 50,
+                    'status': 'closed',
+                    'info': {},
+                },
+                {
+                    'symbol': 'SOL/USDT',
+                    'id': '2',
+                    'timestamp': 1700000000001,
+                    'datetime': ex.iso8601 (1700000000001),
+                    'type': 'limit',
+                    'side': 'sell',
+                    'amount': 1,
+                    'price': 55,
+                    'cost': 55,
+                    'status': 'closed',
+                    'info': {},
+                },
+            ];
+        };
+        try {
+            const orders = await ex.fetchClosedOrders ('SOL/USDT', undefined, 100, { paginate: true });
+            assert.strictEqual (paginateDelegated, true);
+            assert.strictEqual (orders.length, 2);
+        } finally {
+            parentProto.fetchPaginatedCallDynamic = orig;
+        }
+    }
+    // fetchClosedOrders paginate merges two spot API pages
+    {
+        const ex = new ccxt.bingx ({ 'options': { 'defaultType': 'spot' } });
+        ex.loadMarkets = async () => ({});
+        ex.markets = {
+            'SOL/USDT': {
+                'id': 'SOL-USDT',
+                'symbol': 'SOL/USDT',
+                'base': 'SOL',
+                'quote': 'USDT',
+                'type': 'spot',
+                'spot': true,
+                'swap': false,
+            },
+        };
+        ex.symbols = [ 'SOL/USDT' ];
+        let callCount = 0;
+        ex.spotV1PrivateGetTradeHistoryOrders = async (request) => {
+            callCount++;
+            if (callCount === 2) {
+                assert (request['endTime'] !== undefined);
+            }
+            const orderCount = callCount === 1 ? 100 : 30;
+            const orders = [];
+            for (let orderIndex = 0; orderIndex < orderCount; orderIndex++) {
+                const time = 1700000000000 - (callCount * 100000 + orderIndex * 1000);
+                orders.push ({
+                    'symbol': 'SOL-USDT',
+                    'orderId': callCount * 100000 + orderIndex,
+                    'price': '50',
+                    'origQty': '1',
+                    'executedQty': '1',
+                    'cummulativeQuoteQty': '50',
+                    'status': 'FILLED',
+                    'type': 'LIMIT',
+                    'side': 'BUY',
+                    'time': time,
+                    'updateTime': time,
+                });
+            }
+            return {
+                'code': 0,
+                'msg': '',
+                'data': {
+                    'orders': orders,
+                    'total': orderCount,
+                },
+            };
+        };
+        const orders = await ex.fetchClosedOrders ('SOL/USDT', undefined, 130, {
+            'paginate': true,
+            'paginationCalls': 2,
+        });
+        assert.strictEqual (callCount, 2);
+        assert (orders.length > 100);
+        assert.strictEqual (orders[0].status, 'closed');
+    }
+    // adjustForTimeDifference: octobot option enabled for connector time sync
+    {
+        const ex = new ccxt.ob_bingx ();
+        assert.strictEqual (ex.options['octobot']['adjustForTimeDifference'], true);
+    }
+    // nonce: default timeDifference 0 -> raw milliseconds
+    {
+        const ex = new ccxt.ob_bingx ();
+        ex.milliseconds = () => 2000;
+        assert.strictEqual (ex.nonce (), 2000);
+    }
+    // nonce: subtracts options.timeDifference
+    {
+        const ex = new ccxt.ob_bingx ();
+        ex.milliseconds = () => 2000;
+        ex.options['timeDifference'] = 500;
+        assert.strictEqual (ex.nonce (), 1500);
+    }
+    // handleErrors: 100421 timestamp mismatch -> InvalidNonce
+    {
+        const ex = new ccxt.ob_bingx ();
+        const body = '{"code":100421,"msg":"Null timestamp or timestamp mismatch","timestamp":1787900738376}';
+        const response = { 'code': 100421, 'msg': 'Null timestamp or timestamp mismatch', 'timestamp': 1787900738376 };
+        assert.throws (() => {
+            ex.handleErrors (400, 'Bad Request', 'https://api.bingx.com', 'GET', {}, body, response, {}, undefined);
+        }, InvalidNonce);
+    }
+    // handleErrors: 100421 pair restriction -> BadSymbol
+    {
+        const ex = new ccxt.ob_bingx ();
+        const body = '{"code":100421,"msg":"This pair is currently restricted from API trading","debugMsg":""}';
+        const response = { 'code': 100421, 'msg': 'This pair is currently restricted from API trading', 'debugMsg': '' };
+        assert.throws (() => {
+            ex.handleErrors (400, 'Bad Request', 'https://api.bingx.com', 'GET', {}, body, response, {}, undefined);
+        }, BadSymbol);
     }
 }
 

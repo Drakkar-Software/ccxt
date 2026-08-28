@@ -43,6 +43,7 @@ class ob_phemex(phemex, ImplicitAPI):
                     },
                     'fixMarketStatus': True,
                     'hasBroker': True,
+                    'myTradesFetchUseCcxtPaginate': True,
                 },
             },
         })

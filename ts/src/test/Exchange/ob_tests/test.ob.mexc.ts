@@ -12,6 +12,10 @@ async function testObMexc () {
     }
     {
         const ex = new ccxt.ob_mexc ();
+        assert.strictEqual (ex.options.octobot.myTradesFetchUseCcxtPaginate, true);
+    }
+    {
+        const ex = new ccxt.ob_mexc ();
         ex.cancelOrder = async () => ({} as any);
         const rights = await ex.fetchPermissions ();
         assert.deepStrictEqual (rights, [ 'reading' ]);
@@ -176,6 +180,62 @@ async function testObMexc () {
         const out = exAny.sign ('ping', [ 'contract', 'public' ], 'GET', {});
         assert.strictEqual (out['headers']['Signature'], 'CONTRACTSIG');
         assert.strictEqual (out['headers']['ApiKey'], 'mykey');
+    }
+    // fetchDeposits: default since -> 6-day window (MEXC 7-day limit margin)
+    {
+        const exAny = new ccxt.ob_mexc () as any;
+        const fixedNow = 1_000_000_000_000;
+        const defaultWindowMs = 6 * 24 * 60 * 60 * 1000;
+        exAny.markets = {};
+        exAny.milliseconds = () => fixedNow;
+        let capturedRequest: any = undefined;
+        exAny.spotPrivateGetCapitalDepositHisrec = async (request: any) => {
+            capturedRequest = request;
+            return [];
+        };
+        await exAny.fetchDeposits ();
+        assert.strictEqual (capturedRequest['startTime'], fixedNow - defaultWindowMs);
+        assert.strictEqual (capturedRequest['endTime'], fixedNow);
+    }
+    // fetchDeposits: explicit since preserved
+    {
+        const exAny = new ccxt.ob_mexc () as any;
+        exAny.markets = {};
+        let capturedRequest: any = undefined;
+        exAny.spotPrivateGetCapitalDepositHisrec = async (request: any) => {
+            capturedRequest = request;
+            return [];
+        };
+        await exAny.fetchDeposits (undefined, 123);
+        assert.strictEqual (capturedRequest['startTime'], 123);
+    }
+    // fetchWithdrawals: default since -> 6-day window (MEXC 7-day limit margin)
+    {
+        const exAny = new ccxt.ob_mexc () as any;
+        const fixedNow = 1_000_000_000_000;
+        const defaultWindowMs = 6 * 24 * 60 * 60 * 1000;
+        exAny.markets = {};
+        exAny.milliseconds = () => fixedNow;
+        let capturedRequest: any = undefined;
+        exAny.spotPrivateGetCapitalWithdrawHistory = async (request: any) => {
+            capturedRequest = request;
+            return [];
+        };
+        await exAny.fetchWithdrawals ();
+        assert.strictEqual (capturedRequest['startTime'], fixedNow - defaultWindowMs);
+        assert.strictEqual (capturedRequest['endTime'], fixedNow);
+    }
+    // fetchWithdrawals: explicit since preserved
+    {
+        const exAny = new ccxt.ob_mexc () as any;
+        exAny.markets = {};
+        let capturedRequest: any = undefined;
+        exAny.spotPrivateGetCapitalWithdrawHistory = async (request: any) => {
+            capturedRequest = request;
+            return [];
+        };
+        await exAny.fetchWithdrawals (undefined, 456);
+        assert.strictEqual (capturedRequest['startTime'], 456);
     }
 }
 

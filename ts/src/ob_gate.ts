@@ -57,6 +57,7 @@ export default class ob_gate extends gate {
                     'removeMarketStatusPriceLimits': true,
                     'adjustForTimeDifference': true,
                     'hasBroker': true,
+                    'myTradesFetchUseCcxtPaginate': true,
                 },
             },
             'headers': this.extend (parentHeaders, {

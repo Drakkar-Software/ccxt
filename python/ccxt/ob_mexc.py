@@ -6,7 +6,7 @@
 from ccxt.mexc import mexc
 from ccxt.abstract.ob_mexc import ImplicitAPI
 import hashlib
-from ccxt.base.types import Any, Bool, Market, Order, Str
+from ccxt.base.types import Any, Bool, Int, Market, Order, Str, Transaction
 from typing import List
 from ccxt.base.errors import AuthenticationError
 from ccxt.base.errors import PermissionDenied
@@ -77,6 +77,7 @@ class ob_mexc(mexc, ImplicitAPI):
                     'adjustForTimeDifference': True,
                     'localFeeCurrency': 'MX',
                     'hasBroker': True,
+                    'myTradesFetchUseCcxtPaginate': True,
                 },
             },
         })
@@ -196,6 +197,22 @@ class ob_mexc(mexc, ImplicitAPI):
                 'cost': 0,
             }
         return parsed
+
+    def fetch_deposits(self, code: Str = None, since: Int = None, limit: Int = None, params={}) -> List[Transaction]:
+        if since is None:
+            now = self.milliseconds()
+            # MEXC allows up to 7 days per request when startTime is set
+            since = now - 6 * 24 * 60 * 60 * 1000
+            params = self.extend(params, {'endTime': now})
+        return super(ob_mexc, self).fetch_deposits(code, since, limit, params)
+
+    def fetch_withdrawals(self, code: Str = None, since: Int = None, limit: Int = None, params={}) -> List[Transaction]:
+        if since is None:
+            now = self.milliseconds()
+            # MEXC allows up to 7 days per request when startTime is set
+            since = now - 6 * 24 * 60 * 60 * 1000
+            params = self.extend(params, {'endTime': now})
+        return super(ob_mexc, self).fetch_withdrawals(code, since, limit, params)
 
     def ob_quote_from_symbol(self, symbolStr: Str) -> Str:
         # extract the quote currency from a unified symbol like "BTC/USD" or "BTC/USDT:USDT"

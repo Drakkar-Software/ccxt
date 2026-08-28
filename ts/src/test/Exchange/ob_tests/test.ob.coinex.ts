@@ -12,6 +12,10 @@ async function testObCoinex () {
     }
     {
         const ex = new ccxt.ob_coinex ();
+        assert.strictEqual (ex.options.octobot.myTradesFetchUseCcxtPaginate, true);
+    }
+    {
+        const ex = new ccxt.ob_coinex ();
         ex.cancelOrder = async () => ({} as any);
         const rights = await ex.fetchPermissions ();
         assert.deepStrictEqual (rights, [ 'reading' ]);
@@ -188,6 +192,34 @@ async function testObCoinex () {
         } finally {
             parentProto.parseTicker = orig;
         }
+    }
+    // adjustForTimeDifference: octobot option enabled for connector time sync
+    {
+        const ex = new ccxt.ob_coinex ();
+        assert.strictEqual (ex.options['octobot']['adjustForTimeDifference'], true);
+    }
+    // nonce: default timeDifference 0 -> raw milliseconds
+    {
+        const ex = new ccxt.ob_coinex ();
+        ex.milliseconds = () => 2000;
+        assert.strictEqual (ex.nonce (), 2000);
+    }
+    // nonce: subtracts options.timeDifference
+    {
+        const ex = new ccxt.ob_coinex ();
+        ex.milliseconds = () => 2000;
+        ex.options['timeDifference'] = 500;
+        assert.strictEqual (ex.nonce (), 1500);
+    }
+    // sign v2: X-COINEX-TIMESTAMP uses adjusted nonce (not raw milliseconds)
+    {
+        const exAny = new ccxt.ob_coinex () as any;
+        exAny.apiKey = 'key';
+        exAny.secret = 'secret';
+        exAny.milliseconds = () => 1_000_000_000_000;
+        exAny.options['timeDifference'] = 5000;
+        const out = exAny.sign ('assets/deposit-history', [ 'v2', 'private' ], 'GET', {});
+        assert.strictEqual (out['headers']['X-COINEX-TIMESTAMP'], '999999995000');
     }
 }
 

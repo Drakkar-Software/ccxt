@@ -93,6 +93,7 @@ class ob_kucoin(kucoin, ImplicitAPI):
                     'localFeeCurrency': 'KCS',
                     'maxIncreasedPositionQuantityMultiplier': 0.95,
                     'hasBroker': True,
+                    'myTradesFetchUseCcxtPaginate': True,
                 },
             },
         })

@@ -79,6 +79,7 @@ class ob_binance(binance, ImplicitAPI):
                     'defaultQuoteCurrency': 'USDC',
                     'stopLossEditPriceParam': 'stopPrice',
                     'hasBroker': True,
+                    'myTradesFetchUseCcxtPaginate': True,
                     'requiresStopParamToFetchOrder': True,
                     'requiresStopParamToCancelOrder': True,
                 },

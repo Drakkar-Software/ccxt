@@ -5,7 +5,7 @@
 
 from ccxt.async_support.htx import htx
 from ccxt.abstract.ob_htx import ImplicitAPI
-from ccxt.base.types import Any, Market, Order, Ticker
+from ccxt.base.types import Any, Int, Market, Order, Str, Ticker, Transaction
 from typing import List
 
 
@@ -30,6 +30,7 @@ class ob_htx(htx, ImplicitAPI):
             },
             'options': {
                 'createMarketBuyOrderRequiresPrice': False,  # disable quote conversion
+                'marketHelperProps': ['networkNamesByChainIds', 'networkChainIdsByNames'],
                 'broker': {
                     'id': 'AAc4ccb049',
                 },
@@ -49,6 +50,7 @@ class ob_htx(htx, ImplicitAPI):
                     'enableSpotBuyMarketWithCost': True,
                     'adjustForTimeDifference': True,
                     'hasBroker': True,
+                    'myTradesFetchUseCcxtPaginate': True,
                 },
             },
         })
@@ -59,6 +61,19 @@ class ob_htx(htx, ImplicitAPI):
 
     def get_orders_broker_parameters(self, params={}) -> Any:
         return self.extend({}, params)
+
+    async def ensure_network_chain_maps(self):
+        chainIds = self.safe_dict(self.options, 'networkNamesByChainIds', {})
+        if chainIds == 0:
+            await self.fetch_currencies()
+
+    async def fetch_deposits(self, code: Str = None, since: Int = None, limit: Int = None, params={}) -> List[Transaction]:
+        await self.ensure_network_chain_maps()
+        return await super(ob_htx, self).fetch_deposits(code, since, limit, params)
+
+    async def fetch_withdrawals(self, code: Str = None, since: Int = None, limit: Int = None, params={}) -> List[Transaction]:
+        await self.ensure_network_chain_maps()
+        return await super(ob_htx, self).fetch_withdrawals(code, since, limit, params)
 
     def parse_order(self, order: dict, market: Market = None) -> Order:
         # override the standard parseOrder to apply OctoBot's HTXCCXTAdapter.fix_order:

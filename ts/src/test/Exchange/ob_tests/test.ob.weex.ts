@@ -42,6 +42,7 @@ async function testObWeex () {
         assertObExchangeId (exchange, 'ob_weex');
         const octobotOptions = exchange.options['octobot'];
         assert.strictEqual (octobotOptions['fixMarketStatus'], true);
+        assert.strictEqual (octobotOptions['myTradesFetchUseCcxtPaginate'], true);
         assert.deepStrictEqual (octobotOptions['supportedElements']['spot']['orders'], [ 'market', 'limit' ]);
         assert.deepStrictEqual (octobotOptions['supportedElements']['futures']['orders'], [ 'market', 'limit' ]);
         assert.strictEqual (exchange.has['fetchAccountId'], true);

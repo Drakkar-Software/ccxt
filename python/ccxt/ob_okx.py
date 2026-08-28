@@ -67,6 +67,7 @@ class ob_okx(okx, ImplicitAPI):
                     'adjustForTimeDifference': True,
                     'maxFetchedOhlcvCount': 100,
                     'hasBroker': True,
+                    'myTradesFetchUseCcxtPaginate': True,
                 },
             },
         })

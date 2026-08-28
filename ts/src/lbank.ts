@@ -2011,6 +2011,12 @@ export default class lbank extends Exchange {
         if (this.markets === undefined) {
             await this.loadMarkets ();
         }
+        let paginate = false;
+        [ paginate, params ] = this.handleOptionAndParams (params, 'fetchMyTrades', 'paginate');
+        if (paginate) {
+            const maxLimit = 100;
+            return await this.fetchPaginatedCallDynamic ('fetchMyTrades', symbol, since, limit, params, maxLimit) as Trade[];
+        }
         const market = this.market (symbol);
         since = this.safeValue (params, 'start_date', since);
         params = this.omit (params, 'start_date');

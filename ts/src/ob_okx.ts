@@ -66,6 +66,7 @@ export default class ob_okx extends okx {
                     'adjustForTimeDifference': true,
                     'maxFetchedOhlcvCount': 100,
                     'hasBroker': true,
+                    'myTradesFetchUseCcxtPaginate': true,
                 },
             },
         });

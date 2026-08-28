@@ -57,6 +57,7 @@ class ob_gate(gate, ImplicitAPI):
                     'removeMarketStatusPriceLimits': True,
                     'adjustForTimeDifference': True,
                     'hasBroker': True,
+                    'myTradesFetchUseCcxtPaginate': True,
                 },
             },
             'headers': self.extend(parentHeaders, {

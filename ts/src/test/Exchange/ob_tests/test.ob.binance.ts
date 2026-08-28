@@ -16,6 +16,10 @@ async function testObBinance () {
     }
     {
         const ex = new ccxt.ob_binance ();
+        assert.strictEqual (ex.options.octobot.myTradesFetchUseCcxtPaginate, true);
+    }
+    {
+        const ex = new ccxt.ob_binance ();
         assert.strictEqual (ex.has['usesDemoTradingInsteadOfSandbox'], true);
         assert.strictEqual (ex.usesDemoTradingInsteadOfSandbox ('future'), true);
         assert.strictEqual (ex.usesDemoTradingInsteadOfSandbox ('futures'), true);
@@ -462,6 +466,100 @@ async function testObBinance () {
         } finally {
             parentProto.createOrderRequest = orig;
         }
+    }
+    // fetchMyTrades paginate delegates to fetchPaginatedCallDynamic
+    {
+        const ex = new ccxt.binance ({ 'options': { 'defaultType': 'spot' } });
+        const parentProto = Object.getPrototypeOf (ex);
+        const orig = parentProto.fetchPaginatedCallDynamic;
+        let paginateDelegated = false;
+        parentProto.fetchPaginatedCallDynamic = async function (method, symbol, since, limit, params, maxLimit) {
+            paginateDelegated = true;
+            assert.strictEqual (method, 'fetchMyTrades');
+            assert.strictEqual (symbol, 'BTC/USDT');
+            return [
+                {
+                    'symbol': 'BTC/USDT',
+                    'id': '1',
+                    'timestamp': 1700000000000,
+                    'datetime': ex.iso8601 (1700000000000),
+                    'type': 'limit',
+                    'side': 'buy',
+                    'amount': 1,
+                    'price': 50000,
+                    'cost': 50000,
+                    'info': {},
+                },
+                {
+                    'symbol': 'BTC/USDT',
+                    'id': '2',
+                    'timestamp': 1700000000001,
+                    'datetime': ex.iso8601 (1700000000001),
+                    'type': 'limit',
+                    'side': 'sell',
+                    'amount': 1,
+                    'price': 51000,
+                    'cost': 51000,
+                    'info': {},
+                },
+            ];
+        };
+        try {
+            const trades = await ex.fetchMyTrades ('BTC/USDT', undefined, 100, { paginate: true });
+            assert.strictEqual (paginateDelegated, true);
+            assert.strictEqual (trades.length, 2);
+        } finally {
+            parentProto.fetchPaginatedCallDynamic = orig;
+        }
+    }
+    // fetchMyTrades paginate merges two API pages (spot)
+    {
+        const ex = new ccxt.binance ({ 'options': { 'defaultType': 'spot' } });
+        ex.loadMarkets = async () => ({});
+        ex.markets = {
+            'BTC/USDT': {
+                'id': 'BTCUSDT',
+                'symbol': 'BTC/USDT',
+                'base': 'BTC',
+                'quote': 'USDT',
+                'type': 'spot',
+                'spot': true,
+                'swap': false,
+            },
+        };
+        ex.symbols = [ 'BTC/USDT' ];
+        let callCount = 0;
+        ex.privateGetMyTrades = async (_request) => {
+            callCount++;
+            const pageSize = callCount === 1 ? 100 : 25;
+            const trades = [];
+            for (let tradeIndex = 0; tradeIndex < pageSize; tradeIndex++) {
+                const timestamp = 1700000000000 - (callCount * 100000 + tradeIndex * 1000);
+                trades.push ({
+                    'symbol': 'BTCUSDT',
+                    'id': callCount * 100000 + tradeIndex,
+                    'orderId': callCount * 100000 + tradeIndex,
+                    'price': '50000',
+                    'qty': '0.001',
+                    'quoteQty': '50',
+                    'commission': '0.00001',
+                    'commissionAsset': 'BTC',
+                    'time': timestamp,
+                    'isBuyer': true,
+                    'isMaker': false,
+                    'isBestMatch': true,
+                });
+            }
+            return trades;
+        };
+        const trades = await ex.fetchMyTrades ('BTC/USDT', undefined, 130, {
+            'paginate': true,
+            'maxEntriesPerRequest': 100,
+            'paginationCalls': 2,
+        });
+        assert.strictEqual (callCount, 2);
+        assert (trades.length > 100);
+        assert.strictEqual (trades[0].symbol, 'BTC/USDT');
     }
 }
 

@@ -182,17 +182,84 @@ export default class coinrabbit extends Exchange {
     }
 
     coinrabbitResolveMarket (symbol: string, params = {}): Market {
+        const tickerWise = this.coinrabbitParseTickerWiseSymbol (symbol);
+        if (tickerWise !== undefined) {
+            return this.market (symbol);
+        }
         const baseNetwork = this.safeString2 (params, 'base_network', 'baseNetwork');
         const quoteNetwork = this.safeString2 (params, 'quote_network', 'quoteNetwork');
         if (baseNetwork !== undefined && quoteNetwork !== undefined) {
-            const marketId = this.coinrabbitMarketId (baseNetwork, quoteNetwork, symbol);
-            return this.market (marketId);
+            const qualifiedSymbol = this.coinrabbitNetworkQualifiedSymbol (symbol, baseNetwork, quoteNetwork);
+            return this.market (qualifiedSymbol);
         }
         return this.market (symbol);
     }
 
+    coinrabbitParseTickerWiseSymbol (symbol: string) {
+        const marketSeparatorIndex = symbol.indexOf ('/');
+        if (marketSeparatorIndex < 0) {
+            return undefined;
+        }
+        const baseLeg = symbol.slice (0, marketSeparatorIndex);
+        const quoteLeg = symbol.slice (marketSeparatorIndex + 1);
+        const baseSeparatorIndex = baseLeg.indexOf ('@');
+        const quoteSeparatorIndex = quoteLeg.indexOf ('@');
+        if (baseSeparatorIndex < 0 || quoteSeparatorIndex < 0) {
+            return undefined;
+        }
+        const base = baseLeg.slice (0, baseSeparatorIndex);
+        const baseNetwork = baseLeg.slice (baseSeparatorIndex + 1);
+        const quote = quoteLeg.slice (0, quoteSeparatorIndex);
+        const quoteNetwork = quoteLeg.slice (quoteSeparatorIndex + 1);
+        if (!base || !baseNetwork || !quote || !quoteNetwork) {
+            return undefined;
+        }
+        return {
+            'base': base,
+            'quote': quote,
+            'baseNetwork': baseNetwork.toLowerCase (),
+            'quoteNetwork': quoteNetwork.toLowerCase (),
+        };
+    }
+
     coinrabbitNetworkQualifiedSymbol (symbol: Str, baseNetwork: Str, quoteNetwork: Str): Str {
-        return symbol + '@' + baseNetwork + '-' + quoteNetwork;
+        const symbolParts = symbol.split ('/');
+        const base = symbolParts[0];
+        const quote = symbolParts[1];
+        return base + '@' + baseNetwork.toUpperCase () + '/' + quote + '@' + quoteNetwork.toUpperCase ();
+    }
+
+    coinrabbitNetworkQualifiedCurrencyCode (currencyId: Str, networkId: Str): Str {
+        return this.safeCurrencyCode (currencyId) + '@' + networkId.toUpperCase ();
+    }
+
+    coinrabbitIsFlatCurrencyBalance (currencyBalance: Dict): boolean {
+        return (
+            this.safeString (currencyBalance, 'free') !== undefined
+            || this.safeString (currencyBalance, 'used') !== undefined
+            || this.safeString (currencyBalance, 'total') !== undefined
+        );
+    }
+
+    coinrabbitExpandNetworkBalances (balanceDict: Dict): Dict {
+        const result: Dict = {};
+        const currencyIds = Object.keys (balanceDict);
+        for (let currencyIndex = 0; currencyIndex < currencyIds.length; currencyIndex++) {
+            const currencyId = currencyIds[currencyIndex];
+            const currencyBalance = this.safeDict (balanceDict, currencyId, {});
+            if (this.coinrabbitIsFlatCurrencyBalance (currencyBalance)) {
+                result[currencyId] = currencyBalance;
+                continue;
+            }
+            const networkIds = Object.keys (currencyBalance);
+            for (let networkIndex = 0; networkIndex < networkIds.length; networkIndex++) {
+                const networkId = networkIds[networkIndex];
+                const networkBalance = this.safeDict (currencyBalance, networkId, {});
+                const code = this.coinrabbitNetworkQualifiedCurrencyCode (currencyId, networkId);
+                result[code] = networkBalance;
+            }
+        }
+        return result;
     }
 
     coinrabbitFlattenBalanceArray (balanceArray: any[]): Dict {
@@ -366,12 +433,13 @@ export default class coinrabbit extends Exchange {
         } else {
             balanceDict = balancePayload;
         }
-        return this.parseBalance (balanceDict);
+        const expandedBalanceDict = this.coinrabbitExpandNetworkBalances (balanceDict);
+        return this.parseBalance (expandedBalanceDict, balanceDict);
     }
 
-    parseBalance (response: Dict): Balances {
+    parseBalance (response: Dict, rawResponse: Dict = undefined): Balances {
         const result: Dict = {
-            'info': response,
+            'info': (rawResponse !== undefined) ? rawResponse : response,
             'timestamp': undefined,
             'datetime': undefined,
         };
@@ -383,7 +451,12 @@ export default class coinrabbit extends Exchange {
             account['free'] = this.safeString (currencyBalance, 'free');
             account['used'] = this.safeString (currencyBalance, 'used');
             account['total'] = this.safeString (currencyBalance, 'total');
-            const code = this.safeCurrencyCode (currencyId);
+            let code: Str = undefined;
+            if (currencyId.indexOf ('@') >= 0) {
+                code = currencyId;
+            } else {
+                code = this.safeCurrencyCode (currencyId);
+            }
             result[code] = account;
         }
         return this.safeBalance (result);
@@ -592,6 +665,7 @@ export default class coinrabbit extends Exchange {
         const url = this.urls['api']['rest'] + signedPath;
         if (api === 'private') {
             this.checkRequiredCredentials ();
+            headers = (headers !== undefined) ? headers : {};
             const timestamp = this.milliseconds ().toString ();
             let rawBody = '';
             if (method === 'POST') {
@@ -639,7 +713,7 @@ export default class coinrabbit extends Exchange {
             throw new ExchangeError (feedback);
         }
         const envelopeResult = this.safeBool (response, 'result', undefined);
-        if (envelopeResult === false) {
+        if (envelopeResult !== undefined && !envelopeResult) {
             throw new ExchangeError (this.id + ' ' + body);
         }
         if (httpCode === 401 || httpCode === 403) {

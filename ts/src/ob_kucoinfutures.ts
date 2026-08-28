@@ -89,6 +89,7 @@ export default class ob_kucoinfutures extends kucoinfutures {
                     'localFeeCurrency': 'KCS',
                     'maxIncreasedPositionQuantityMultiplier': 0.95,
                     'hasBroker': true,
+                    'myTradesFetchUseCcxtPaginate': true,
                 },
             },
         });

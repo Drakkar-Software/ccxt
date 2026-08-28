@@ -2,7 +2,7 @@
 //  ---------------------------------------------------------------------------
 
 import hyperliquid from './hyperliquid.js';
-import type { Dict, Market, Ticker } from './base/types.js';
+import type { Currency, Dict, Market, Ticker, Transaction } from './base/types.js';
 
 //  ---------------------------------------------------------------------------
 
@@ -45,6 +45,7 @@ export default class ob_hyperliquid extends hyperliquid {
                     'fixMarketStatus': true,
                     'requireOrderFeesFromTrades': true,
                     'expectPossibleNotFoundOrderDuringOrderCreation': true,
+                    'myTradesFetchUseCcxtPaginate': true,
                 },
                 'ref': 'OCTOBOT',
                 'builder': '0x4574F97475dc29034cf57bc1E255Ef1997b0cc43',
@@ -94,5 +95,22 @@ export default class ob_hyperliquid extends hyperliquid {
             parsed['timestamp'] = this.milliseconds ();
         }
         return parsed as Ticker;
+    }
+
+    parseTransaction (transaction: Dict, currency: Currency = undefined): Transaction {
+        // override the standard parseTransaction: upstream leaves currency unset while amount comes from delta.usdc
+        const parsed = super.parseTransaction (transaction, currency) as Dict;
+        if (parsed['currency'] === undefined) {
+            const delta = this.safeDict (transaction, 'delta', {});
+            if (this.safeNumber (delta, 'usdc') !== undefined) {
+                parsed['currency'] = 'USDC';
+            } else {
+                const token = this.safeString (delta, 'token');
+                if (token !== undefined) {
+                    parsed['currency'] = token;
+                }
+            }
+        }
+        return parsed as Transaction;
     }
 }

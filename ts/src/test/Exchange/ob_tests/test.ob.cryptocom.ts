@@ -14,6 +14,10 @@ async function testObCryptocom () {
     }
     {
         const ex = new ccxt.ob_cryptocom ();
+        assert.strictEqual (ex.options.octobot.myTradesFetchUseCcxtPaginate, true);
+    }
+    {
+        const ex = new ccxt.ob_cryptocom ();
         ex.fetchBalance = async () => ({ 'info': {} } as any);
         const rights = await ex.fetchPermissions ();
         const expected = [ 'reading', 'spotTrading', 'futuresTrading', 'marginTrading' ];

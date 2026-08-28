@@ -16,6 +16,10 @@ async function testObKucoin () {
     }
     {
         const ex = new ccxt.ob_kucoin ();
+        assert.strictEqual (ex.options.octobot.myTradesFetchUseCcxtPaginate, true);
+    }
+    {
+        const ex = new ccxt.ob_kucoin ();
         ex.cancelOrder = async () => ({} as any);
         const rights = await ex.fetchPermissions ();
         assert.deepStrictEqual (rights, [ 'reading' ]);

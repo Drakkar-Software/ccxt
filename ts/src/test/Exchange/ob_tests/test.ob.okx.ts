@@ -15,6 +15,10 @@ async function testObOkx () {
     }
     {
         const ex = new ccxt.ob_okx ();
+        assert.strictEqual (ex.options.octobot.myTradesFetchUseCcxtPaginate, true);
+    }
+    {
+        const ex = new ccxt.ob_okx ();
         ex.fetchAccounts = async () => [];
         const rights = await ex.fetchPermissions ();
         assert.deepStrictEqual (rights, []);

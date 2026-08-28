@@ -55,6 +55,108 @@ async function testCoinrabbit () {
         assert.strictEqual (balance['USDT']['used'], 500);
         assert.strictEqual (balance['USDT']['total'], 2000.25);
     }
+    // coinrabbitNetworkQualifiedSymbol: ticker-wise market symbol
+    {
+        const exchange = new ccxt.coinrabbit ();
+        assert.strictEqual (exchange.coinrabbitNetworkQualifiedSymbol ('BTC/USDT', 'btc', 'eth'), 'BTC@BTC/USDT@ETH');
+    }
+    // coinrabbitParseTickerWiseSymbol: parse ticker-wise market symbol
+    {
+        const exchange = new ccxt.coinrabbit ();
+        const parsed = exchange.coinrabbitParseTickerWiseSymbol ('BTC@BTC/USDT@ETH');
+        assert.strictEqual (parsed['base'], 'BTC');
+        assert.strictEqual (parsed['quote'], 'USDT');
+        assert.strictEqual (parsed['baseNetwork'], 'btc');
+        assert.strictEqual (parsed['quoteNetwork'], 'eth');
+    }
+    // coinrabbitResolveMarket: ticker-wise symbol lookup
+    {
+        const exchange = new ccxt.coinrabbit ();
+        const tickerWiseMarket = {
+            'symbol': 'BTC@BTC/USDT@ETH',
+            'id': 'btc:eth:BTC/USDT',
+            'precision': { 'amount': 8, 'price': 8 },
+            'info': {
+                'symbol': 'BTC/USDT',
+                'base_network': 'btc',
+                'quote_network': 'eth',
+            },
+        };
+        exchange.markets = {
+            'BTC@BTC/USDT@ETH': tickerWiseMarket,
+        };
+        const market = exchange.coinrabbitResolveMarket ('BTC@BTC/USDT@ETH');
+        assert.strictEqual (market['symbol'], 'BTC@BTC/USDT@ETH');
+    }
+    // coinrabbitResolveMarket: plain symbol + network params
+    {
+        const exchange = new ccxt.coinrabbit ();
+        const tickerWiseMarket = {
+            'symbol': 'BTC@BTC/USDT@ETH',
+            'id': 'btc:eth:BTC/USDT',
+            'precision': { 'amount': 8, 'price': 8 },
+            'info': {
+                'symbol': 'BTC/USDT',
+                'base_network': 'btc',
+                'quote_network': 'eth',
+            },
+        };
+        exchange.markets = {
+            'BTC@BTC/USDT@ETH': tickerWiseMarket,
+        };
+        const market = exchange.coinrabbitResolveMarket ('BTC/USDT', { 'base_network': 'btc', 'quote_network': 'eth' });
+        assert.strictEqual (market['symbol'], 'BTC@BTC/USDT@ETH');
+    }
+    // parseOrder: API plain symbol + ticker-wise market → unified symbol
+    {
+        const exchange = new ccxt.coinrabbit ();
+        const tickerWiseMarket = {
+            'symbol': 'BTC@BTC/USDT@ETH',
+            'id': 'btc:eth:BTC/USDT',
+            'base': 'BTC',
+            'quote': 'USDT',
+            'info': {
+                'symbol': 'BTC/USDT',
+                'base_network': 'btc',
+                'quote_network': 'eth',
+            },
+        };
+        const order = exchange.parseOrder ({
+            'id': '1',
+            'symbol': 'BTC/USDT',
+            'side': 'sell',
+            'type': 'market',
+            'amount': '0.1',
+            'status': 'open',
+            'created_at': '2025-01-01T00:00:00Z',
+        }, tickerWiseMarket as any);
+        assert.strictEqual (order['symbol'], 'BTC@BTC/USDT@ETH');
+    }
+    // coinrabbitExpandNetworkBalances: network-nested live API shape
+    {
+        const exchange = new ccxt.coinrabbit ();
+        const expanded = exchange.coinrabbitExpandNetworkBalances ({
+            'USDT': { 'ETH': { 'free': '1', 'used': '0', 'total': '1' } },
+        });
+        const balance = exchange.parseBalance (expanded);
+        assert.strictEqual (balance['USDT@ETH']['free'], 1);
+        assert.strictEqual (balance['USDT@ETH']['used'], 0);
+        assert.strictEqual (balance['USDT@ETH']['total'], 1);
+    }
+    // coinrabbitExpandNetworkBalances: multi-network yields separate keys
+    {
+        const exchange = new ccxt.coinrabbit ();
+        const expanded = exchange.coinrabbitExpandNetworkBalances ({
+            'USDT': {
+                'ETH': { 'free': '2', 'used': '0', 'total': '2' },
+                'TRX': { 'free': '1', 'used': '0', 'total': '1' },
+            },
+        });
+        const balance = exchange.parseBalance (expanded);
+        assert.strictEqual (balance['USDT@ETH']['total'], 2);
+        assert.strictEqual (balance['USDT@TRX']['total'], 1);
+        assert.strictEqual (balance['USDT'], undefined);
+    }
     // sign: private GET includes v2 auth headers over METHOD\nPATH\nBODY\nTIMESTAMP
     {
         const exchangeAny = new ccxt.coinrabbit () as any;
@@ -74,24 +176,23 @@ async function testCoinrabbit () {
         assert.match (signed['url'], /symbol=/);
         assert.strictEqual (capturedPayload, 'GET\n/v2/trading/orders?symbol=BTC%2FUSDT&limit=10\n\n1710000000000');
     }
-    // createOrder: sell maps amount and source
+    // createOrder: sell maps amount and source via ticker-wise symbol
     {
         const exchange = new ccxt.coinrabbit ();
         exchange.apiKey = 'key';
         exchange.secret = 'secret';
-        exchange.markets = {
-            'BTC/USDT': {
+        const tickerWiseMarket = {
+            'symbol': 'BTC@BTC/USDT@ETH',
+            'id': 'btc:eth:BTC/USDT',
+            'precision': { 'amount': 8, 'price': 8 },
+            'info': {
                 'symbol': 'BTC/USDT',
-                'precision': { 'amount': 8, 'price': 8 },
-                'info': {
-                    'symbol': 'BTC/USDT',
-                    'base_network': 'btc',
-                    'quote_network': 'eth',
-                },
+                'base_network': 'btc',
+                'quote_network': 'eth',
             },
         };
-        exchange.markets_by_id = {
-            'btc:eth:BTC/USDT': exchange.markets['BTC/USDT'],
+        exchange.markets = {
+            'BTC@BTC/USDT@ETH': tickerWiseMarket,
         };
         exchange.loadMarkets = async () => exchange.markets;
         let capturedRequest: any = undefined;
@@ -99,7 +200,8 @@ async function testCoinrabbit () {
             capturedRequest = request;
             return { 'result': true, 'response': { 'id': 1, 'symbol': 'BTC/USDT', 'side': 'sell', 'type': 'market', 'amount': '0.1', 'status': 'open' } };
         };
-        await exchange.createOrder ('BTC/USDT', 'market', 'sell', 0.1);
+        await exchange.createOrder ('BTC@BTC/USDT@ETH', 'market', 'sell', 0.1);
+        assert.strictEqual (capturedRequest['symbol'], 'BTC/USDT');
         assert.strictEqual (capturedRequest['side'], 'sell');
         assert.strictEqual (capturedRequest['type'], 'market');
         assert.strictEqual (capturedRequest['amount'], '0.1');

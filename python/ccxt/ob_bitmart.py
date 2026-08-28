@@ -49,6 +49,7 @@ class ob_bitmart(bitmart, ImplicitAPI):
                     'supportFetchingCancelledOrders': False,
                     'adjustForTimeDifference': True,
                     'hasBroker': True,
+                    'myTradesFetchUseCcxtPaginate': True,
                 },
             },
         })

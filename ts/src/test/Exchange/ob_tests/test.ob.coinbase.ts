@@ -12,6 +12,10 @@ async function testObCoinbase () {
     }
     {
         const ex = new ccxt.ob_coinbase ();
+        assert.strictEqual (ex.options.octobot.myTradesFetchUseCcxtPaginate, true);
+    }
+    {
+        const ex = new ccxt.ob_coinbase ();
         ex.cancelOrder = async () => ({} as any);
         const rights = await ex.fetchPermissions ();
         assert.deepStrictEqual (rights, [ 'reading' ]);

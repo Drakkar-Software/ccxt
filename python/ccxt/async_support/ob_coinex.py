@@ -53,10 +53,15 @@ class ob_coinex(coinex, ImplicitAPI):
                     'fixMarketStatus': True,
                     'supportFetchingCancelledOrders': False,
                     'enableSpotBuyMarketWithCost': True,
+                    'adjustForTimeDifference': True,
                     'hasBroker': True,
+                    'myTradesFetchUseCcxtPaginate': True,
                 },
             },
         })
+
+    def nonce(self):
+        return self.milliseconds() - self.safe_integer(self.options, 'timeDifference', 0)
 
     async def fetch_permissions(self, params={}) -> List[str]:
         return await self.ob_fetch_permissions_imaginary_cancel('12345', 'BTC/USDT', params, 'pair')
