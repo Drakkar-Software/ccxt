@@ -60,6 +60,7 @@ export default class ob_hollaex extends hollaex {
                     'isSkippingEmptyCandlesInOhlcvFetch': true,
                     'stopLossEditPriceParam': 'stopPrice',
                     'stopLossCreatePriceParam': 'stopPrice',
+                    'myTradesFetchUseCcxtPaginate': true,
                 },
             },
         });

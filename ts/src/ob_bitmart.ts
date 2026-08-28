@@ -49,6 +49,7 @@ export default class ob_bitmart extends bitmart {
                     'supportFetchingCancelledOrders': false,
                     'adjustForTimeDifference': true,
                     'hasBroker': true,
+                    'myTradesFetchUseCcxtPaginate': true,
                 },
             },
         });

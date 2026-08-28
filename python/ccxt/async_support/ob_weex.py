@@ -47,6 +47,7 @@ class ob_weex(weex, ImplicitAPI):
                     'fixMarketStatus': True,
                     'requireOrderFeesFromTrades': True,
                     'hasBroker': True,
+                    'myTradesFetchUseCcxtPaginate': True,
                 },
             },
         })

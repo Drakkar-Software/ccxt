@@ -4,7 +4,7 @@
 import mexc from './mexc.js';
 import { AuthenticationError, OBIPWhitelistError, OrderNotFound, PermissionDenied, OBUntradableSymbol } from './base/errors.js';
 import { sha256 } from '@noble/hashes/sha2.js';
-import type { Bool, Dict, Market, Order, Str } from './base/types.js';
+import type { Bool, Dict, Int, Market, Order, Str, Transaction } from './base/types.js';
 
 //  ---------------------------------------------------------------------------
 
@@ -73,6 +73,7 @@ export default class ob_mexc extends mexc {
                     'adjustForTimeDifference': true,
                     'localFeeCurrency': 'MX',
                     'hasBroker': true,
+                    'myTradesFetchUseCcxtPaginate': true,
                 },
             },
         });
@@ -213,6 +214,26 @@ export default class ob_mexc extends mexc {
             };
         }
         return parsed as Order;
+    }
+
+    async fetchDeposits (code: Str = undefined, since: Int = undefined, limit: Int = undefined, params = {}): Promise<Transaction[]> {
+        if (since === undefined) {
+            const now = this.milliseconds ();
+            // MEXC allows up to 7 days per request when startTime is set
+            since = now - 6 * 24 * 60 * 60 * 1000;
+            params = this.extend (params, { 'endTime': now });
+        }
+        return await super.fetchDeposits (code, since, limit, params);
+    }
+
+    async fetchWithdrawals (code: Str = undefined, since: Int = undefined, limit: Int = undefined, params = {}): Promise<Transaction[]> {
+        if (since === undefined) {
+            const now = this.milliseconds ();
+            // MEXC allows up to 7 days per request when startTime is set
+            since = now - 6 * 24 * 60 * 60 * 1000;
+            params = this.extend (params, { 'endTime': now });
+        }
+        return await super.fetchWithdrawals (code, since, limit, params);
     }
 
     obQuoteFromSymbol (symbolStr: Str): Str {

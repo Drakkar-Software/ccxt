@@ -5,7 +5,7 @@
 
 from ccxt.async_support.kraken import kraken
 from ccxt.abstract.ob_kraken import ImplicitAPI
-from ccxt.base.types import Any, Market, Str, Ticker
+from ccxt.base.types import Any, Market, Order, Str, Ticker, Trade
 from typing import List
 from ccxt.base.errors import AuthenticationError
 
@@ -43,9 +43,39 @@ class ob_kraken(kraken, ImplicitAPI):
                     },
                     'fixMarketStatus': True,
                     'adjustForTimeDifference': True,
+                    'myTradesSymbolFilterIsClientSide': True,
+                    'myTradesFetchPaginationOffset': 'ofs',
                 },
             },
         })
+
+    def ob_kraken_last_nonce_by_api_key_map(self) -> dict:
+        classRef = ob_kraken
+        lastNonceByApiKey: dict
+        try:
+            lastNonceByApiKey = classRef.obKrakenLastNonceByApiKey
+        except Exception as caughtObKrakenNonceMapError:
+            lastNonceByApiKey = None
+        if lastNonceByApiKey is None:
+            lastNonceByApiKey = {}
+            classRef.obKrakenLastNonceByApiKey = lastNonceByApiKey
+        return lastNonceByApiKey
+
+    def nonce(self):
+        """
+        Process-wide monotonic nonce per API key. Kraken requires strictly
+   increasing nonces across all clients using the same key in one process.
+        """
+        apiKey = self.apiKey
+        if apiKey is None:
+            return self.milliseconds() - self.options['timeDifference']
+        candidate = self.milliseconds() - self.options['timeDifference']
+        lastNonceByApiKey = self.ob_kraken_last_nonce_by_api_key_map()
+        storedNonce = self.safe_integer(lastNonceByApiKey, apiKey)
+        previousNonce = 0 if (storedNonce is None) else storedNonce
+        nextNonce = max(candidate, previousNonce + 1)
+        lastNonceByApiKey[apiKey] = nextNonce
+        return nextNonce
 
     async def fetch_account_id(self, params={}, _ccxtTypesImportStr: Str = None) -> Str:
         return 'default_account_id'
@@ -84,4 +114,54 @@ class ob_kraken(kraken, ImplicitAPI):
         parsed = super(ob_kraken, self).parse_ticker(ticker, market)
         if not self.safe_integer(parsed, 'timestamp'):
             parsed['timestamp'] = self.milliseconds()
+        return parsed
+
+    def adapt_kraken_order_or_trade_type(self, parsed: dict):
+        """
+ OctoBot Kraken adapter: normalize conditional order/trade types for portfolio history.
+        """
+        orderInfo = self.safe_dict(parsed, 'info', {})
+        rawType = self.safe_string(orderInfo, 'tradeordertype')
+        if rawType is None:
+            rawType = self.safe_string(parsed, 'type')
+        if rawType is None:
+            return
+        normalizedKey = ''
+        rawTypeLower = rawType.lower()
+        for charIndex in range(0, len(rawTypeLower)):
+            currentChar = rawTypeLower[charIndex]
+            if currentChar == ' ' or currentChar == '_':
+                normalizedKey += '-'
+            else:
+                normalizedKey += currentChar
+        krakenTypeMap = {
+            'stop-loss-limit': 'stop_loss_limit',
+            'stop-limit': 'stop_loss_limit',
+            'stop-loss': 'stop_loss',
+            'take-profit-limit': 'take_profit_limit',
+            'take-profit': 'take_profit',
+            'trailing-stop-limit': 'stop_loss_limit',
+            'liquidation-market': 'market',
+        }
+        mappedType = self.safe_string(krakenTypeMap, normalizedKey)
+        if mappedType is not None:
+            parsed['type'] = mappedType
+            return
+        parseOrderTypeResult = self.parseOrderType(rawType)
+        if parseOrderTypeResult != rawType:
+            parsed['type'] = parseOrderTypeResult
+
+    def parse_order(self, order: dict, market: Market = None) -> Order:
+        parsed = super(ob_kraken, self).parse_order(order, market)
+        self.adapt_kraken_order_or_trade_type(parsed)
+        return parsed
+
+    def parse_trade(self, trade: dict, market: Market = None) -> Trade:
+        """
+        Inherits kraken.parseTrade fee parsing(fee.currency=quote). TradesHistory
+   does not expose oflags/fciq/fcib; base-fee trades can mislabel fee currency. See
+   OctoBot kraken_exchange.py for portfolio-history replay impact.
+        """
+        parsed = super(ob_kraken, self).parse_trade(trade, market)
+        self.adapt_kraken_order_or_trade_type(parsed)
         return parsed

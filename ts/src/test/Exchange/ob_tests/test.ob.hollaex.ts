@@ -10,6 +10,7 @@ async function testObHollaex () {
         const ex = new ccxt.ob_hollaex ();
         assertObExchangeId (ex, 'ob_hollaex');
         assert.strictEqual (ex.options['octobot']['computeMarketStatusCostLimits'], true);
+        assert.strictEqual (ex.options.octobot.myTradesFetchUseCcxtPaginate, true);
     }
     {
         const ex = new ccxt.ob_hollaex ();

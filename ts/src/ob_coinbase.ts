@@ -69,6 +69,7 @@ export default class ob_coinbase extends coinbase {
                     'adjustForTimeDifference': true,
                     'defaultQuoteCurrency': 'USDC',
                     'hasBroker': true,
+                    'myTradesFetchUseCcxtPaginate': true,
                 },
             },
         });

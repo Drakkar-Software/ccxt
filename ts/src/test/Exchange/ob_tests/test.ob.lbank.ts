@@ -14,6 +14,10 @@ async function testObLbank () {
     }
     {
         const ex = new ccxt.ob_lbank ();
+        assert.strictEqual (ex.options.octobot.myTradesFetchUseCcxtPaginate, true);
+    }
+    {
+        const ex = new ccxt.ob_lbank ();
         const payload = {
             'data': {
                 'enableReading': true,

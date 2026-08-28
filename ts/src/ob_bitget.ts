@@ -46,6 +46,7 @@ export default class ob_bitget extends bitget {
                     'removeMarketStatusPriceLimits': true,
                     'enableSpotBuyMarketWithCost': true,
                     'hasBroker': true,
+                    'myTradesFetchUseCcxtPaginate': true,
                 },
             },
         });

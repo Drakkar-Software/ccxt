@@ -2183,6 +2183,11 @@ class bitmart(Exchange, ImplicitAPI):
         """
         if self.markets is None:
             await self.load_markets()
+        paginate = False
+        paginate, params = self.handle_option_and_params(params, 'fetchMyTrades', 'paginate')
+        if paginate:
+            maxLimit = 200
+            return await self.fetch_paginated_call_dynamic('fetchMyTrades', symbol, since, limit, params, maxLimit)
         market = None
         request = {}
         if symbol is not None:

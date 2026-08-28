@@ -77,6 +77,7 @@ class ob_coinbase(coinbase, ImplicitAPI):
                     'adjustForTimeDifference': True,
                     'defaultQuoteCurrency': 'USDC',
                     'hasBroker': True,
+                    'myTradesFetchUseCcxtPaginate': True,
                 },
             },
         })

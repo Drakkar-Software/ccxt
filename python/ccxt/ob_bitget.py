@@ -46,6 +46,7 @@ class ob_bitget(bitget, ImplicitAPI):
                     'removeMarketStatusPriceLimits': True,
                     'enableSpotBuyMarketWithCost': True,
                     'hasBroker': True,
+                    'myTradesFetchUseCcxtPaginate': True,
                 },
             },
         })

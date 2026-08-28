@@ -74,6 +74,7 @@ export default class ob_binance extends binance {
                     'defaultQuoteCurrency': 'USDC',
                     'stopLossEditPriceParam': 'stopPrice',
                     'hasBroker': true,
+                    'myTradesFetchUseCcxtPaginate': true,
                     'requiresStopParamToFetchOrder': true,
                     'requiresStopParamToCancelOrder': true,
                 },

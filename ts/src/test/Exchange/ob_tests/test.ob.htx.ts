@@ -10,6 +10,10 @@ async function testObHtx () {
     }
     {
         const ex = new ccxt.ob_htx ();
+        assert.strictEqual (ex.options.octobot.myTradesFetchUseCcxtPaginate, true);
+    }
+    {
+        const ex = new ccxt.ob_htx ();
         ex.fetchBalance = async () => ({ 'info': {} } as any);
         const rights = await ex.fetchPermissions ();
         assert (rights.indexOf ('futuresTrading') >= 0);
@@ -54,6 +58,48 @@ async function testObHtx () {
             assert.strictEqual (parsed['amount'], 4);
         } finally {
             parentProto.parseOrder = orig;
+        }
+    }
+    // marketHelperProps: copy chain-id maps when sharing markets cache
+    {
+        const ex = new ccxt.ob_htx ();
+        assert.deepStrictEqual (ex.options['marketHelperProps'], [ 'networkNamesByChainIds', 'networkChainIdsByNames' ]);
+    }
+    // parseTransaction: chain maps present -> network resolved without KeyError
+    {
+        const ex = new ccxt.ob_htx ();
+        ex.options['networkNamesByChainIds'] = { 'arc20usdt': 'ETH' };
+        const parsed: any = ex.parseTransaction ({
+            'id': '118655882',
+            'type': 'withdraw',
+            'currency': 'usdt',
+            'chain': 'arc20usdt',
+            'tx-hash': '0xfa5915039a1c53448bf9a9f9d6bb7dcd857b01be8b6f20ee019f3a41875da211',
+            'amount': 28.357244,
+            'fee': 1,
+            'state': 'confirmed',
+            'created-at': 1691317556725,
+            'updated-at': 1691317728483,
+        });
+        assert.strictEqual (parsed['currency'], 'USDT');
+        assert.strictEqual (parsed['amount'], 28.357244);
+        assert.ok (parsed['network'] !== undefined);
+    }
+    // ensureNetworkChainMaps: loads currencies when chain maps are empty
+    {
+        const ex = new ccxt.ob_htx ();
+        let fetchCurrenciesCalls = 0;
+        const origFetchCurrencies = ex.fetchCurrencies;
+        ex.fetchCurrencies = async () => {
+            fetchCurrenciesCalls++;
+            ex.options['networkNamesByChainIds'] = { 'arc20usdt': 'ETH' };
+            return {};
+        };
+        try {
+            await ex.ensureNetworkChainMaps ();
+            assert.strictEqual (fetchCurrenciesCalls, 1);
+        } finally {
+            ex.fetchCurrencies = origFetchCurrencies;
         }
     }
 }

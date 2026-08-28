@@ -52,6 +52,7 @@ export default class ob_lbank extends lbank {
                     'requireOrderFeesFromTrades': true,
                     'supportsForcedSigningAllRequests': true,
                     'enableForcedSigningAllRequests': false,
+                    'myTradesFetchUseCcxtPaginate': true,
                 },
             },
         });

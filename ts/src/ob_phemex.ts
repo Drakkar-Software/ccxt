@@ -43,6 +43,7 @@ export default class ob_phemex extends phemex {
                     },
                     'fixMarketStatus': true,
                     'hasBroker': true,
+                    'myTradesFetchUseCcxtPaginate': true,
                 },
             },
         });

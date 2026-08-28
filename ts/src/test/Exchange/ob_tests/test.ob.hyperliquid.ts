@@ -26,6 +26,7 @@ async function testObHyperliquid () {
         const ex = new ccxt.ob_hyperliquid ();
         assertObExchangeId (ex, 'ob_hyperliquid');
         assertObBuilderOptions (ex);
+        assert.strictEqual (ex.options.octobot.myTradesFetchUseCcxtPaginate, true);
     }
     // parseMarket: base hyperliquid sets cost.min 10; ob_hyperliquid bumps to 11
     {
@@ -203,6 +204,38 @@ async function testObHyperliquid () {
             ex.amountToPrecision = origAmountToPrecision;
             ex.signL1Action = origSignL1;
         }
+    }
+    // parseTransaction: deposit delta.usdc -> currency USDC
+    {
+        const ex = new ccxt.ob_hyperliquid ();
+        const parsed: any = ex.parseTransaction ({
+            'time': 1743685580728,
+            'hash': '0xfcd4f7a8b8c974fce3fc0f1108ff48c7ecefcdfa79bb277301a0b221b5e24401',
+            'delta': { 'type': 'deposit', 'usdc': '100.0' },
+        });
+        assert.strictEqual (parsed['currency'], 'USDC');
+        assert.strictEqual (parsed['amount'], 100);
+    }
+    // parseTransaction: withdraw delta.usdc -> currency USDC
+    {
+        const ex = new ccxt.ob_hyperliquid ();
+        const parsed: any = ex.parseTransaction ({
+            'time': 1760512400796,
+            'hash': '0x5643d64d08465d3ccd9fc77afdb0c8ee98f55f4e2791a151c4a1eeb157ed2d1e',
+            'delta': { 'type': 'withdraw', 'usdc': '879.0', 'fee': '1.0' },
+        });
+        assert.strictEqual (parsed['currency'], 'USDC');
+        assert.strictEqual (parsed['amount'], 879);
+    }
+    // parseTransaction: token delta -> currency from token field
+    {
+        const ex = new ccxt.ob_hyperliquid ();
+        const parsed: any = ex.parseTransaction ({
+            'time': 1780953756242,
+            'hash': '0x7d6c2bc46615a42b7ee5043d46e30e02021b00aa0118c2fd2134d71725197e16',
+            'delta': { 'type': 'send', 'token': 'HYPE', 'amount': '7.0' },
+        });
+        assert.strictEqual (parsed['currency'], 'HYPE');
     }
     // createOrdersRequest: omits builder when approvedBuilderFee is false
     {

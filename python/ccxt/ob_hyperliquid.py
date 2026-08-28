@@ -5,7 +5,7 @@
 
 from ccxt.hyperliquid import hyperliquid
 from ccxt.abstract.ob_hyperliquid import ImplicitAPI
-from ccxt.base.types import Any, Market, Ticker
+from ccxt.base.types import Any, Currency, Market, Ticker, Transaction
 from typing import List
 
 
@@ -45,6 +45,7 @@ class ob_hyperliquid(hyperliquid, ImplicitAPI):
                     'fixMarketStatus': True,
                     'requireOrderFeesFromTrades': True,
                     'expectPossibleNotFoundOrderDuringOrderCreation': True,
+                    'myTradesFetchUseCcxtPaginate': True,
                 },
                 'ref': 'OCTOBOT',
                 'builder': '0x4574F97475dc29034cf57bc1E255Ef1997b0cc43',
@@ -85,4 +86,17 @@ class ob_hyperliquid(hyperliquid, ImplicitAPI):
         parsed = super(ob_hyperliquid, self).parse_ticker(ticker, market)
         if not self.safe_integer(parsed, 'timestamp'):
             parsed['timestamp'] = self.milliseconds()
+        return parsed
+
+    def parse_transaction(self, transaction: dict, currency: Currency = None) -> Transaction:
+        # override the standard parseTransaction: upstream leaves currency unset while amount comes from delta.usdc
+        parsed = super(ob_hyperliquid, self).parse_transaction(transaction, currency)
+        if parsed['currency'] is None:
+            delta = self.safe_dict(transaction, 'delta', {})
+            if self.safe_number(delta, 'usdc') is not None:
+                parsed['currency'] = 'USDC'
+            else:
+                token = self.safe_string(delta, 'token')
+                if token is not None:
+                    parsed['currency'] = token
         return parsed

@@ -11,6 +11,10 @@ async function testObGate () {
     }
     {
         const ex = new ccxt.ob_gate ();
+        assert.strictEqual (ex.options.octobot.myTradesFetchUseCcxtPaginate, true);
+    }
+    {
+        const ex = new ccxt.ob_gate ();
         const cfg = ex.describe ();
         const headers = cfg['headers'] as Record<string, string>;
         assert.strictEqual (headers['X-Gate-Channel-Id'], 'octobotclo');

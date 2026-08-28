@@ -69,6 +69,8 @@ class ob_bingx(bingx, ImplicitAPI):
                     'fixMarketStatus': True,
                     'canHaveDelayedCancelledOrders': True,
                     'requireRecentTradesFromClosedOrders': True,
+                    'closedOrdersFetchUseCcxtPaginate': True,
+                    'adjustForTimeDifference': True,
                     'hasBroker': True,
                 },
             },

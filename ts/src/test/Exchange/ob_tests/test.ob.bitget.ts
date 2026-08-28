@@ -10,6 +10,10 @@ async function testObBitget () {
     }
     {
         const ex = new ccxt.ob_bitget ();
+        assert.strictEqual (ex.options.octobot.myTradesFetchUseCcxtPaginate, true);
+    }
+    {
+        const ex = new ccxt.ob_bitget ();
         ex.fetchBalance = async () => ({ 'info': {} } as any);
         const rights = await ex.fetchPermissions ();
         assert (rights.indexOf ('futuresTrading') >= 0);
