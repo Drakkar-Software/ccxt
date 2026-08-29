@@ -17,6 +17,9 @@ export default class ob_phemex extends phemex {
             'name': 'Phemex',
             'certified': false,
             'urls': {
+                'referral': {
+                    'url': 'https://phemex.com/register-vt1?referralCode=CK8CC5',
+                },
             },
             'has': {
                 'CORS': undefined,

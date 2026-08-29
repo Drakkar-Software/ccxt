@@ -17,6 +17,7 @@ class ob_bybit(bybit, ImplicitAPI):
             'name': 'Bybit',
             'certified': False,
             'urls': {
+                'referral': 'https://www.bybit.com/en-US/invite?ref=QW6O5',
             },
             'has': {
                 'CORS': True,

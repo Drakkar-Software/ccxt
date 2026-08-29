@@ -17,6 +17,7 @@ export default class ob_bybit extends bybit {
             'name': 'Bybit',
             'certified': false,
             'urls': {
+                'referral': 'https://www.bybit.com/en-US/invite?ref=QW6O5',
             },
             'has': {
                 'CORS': true,

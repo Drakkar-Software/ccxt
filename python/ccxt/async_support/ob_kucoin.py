@@ -22,6 +22,7 @@ class ob_kucoin(kucoin, ImplicitAPI):
             'name': 'KuCoin',
             'certified': False,
             'urls': {
+                'referral': 'https://www.kucoin.com/ucenter/signup?rcode=rJ2Q2T3',
             },
             'exceptions': {
                 'exact': {

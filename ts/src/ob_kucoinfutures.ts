@@ -18,6 +18,7 @@ export default class ob_kucoinfutures extends kucoinfutures {
             'name': 'KuCoin Futures',
             'certified': false,
             'urls': {
+                'referral': 'https://futures.kucoin.com/?rcode=rJ2Q2T3',
             },
             'exceptions': {
                 'exact': {

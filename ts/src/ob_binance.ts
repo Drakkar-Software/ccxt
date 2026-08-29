@@ -18,6 +18,9 @@ export default class ob_binance extends binance {
             'name': 'Binance',
             'certified': false,
             'urls': {
+                'referral': {
+                    'url': 'https://accounts.binance.com/en/register?ref=528112221',
+                },
             },
             'exceptions': {
                 'exact': {

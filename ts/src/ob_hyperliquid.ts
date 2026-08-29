@@ -17,6 +17,7 @@ export default class ob_hyperliquid extends hyperliquid {
             'name': 'Hyperliquid',
             'certified': false,
             'urls': {
+                'referral': 'https://app.hyperliquid.xyz/join/OCTOBOT',
             },
             'has': {
                 'CORS': undefined,

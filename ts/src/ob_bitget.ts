@@ -17,6 +17,7 @@ export default class ob_bitget extends bitget {
             'name': 'Bitget',
             'certified': false,
             'urls': {
+                'referral': 'https://www.bitget.site/en/referral/register?from=referral&clacCode=QBBLW2XR',
             },
             'has': {
                 'CORS': undefined,

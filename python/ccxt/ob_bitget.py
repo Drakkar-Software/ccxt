@@ -17,6 +17,7 @@ class ob_bitget(bitget, ImplicitAPI):
             'name': 'Bitget',
             'certified': False,
             'urls': {
+                'referral': 'https://www.bitget.site/en/referral/register?from=referral&clacCode=QBBLW2XR',
             },
             'has': {
                 'CORS': None,

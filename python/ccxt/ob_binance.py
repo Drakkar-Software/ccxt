@@ -23,6 +23,9 @@ class ob_binance(binance, ImplicitAPI):
             'name': 'Binance',
             'certified': False,
             'urls': {
+                'referral': {
+                    'url': 'https://accounts.binance.com/en/register?ref=528112221',
+                },
             },
             'exceptions': {
                 'exact': {

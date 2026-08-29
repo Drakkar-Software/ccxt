@@ -17,6 +17,9 @@ class ob_bitmart(bitmart, ImplicitAPI):
             'name': 'BitMart',
             'certified': False,
             'urls': {
+                'referral': {
+                    'url': 'https://www.bitmart.com/invite/c6eRCp/en',
+                },
             },
             'has': {
                 'CORS': None,

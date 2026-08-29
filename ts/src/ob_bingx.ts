@@ -18,6 +18,7 @@ export default class ob_bingx extends bingx {
             'name': 'BingX',
             'certified': false,
             'urls': {
+                'referral': 'https://bingx.com/invite/Z4UUVX',
             },
             'exceptions': {
                 'exact': {

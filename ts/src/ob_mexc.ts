@@ -19,6 +19,7 @@ export default class ob_mexc extends mexc {
             'name': 'MEXC Global',
             'certified': false,
             'urls': {
+                'referral': 'https://www.mexc.com/register?inviteCode=1fqGu',
             },
             'exceptions': {
                 'exact': {

@@ -22,6 +22,7 @@ class ob_kucoinfutures(kucoinfutures, ImplicitAPI):
             'name': 'KuCoin Futures',
             'certified': False,
             'urls': {
+                'referral': 'https://futures.kucoin.com/?rcode=rJ2Q2T3',
             },
             'exceptions': {
                 'exact': {

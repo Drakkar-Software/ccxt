@@ -18,6 +18,9 @@ export default class ob_okx extends okx {
             'name': 'OKX',
             'certified': false,
             'urls': {
+                'referral': {
+                    'url': 'https://www.okx.com/join/9403477',
+                },
             },
             'exceptions': {
                 'exact': {

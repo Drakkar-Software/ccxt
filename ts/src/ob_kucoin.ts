@@ -18,6 +18,7 @@ export default class ob_kucoin extends kucoin {
             'name': 'KuCoin',
             'certified': false,
             'urls': {
+                'referral': 'https://www.kucoin.com/ucenter/signup?rcode=rJ2Q2T3',
             },
             'exceptions': {
                 'exact': {

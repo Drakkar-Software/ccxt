@@ -20,6 +20,9 @@ export default class ob_gate extends gate {
             'name': 'Gate',
             'certified': false,
             'urls': {
+                'referral': {
+                    'url': 'https://www.gate.io/signup/VLFGBLTDVG?ref_type=103',
+                },
             },
             'exceptions': {
                 'exact': {

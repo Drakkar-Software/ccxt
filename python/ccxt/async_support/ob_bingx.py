@@ -23,6 +23,7 @@ class ob_bingx(bingx, ImplicitAPI):
             'name': 'BingX',
             'certified': False,
             'urls': {
+                'referral': 'https://bingx.com/invite/Z4UUVX',
             },
             'exceptions': {
                 'exact': {
