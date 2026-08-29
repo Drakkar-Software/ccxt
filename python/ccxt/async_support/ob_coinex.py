@@ -18,6 +18,7 @@ class ob_coinex(coinex, ImplicitAPI):
             'name': 'CoinEx',
             'certified': False,
             'urls': {
+                'referral': 'https://www.coinex.com/register?refer_code=d6muk',
             },
             'exceptions': {
                 'broad': {

@@ -17,6 +17,9 @@ class ob_htx(htx, ImplicitAPI):
             'name': 'HTX',
             'certified': False,
             'urls': {
+                'referral': {
+                    'url': 'https://www.htx.com/invite/en-us/1f?invite_code=nwcu2223',
+                },
             },
             'has': {
                 'CORS': None,

@@ -27,6 +27,7 @@ class ob_coinbase(coinbase, ImplicitAPI):
             'name': 'Coinbase Advanced',
             'certified': False,
             'urls': {
+                'referral': 'https://coinbase-consumer.sjv.io/c/5348642/3856175/9251',
             },
             'exceptions': {
                 'exact': {

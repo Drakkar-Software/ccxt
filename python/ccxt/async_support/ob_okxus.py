@@ -19,6 +19,9 @@ class ob_okxus(okxus, ImplicitAPI):
             'name': 'OKX(US)',
             'certified': False,
             'urls': {
+                'referral': {
+                    'url': 'https://www.okx.com/join/9403477',
+                },
             },
             'exceptions': {
                 'exact': {

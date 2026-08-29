@@ -18,6 +18,7 @@ export default class ob_weex extends weex {
             'name': 'Weex',
             'certified': false,
             'urls': {
+                'referral': 'https://weex.com/register?vipCode=lpy0',
             },
             'has': {
                 'CORS': undefined,

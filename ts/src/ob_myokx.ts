@@ -18,6 +18,9 @@ export default class ob_myokx extends myokx {
             'name': 'MyOKX (EEA)',
             'certified': false,
             'urls': {
+                'referral': {
+                    'url': 'https://www.okx.com/join/9403477',
+                },
             },
             'exceptions': {
                 'exact': {

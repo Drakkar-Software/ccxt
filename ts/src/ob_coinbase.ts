@@ -19,6 +19,7 @@ export default class ob_coinbase extends coinbase {
             'name': 'Coinbase Advanced',
             'certified': false,
             'urls': {
+                'referral': 'https://coinbase-consumer.sjv.io/c/5348642/3856175/9251',
             },
             'exceptions': {
                 'exact': {

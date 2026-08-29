@@ -17,6 +17,9 @@ export default class ob_bitmart extends bitmart {
             'name': 'BitMart',
             'certified': false,
             'urls': {
+                'referral': {
+                    'url': 'https://www.bitmart.com/invite/c6eRCp/en',
+                },
             },
             'has': {
                 'CORS': undefined,

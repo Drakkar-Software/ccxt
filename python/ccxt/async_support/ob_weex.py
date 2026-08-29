@@ -18,6 +18,7 @@ class ob_weex(weex, ImplicitAPI):
             'name': 'Weex',
             'certified': False,
             'urls': {
+                'referral': 'https://weex.com/register?vipCode=lpy0',
             },
             'has': {
                 'CORS': None,

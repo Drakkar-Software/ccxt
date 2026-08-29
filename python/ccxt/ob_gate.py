@@ -20,6 +20,9 @@ class ob_gate(gate, ImplicitAPI):
             'name': 'Gate',
             'certified': False,
             'urls': {
+                'referral': {
+                    'url': 'https://www.gate.io/signup/VLFGBLTDVG?ref_type=103',
+                },
             },
             'exceptions': {
                 'exact': {

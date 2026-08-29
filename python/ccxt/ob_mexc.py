@@ -23,6 +23,7 @@ class ob_mexc(mexc, ImplicitAPI):
             'name': 'MEXC Global',
             'certified': False,
             'urls': {
+                'referral': 'https://www.mexc.com/register?inviteCode=1fqGu',
             },
             'exceptions': {
                 'exact': {

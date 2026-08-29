@@ -17,6 +17,9 @@ export default class ob_htx extends htx {
             'name': 'HTX',
             'certified': false,
             'urls': {
+                'referral': {
+                    'url': 'https://www.htx.com/invite/en-us/1f?invite_code=nwcu2223',
+                },
             },
             'has': {
                 'CORS': undefined,

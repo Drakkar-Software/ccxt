@@ -18,6 +18,7 @@ class ob_lbank(lbank, ImplicitAPI):
             'name': 'LBank',
             'certified': False,
             'urls': {
+                'referral': 'https://www.lbank.com/signup?icode=5ZA8A',
             },
             'has': {
                 'CORS': False,

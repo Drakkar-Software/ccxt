@@ -17,6 +17,9 @@ class ob_phemex(phemex, ImplicitAPI):
             'name': 'Phemex',
             'certified': False,
             'urls': {
+                'referral': {
+                    'url': 'https://phemex.com/register-vt1?referralCode=CK8CC5',
+                },
             },
             'has': {
                 'CORS': None,

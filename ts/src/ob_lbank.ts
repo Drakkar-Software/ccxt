@@ -20,6 +20,7 @@ export default class ob_lbank extends lbank {
             'name': 'LBank',
             'certified': false,
             'urls': {
+                'referral': 'https://www.lbank.com/signup?icode=5ZA8A',
             },
             'has': {
                 'CORS': false,

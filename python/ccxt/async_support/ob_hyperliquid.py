@@ -17,6 +17,7 @@ class ob_hyperliquid(hyperliquid, ImplicitAPI):
             'name': 'Hyperliquid',
             'certified': False,
             'urls': {
+                'referral': 'https://app.hyperliquid.xyz/join/OCTOBOT',
             },
             'has': {
                 'CORS': None,
