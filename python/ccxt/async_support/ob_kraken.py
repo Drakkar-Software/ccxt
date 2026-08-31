@@ -8,6 +8,7 @@ from ccxt.abstract.ob_kraken import ImplicitAPI
 from ccxt.base.types import Any, Market, Order, Str, Ticker, Trade
 from typing import List
 from ccxt.base.errors import AuthenticationError
+from ccxt.base.errors import OperationFailed
 
 
 class ob_kraken(kraken, ImplicitAPI):
@@ -18,6 +19,11 @@ class ob_kraken(kraken, ImplicitAPI):
             'name': 'Kraken',
             'certified': False,
             'urls': {
+            },
+            'exceptions': {
+                'exact': {
+                    'EAPI:Invalid nonce': OperationFailed,  # should instantly retry
+                },
             },
             'has': {
                 'CORS': None,
@@ -30,6 +36,8 @@ class ob_kraken(kraken, ImplicitAPI):
                 'fetchPermissions': True,
             },
             'options': {
+                'maxRetriesOnFailure': 5,
+                'maxRetriesOnFailureDelay': 0,
                 'octobot': {
                     'supportedElements': {
                         'spot': {
@@ -65,6 +73,7 @@ class ob_kraken(kraken, ImplicitAPI):
         """
         Process-wide monotonic nonce per API key. Kraken requires strictly
    increasing nonces across all clients using the same key in one process.
+        :returns number: monotonic nonce
         """
         apiKey = self.apiKey
         if apiKey is None:
@@ -119,6 +128,7 @@ class ob_kraken(kraken, ImplicitAPI):
     def adapt_kraken_order_or_trade_type(self, parsed: dict):
         """
  OctoBot Kraken adapter: normalize conditional order/trade types for portfolio history.
+        :param dict parsed: parsed order/trade dict(mutated in place)
         """
         orderInfo = self.safe_dict(parsed, 'info', {})
         rawType = self.safe_string(orderInfo, 'tradeordertype')
@@ -161,6 +171,9 @@ class ob_kraken(kraken, ImplicitAPI):
         Inherits kraken.parseTrade fee parsing(fee.currency=quote). TradesHistory
    does not expose oflags/fciq/fcib; base-fee trades can mislabel fee currency. See
    OctoBot kraken_exchange.py for portfolio-history replay impact.
+        :param dict trade: trade structure from the exchange
+        :param dict [market]: market structure
+        :returns dict: parsed trade
         """
         parsed = super(ob_kraken, self).parse_trade(trade, market)
         self.adapt_kraken_order_or_trade_type(parsed)
