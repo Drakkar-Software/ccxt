@@ -2,7 +2,7 @@
 //  ---------------------------------------------------------------------------
 
 import kraken from './kraken.js';
-import { AuthenticationError } from './base/errors.js';
+import { AuthenticationError, OperationFailed } from './base/errors.js';
 import type { Dict, Market, Order, Str, Ticker, Trade } from './base/types.js';
 
 //  ---------------------------------------------------------------------------
@@ -19,6 +19,11 @@ export default class ob_kraken extends kraken {
             'certified': false,
             'urls': {
             },
+            'exceptions': {
+                'exact': {
+                    'EAPI:Invalid nonce': OperationFailed, // should instantly retry
+                },
+            },
             'has': {
                 'CORS': undefined,
                 'spot': true,
@@ -30,6 +35,8 @@ export default class ob_kraken extends kraken {
                 'fetchPermissions': true,
             },
             'options': {
+                'maxRetriesOnFailure': 5,
+                'maxRetriesOnFailureDelay': 0,
                 'octobot': {
                     'supportedElements': {
                         'spot': {
