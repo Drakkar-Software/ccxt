@@ -15,7 +15,9 @@ from ccxt.base.errors import BadRequest
 from ccxt.base.errors import InsufficientFunds
 from ccxt.base.errors import InvalidOrder
 from ccxt.base.errors import OrderNotFound
+from ccxt.base.errors import NotSupported
 from ccxt.base.decimal_to_precision import DECIMAL_PLACES
+from ccxt.base.precise import Precise
 
 
 class coinrabbit(Exchange, ImplicitAPI):
@@ -37,6 +39,7 @@ class coinrabbit(Exchange, ImplicitAPI):
                 'future': False,
                 'option': False,
                 'cancelOrder': False,
+                'createMarketBuyOrderWithCost': True,
                 'createOrder': True,
                 'fetchBalance': True,
                 'fetchClosedOrders': True,
@@ -158,6 +161,7 @@ class coinrabbit(Exchange, ImplicitAPI):
                 },
             },
             'options': {
+                'createMarketBuyOrderRequiresPrice': False,
                 'orderSource': 'octobot',
                 'statusMapping': {
                     'OPEN': 'open',
@@ -296,8 +300,10 @@ class coinrabbit(Exchange, ImplicitAPI):
         active = self.safe_bool(market, 'active', True)
         minAmount = self.safe_number(market, 'min_amount')
         precisionInfo = self.safe_dict(market, 'precision', {})
-        amountPrecision = self.safe_number(precisionInfo, 'amount')
-        pricePrecision = self.safe_number(precisionInfo, 'price')
+        # TODO: CoinRabbit API may return null for precision.amount; default to 6 until the API always exposes amount precision.
+        amountPrecision = self.parse_to_int(self.number_to_string(self.safe_number(precisionInfo, 'amount', 6)))
+        # TODO: CoinRabbit API returns null for precision.price; hardcode 2 until the API exposes price precision.
+        pricePrecision = 2
         marketId = self.coinrabbit_market_id(baseNetwork, quoteNetwork, apiSymbol)
         return {
             'id': marketId,
@@ -461,7 +467,14 @@ class coinrabbit(Exchange, ImplicitAPI):
             if quoteValue is None:
                 quoteValue = cost
             if quoteValue is None:
-                quoteValue = self.cost_to_precision(symbol, amount)
+                if type == 'limit':
+                    if price is None:
+                        raise ArgumentsRequired(self.id + ' createOrder() requires a price argument for limit buy orders')
+                    limitBuyCost = Precise.string_mul(self.number_to_string(amount), self.number_to_string(price))
+                    quoteValue = self.price_to_precision(symbol, self.parse_number(limitBuyCost))
+                else:
+                    # market buy: amount is quote cost(marketBuyByCost)
+                    quoteValue = self.price_to_precision(symbol, amount)
             if quoteValue is None:
                 raise ArgumentsRequired(self.id + ' createOrder() requires a quote amount for buy orders')
             request['quote_amount'] = quoteValue
@@ -561,7 +574,40 @@ class coinrabbit(Exchange, ImplicitAPI):
         price = self.safe_string(order, 'price')
         amount = self.safe_string(order, 'amount')
         cost = self.safe_string(order, 'quote_amount')
+        if side == 'buy':
+            quoteAmount = self.safe_string(order, 'quote_amount')
+            if quoteAmount is not None:
+                quoteAmountNumber = self.parse_number(quoteAmount)
+                amountNumber = self.parse_number(amount)
+                if quoteAmountNumber > 0 and amountNumber > 0:
+                    # fetchClosedOrders: amount=quote spent, quote_amount=base received, price may be inverted
+                    cost = amount
+                    amount = self.amount_to_precision(symbol, quoteAmountNumber)
+                    costNumber = self.parse_number(cost)
+                    parsedAmountNumber = self.parse_number(amount)
+                    if parsedAmountNumber > 0:
+                        price = self.price_to_precision(symbol, costNumber / parsedAmountNumber)
+            elif amount is not None and price is not None:
+                amountNumber = self.parse_number(amount)
+                priceNumber = self.parse_number(price)
+                if priceNumber > 0:
+                    if cost is None:
+                        cost = amount
+                    amount = self.amount_to_precision(symbol, amountNumber / priceNumber)
+        feeCost = self.safe_string(order, 'fee')
+        # TODO: CoinRabbit API keeps market orders status=open after execution; map to closed when fee is present so
+        # OctoBot treats them. This does not align with portfolio settlement(used→free can lag minutes).
+        # Remove once the API exposes a reliable filled/closed status that matches balance settlement.
+        if type == 'market' and status == 'open':
+            if feeCost is not None and self.parse_number(feeCost) > 0:
+                status = 'closed'
         clientOrderId = self.safe_string(order, 'client_order_id')
+        fee = None
+        if feeCost is not None:
+            fee = {
+                'cost': feeCost,
+                'currency': self.safe_string(market, 'quote'),
+            }
         return self.safe_order({
             'info': order,
             'id': id,
@@ -584,7 +630,7 @@ class coinrabbit(Exchange, ImplicitAPI):
             'average': None,
             'filled': None,
             'remaining': None,
-            'fee': None,
+            'fee': fee,
             'trades': None,
         }, market)
 
@@ -639,7 +685,16 @@ class coinrabbit(Exchange, ImplicitAPI):
             raise ExchangeError(feedback)
         envelopeResult = self.safe_bool(response, 'result', None)
         if envelopeResult is not None and not envelopeResult:
-            raise ExchangeError(self.id + ' ' + body)
+            feedback = self.id + ' ' + body
+            errorCode = self.safe_string_upper(response, 'code')
+            message = self.safe_string(response, 'message')
+            if errorCode == 'NOT FOUND' or (message is not None and message.lower().find('not found') >= 0):
+                raise OrderNotFound(feedback)
+            if message is not None and message.find('must be equal to "market"') >= 0:
+                raise NotSupported(feedback)
+            if httpCode == 401 or httpCode == 403 or errorCode == 'UNAUTHORIZED':
+                raise AuthenticationError(feedback)
+            raise ExchangeError(feedback)
         if httpCode == 401 or httpCode == 403:
             raise AuthenticationError(self.id + ' ' + body)
         if httpCode == 404 and url.find('/trading/order/') >= 0:
