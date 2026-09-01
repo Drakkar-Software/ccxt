@@ -9,8 +9,9 @@ async function testObCoinrabbit () {
         const exchange = new ccxt.ob_coinrabbit ();
         assertObExchangeId (exchange, 'ob_coinrabbit');
         const octobotOptions = exchange.options['octobot'];
-        assert.strictEqual (octobotOptions['fixMarketStatus'], true);
-        assert.deepStrictEqual (octobotOptions['supportedElements']['spot']['orders'], [ 'market', 'limit' ]);
+        assert.strictEqual (octobotOptions['fixMarketStatus'], false);
+        assert.strictEqual (octobotOptions['enableSpotBuyMarketWithCost'], true);
+        assert.deepStrictEqual (octobotOptions['supportedElements']['spot']['orders'], [ 'market' ]);
         assert.strictEqual (exchange.options['orderSource'], 'octobot');
     }
     // obTopUpTradingCell: builds wallet top-up request with JWT + api key headers
@@ -60,6 +61,40 @@ async function testObCoinrabbit () {
             async () => await exchange.obTopUpTradingCell ('usdt', 1, 'eth', { 'xApiKey': 'octobot-settings-key' }),
             ArgumentsRequired,
         );
+    }
+    // parseOrder: buy market API amount is quote cost via ob_coinrabbit wrapper
+    {
+        const exchange = new ccxt.ob_coinrabbit ();
+        const tickerWiseMarket = {
+            'symbol': 'BTC@BTC/USDT@ETH',
+            'id': 'btc:eth:BTC/USDT',
+            'base': 'BTC',
+            'quote': 'USDT',
+            'precision': { 'amount': 6, 'price': 2 },
+            'info': {
+                'symbol': 'BTC/USDT',
+                'base_network': 'btc',
+                'quote_network': 'eth',
+            },
+        };
+        exchange.markets = {
+            'BTC@BTC/USDT@ETH': tickerWiseMarket,
+        };
+        const order = exchange.parseOrder ({
+            'id': '6',
+            'symbol': 'BTC/USDT',
+            'side': 'buy',
+            'type': 'market',
+            'amount': '2.41',
+            'price': '77775.8',
+            'fee': '0.0723',
+            'status': 'open',
+            'created_at': '2025-01-01T00:00:00Z',
+        }, tickerWiseMarket as any);
+        const expectedAmount = exchange.amountToPrecision ('BTC@BTC/USDT@ETH', 2.41 / 77775.8);
+        assert.strictEqual (Number (order['amount']), Number (expectedAmount));
+        assert.strictEqual (Number (order['cost']), 2.41);
+        assert.strictEqual (order['status'], 'closed');
     }
 }
 

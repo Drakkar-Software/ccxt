@@ -5,9 +5,10 @@
 
 from ccxt.coinrabbit import coinrabbit
 from ccxt.abstract.ob_coinrabbit import ImplicitAPI
-from ccxt.base.types import Any, Num, Str
+from ccxt.base.types import Any, Market, Num, Order, Str
 from ccxt.base.errors import AuthenticationError
 from ccxt.base.errors import ArgumentsRequired
+from ccxt.base.decimal_to_precision import DECIMAL_PLACES
 
 
 class ob_coinrabbit(coinrabbit, ImplicitAPI):
@@ -17,6 +18,7 @@ class ob_coinrabbit(coinrabbit, ImplicitAPI):
             'id': 'ob_coinrabbit',
             'name': 'CoinRabbit',
             'certified': False,
+            'precisionMode': DECIMAL_PLACES,
             'urls': {
                 'api': {
                     'wallet': 'https://api.coinrabbit.io',
@@ -35,7 +37,7 @@ class ob_coinrabbit(coinrabbit, ImplicitAPI):
                 'octobot': {
                     'supportedElements': {
                         'spot': {
-                            'orders': ['market', 'limit'],
+                            'orders': ['market'],
                             'bundled_orders': {},
                         },
                         'futures': {
@@ -43,11 +45,33 @@ class ob_coinrabbit(coinrabbit, ImplicitAPI):
                             'bundled_orders': {},
                         },
                     },
-                    'fixMarketStatus': True,
-                    'supportFetchingCancelledOrders': True,
+                    # coinrabbit uses DECIMAL_PLACES; obReplacePrecisionStepsWithDigitCount mis-converts place counts(6 → 1)
+                    'fixMarketStatus': False,
+                    'enableSpotBuyMarketWithCost': True,
+                    'requireRecentTradesFromClosedOrders': True,
+                    'supportFetchingCancelledOrders': False,
+                    'hasBroker': True,
                 },
             },
         })
+
+    def parse_order(self, order: dict, market: Market = None) -> Order:
+        parsed = super(ob_coinrabbit, self).parse_order(order, market)
+        self.ob_adapt_amount_from_filled_or_cost(parsed)
+        return parsed
+
+    def ob_adapt_amount_from_filled_or_cost(self, parsed: dict) -> dict:
+        orderType = self.safe_string_lower(parsed, 'type')
+        orderSide = self.safe_string_lower(parsed, 'side')
+        filled = self.safe_number(parsed, 'filled')
+        if orderType == 'market' and orderSide == 'buy' and filled is not None and filled != 0:
+            parsed['amount'] = filled
+        amount = self.safe_number(parsed, 'amount')
+        cost = self.safe_number(parsed, 'cost')
+        price = self.safe_number(parsed, 'price')
+        if (amount is None or amount == 0) and cost is not None and cost != 0 and price is not None and price != 0:
+            parsed['amount'] = cost / price
+        return parsed
 
     def ob_top_up_trading_cell(self, code: Str, amount: Num, network: Str, params={}) -> dict:
         """

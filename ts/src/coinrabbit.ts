@@ -1,8 +1,9 @@
 //  ---------------------------------------------------------------------------
 
 import { sha256 } from '@noble/hashes/sha2.js';
+import { Precise } from './base/Precise.js';
 import Exchange from './abstract/coinrabbit.js';
-import { ExchangeError, BadRequest, ArgumentsRequired, AuthenticationError, OrderNotFound, InvalidOrder, InsufficientFunds } from './base/errors.js';
+import { ExchangeError, BadRequest, ArgumentsRequired, AuthenticationError, OrderNotFound, InvalidOrder, InsufficientFunds, NotSupported } from './base/errors.js';
 import { DECIMAL_PLACES } from './base/functions/number.js';
 import type { Balances, Dict, Int, Market, Num, NullableDict, Order, OrderSide, OrderType, Str, Ticker, int } from './base/types.js';
 
@@ -31,6 +32,7 @@ export default class coinrabbit extends Exchange {
                 'future': false,
                 'option': false,
                 'cancelOrder': false,
+                'createMarketBuyOrderWithCost': true,
                 'createOrder': true,
                 'fetchBalance': true,
                 'fetchClosedOrders': true,
@@ -152,6 +154,7 @@ export default class coinrabbit extends Exchange {
                 },
             },
             'options': {
+                'createMarketBuyOrderRequiresPrice': false,
                 'orderSource': 'octobot',
                 'statusMapping': {
                     'OPEN': 'open',
@@ -317,8 +320,10 @@ export default class coinrabbit extends Exchange {
         const active = this.safeBool (market, 'active', true);
         const minAmount = this.safeNumber (market, 'min_amount');
         const precisionInfo = this.safeDict (market, 'precision', {});
-        const amountPrecision = this.safeNumber (precisionInfo, 'amount');
-        const pricePrecision = this.safeNumber (precisionInfo, 'price');
+        // TODO: CoinRabbit API may return null for precision.amount; default to 6 until the API always exposes amount precision.
+        const amountPrecision = this.parseToInt (this.numberToString (this.safeNumber (precisionInfo, 'amount', 6)));
+        // TODO: CoinRabbit API returns null for precision.price; hardcode 2 until the API exposes price precision.
+        const pricePrecision = 2;
         const marketId = this.coinrabbitMarketId (baseNetwork, quoteNetwork, apiSymbol);
         return {
             'id': marketId,
@@ -497,7 +502,16 @@ export default class coinrabbit extends Exchange {
                 quoteValue = cost;
             }
             if (quoteValue === undefined) {
-                quoteValue = this.costToPrecision (symbol, amount);
+                if (type === 'limit') {
+                    if (price === undefined) {
+                        throw new ArgumentsRequired (this.id + ' createOrder() requires a price argument for limit buy orders');
+                    }
+                    const limitBuyCost = Precise.stringMul (this.numberToString (amount), this.numberToString (price));
+                    quoteValue = this.priceToPrecision (symbol, this.parseNumber (limitBuyCost));
+                } else {
+                    // market buy: amount is quote cost (marketBuyByCost)
+                    quoteValue = this.priceToPrecision (symbol, amount);
+                }
             }
             if (quoteValue === undefined) {
                 throw new ArgumentsRequired (this.id + ' createOrder() requires a quote amount for buy orders');
@@ -615,13 +629,55 @@ export default class coinrabbit extends Exchange {
             symbol = apiSymbol;
         }
         const timestamp = this.parse8601 (this.safeString (order, 'created_at'));
-        const status = this.parseOrderStatus (this.safeStringUpper (order, 'status'));
+        let status = this.parseOrderStatus (this.safeStringUpper (order, 'status'));
         const side = this.safeStringLower (order, 'side');
         const type = this.safeStringLower (order, 'type');
-        const price = this.safeString (order, 'price');
-        const amount = this.safeString (order, 'amount');
-        const cost = this.safeString (order, 'quote_amount');
+        let price = this.safeString (order, 'price');
+        let amount = this.safeString (order, 'amount');
+        let cost = this.safeString (order, 'quote_amount');
+        if (side === 'buy') {
+            const quoteAmount = this.safeString (order, 'quote_amount');
+            if (quoteAmount !== undefined) {
+                const quoteAmountNumber = this.parseNumber (quoteAmount);
+                const amountNumber = this.parseNumber (amount);
+                if (quoteAmountNumber > 0 && amountNumber > 0) {
+                    // fetchClosedOrders: amount=quote spent, quote_amount=base received, price may be inverted
+                    cost = amount;
+                    amount = this.amountToPrecision (symbol, quoteAmountNumber);
+                    const costNumber = this.parseNumber (cost);
+                    const parsedAmountNumber = this.parseNumber (amount);
+                    if (parsedAmountNumber > 0) {
+                        price = this.priceToPrecision (symbol, costNumber / parsedAmountNumber);
+                    }
+                }
+            } else if (amount !== undefined && price !== undefined) {
+                const amountNumber = this.parseNumber (amount);
+                const priceNumber = this.parseNumber (price);
+                if (priceNumber > 0) {
+                    if (cost === undefined) {
+                        cost = amount;
+                    }
+                    amount = this.amountToPrecision (symbol, amountNumber / priceNumber);
+                }
+            }
+        }
+        const feeCost = this.safeString (order, 'fee');
+        // TODO: CoinRabbit API keeps market orders status=open after execution; map to closed when fee is present so
+        // OctoBot treats them as filled. This does not align with portfolio settlement (used→free can lag minutes).
+        // Remove once the API exposes a reliable filled/closed status that matches balance settlement.
+        if (type === 'market' && status === 'open') {
+            if (feeCost !== undefined && this.parseNumber (feeCost) > 0) {
+                status = 'closed';
+            }
+        }
         const clientOrderId = this.safeString (order, 'client_order_id');
+        let fee = undefined;
+        if (feeCost !== undefined) {
+            fee = {
+                'cost': feeCost,
+                'currency': this.safeString (market, 'quote'),
+            };
+        }
         return this.safeOrder ({
             'info': order,
             'id': id,
@@ -644,7 +700,7 @@ export default class coinrabbit extends Exchange {
             'average': undefined,
             'filled': undefined,
             'remaining': undefined,
-            'fee': undefined,
+            'fee': fee,
             'trades': undefined,
         }, market);
     }
@@ -714,7 +770,19 @@ export default class coinrabbit extends Exchange {
         }
         const envelopeResult = this.safeBool (response, 'result', undefined);
         if (envelopeResult !== undefined && !envelopeResult) {
-            throw new ExchangeError (this.id + ' ' + body);
+            const feedback = this.id + ' ' + body;
+            const errorCode = this.safeStringUpper (response, 'code');
+            const message = this.safeString (response, 'message');
+            if (errorCode === 'NOT FOUND' || (message !== undefined && message.toLowerCase ().indexOf ('not found') >= 0)) {
+                throw new OrderNotFound (feedback);
+            }
+            if (message !== undefined && message.indexOf ('must be equal to "market"') >= 0) {
+                throw new NotSupported (feedback);
+            }
+            if (httpCode === 401 || httpCode === 403 || errorCode === 'UNAUTHORIZED') {
+                throw new AuthenticationError (feedback);
+            }
+            throw new ExchangeError (feedback);
         }
         if (httpCode === 401 || httpCode === 403) {
             throw new AuthenticationError (this.id + ' ' + body);

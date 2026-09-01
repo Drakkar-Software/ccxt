@@ -3,7 +3,8 @@
 
 import coinrabbit from './coinrabbit.js';
 import { ArgumentsRequired, AuthenticationError } from './base/errors.js';
-import type { Dict, Num, Str } from './base/types.js';
+import { DECIMAL_PLACES } from './base/functions/number.js';
+import type { Dict, Market, Num, Order, Str } from './base/types.js';
 
 //  ---------------------------------------------------------------------------
 
@@ -17,6 +18,7 @@ export default class ob_coinrabbit extends coinrabbit {
             'id': 'ob_coinrabbit',
             'name': 'CoinRabbit',
             'certified': false,
+            'precisionMode': DECIMAL_PLACES,
             'urls': {
                 'api': {
                     'wallet': 'https://api.coinrabbit.io',
@@ -35,7 +37,7 @@ export default class ob_coinrabbit extends coinrabbit {
                 'octobot': {
                     'supportedElements': {
                         'spot': {
-                            'orders': [ 'market', 'limit' ],
+                            'orders': [ 'market' ],
                             'bundled_orders': {},
                         },
                         'futures': {
@@ -43,11 +45,37 @@ export default class ob_coinrabbit extends coinrabbit {
                             'bundled_orders': {},
                         },
                     },
-                    'fixMarketStatus': true,
-                    'supportFetchingCancelledOrders': true,
+                    // coinrabbit uses DECIMAL_PLACES; obReplacePrecisionStepsWithDigitCount mis-converts place counts (6 → 1)
+                    'fixMarketStatus': false,
+                    'enableSpotBuyMarketWithCost': true,
+                    'requireRecentTradesFromClosedOrders': true,
+                    'supportFetchingCancelledOrders': false,
+                    'hasBroker': true,
                 },
             },
         });
+    }
+
+    parseOrder (order: Dict, market: Market = undefined): Order {
+        const parsed = super.parseOrder (order, market) as Dict;
+        this.obAdaptAmountFromFilledOrCost (parsed);
+        return parsed as Order;
+    }
+
+    obAdaptAmountFromFilledOrCost (parsed: Dict): Dict {
+        const orderType = this.safeStringLower (parsed, 'type');
+        const orderSide = this.safeStringLower (parsed, 'side');
+        const filled = this.safeNumber (parsed, 'filled');
+        if (orderType === 'market' && orderSide === 'buy' && filled !== undefined && filled !== 0) {
+            parsed['amount'] = filled;
+        }
+        const amount = this.safeNumber (parsed, 'amount');
+        const cost = this.safeNumber (parsed, 'cost');
+        const price = this.safeNumber (parsed, 'price');
+        if ((amount === undefined || amount === 0) && cost !== undefined && cost !== 0 && price !== undefined && price !== 0) {
+            parsed['amount'] = cost / price;
+        }
+        return parsed;
     }
 
     /**
