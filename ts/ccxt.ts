@@ -147,6 +147,7 @@ import ob_bitmex from  './src/ob_bitmex.js'
 import ob_bitso from  './src/ob_bitso.js'
 import ob_bitstamp from  './src/ob_bitstamp.js'
 import ob_bybit from  './src/ob_bybit.js'
+import ob_bybiteu from  './src/ob_bybiteu.js'
 import ob_changenow from  './src/ob_changenow.js'
 import ob_coinbase from  './src/ob_coinbase.js'
 import ob_coinex from  './src/ob_coinex.js'
@@ -385,6 +386,7 @@ const exchanges = {
     'ob_bitso':               ob_bitso,
     'ob_bitstamp':            ob_bitstamp,
     'ob_bybit':               ob_bybit,
+    'ob_bybiteu':             ob_bybiteu,
     'ob_changenow':           ob_changenow,
     'ob_coinbase':            ob_coinbase,
     'ob_coinex':              ob_coinex,
@@ -801,6 +803,7 @@ export {
     ob_bitso,
     ob_bitstamp,
     ob_bybit,
+    ob_bybiteu,
     ob_changenow,
     ob_coinbase,
     ob_coinex,

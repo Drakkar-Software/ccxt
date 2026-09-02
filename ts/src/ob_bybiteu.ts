@@ -1,31 +1,31 @@
 
 //  ---------------------------------------------------------------------------
 
-import bybit from './bybit.js';
+import bybiteu from './bybiteu.js';
 import type { Dict, Market, Str, Ticker } from './base/types.js';
 
 //  ---------------------------------------------------------------------------
 
 /**
- * @class ob_bybit
- * @augments bybit
+ * @class ob_bybiteu
+ * @augments bybiteu
  */
-export default class ob_bybit extends bybit {
+export default class ob_bybiteu extends bybiteu {
     describe (): any {
         return this.deepExtend (super.describe (), {
-            'id': 'ob_bybit',
-            'name': 'Bybit',
+            'id': 'ob_bybiteu',
+            'name': 'Bybit EU',
             'certified': false,
             'urls': {
-                'referral': 'https://www.bybit.com/en-US/invite?ref=QW6O5',
+                'referral': 'https://www.bybit.com/invite?ref=XDK12WP',
             },
             'has': {
                 'CORS': true,
                 'spot': true,
                 'margin': true,
-                'swap': true,
-                'future': true,
-                'option': true,
+                'swap': false,
+                'future': false,
+                'option': false,
                 'fetchPermissions': true,
                 'getOrdersBrokerParameters': true,
             },
@@ -38,15 +38,8 @@ export default class ob_bybit extends bybit {
                             'orders': [ 'market', 'limit' ],
                             'bundled_orders': {},
                         },
-                        'futures': {
-                            'orders': [ 'market', 'limit', 'stop_loss' ],
-                            'bundled_orders': {},
-                        },
                     },
                     'fixMarketStatus': true,
-                    'markPriceInTicker': true,
-                    'fundingInTicker': true,
-                    'requiresSymbolForEmptyPosition': true,
                     'requireOrderFeesFromTrades': false,
                     'expectPossibleNotFoundOrderDuringOrderCreation': true,
                     'canHaveDelayedCancelledOrders': true,
@@ -61,7 +54,7 @@ export default class ob_bybit extends bybit {
 
     async fetchPermissions (params = {}): Promise<string[]> {
         await this.fetchBalance (params);
-        return [ 'reading', 'spotTrading', 'futuresTrading', 'marginTrading' ];
+        return [ 'reading', 'spotTrading', 'marginTrading' ];
     }
 
     getOrdersBrokerParameters (params = {}): any {

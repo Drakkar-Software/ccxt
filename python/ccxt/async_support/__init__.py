@@ -172,6 +172,7 @@ from ccxt.async_support.ob_bitmex import ob_bitmex                              
 from ccxt.async_support.ob_bitso import ob_bitso                                # noqa: F401
 from ccxt.async_support.ob_bitstamp import ob_bitstamp                          # noqa: F401
 from ccxt.async_support.ob_bybit import ob_bybit                                # noqa: F401
+from ccxt.async_support.ob_bybiteu import ob_bybiteu                            # noqa: F401
 from ccxt.async_support.ob_changenow import ob_changenow                        # noqa: F401
 from ccxt.async_support.ob_coinbase import ob_coinbase                          # noqa: F401
 from ccxt.async_support.ob_coinex import ob_coinex                              # noqa: F401
@@ -323,6 +324,7 @@ exchanges = [
     'ob_bitso',
     'ob_bitstamp',
     'ob_bybit',
+    'ob_bybiteu',
     'ob_changenow',
     'ob_coinbase',
     'ob_coinex',

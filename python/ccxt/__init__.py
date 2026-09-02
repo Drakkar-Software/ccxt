@@ -192,6 +192,7 @@ from ccxt.ob_bitmex import ob_bitmex                                  # noqa: F4
 from ccxt.ob_bitso import ob_bitso                                    # noqa: F401
 from ccxt.ob_bitstamp import ob_bitstamp                              # noqa: F401
 from ccxt.ob_bybit import ob_bybit                                    # noqa: F401
+from ccxt.ob_bybiteu import ob_bybiteu                                # noqa: F401
 from ccxt.ob_changenow import ob_changenow                            # noqa: F401
 from ccxt.ob_coinbase import ob_coinbase                              # noqa: F401
 from ccxt.ob_coinex import ob_coinex                                  # noqa: F401
@@ -343,6 +344,7 @@ exchanges = [
     'ob_bitso',
     'ob_bitstamp',
     'ob_bybit',
+    'ob_bybiteu',
     'ob_changenow',
     'ob_coinbase',
     'ob_coinex',

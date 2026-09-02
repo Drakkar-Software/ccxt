@@ -5,7 +5,7 @@
 
 from ccxt.async_support.bybit import bybit
 from ccxt.abstract.ob_bybit import ImplicitAPI
-from ccxt.base.types import Any, Market, Ticker
+from ccxt.base.types import Any, Market, Str, Ticker
 from typing import List
 
 
@@ -47,12 +47,13 @@ class ob_bybit(bybit, ImplicitAPI):
                     'markPriceInTicker': True,
                     'fundingInTicker': True,
                     'requiresSymbolForEmptyPosition': True,
-                    'requireOrderFeesFromTrades': True,
+                    'requireOrderFeesFromTrades': False,
                     'expectPossibleNotFoundOrderDuringOrderCreation': True,
                     'canHaveDelayedCancelledOrders': True,
                     'adjustForTimeDifference': True,
                     'hasBroker': True,
                     'myTradesFetchUseCcxtPaginate': True,
+                    'enableSpotBuyMarketWithCost': True,
                 },
             },
         })
@@ -63,6 +64,10 @@ class ob_bybit(bybit, ImplicitAPI):
 
     def get_orders_broker_parameters(self, params={}) -> Any:
         return self.extend({}, params)
+
+    async def fetch_order(self, id: str, symbol: Str = None, params={}):
+        acknowledgedParams = self.extend({'acknowledged': True}, params)
+        return super(ob_bybit, self).fetch_order(id, symbol, acknowledgedParams)
 
     def parse_ticker(self, ticker: dict, market: Market = None) -> Ticker:
         # override the standard parseTicker to apply OctoBot's BybitCCXTAdapter.fix_ticker:

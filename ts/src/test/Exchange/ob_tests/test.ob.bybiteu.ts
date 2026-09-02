@@ -7,30 +7,30 @@ function sortedStrings (values: string[]) {
     return values.slice ().sort ();
 }
 
-async function testObBybit () {
+async function testObBybiteu () {
     {
-        const ex = new ccxt.ob_bybit ();
-        assertObExchangeId (ex, 'ob_bybit');
+        const ex = new ccxt.ob_bybiteu ();
+        assertObExchangeId (ex, 'ob_bybiteu');
     }
     {
-        const ex = new ccxt.ob_bybit ();
+        const ex = new ccxt.ob_bybiteu ();
         assert.strictEqual (ex.options.octobot.myTradesFetchUseCcxtPaginate, true);
+        assert.strictEqual (ex.options.octobot.hasBroker, true);
         assert.strictEqual (ex.options.octobot.enableSpotBuyMarketWithCost, true);
-        assert.strictEqual (ex.options.octobot.requireOrderFeesFromTrades, false);
     }
     {
-        const ex = new ccxt.ob_bybit ();
+        const ex = new ccxt.ob_bybiteu ();
         ex.fetchBalance = async () => ({ 'info': {} } as any);
         const rights = await ex.fetchPermissions ();
-        const expected = [ 'reading', 'spotTrading', 'futuresTrading', 'marginTrading' ];
+        const expected = [ 'reading', 'spotTrading', 'marginTrading' ];
         assert.deepStrictEqual (sortedStrings (rights), sortedStrings (expected));
     }
     {
-        const ex = new ccxt.ob_bybit ();
+        const ex = new ccxt.ob_bybiteu ();
         assert.strictEqual (ex.options['brokerId'], 'octobot');
         ex.getOrdersBrokerParameters ();
         assert.strictEqual (ex.options['brokerId'], 'octobot');
     }
 }
 
-export default testObBybit;
+export default testObBybiteu;
