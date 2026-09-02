@@ -102,6 +102,7 @@
         "ob_bitso",
         "ob_bitstamp",
         "ob_bybit",
+        "ob_bybiteu",
         "ob_changenow",
         "ob_coinbase",
         "ob_coinex",
