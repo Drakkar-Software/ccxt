@@ -1,7 +1,7 @@
 //  ---------------------------------------------------------------------------
 
 import Exchange from './abstract/alchemy.js';
-import { ArgumentsRequired, AuthenticationError, BadSymbol, ExchangeError, NotSupported, RateLimitExceeded } from './base/errors.js';
+import { ArgumentsRequired, AuthenticationError, BadSymbol, ExchangeError, NotSupported, OperationFailed, RateLimitExceeded } from './base/errors.js';
 import type { Market, Dict, Ticker, int, Strings, Tickers, MarketInterface } from './base/types.js';
 
 //  ---------------------------------------------------------------------------
@@ -105,6 +105,8 @@ export default class alchemy extends Exchange {
                 'secret': false,
             },
             'options': {
+                'maxRetriesOnFailure': 5,
+                'maxRetriesOnFailureDelay': 0,
                 'networks': networks,
                 'networksById': networksById,
                 'dexes': dexes,
@@ -588,7 +590,7 @@ export default class alchemy extends Exchange {
                 'latest',
             ],
         };
-        const response = await this.fetch (rpcUrl, 'POST', {
+        const response = await this.fetch2 (rpcUrl, 'public', 'POST', params, {
             'Content-Type': 'application/json',
         }, this.json (requestBody));
         const result = this.safeString (response, 'result');
@@ -827,7 +829,18 @@ export default class alchemy extends Exchange {
         return [];
     }
 
+    sign (path, api, method, params, headers, body) {
+        return { 'url': path, 'method': method, 'headers': headers, 'body': body };
+    }
+
+    isTransientAlchemyGatewayHttpError (httpCode: int, body: string, response): boolean {
+        return httpCode === 403 && (body === '' || body === undefined) && response === undefined;
+    }
+
     handleErrors (httpCode: int, reason: string, url: string, method: string, headers: Dict, body: string, response, requestHeaders, requestBody) {
+        if (this.isTransientAlchemyGatewayHttpError (httpCode, body, response)) {
+            throw new OperationFailed (this.id + ' transient gateway 403 on ' + url);
+        }
         if (response === undefined) {
             return undefined;
         }

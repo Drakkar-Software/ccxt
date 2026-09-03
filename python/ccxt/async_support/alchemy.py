@@ -14,6 +14,7 @@ from ccxt.base.errors import AuthenticationError
 from ccxt.base.errors import ArgumentsRequired
 from ccxt.base.errors import BadSymbol
 from ccxt.base.errors import NotSupported
+from ccxt.base.errors import OperationFailed
 from ccxt.base.errors import RateLimitExceeded
 
 
@@ -110,6 +111,8 @@ class alchemy(Exchange, ImplicitAPI):
                 'secret': False,
             },
             'options': {
+                'maxRetriesOnFailure': 5,
+                'maxRetriesOnFailureDelay': 0,
                 'networks': networks,
                 'networksById': networksById,
                 'dexes': dexes,
@@ -504,7 +507,7 @@ class alchemy(Exchange, ImplicitAPI):
                 'latest',
             ],
         }
-        response = await self.fetch(rpcUrl, 'POST', {
+        response = await self.fetch2(rpcUrl, 'public', 'POST', params, {
             'Content-Type': 'application/json',
         }, self.json(requestBody))
         result = self.safe_string(response, 'result')
@@ -707,7 +710,15 @@ class alchemy(Exchange, ImplicitAPI):
             await self.resolve_markets(symbolsToResolve, params)
         return []
 
+    def sign(self, path, api, method, params, headers, body):
+        return {'url': path, 'method': method, 'headers': headers, 'body': body}
+
+    def is_transient_alchemy_gateway_http_error(self, httpCode: int, body: str, response) -> bool:
+        return httpCode == 403 and (body == '' or body is None) and response is None
+
     def handle_errors(self, httpCode: int, reason: str, url: str, method: str, headers: dict, body: str, response, requestHeaders, requestBody):
+        if self.is_transient_alchemy_gateway_http_error(httpCode, body, response):
+            raise OperationFailed(self.id + ' transient gateway 403 on ' + url)
         if response is None:
             return None
         if httpCode == 429:

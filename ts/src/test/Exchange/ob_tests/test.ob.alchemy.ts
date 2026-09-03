@@ -14,6 +14,8 @@ async function testObAlchemy () {
         assert.strictEqual (octobotOptions['requiresSymbolsParamToFetchTickers'], true);
         assert.strictEqual (octobotOptions['fixMarketStatus'], true);
         assert.strictEqual (octobotOptions['createOhlcvFromTickers'], true);
+        assert.strictEqual (exchange.options['maxRetriesOnFailure'], 5);
+        assert.strictEqual (exchange.options['maxRetriesOnFailureDelay'], 0);
     }
 }
 

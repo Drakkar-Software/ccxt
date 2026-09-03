@@ -1,6 +1,7 @@
 
 import assert from 'assert';
 import ccxt from '../../../../ccxt.js';
+import { AuthenticationError, OperationFailed } from '../../../base/errors.js';
 
 const MCADE_BASE = '0xc48823ec67720a04a9dfd8c7d109b2c3d6622094';
 const WETH_BASE = '0x4200000000000000000000000000000000000006';
@@ -138,6 +139,90 @@ async function testAlchemy () {
         const parsed: any = exchange.obParseNetworkDexSymbol (SYMBOL_ETH_UNI);
         assert.strictEqual (parsed['networkCode'], 'ETH');
         assert.strictEqual (parsed['dexCode'], 'UNISWAPV3');
+    }
+    // D1: describe() retry options
+    {
+        const exchange = createExchange ();
+        assert.strictEqual (exchange.options['maxRetriesOnFailure'], 5);
+        assert.strictEqual (exchange.options['maxRetriesOnFailureDelay'], 0);
+    }
+    // C1: transient empty 403
+    {
+        const exchange = createExchange ();
+        assert.strictEqual (exchange.isTransientAlchemyGatewayHttpError (403, '', undefined), true);
+    }
+    // C2: auth 403 with JSON-RPC body
+    {
+        const exchange = createExchange ();
+        const jsonRpcError = { 'jsonrpc': '2.0', 'error': { 'code': -32600 } };
+        assert.strictEqual (exchange.isTransientAlchemyGatewayHttpError (403, '{"jsonrpc":"2.0","error":{"code":-32600}}', jsonRpcError), false);
+    }
+    // C3: non-403 response
+    {
+        const exchange = createExchange ();
+        const jsonRpcResult = { 'result': '0x' };
+        assert.strictEqual (exchange.isTransientAlchemyGatewayHttpError (200, '{"result":"0x"}', jsonRpcResult), false);
+    }
+    // H1: handleErrors transient 403 -> OperationFailed
+    {
+        const exchange = createExchange ();
+        assert.throws (
+            () => exchange.handleErrors (403, 'Forbidden', 'https://base-mainnet.g.alchemy.com/v2/test', 'POST', {}, '', undefined, {}, undefined),
+            OperationFailed,
+        );
+    }
+    // H2: handleErrors auth 403 with JSON body -> AuthenticationError
+    {
+        const exchange = createExchange ();
+        const body = '{"jsonrpc":"2.0","error":{"code":-32600,"message":"Invalid request"}}';
+        const response = { 'jsonrpc': '2.0', 'error': { 'code': -32600, 'message': 'Invalid request' } };
+        assert.throws (
+            () => exchange.handleErrors (403, 'Forbidden', 'https://base-mainnet.g.alchemy.com/v2/test', 'POST', {}, body, response, {}, undefined),
+            AuthenticationError,
+        );
+    }
+    // R1: ethCall retries transient failures then succeeds
+    {
+        const exchange = createExchange ();
+        let fetchCallCount = 0;
+        exchange.fetch = async (url, method, headers, body) => {
+            fetchCallCount++;
+            if (fetchCallCount <= 2) {
+                throw new OperationFailed ('transient gateway 403');
+            }
+            return { 'jsonrpc': '2.0', 'id': 1, 'result': '0x' + '0'.repeat (64) };
+        };
+        const result = await exchange.ethCall ('https://base-mainnet.g.alchemy.com/v2/test', '0xabc', '0x');
+        assert.strictEqual (fetchCallCount, 3);
+        assert.strictEqual (result.startsWith ('0x'), true);
+    }
+    // R2: ethCall does not retry AuthenticationError
+    {
+        const exchange = createExchange ();
+        let fetchCallCount = 0;
+        exchange.fetch = async (url, method, headers, body) => {
+            fetchCallCount++;
+            throw new AuthenticationError ('invalid api key');
+        };
+        await assert.rejects (
+            async () => exchange.ethCall ('https://base-mainnet.g.alchemy.com/v2/test', '0xabc', '0x'),
+            AuthenticationError,
+        );
+        assert.strictEqual (fetchCallCount, 1);
+    }
+    // R3: ethCall exhausts retries on persistent OperationFailed
+    {
+        const exchange = createExchange ();
+        let fetchCallCount = 0;
+        exchange.fetch = async (url, method, headers, body) => {
+            fetchCallCount++;
+            throw new OperationFailed ('transient gateway 403');
+        };
+        await assert.rejects (
+            async () => exchange.ethCall ('https://base-mainnet.g.alchemy.com/v2/test', '0xabc', '0x'),
+            OperationFailed,
+        );
+        assert.strictEqual (fetchCallCount, 6);
     }
 }
 
