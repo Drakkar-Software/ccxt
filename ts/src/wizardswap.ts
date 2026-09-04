@@ -469,34 +469,55 @@ export default class wizardswap extends Exchange {
             request['refund_address'] = refundAddress;
         }
         params = this.omit (params, [ 'address_to', 'refund_address' ]);
-        const response = await this.publicPostExchange (this.extend (request, params));
-        if (((typeof response === 'boolean') && !response) || response === 'False') {
-            throw new InvalidOrder (this.id + ' createOrder() failed: exchange returned False (order rejected)');
+        // ob_wizardswap enables maxRetriesOnFailure for fetch2 (HTTP/network failures only).
+        // Missing order id is a successful HTTP response without an id — retry here at createOrder level.
+        // Rejected swaps (False) fail immediately; exhausted missing-id retries throw InvalidOrder
+        // with a stable message.
+        const maxRetries = this.safeInteger (this.options, 'maxRetriesOnFailure', 0);
+        const retryDelay = this.safeInteger (this.options, 'maxRetriesOnFailureDelay', 0);
+        const extendedRequest = this.extend (request, params);
+        for (let attempt = 0; attempt <= maxRetries; attempt++) {
+            const response = await this.publicPostExchange (extendedRequest);
+            if (((typeof response === 'boolean') && !response) || response === 'False') {
+                throw new InvalidOrder (this.id + ' createOrder() failed: exchange returned False (order rejected)');
+            }
+            const orderId = this.safeString (response, 'id');
+            if (orderId !== undefined && orderId !== '') {
+                //
+                //  {
+                //      "id": "08A75WA1",
+                //      "type": "fixed",
+                //      "timestamp": "2026-03-24 21:48:22",
+                //      "updated_at": "2026-03-24 22:48:21",
+                //      "currency_from": "xmr",
+                //      "amount_from": "0.1000...",
+                //      "expected_amount": "0.1000...",
+                //      "amount_to": "0.000467720...",
+                //      "address_from": "88hsysd...",
+                //      "address_to": "1Bitcoin...",
+                //      "extra_id_from": "",
+                //      "extra_id_to": "",
+                //      "tx_from": "",
+                //      "tx_to": "",
+                //      "status": "waiting",
+                //      "refund_address": null,
+                //      "refund_extra_id": "",
+                //      "currencies": { ... }
+                //  }
+                //
+                // Note: create response may omit currency_to; pass market to parseOrder.
+                return this.parseOrder (response, market);
+            }
+            if (attempt < maxRetries) {
+                this.log ('createOrder missing id, retrying ...');
+                if (retryDelay) {
+                    await this.sleep (retryDelay);
+                }
+                continue;
+            }
+            throw new InvalidOrder (this.id + ' createOrder() failed: exchange response has no order id');
         }
-        //
-        //  {
-        //      "id": "08A75WA1",
-        //      "type": "fixed",
-        //      "timestamp": "2026-03-24 21:48:22",
-        //      "updated_at": "2026-03-24 22:48:21",
-        //      "currency_from": "xmr",
-        //      "amount_from": "0.1000...",
-        //      "expected_amount": "0.1000...",
-        //      "amount_to": "0.000467720...",
-        //      "address_from": "88hsysd...",
-        //      "address_to": "1Bitcoin...",
-        //      "extra_id_from": "",
-        //      "extra_id_to": "",
-        //      "tx_from": "",
-        //      "tx_to": "",
-        //      "status": "waiting",
-        //      "refund_address": null,
-        //      "refund_extra_id": "",
-        //      "currencies": { ... }
-        //  }
-        //
-        // Note: create response may omit currency_to; pass market to parseOrder.
-        return this.parseOrder (response, market);
+        throw new InvalidOrder (this.id + ' createOrder() failed: exchange response has no order id');
     }
 
     /**

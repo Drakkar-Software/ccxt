@@ -29,6 +29,7 @@ import testObMexc from './test.ob.mexc.js';
 import testObOkx from './test.ob.okx.js';
 import testObPhemex from './test.ob.phemex.js';
 import testObWeex from './test.ob.weex.js';
+import testWizardswap from './test.wizardswap.js';
 import testObWizardswap from './test.ob.wizardswap.js';
 
 async function obTestsInit () {
@@ -63,6 +64,7 @@ async function obTestsInit () {
     await testObOkx ();
     await testObPhemex ();
     await testObWeex ();
+    await testWizardswap ();
     await testObWizardswap ();
 }
 

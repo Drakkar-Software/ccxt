@@ -447,33 +447,50 @@ class wizardswap(Exchange, ImplicitAPI):
         if refundAddress is not None:
             request['refund_address'] = refundAddress
         params = self.omit(params, ['address_to', 'refund_address'])
-        response = await self.publicPostExchange(self.extend(request, params))
-        if ((isinstance(response, bool)) and not response) or response == 'False':
-            raise InvalidOrder(self.id + ' createOrder() failed: exchange returned False(order rejected)')
-        #
-        #  {
-        #      "id": "08A75WA1",
-        #      "type": "fixed",
-        #      "timestamp": "2026-03-24 21:48:22",
-        #      "updated_at": "2026-03-24 22:48:21",
-        #      "currency_from": "xmr",
-        #      "amount_from": "0.1000...",
-        #      "expected_amount": "0.1000...",
-        #      "amount_to": "0.000467720...",
-        #      "address_from": "88hsysd...",
-        #      "address_to": "1Bitcoin...",
-        #      "extra_id_from": "",
-        #      "extra_id_to": "",
-        #      "tx_from": "",
-        #      "tx_to": "",
-        #      "status": "waiting",
-        #      "refund_address": null,
-        #      "refund_extra_id": "",
-        #      "currencies": {...}
-        #  }
-        #
-        # Note: create response may omit currency_to; pass market to parseOrder.
-        return self.parse_order(response, market)
+        # ob_wizardswap enables maxRetriesOnFailure for fetch2(HTTP/network failures only).
+        # Missing order id is a successful HTTP response without an id — retry here at createOrder level.
+        # Rejected swaps(False) fail immediately; exhausted missing-id retries raise InvalidOrder
+        # with a stable message.
+        maxRetries = self.safe_integer(self.options, 'maxRetriesOnFailure', 0)
+        retryDelay = self.safe_integer(self.options, 'maxRetriesOnFailureDelay', 0)
+        extendedRequest = self.extend(request, params)
+        for attempt in range(0, maxRetries):
+            response = await self.publicPostExchange(extendedRequest)
+            if ((isinstance(response, bool)) and not response) or response == 'False':
+                raise InvalidOrder(self.id + ' createOrder() failed: exchange returned False(order rejected)')
+            orderId = self.safe_string(response, 'id')
+            if orderId is not None and orderId != '':
+                #
+                #  {
+                #      "id": "08A75WA1",
+                #      "type": "fixed",
+                #      "timestamp": "2026-03-24 21:48:22",
+                #      "updated_at": "2026-03-24 22:48:21",
+                #      "currency_from": "xmr",
+                #      "amount_from": "0.1000...",
+                #      "expected_amount": "0.1000...",
+                #      "amount_to": "0.000467720...",
+                #      "address_from": "88hsysd...",
+                #      "address_to": "1Bitcoin...",
+                #      "extra_id_from": "",
+                #      "extra_id_to": "",
+                #      "tx_from": "",
+                #      "tx_to": "",
+                #      "status": "waiting",
+                #      "refund_address": null,
+                #      "refund_extra_id": "",
+                #      "currencies": {...}
+                #  }
+                #
+                # Note: create response may omit currency_to; pass market to parseOrder.
+                return self.parse_order(response, market)
+            if attempt < maxRetries:
+                self.log('createOrder missing id, retrying ...')
+                if retryDelay:
+                    await self.sleep(retryDelay)
+                continue
+            raise InvalidOrder(self.id + ' createOrder() failed: exchange response has no order id')
+        raise InvalidOrder(self.id + ' createOrder() failed: exchange response has no order id')
 
     async def fetch_order(self, id: str, symbol: Str = None, params={}) -> Order:
         """

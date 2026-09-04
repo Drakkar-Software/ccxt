@@ -27,6 +27,8 @@ export default class ob_wizardswap extends wizardswap {
                 'option': false,
             },
             'options': {
+                'maxRetriesOnFailure': 5,
+                'maxRetriesOnFailureDelay': 0,
                 'octobot': {
                     'supportedElements': {
                         'spot': {
