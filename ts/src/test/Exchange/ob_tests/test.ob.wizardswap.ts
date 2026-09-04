@@ -7,6 +7,8 @@ async function testObWizardswap () {
     {
         const ex = new ccxt.ob_wizardswap ();
         assertObExchangeId (ex, 'ob_wizardswap');
+        assert.strictEqual (ex.options['maxRetriesOnFailure'], 5);
+        assert.strictEqual (ex.options['maxRetriesOnFailureDelay'], 0);
     }
     // parseOrder O1: info.address_from -> esov.address_from
     {

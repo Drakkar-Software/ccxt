@@ -26,6 +26,8 @@ class ob_wizardswap(wizardswap, ImplicitAPI):
                 'option': False,
             },
             'options': {
+                'maxRetriesOnFailure': 5,
+                'maxRetriesOnFailureDelay': 0,
                 'octobot': {
                     'supportedElements': {
                         'spot': {
