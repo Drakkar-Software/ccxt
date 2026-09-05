@@ -26,9 +26,15 @@ from ccxt.base.errors import AuthenticationError                      # noqa: F4
 from ccxt.base.errors import PermissionDenied                         # noqa: F401
 from ccxt.base.errors import AccountNotEnabled                        # noqa: F401
 from ccxt.base.errors import AccountSuspended                         # noqa: F401
+from ccxt.base.errors import OBIPWhitelistError                       # noqa: F401
 from ccxt.base.errors import ArgumentsRequired                        # noqa: F401
 from ccxt.base.errors import BadRequest                               # noqa: F401
 from ccxt.base.errors import BadSymbol                                # noqa: F401
+from ccxt.base.errors import OBUntradableSymbol                       # noqa: F401
+from ccxt.base.errors import OBClosedPositionError                    # noqa: F401
+from ccxt.base.errors import OBOrderUncancellableError                # noqa: F401
+from ccxt.base.errors import OBInternalSyncError                      # noqa: F401
+from ccxt.base.errors import OBMaxOpenOrdersReached                   # noqa: F401
 from ccxt.base.errors import OperationRejected                        # noqa: F401
 from ccxt.base.errors import NoChange                                 # noqa: F401
 from ccxt.base.errors import MarginModeAlreadySet                     # noqa: F401
@@ -64,6 +70,7 @@ from ccxt.base.errors import UnsubscribeError                         # noqa: F4
 from ccxt.base.errors import error_hierarchy                          # noqa: F401
 
 
+from ccxt.async_support.alchemy import alchemy                                  # noqa: F401
 from ccxt.async_support.alpaca import alpaca                                    # noqa: F401
 from ccxt.async_support.apex import apex                                        # noqa: F401
 from ccxt.async_support.aster import aster                                      # noqa: F401
@@ -101,21 +108,26 @@ from ccxt.async_support.bybit import bybit                                      
 from ccxt.async_support.bybiteu import bybiteu                                  # noqa: F401
 from ccxt.async_support.bydfi import bydfi                                      # noqa: F401
 from ccxt.async_support.cex import cex                                          # noqa: F401
+from ccxt.async_support.changenow import changenow                              # noqa: F401
 from ccxt.async_support.coinbase import coinbase                                # noqa: F401
 from ccxt.async_support.coinbaseexchange import coinbaseexchange                # noqa: F401
 from ccxt.async_support.coinbaseinternational import coinbaseinternational      # noqa: F401
 from ccxt.async_support.coincheck import coincheck                              # noqa: F401
 from ccxt.async_support.coinex import coinex                                    # noqa: F401
+from ccxt.async_support.coingecko import coingecko                              # noqa: F401
 from ccxt.async_support.coinmate import coinmate                                # noqa: F401
 from ccxt.async_support.coinone import coinone                                  # noqa: F401
+from ccxt.async_support.coinrabbit import coinrabbit                            # noqa: F401
 from ccxt.async_support.coinsph import coinsph                                  # noqa: F401
 from ccxt.async_support.coinspot import coinspot                                # noqa: F401
 from ccxt.async_support.cryptocom import cryptocom                              # noqa: F401
 from ccxt.async_support.cryptomus import cryptomus                              # noqa: F401
 from ccxt.async_support.deepcoin import deepcoin                                # noqa: F401
+from ccxt.async_support.defillama import defillama                              # noqa: F401
 from ccxt.async_support.delta import delta                                      # noqa: F401
 from ccxt.async_support.deribit import deribit                                  # noqa: F401
 from ccxt.async_support.derive import derive                                    # noqa: F401
+from ccxt.async_support.dexscreener import dexscreener                          # noqa: F401
 from ccxt.async_support.digifinex import digifinex                              # noqa: F401
 from ccxt.async_support.dydx import dydx                                        # noqa: F401
 from ccxt.async_support.exmo import exmo                                        # noqa: F401
@@ -149,6 +161,45 @@ from ccxt.async_support.modetrade import modetrade                              
 from ccxt.async_support.mudrex import mudrex                                    # noqa: F401
 from ccxt.async_support.myokx import myokx                                      # noqa: F401
 from ccxt.async_support.ndax import ndax                                        # noqa: F401
+from ccxt.async_support.ob_alchemy import ob_alchemy                            # noqa: F401
+from ccxt.async_support.ob_binance import ob_binance                            # noqa: F401
+from ccxt.async_support.ob_binanceus import ob_binanceus                        # noqa: F401
+from ccxt.async_support.ob_bingx import ob_bingx                                # noqa: F401
+from ccxt.async_support.ob_bitfinex import ob_bitfinex                          # noqa: F401
+from ccxt.async_support.ob_bitget import ob_bitget                              # noqa: F401
+from ccxt.async_support.ob_bitmart import ob_bitmart                            # noqa: F401
+from ccxt.async_support.ob_bitmex import ob_bitmex                              # noqa: F401
+from ccxt.async_support.ob_bitso import ob_bitso                                # noqa: F401
+from ccxt.async_support.ob_bitstamp import ob_bitstamp                          # noqa: F401
+from ccxt.async_support.ob_bybit import ob_bybit                                # noqa: F401
+from ccxt.async_support.ob_bybiteu import ob_bybiteu                            # noqa: F401
+from ccxt.async_support.ob_changenow import ob_changenow                        # noqa: F401
+from ccxt.async_support.ob_coinbase import ob_coinbase                          # noqa: F401
+from ccxt.async_support.ob_coinex import ob_coinex                              # noqa: F401
+from ccxt.async_support.ob_coingecko import ob_coingecko                        # noqa: F401
+from ccxt.async_support.ob_coinrabbit import ob_coinrabbit                      # noqa: F401
+from ccxt.async_support.ob_cryptocom import ob_cryptocom                        # noqa: F401
+from ccxt.async_support.ob_defillama import ob_defillama                        # noqa: F401
+from ccxt.async_support.ob_dexscreener import ob_dexscreener                    # noqa: F401
+from ccxt.async_support.ob_gate import ob_gate                                  # noqa: F401
+from ccxt.async_support.ob_hitbtc import ob_hitbtc                              # noqa: F401
+from ccxt.async_support.ob_hollaex import ob_hollaex                            # noqa: F401
+from ccxt.async_support.ob_htx import ob_htx                                    # noqa: F401
+from ccxt.async_support.ob_hyperliquid import ob_hyperliquid                    # noqa: F401
+from ccxt.async_support.ob_kraken import ob_kraken                              # noqa: F401
+from ccxt.async_support.ob_kucoin import ob_kucoin                              # noqa: F401
+from ccxt.async_support.ob_kucoinfutures import ob_kucoinfutures                # noqa: F401
+from ccxt.async_support.ob_lbank import ob_lbank                                # noqa: F401
+from ccxt.async_support.ob_mexc import ob_mexc                                  # noqa: F401
+from ccxt.async_support.ob_myokx import ob_myokx                                # noqa: F401
+from ccxt.async_support.ob_ndax import ob_ndax                                  # noqa: F401
+from ccxt.async_support.ob_okx import ob_okx                                    # noqa: F401
+from ccxt.async_support.ob_okxus import ob_okxus                                # noqa: F401
+from ccxt.async_support.ob_phemex import ob_phemex                              # noqa: F401
+from ccxt.async_support.ob_poloniex import ob_poloniex                          # noqa: F401
+from ccxt.async_support.ob_upbit import ob_upbit                                # noqa: F401
+from ccxt.async_support.ob_weex import ob_weex                                  # noqa: F401
+from ccxt.async_support.ob_wizardswap import ob_wizardswap                      # noqa: F401
 from ccxt.async_support.okx import okx                                          # noqa: F401
 from ccxt.async_support.okxus import okxus                                      # noqa: F401
 from ccxt.async_support.onetrading import onetrading                            # noqa: F401
@@ -163,6 +214,7 @@ from ccxt.async_support.toobit import toobit                                    
 from ccxt.async_support.upbit import upbit                                      # noqa: F401
 from ccxt.async_support.weex import weex                                        # noqa: F401
 from ccxt.async_support.whitebit import whitebit                                # noqa: F401
+from ccxt.async_support.wizardswap import wizardswap                            # noqa: F401
 from ccxt.async_support.woo import woo                                          # noqa: F401
 from ccxt.async_support.woofipro import woofipro                                # noqa: F401
 from ccxt.async_support.xt import xt                                            # noqa: F401
@@ -170,6 +222,7 @@ from ccxt.async_support.zaif import zaif                                        
 from ccxt.async_support.zebpay import zebpay                                    # noqa: F401
 
 exchanges = [
+    'alchemy',
     'alpaca',
     'apex',
     'aster',
@@ -207,21 +260,26 @@ exchanges = [
     'bybiteu',
     'bydfi',
     'cex',
+    'changenow',
     'coinbase',
     'coinbaseexchange',
     'coinbaseinternational',
     'coincheck',
     'coinex',
+    'coingecko',
     'coinmate',
     'coinone',
+    'coinrabbit',
     'coinsph',
     'coinspot',
     'cryptocom',
     'cryptomus',
     'deepcoin',
+    'defillama',
     'delta',
     'deribit',
     'derive',
+    'dexscreener',
     'digifinex',
     'dydx',
     'exmo',
@@ -255,6 +313,45 @@ exchanges = [
     'mudrex',
     'myokx',
     'ndax',
+    'ob_alchemy',
+    'ob_binance',
+    'ob_binanceus',
+    'ob_bingx',
+    'ob_bitfinex',
+    'ob_bitget',
+    'ob_bitmart',
+    'ob_bitmex',
+    'ob_bitso',
+    'ob_bitstamp',
+    'ob_bybit',
+    'ob_bybiteu',
+    'ob_changenow',
+    'ob_coinbase',
+    'ob_coinex',
+    'ob_coingecko',
+    'ob_coinrabbit',
+    'ob_cryptocom',
+    'ob_defillama',
+    'ob_dexscreener',
+    'ob_gate',
+    'ob_hitbtc',
+    'ob_hollaex',
+    'ob_htx',
+    'ob_hyperliquid',
+    'ob_kraken',
+    'ob_kucoin',
+    'ob_kucoinfutures',
+    'ob_lbank',
+    'ob_mexc',
+    'ob_myokx',
+    'ob_ndax',
+    'ob_okx',
+    'ob_okxus',
+    'ob_phemex',
+    'ob_poloniex',
+    'ob_upbit',
+    'ob_weex',
+    'ob_wizardswap',
     'okx',
     'okxus',
     'onetrading',
@@ -269,6 +366,7 @@ exchanges = [
     'upbit',
     'weex',
     'whitebit',
+    'wizardswap',
     'woo',
     'woofipro',
     'xt',

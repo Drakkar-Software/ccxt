@@ -1,4 +1,4 @@
-/*
+﻿/*
 
 MIT License
 
@@ -34,8 +34,8 @@ import PredictionExchange from './src/base/PredictionExchange.js'
 import { Precise }   from './src/base/Precise.js'
 import * as functions from './src/base/functions.js'
 import * as errors   from './src/base/errors.js'
-import type { Int, int, Str, Strings, Num, Bool, IndexType, OrderSide, OrderType, MarketType, SubType, Dict, NullableDict, List, NullableList, Fee, OHLCV, OHLCVC, implicitReturnType, Market, Currency, Dictionary, NestedDictionary, MinMax, FeeInterface, TradingFeeInterface, MarketInterface, Precision, PredictionEvent, PredictionOutcome, PredictionMarket, PredictionSettlement, PredictionFees, PredictionOrder, PredictionTrade, PredictionPosition, PredictionTicker, PredictionOrderBook, PredictionTickers, PredictionTradingFee, PredictionOpenInterest, PredictionOrderRequest, fetchEventsParams, Trade, Order, OrderBook, Ticker, Transaction, Tickers, CurrencyInterface, Balance, BalanceAccount, Account, PartialBalances, Balances, DepositAddress, WithdrawalResponse, FundingRate, FundingRates, Position, BorrowInterest, LeverageTier, LedgerEntry, DepositWithdrawFeeNetwork, DepositWithdrawFee, TransferEntry, CrossBorrowRate, IsolatedBorrowRate, FundingRateHistory, OpenInterest, Liquidation, OrderRequest, CancellationRequest, FundingHistory, MarketMarginModes, MarginMode, Greeks, Conversion, Option, LastPrice, Leverage, MarginModification, Leverages, LastPrices, Currencies, TradingFees, MarginModes, OptionChain, IsolatedBorrowRates, CrossBorrowRates, LeverageTiers, LongShortRatio, OrderBooks, OpenInterests, ConstructorArgs, ADL } from './src/base/types.js'
-import {BaseError, ExchangeError, AuthenticationError, PermissionDenied, AccountNotEnabled, AccountSuspended, ArgumentsRequired, BadRequest, BadSymbol, OperationRejected, NoChange, MarginModeAlreadySet, MarketClosed, ManualInteractionNeeded, RestrictedLocation, InsufficientFunds, InvalidAddress, AddressPending, InvalidOrder, OrderNotFound, OrderNotCached, OrderImmediatelyFillable, OrderNotFillable, DuplicateOrderId, ContractUnavailable, NotSupported, InvalidProxySettings, ExchangeClosedByUser, OperationFailed, NetworkError, DDoSProtection, RateLimitExceeded, ExchangeNotAvailable, OnMaintenance, InvalidNonce, ChecksumError, RequestTimeout, BadResponse, NullResponse, CancelPending, UnsubscribeError}  from './src/base/errors.js'
+import type {Int, int, Str, Strings, Num, Bool, IndexType, OrderSide, OrderType, MarketType, SubType, Dict, NullableDict, List, NullableList, Fee, OHLCV, OHLCVC, implicitReturnType, Market, Currency, ConstructorArgs, Dictionary, NestedDictionary, MinMax, FeeInterface, TradingFeeInterface, MarketMarginModes, Precision, MarketInterface, PredictionFees, PredictionEvent, PredictionMarket, PredictionOutcome, PredictionOrder, PredictionTrade, PredictionPosition, PredictionTicker, PredictionOrderBook, PredictionTickers, PredictionTradingFee, PredictionOpenInterest, PredictionSettlement, fetchEventsParams, Trade, Order, OrderBook, OrderBooks, Ticker, Transaction, Tickers, CurrencyInterface, Balance, BalanceAccount, Account, PartialBalances, Balances, DepositAddress, WithdrawalResponse, FundingRate, FundingRates, Position, BorrowInterest, LeverageTier, LedgerEntry, DepositWithdrawFeeNetwork, DepositWithdrawFee, TransferEntry, ObDexPair, CrossBorrowRate, IsolatedBorrowRate, FundingRateHistory, OpenInterest, OpenInterests, Liquidation, OrderRequest, PredictionOrderRequest, CancellationRequest, FundingHistory, MarginMode, Greeks, Conversion, Option, LastPrice, Leverage, LongShortRatio, ADL, MarginModification, Leverages, LastPrices, Currencies, TradingFees, MarginModes, OptionChain, IsolatedBorrowRates, CrossBorrowRates, LeverageTiers} from './src/base/types.js'
+import {BaseError, ExchangeError, AuthenticationError, PermissionDenied, AccountNotEnabled, AccountSuspended, OBIPWhitelistError, ArgumentsRequired, BadRequest, BadSymbol, OBUntradableSymbol, OBClosedPositionError, OBOrderUncancellableError, OBInternalSyncError, OBMaxOpenOrdersReached, OperationRejected, NoChange, MarginModeAlreadySet, MarketClosed, ManualInteractionNeeded, RestrictedLocation, InsufficientFunds, InvalidAddress, AddressPending, InvalidOrder, OrderNotFound, OrderNotCached, OrderImmediatelyFillable, OrderNotFillable, DuplicateOrderId, ContractUnavailable, NotSupported, InvalidProxySettings, ExchangeClosedByUser, OperationFailed, NetworkError, DDoSProtection, RateLimitExceeded, ExchangeNotAvailable, OnMaintenance, InvalidNonce, ChecksumError, RequestTimeout, BadResponse, NullResponse, CancelPending, UnsubscribeError}  from './src/base/errors.js'
 
 
 //-----------------------------------------------------------------------------
@@ -45,6 +45,7 @@ const version = '4.5.68';
 
 //-----------------------------------------------------------------------------
 
+import alchemy from  './src/alchemy.js'
 import alpaca from  './src/alpaca.js'
 import apex from  './src/apex.js'
 import aster from  './src/aster.js'
@@ -82,21 +83,26 @@ import bybit from  './src/bybit.js'
 import bybiteu from  './src/bybiteu.js'
 import bydfi from  './src/bydfi.js'
 import cex from  './src/cex.js'
+import changenow from  './src/changenow.js'
 import coinbase from  './src/coinbase.js'
 import coinbaseexchange from  './src/coinbaseexchange.js'
 import coinbaseinternational from  './src/coinbaseinternational.js'
 import coincheck from  './src/coincheck.js'
 import coinex from  './src/coinex.js'
+import coingecko from  './src/coingecko.js'
 import coinmate from  './src/coinmate.js'
 import coinone from  './src/coinone.js'
+import coinrabbit from  './src/coinrabbit.js'
 import coinsph from  './src/coinsph.js'
 import coinspot from  './src/coinspot.js'
 import cryptocom from  './src/cryptocom.js'
 import cryptomus from  './src/cryptomus.js'
 import deepcoin from  './src/deepcoin.js'
+import defillama from  './src/defillama.js'
 import delta from  './src/delta.js'
 import deribit from  './src/deribit.js'
 import derive from  './src/derive.js'
+import dexscreener from  './src/dexscreener.js'
 import digifinex from  './src/digifinex.js'
 import dydx from  './src/dydx.js'
 import exmo from  './src/exmo.js'
@@ -130,6 +136,45 @@ import modetrade from  './src/modetrade.js'
 import mudrex from  './src/mudrex.js'
 import myokx from  './src/myokx.js'
 import ndax from  './src/ndax.js'
+import ob_alchemy from  './src/ob_alchemy.js'
+import ob_binance from  './src/ob_binance.js'
+import ob_binanceus from  './src/ob_binanceus.js'
+import ob_bingx from  './src/ob_bingx.js'
+import ob_bitfinex from  './src/ob_bitfinex.js'
+import ob_bitget from  './src/ob_bitget.js'
+import ob_bitmart from  './src/ob_bitmart.js'
+import ob_bitmex from  './src/ob_bitmex.js'
+import ob_bitso from  './src/ob_bitso.js'
+import ob_bitstamp from  './src/ob_bitstamp.js'
+import ob_bybit from  './src/ob_bybit.js'
+import ob_bybiteu from  './src/ob_bybiteu.js'
+import ob_changenow from  './src/ob_changenow.js'
+import ob_coinbase from  './src/ob_coinbase.js'
+import ob_coinex from  './src/ob_coinex.js'
+import ob_coingecko from  './src/ob_coingecko.js'
+import ob_coinrabbit from  './src/ob_coinrabbit.js'
+import ob_cryptocom from  './src/ob_cryptocom.js'
+import ob_defillama from  './src/ob_defillama.js'
+import ob_dexscreener from  './src/ob_dexscreener.js'
+import ob_gate from  './src/ob_gate.js'
+import ob_hitbtc from  './src/ob_hitbtc.js'
+import ob_hollaex from  './src/ob_hollaex.js'
+import ob_htx from  './src/ob_htx.js'
+import ob_hyperliquid from  './src/ob_hyperliquid.js'
+import ob_kraken from  './src/ob_kraken.js'
+import ob_kucoin from  './src/ob_kucoin.js'
+import ob_kucoinfutures from  './src/ob_kucoinfutures.js'
+import ob_lbank from  './src/ob_lbank.js'
+import ob_mexc from  './src/ob_mexc.js'
+import ob_myokx from  './src/ob_myokx.js'
+import ob_ndax from  './src/ob_ndax.js'
+import ob_okx from  './src/ob_okx.js'
+import ob_okxus from  './src/ob_okxus.js'
+import ob_phemex from  './src/ob_phemex.js'
+import ob_poloniex from  './src/ob_poloniex.js'
+import ob_upbit from  './src/ob_upbit.js'
+import ob_weex from  './src/ob_weex.js'
+import ob_wizardswap from  './src/ob_wizardswap.js'
 import okx from  './src/okx.js'
 import okxus from  './src/okxus.js'
 import onetrading from  './src/onetrading.js'
@@ -144,6 +189,7 @@ import toobit from  './src/toobit.js'
 import upbit from  './src/upbit.js'
 import weex from  './src/weex.js'
 import whitebit from  './src/whitebit.js'
+import wizardswap from  './src/wizardswap.js'
 import woo from  './src/woo.js'
 import woofipro from  './src/woofipro.js'
 import xt from  './src/xt.js'
@@ -238,6 +284,7 @@ import myriadPrediction from  './src/prediction/myriad.js'
 import polymarketPrediction from  './src/prediction/polymarket.js'
 
 const exchanges = {
+    'alchemy':                alchemy,
     'alpaca':                 alpaca,
     'apex':                   apex,
     'aster':                  aster,
@@ -275,21 +322,26 @@ const exchanges = {
     'bybiteu':                bybiteu,
     'bydfi':                  bydfi,
     'cex':                    cex,
+    'changenow':              changenow,
     'coinbase':               coinbase,
     'coinbaseexchange':       coinbaseexchange,
     'coinbaseinternational':  coinbaseinternational,
     'coincheck':              coincheck,
     'coinex':                 coinex,
+    'coingecko':              coingecko,
     'coinmate':               coinmate,
     'coinone':                coinone,
+    'coinrabbit':             coinrabbit,
     'coinsph':                coinsph,
     'coinspot':               coinspot,
     'cryptocom':              cryptocom,
     'cryptomus':              cryptomus,
     'deepcoin':               deepcoin,
+    'defillama':              defillama,
     'delta':                  delta,
     'deribit':                deribit,
     'derive':                 derive,
+    'dexscreener':            dexscreener,
     'digifinex':              digifinex,
     'dydx':                   dydx,
     'exmo':                   exmo,
@@ -323,6 +375,45 @@ const exchanges = {
     'mudrex':                 mudrex,
     'myokx':                  myokx,
     'ndax':                   ndax,
+    'ob_alchemy':             ob_alchemy,
+    'ob_binance':             ob_binance,
+    'ob_binanceus':           ob_binanceus,
+    'ob_bingx':               ob_bingx,
+    'ob_bitfinex':            ob_bitfinex,
+    'ob_bitget':              ob_bitget,
+    'ob_bitmart':             ob_bitmart,
+    'ob_bitmex':              ob_bitmex,
+    'ob_bitso':               ob_bitso,
+    'ob_bitstamp':            ob_bitstamp,
+    'ob_bybit':               ob_bybit,
+    'ob_bybiteu':             ob_bybiteu,
+    'ob_changenow':           ob_changenow,
+    'ob_coinbase':            ob_coinbase,
+    'ob_coinex':              ob_coinex,
+    'ob_coingecko':           ob_coingecko,
+    'ob_coinrabbit':          ob_coinrabbit,
+    'ob_cryptocom':           ob_cryptocom,
+    'ob_defillama':           ob_defillama,
+    'ob_dexscreener':         ob_dexscreener,
+    'ob_gate':                ob_gate,
+    'ob_hitbtc':              ob_hitbtc,
+    'ob_hollaex':             ob_hollaex,
+    'ob_htx':                 ob_htx,
+    'ob_hyperliquid':         ob_hyperliquid,
+    'ob_kraken':              ob_kraken,
+    'ob_kucoin':              ob_kucoin,
+    'ob_kucoinfutures':       ob_kucoinfutures,
+    'ob_lbank':               ob_lbank,
+    'ob_mexc':                ob_mexc,
+    'ob_myokx':               ob_myokx,
+    'ob_ndax':                ob_ndax,
+    'ob_okx':                 ob_okx,
+    'ob_okxus':               ob_okxus,
+    'ob_phemex':              ob_phemex,
+    'ob_poloniex':            ob_poloniex,
+    'ob_upbit':               ob_upbit,
+    'ob_weex':                ob_weex,
+    'ob_wizardswap':          ob_wizardswap,
     'okx':                    okx,
     'okxus':                  okxus,
     'onetrading':             onetrading,
@@ -337,6 +428,7 @@ const exchanges = {
     'upbit':                  upbit,
     'weex':                   weex,
     'whitebit':               whitebit,
+    'wizardswap':             wizardswap,
     'woo':                    woo,
     'woofipro':               woofipro,
     'xt':                     xt,
@@ -471,9 +563,15 @@ export {
     PermissionDenied,
     AccountNotEnabled,
     AccountSuspended,
+    OBIPWhitelistError,
     ArgumentsRequired,
     BadRequest,
     BadSymbol,
+    OBUntradableSymbol,
+    OBClosedPositionError,
+    OBOrderUncancellableError,
+    OBInternalSyncError,
+    OBMaxOpenOrdersReached,
     OperationRejected,
     NoChange,
     MarginModeAlreadySet,
@@ -574,6 +672,7 @@ export {
     DepositWithdrawFeeNetwork,
     DepositWithdrawFee,
     TransferEntry,
+    ObDexPair,
     CrossBorrowRate,
     IsolatedBorrowRate,
     FundingRateHistory,
@@ -602,6 +701,7 @@ export {
     IsolatedBorrowRates,
     CrossBorrowRates,
     LeverageTiers,
+    alchemy,
     alpaca,
     apex,
     aster,
@@ -639,21 +739,26 @@ export {
     bybiteu,
     bydfi,
     cex,
+    changenow,
     coinbase,
     coinbaseexchange,
     coinbaseinternational,
     coincheck,
     coinex,
+    coingecko,
     coinmate,
     coinone,
+    coinrabbit,
     coinsph,
     coinspot,
     cryptocom,
     cryptomus,
     deepcoin,
+    defillama,
     delta,
     deribit,
     derive,
+    dexscreener,
     digifinex,
     dydx,
     exmo,
@@ -687,6 +792,45 @@ export {
     mudrex,
     myokx,
     ndax,
+    ob_alchemy,
+    ob_binance,
+    ob_binanceus,
+    ob_bingx,
+    ob_bitfinex,
+    ob_bitget,
+    ob_bitmart,
+    ob_bitmex,
+    ob_bitso,
+    ob_bitstamp,
+    ob_bybit,
+    ob_bybiteu,
+    ob_changenow,
+    ob_coinbase,
+    ob_coinex,
+    ob_coingecko,
+    ob_coinrabbit,
+    ob_cryptocom,
+    ob_defillama,
+    ob_dexscreener,
+    ob_gate,
+    ob_hitbtc,
+    ob_hollaex,
+    ob_htx,
+    ob_hyperliquid,
+    ob_kraken,
+    ob_kucoin,
+    ob_kucoinfutures,
+    ob_lbank,
+    ob_mexc,
+    ob_myokx,
+    ob_ndax,
+    ob_okx,
+    ob_okxus,
+    ob_phemex,
+    ob_poloniex,
+    ob_upbit,
+    ob_weex,
+    ob_wizardswap,
     okx,
     okxus,
     onetrading,
@@ -701,6 +845,7 @@ export {
     upbit,
     weex,
     whitebit,
+    wizardswap,
     woo,
     woofipro,
     xt,

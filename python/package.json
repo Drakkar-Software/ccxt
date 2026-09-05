@@ -1,6 +1,6 @@
 {
-  "name": "ccxt",
-  "version": "4.5.68",
+  "name": "octobot_ccxt",
+  "version": "0.0.11",
   "description": "A cryptocurrency trading API with more than 100 exchanges in JavaScript / TypeScript / Python / C# / PHP / Go",
   "unpkg": "dist/ccxt.browser.min.js",
   "type": "module",
@@ -27,7 +27,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/ccxt/ccxt.git"
+    "url": "git+https://github.com/Drakkar-Software/ccxt.git"
   },
   "readme": "README.md",
   "scripts": {
@@ -90,6 +90,7 @@
     "pre-transpile-cs": "npm run export-exchanges-cs && npm run emitAPICs",
     "pre-transpile-java": "npm run export-exchanges-java && npm run emitAPIJava",
     "pre-transpile": "npm run export-exchanges && npm run vss && npm run tsBuild && npm run emitAPI && npm run validate-types && npm run tsBuildExamples && npm run check-js-syntax && npm run bundle",
+    "pre-transpile-js-py": "pre-transpile-js && pre-transpile-py",
     "pre-transpile-pr": "npm run export-exchanges && npm run tsBuild && npm run emitAPI && npm run check-js-syntax",
     "post-transpile": "npm run check-python-syntax && npm run check-php-syntax",
     "cli.ts": "tsx ./cli/ts/cli.ts",
@@ -198,6 +199,7 @@
     "request-java-prediction": "./java/gradlew -p java :tests:run -- --args=\"--requestTests --prediction\"",
     "request-go-prediction": "npm run ti-go -- --requestTests --prediction",
     "request-tests-prediction": "npm run request-js-prediction && npm run request-py-prediction && npm run request-php-prediction && npm run request-cs-prediction && npm run request-go-prediction && npm run request-java-prediction",
+    "request-tests-js-py": "npm run request-js && npm run request-py",
     "response-ts": "npm run ti-ts  -- --responseTests",
     "response-js": "npm run ti-js  -- --responseTests",
     "response-py-sync": "npm run ti-py  -- --responseTests --sync",
@@ -224,6 +226,7 @@
     "response-php-prediction": "npm run response-php-sync-prediction && npm run response-php-async-prediction",
     "response-tests-prediction": "npm run response-js-prediction && npm run response-py-prediction && npm run response-php-prediction && npm run response-cs-prediction && npm run response-go-prediction && npm run response-java-prediction",
     "static-updater": "tsx ./build/utils/update-static-json --update",
+    "response-tests-js-py": "npm run response-js && npm run response-py",
     "id-tests-js": "npm run ti-js  -- --idTests",
     "id-tests-py": "npm run ti-py  -- --idTests",
     "id-tests-php": "npm run ti-php -- --idTests",
@@ -231,8 +234,12 @@
     "id-tests-go": "npm run ti-go  -- --idTests",
     "id-tests-java": "cd java/ &&  ./gradlew :tests:run -- --args=\"--idTests\" && cd ../",
     "id-tests": "npm run id-tests-js && npm run id-tests-py && npm run id-tests-php && npm run id-tests-cs && npm run id-tests-go && npm run id-tests-java",
+    "id-tests-js-py": "npm run id-tests-js && npm run id-tests-py",
     "id-tests//withGO": "npm run id-tests-js && npm run id-tests-py && npm run id-tests-php && npm run id-tests-cs && npm run id-tests-go",
     "test-base-rest-ts": "npm run ti-ts  -- --baseTests",
+    "test-ob-ts": "npm run ti-ts -- --obTests",
+    "test-ob-py": "python -m pytest python/ccxt/test/exchange/octobot/",
+    "test-ob": "npm run test-ob-ts && npm run test-ob-py",
     "test-base-rest-js": "npm run ti-js  -- --baseTests",
     "test-base-rest-py": "npm run ti-py  -- --baseTests",
     "test-base-rest-php": "npm run ti-php -- --baseTests",
@@ -246,7 +253,9 @@
     "test-base-ws-cs": "npm run ti-cs  -- --baseTests --ws",
     "test-base-ws-go": "npm run ti-go  -- --baseTests --ws",
     "test-base-rest": "npm run test-base-rest-js && npm run test-base-rest-py && npm run test-base-rest-php && npm run test-base-rest-cs && npm run test-base-rest-go && npm run test-base-rest-java",
+    "test-base-rest-js-py": "npm run test-base-rest-js && npm run test-base-rest-py",
     "test-base-ws": "npm run test-base-ws-js   && npm run test-base-ws-py   && npm run test-base-ws-php   && npm run test-base-ws-cs && npm run test-base-ws-go",
+    "test-base-ws-js-py": "npm run test-base-ws-js && npm run test-base-ws-py",
     "test": "npm run build && npm run commonjs-test && npm run id-tests && npm run request-tests && npm run response-tests && npm run live-tests",
     "commonjs-test": "node ./build/utils/test-commonjs.cjs",
     "package-test": "./build/utils/package-test.sh",
@@ -297,15 +306,15 @@
     "typescript6": "npm:typescript@6.0.3"
   },
   "author": {
-    "name": "Igor Kroitor",
-    "email": "igor.kroitor@gmail.com",
-    "url": "https://github.com/kroitor"
+    "name": "Drakkar-Software",
+    "email": "contact@drakkar.software",
+    "url": "https://github.com/Drakkar-Software"
   },
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/ccxt/ccxt/issues"
+    "url": "https://github.com/Drakkar-Software/ccxt/issues"
   },
-  "homepage": "https://ccxt.com",
+  "homepage": "https://github.com/Drakkar-Software/ccxt",
   "keywords": [
     "algorithmic",
     "algotrading",
@@ -387,8 +396,8 @@
   ],
   "collective": {
     "type": "opencollective",
-    "url": "https://opencollective.com/ccxt",
-    "logo": "https://opencollective.com/ccxt/logo.txt"
+    "url": "https://opencollective.com/octobot",
+    "logo": "https://opencollective.com/octobot/logo.txt"
   },
   "ethereum": "0x26a3CB49578F07000575405a57888681249c35Fd",
   "dependencies": {
