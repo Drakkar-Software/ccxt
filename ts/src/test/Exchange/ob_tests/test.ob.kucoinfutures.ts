@@ -43,15 +43,19 @@ async function testObKucoinfutures () {
     }
     {
         const ex = new ccxt.ob_kucoinfutures ();
-        assert.strictEqual (ex.options['partner']['spot']['id'], 'Octobot');
-        assert.strictEqual (ex.options['partner']['spot']['key'], '0782058c-8c05-45f1-bfe1-840e2f96335a');
-        assert.strictEqual (ex.options['partner']['future']['id'], 'Octobotfutures');
-        assert.strictEqual (ex.options['partner']['future']['key'], '018e58ef-d9ac-4c8e-9646-0afa7fa9e37c');
+        assert.strictEqual (ex.options['partner']['spot']['id'], 'NewOctobot');
+        assert.strictEqual (ex.options['partner']['spot']['key'], '7672011a-e927-4cd4-972c-b58b37c989f7');
+        assert.strictEqual (ex.options['partner']['spot']['name'], 'NewOctobot');
+        assert.strictEqual (ex.options['partner']['future']['id'], 'NewOctobotF');
+        assert.strictEqual (ex.options['partner']['future']['key'], 'e415207f-d4d2-404f-9b39-293adc084cf1');
+        assert.strictEqual (ex.options['partner']['future']['name'], 'NewOctobotF');
         ex.getOrdersBrokerParameters ();
-        assert.strictEqual (ex.options['partner']['spot']['id'], 'Octobot');
-        assert.strictEqual (ex.options['partner']['spot']['key'], '0782058c-8c05-45f1-bfe1-840e2f96335a');
-        assert.strictEqual (ex.options['partner']['future']['id'], 'Octobotfutures');
-        assert.strictEqual (ex.options['partner']['future']['key'], '018e58ef-d9ac-4c8e-9646-0afa7fa9e37c');
+        assert.strictEqual (ex.options['partner']['spot']['id'], 'NewOctobot');
+        assert.strictEqual (ex.options['partner']['spot']['key'], '7672011a-e927-4cd4-972c-b58b37c989f7');
+        assert.strictEqual (ex.options['partner']['spot']['name'], 'NewOctobot');
+        assert.strictEqual (ex.options['partner']['future']['id'], 'NewOctobotF');
+        assert.strictEqual (ex.options['partner']['future']['key'], 'e415207f-d4d2-404f-9b39-293adc084cf1');
+        assert.strictEqual (ex.options['partner']['future']['name'], 'NewOctobotF');
     }
     {
         const ex = new ccxt.ob_kucoinfutures ();
