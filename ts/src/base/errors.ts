@@ -36,6 +36,12 @@ class AccountSuspended extends AuthenticationError {
         this.name = 'AccountSuspended';
     }
 }
+class OBIPWhitelistError extends AuthenticationError {
+    constructor (message: string) {
+        super (message);
+        this.name = 'OBIPWhitelistError';
+    }
+}
 class ArgumentsRequired extends ExchangeError {
     constructor (message: string) {
         super (message);
@@ -52,6 +58,36 @@ class BadSymbol extends BadRequest {
     constructor (message: string) {
         super (message);
         this.name = 'BadSymbol';
+    }
+}
+class OBUntradableSymbol extends BadRequest {
+    constructor (message: string) {
+        super (message);
+        this.name = 'OBUntradableSymbol';
+    }
+}
+class OBClosedPositionError extends BadRequest {
+    constructor (message: string) {
+        super (message);
+        this.name = 'OBClosedPositionError';
+    }
+}
+class OBOrderUncancellableError extends BadRequest {
+    constructor (message: string) {
+        super (message);
+        this.name = 'OBOrderUncancellableError';
+    }
+}
+class OBInternalSyncError extends BadRequest {
+    constructor (message: string) {
+        super (message);
+        this.name = 'OBInternalSyncError';
+    }
+}
+class OBMaxOpenOrdersReached extends BadRequest {
+    constructor (message: string) {
+        super (message);
+        this.name = 'OBMaxOpenOrdersReached';
     }
 }
 class OperationRejected extends ExchangeError {
@@ -247,6 +283,6 @@ class UnsubscribeError extends BaseError {
     }
 }
 
-export { BaseError, ExchangeError, AuthenticationError, PermissionDenied, AccountNotEnabled, AccountSuspended, ArgumentsRequired, BadRequest, BadSymbol, OperationRejected, NoChange, MarginModeAlreadySet, MarketClosed, ManualInteractionNeeded, RestrictedLocation, InsufficientFunds, InvalidAddress, AddressPending, InvalidOrder, OrderNotFound, OrderNotCached, OrderImmediatelyFillable, OrderNotFillable, DuplicateOrderId, ContractUnavailable, NotSupported, InvalidProxySettings, ExchangeClosedByUser, OperationFailed, NetworkError, DDoSProtection, RateLimitExceeded, ExchangeNotAvailable, OnMaintenance, InvalidNonce, ChecksumError, RequestTimeout, BadResponse, NullResponse, CancelPending, UnsubscribeError };
+export { BaseError, ExchangeError, AuthenticationError, PermissionDenied, AccountNotEnabled, AccountSuspended, OBIPWhitelistError, ArgumentsRequired, BadRequest, BadSymbol, OBUntradableSymbol, OBClosedPositionError, OBOrderUncancellableError, OBInternalSyncError, OBMaxOpenOrdersReached, OperationRejected, NoChange, MarginModeAlreadySet, MarketClosed, ManualInteractionNeeded, RestrictedLocation, InsufficientFunds, InvalidAddress, AddressPending, InvalidOrder, OrderNotFound, OrderNotCached, OrderImmediatelyFillable, OrderNotFillable, DuplicateOrderId, ContractUnavailable, NotSupported, InvalidProxySettings, ExchangeClosedByUser, OperationFailed, NetworkError, DDoSProtection, RateLimitExceeded, ExchangeNotAvailable, OnMaintenance, InvalidNonce, ChecksumError, RequestTimeout, BadResponse, NullResponse, CancelPending, UnsubscribeError };
 
-export default { BaseError, ExchangeError, AuthenticationError, PermissionDenied, AccountNotEnabled, AccountSuspended, ArgumentsRequired, BadRequest, BadSymbol, OperationRejected, NoChange, MarginModeAlreadySet, MarketClosed, ManualInteractionNeeded, RestrictedLocation, InsufficientFunds, InvalidAddress, AddressPending, InvalidOrder, OrderNotFound, OrderNotCached, OrderImmediatelyFillable, OrderNotFillable, DuplicateOrderId, ContractUnavailable, NotSupported, InvalidProxySettings, ExchangeClosedByUser, OperationFailed, NetworkError, DDoSProtection, RateLimitExceeded, ExchangeNotAvailable, OnMaintenance, InvalidNonce, ChecksumError, RequestTimeout, BadResponse, NullResponse, CancelPending, UnsubscribeError };
+export default { BaseError, ExchangeError, AuthenticationError, PermissionDenied, AccountNotEnabled, AccountSuspended, OBIPWhitelistError, ArgumentsRequired, BadRequest, BadSymbol, OBUntradableSymbol, OBClosedPositionError, OBOrderUncancellableError, OBInternalSyncError, OBMaxOpenOrdersReached, OperationRejected, NoChange, MarginModeAlreadySet, MarketClosed, ManualInteractionNeeded, RestrictedLocation, InsufficientFunds, InvalidAddress, AddressPending, InvalidOrder, OrderNotFound, OrderNotCached, OrderImmediatelyFillable, OrderNotFillable, DuplicateOrderId, ContractUnavailable, NotSupported, InvalidProxySettings, ExchangeClosedByUser, OperationFailed, NetworkError, DDoSProtection, RateLimitExceeded, ExchangeNotAvailable, OnMaintenance, InvalidNonce, ChecksumError, RequestTimeout, BadResponse, NullResponse, CancelPending, UnsubscribeError };

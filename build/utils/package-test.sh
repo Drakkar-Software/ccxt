@@ -1,10 +1,10 @@
 #!/bin/bash
 
 # Asserts the npm package works as expected, using ESM, CJS, and exports map validation.
-npm pack . --silent
-mv ccxt-*.tgz ./build/utils/package-test/
+packed_tarball=$(npm pack . --silent)
+mv "$packed_tarball" ./build/utils/package-test/
 cd ./build/utils/package-test
-npm install ccxt-*.tgz typescript
+npm install "ccxt@$packed_tarball" typescript
 node test-esm.mjs
 return_code=$?
 node test-cjs.cjs
@@ -15,7 +15,7 @@ npx tsc --project tsconfig.json --noEmit
 node16_types_return_code=$?
 npx tsc --project tsconfig-bundler.json --noEmit
 bundler_types_return_code=$?
-rm -rf node_modules ccxt-*.tgz package-lock.json package.json
+rm -rf node_modules "$packed_tarball" package-lock.json package.json
 npm init -y > /dev/null
 if [ $return_code -eq 0 ] && [ $cjs_return_code -eq 0 ] && [ $exports_return_code -eq 0 ] && [ $node16_types_return_code -eq 0 ] && [ $bundler_types_return_code -eq 0 ]; then
   echo "Package test successful"
