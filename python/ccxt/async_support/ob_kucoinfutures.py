@@ -60,12 +60,14 @@ class ob_kucoinfutures(kucoinfutures, ImplicitAPI):
                 'maxRetriesOnFailureDelay': 0,
                 'partner': {
                     'spot': {
-                        'id': 'Octobot',
-                        'key': '0782058c-8c05-45f1-bfe1-840e2f96335a',
+                        'id': 'NewOctobot',
+                        'key': '7672011a-e927-4cd4-972c-b58b37c989f7',
+                        'name': 'NewOctobot',
                     },
                     'future': {
-                        'id': 'Octobotfutures',
-                        'key': '018e58ef-d9ac-4c8e-9646-0afa7fa9e37c',
+                        'id': 'NewOctobotF',
+                        'key': 'e415207f-d4d2-404f-9b39-293adc084cf1',
+                        'name': 'NewOctobotF',
                     },
                 },
                 'octobot': {

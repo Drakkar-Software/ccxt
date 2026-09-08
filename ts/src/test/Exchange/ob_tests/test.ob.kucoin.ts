@@ -43,9 +43,19 @@ async function testObKucoin () {
     }
     {
         const ex = new ccxt.ob_kucoin ();
-        assert.strictEqual (ex.options['partner']['spot']['id'], 'Octobot');
+        assert.strictEqual (ex.options['partner']['spot']['id'], 'NewOctobot');
+        assert.strictEqual (ex.options['partner']['spot']['key'], '7672011a-e927-4cd4-972c-b58b37c989f7');
+        assert.strictEqual (ex.options['partner']['spot']['name'], 'NewOctobot');
+        assert.strictEqual (ex.options['partner']['future']['id'], 'NewOctobotF');
+        assert.strictEqual (ex.options['partner']['future']['key'], 'e415207f-d4d2-404f-9b39-293adc084cf1');
+        assert.strictEqual (ex.options['partner']['future']['name'], 'NewOctobotF');
         ex.getOrdersBrokerParameters ();
-        assert.strictEqual (ex.options['partner']['spot']['id'], 'Octobot');
+        assert.strictEqual (ex.options['partner']['spot']['id'], 'NewOctobot');
+        assert.strictEqual (ex.options['partner']['spot']['key'], '7672011a-e927-4cd4-972c-b58b37c989f7');
+        assert.strictEqual (ex.options['partner']['spot']['name'], 'NewOctobot');
+        assert.strictEqual (ex.options['partner']['future']['id'], 'NewOctobotF');
+        assert.strictEqual (ex.options['partner']['future']['key'], 'e415207f-d4d2-404f-9b39-293adc084cf1');
+        assert.strictEqual (ex.options['partner']['future']['name'], 'NewOctobotF');
     }
     {
         const ex = new ccxt.ob_kucoin ();
