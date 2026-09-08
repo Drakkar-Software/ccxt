@@ -119,6 +119,7 @@
         "ob_kraken",
         "ob_kucoin",
         "ob_kucoinfutures",
+        "ob_kucoineu",
         "ob_lbank",
         "ob_mexc",
         "ob_myokx",
