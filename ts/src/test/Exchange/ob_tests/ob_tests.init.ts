@@ -24,6 +24,7 @@ import testObHyperliquid from './test.ob.hyperliquid.js';
 import testObHtx from './test.ob.htx.js';
 import testObKucoin from './test.ob.kucoin.js';
 import testObKucoinfutures from './test.ob.kucoinfutures.js';
+import testObKucoinEu from './test.ob.kucoineu.js';
 import testObKraken from './test.ob.kraken.js';
 import testObLbank from './test.ob.lbank.js';
 import testObMexc from './test.ob.mexc.js';
@@ -60,6 +61,7 @@ async function obTestsInit () {
     await testObHtx ();
     await testObKucoin ();
     await testObKucoinfutures ();
+    await testObKucoinEu ();
     await testObKraken ();
     await testObLbank ();
     await testObMexc ();

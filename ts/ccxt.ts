@@ -164,6 +164,7 @@ import ob_hyperliquid from  './src/ob_hyperliquid.js'
 import ob_kraken from  './src/ob_kraken.js'
 import ob_kucoin from  './src/ob_kucoin.js'
 import ob_kucoinfutures from  './src/ob_kucoinfutures.js'
+import ob_kucoineu from  './src/ob_kucoineu.js'
 import ob_lbank from  './src/ob_lbank.js'
 import ob_mexc from  './src/ob_mexc.js'
 import ob_myokx from  './src/ob_myokx.js'
@@ -403,6 +404,7 @@ const exchanges = {
     'ob_kraken':              ob_kraken,
     'ob_kucoin':              ob_kucoin,
     'ob_kucoinfutures':       ob_kucoinfutures,
+    'ob_kucoineu':            ob_kucoineu,
     'ob_lbank':               ob_lbank,
     'ob_mexc':                ob_mexc,
     'ob_myokx':               ob_myokx,
@@ -820,6 +822,7 @@ export {
     ob_kraken,
     ob_kucoin,
     ob_kucoinfutures,
+    ob_kucoineu,
     ob_lbank,
     ob_mexc,
     ob_myokx,

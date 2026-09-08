@@ -189,6 +189,7 @@ from ccxt.async_support.ob_hyperliquid import ob_hyperliquid                    
 from ccxt.async_support.ob_kraken import ob_kraken                              # noqa: F401
 from ccxt.async_support.ob_kucoin import ob_kucoin                              # noqa: F401
 from ccxt.async_support.ob_kucoinfutures import ob_kucoinfutures                # noqa: F401
+from ccxt.async_support.ob_kucoineu import ob_kucoineu                          # noqa: F401
 from ccxt.async_support.ob_lbank import ob_lbank                                # noqa: F401
 from ccxt.async_support.ob_mexc import ob_mexc                                  # noqa: F401
 from ccxt.async_support.ob_myokx import ob_myokx                                # noqa: F401
@@ -341,6 +342,7 @@ exchanges = [
     'ob_kraken',
     'ob_kucoin',
     'ob_kucoinfutures',
+    'ob_kucoineu',
     'ob_lbank',
     'ob_mexc',
     'ob_myokx',
