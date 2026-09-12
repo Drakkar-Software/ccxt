@@ -4,7 +4,7 @@
 import coinrabbit from './coinrabbit.js';
 import { ArgumentsRequired, AuthenticationError } from './base/errors.js';
 import { DECIMAL_PLACES } from './base/functions/number.js';
-import type { Dict, Market, Num, Order, Str } from './base/types.js';
+import type { Bool, Dict, Market, Num, Order, Str } from './base/types.js';
 
 //  ---------------------------------------------------------------------------
 
@@ -31,6 +31,7 @@ export default class ob_coinrabbit extends coinrabbit {
                 'swap': false,
                 'future': false,
                 'option': false,
+                'isAuthenticatedRequest': true,
             },
             'options': {
                 'orderSource': 'octobot',
@@ -76,6 +77,12 @@ export default class ob_coinrabbit extends coinrabbit {
             parsed['amount'] = cost / price;
         }
         return parsed;
+    }
+
+    isAuthenticatedRequest (url: Str, method: Str, headers: Dict, body, _ccxtTypesImportStr: Str = undefined): Bool {
+        return this.obIsAuthenticatedRequest (url, method, headers, body, 'headersJsonAny', {
+            'needles': [ 'X-SIGNATURE', 'X-TIMESTAMP', 'X-API-KEY' ],
+        });
     }
 
     /**
