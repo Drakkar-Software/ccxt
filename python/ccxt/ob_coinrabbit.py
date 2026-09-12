@@ -5,7 +5,7 @@
 
 from ccxt.coinrabbit import coinrabbit
 from ccxt.abstract.ob_coinrabbit import ImplicitAPI
-from ccxt.base.types import Any, Market, Num, Order, Str
+from ccxt.base.types import Any, Bool, Market, Num, Order, Str
 from ccxt.base.errors import AuthenticationError
 from ccxt.base.errors import ArgumentsRequired
 from ccxt.base.decimal_to_precision import DECIMAL_PLACES
@@ -31,6 +31,7 @@ class ob_coinrabbit(coinrabbit, ImplicitAPI):
                 'swap': False,
                 'future': False,
                 'option': False,
+                'isAuthenticatedRequest': True,
             },
             'options': {
                 'orderSource': 'octobot',
@@ -72,6 +73,11 @@ class ob_coinrabbit(coinrabbit, ImplicitAPI):
         if (amount is None or amount == 0) and cost is not None and cost != 0 and price is not None and price != 0:
             parsed['amount'] = cost / price
         return parsed
+
+    def is_authenticated_request(self, url: Str, method: Str, headers: dict, body, _ccxtTypesImportStr: Str = None) -> Bool:
+        return self.ob_is_authenticated_request(url, method, headers, body, 'headersJsonAny', {
+            'needles': ['X-SIGNATURE', 'X-TIMESTAMP', 'X-API-KEY'],
+        })
 
     def ob_top_up_trading_cell(self, code: Str, amount: Num, network: Str, params={}) -> dict:
         """

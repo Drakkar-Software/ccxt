@@ -13,6 +13,16 @@ async function testObCoinrabbit () {
         assert.strictEqual (octobotOptions['enableSpotBuyMarketWithCost'], true);
         assert.deepStrictEqual (octobotOptions['supportedElements']['spot']['orders'], [ 'market' ]);
         assert.strictEqual (exchange.options['orderSource'], 'octobot');
+        assert.strictEqual (exchange.has['isAuthenticatedRequest'], true);
+    }
+    // isAuthenticatedRequest: CoinRabbit private REST uses X-SIGNATURE / X-TIMESTAMP / X-API-KEY headers
+    {
+        const ex = new ccxt.ob_coinrabbit ();
+        assert.strictEqual (ex.isAuthenticatedRequest ('', 'GET', { 'X-SIGNATURE': 'x' }, undefined), true);
+        assert.strictEqual (ex.isAuthenticatedRequest ('', 'GET', { 'X-TIMESTAMP': '1' }, undefined), true);
+        assert.strictEqual (ex.isAuthenticatedRequest ('', 'GET', { 'X-API-KEY': 'k' }, undefined), true);
+        assert.strictEqual (ex.isAuthenticatedRequest ('', 'GET', { 'x-api-key': 'settings-key' }, undefined), false);
+        assert.strictEqual (ex.isAuthenticatedRequest ('', 'GET', {}, undefined), false);
     }
     // obTopUpTradingCell: builds wallet top-up request with JWT + api key headers
     {
@@ -62,7 +72,7 @@ async function testObCoinrabbit () {
             ArgumentsRequired,
         );
     }
-    // parseOrder: buy market API amount is quote cost via ob_coinrabbit wrapper
+    // parseOrder: buy market active status maps to open via ob_coinrabbit wrapper
     {
         const exchange = new ccxt.ob_coinrabbit ();
         const tickerWiseMarket = {
@@ -88,13 +98,13 @@ async function testObCoinrabbit () {
             'amount': '2.41',
             'price': '77775.8',
             'fee': '0.0723',
-            'status': 'open',
+            'status': 'active',
             'created_at': '2025-01-01T00:00:00Z',
         }, tickerWiseMarket as any);
         const expectedAmount = exchange.amountToPrecision ('BTC@BTC/USDT@ETH', 2.41 / 77775.8);
         assert.strictEqual (Number (order['amount']), Number (expectedAmount));
         assert.strictEqual (Number (order['cost']), 2.41);
-        assert.strictEqual (order['status'], 'closed');
+        assert.strictEqual (order['status'], 'open');
     }
 }
 
