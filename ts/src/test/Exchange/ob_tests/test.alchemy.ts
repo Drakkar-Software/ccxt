@@ -10,8 +10,10 @@ const WETH_ETH = '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2';
 const USDC_ETH = '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48';
 const HYDREX_QUOTER = '0x08b46265643a5389529D6f6616FA4a0d66F13Fdb';
 const BASE_UNI_QUOTER = '0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a';
+const BASE_UNI_V4_QUOTER = '0x0d5e0F971ED27FBfF6c2837bf31316121532048D';
 const SYMBOL_HYDREX = MCADE_BASE + '/' + WETH_BASE + '@BASE!HYDREX';
 const SYMBOL_BASE_UNI = WETH_BASE + '/' + USDC_BASE + '@BASE!UNISWAPV3';
+const SYMBOL_BASE_UNI_V4 = WETH_BASE + '/' + USDC_BASE + '@BASE!UNISWAPV4';
 const SYMBOL_ETH_UNI = WETH_ETH + '/' + USDC_ETH + '@ETH!UNISWAPV3';
 
 function createExchange () {
@@ -31,6 +33,11 @@ async function testAlchemy () {
         const uniRoute: any = exchange.resolveQuoterRoute ('ETH', 'UNISWAPV3');
         assert.strictEqual (uniRoute['engine'], 'uniswapv3');
         assert.strictEqual (uniRoute['fee'], 3000);
+        const uniV4Route: any = exchange.resolveQuoterRoute ('BASE', 'UNISWAPV4');
+        assert.strictEqual (uniV4Route['engine'], 'uniswapv4');
+        assert.strictEqual (uniV4Route['fee'], 3000);
+        assert.strictEqual (uniV4Route['tickSpacing'], 60);
+        assert.strictEqual (uniV4Route['quoter'], BASE_UNI_V4_QUOTER);
     }
     // R2: unknown route -> NotSupported
     {
@@ -71,6 +78,33 @@ async function testAlchemy () {
         );
         assert.strictEqual (calldata.startsWith ('0x'), true);
         assert.strictEqual (calldata.length > 10, true);
+    }
+    // E3: Uniswap V4 poolKey sort and calldata
+    {
+        const exchange = createExchange ();
+        const sortedCurrencies: any = exchange.sortPoolCurrencies (WETH_BASE, USDC_BASE);
+        assert.strictEqual (sortedCurrencies['currency0'], WETH_BASE);
+        assert.strictEqual (sortedCurrencies['currency1'], USDC_BASE);
+        assert.strictEqual (exchange.isZeroForOneSwap (WETH_BASE, sortedCurrencies['currency0']), true);
+        const calldata: string = exchange.buildUniswapV4QuoterCalldata (
+            WETH_BASE,
+            USDC_BASE,
+            '1000000000000000000',
+            3000,
+            60,
+            '0x0000000000000000000000000000000000000000'
+        );
+        assert.strictEqual (calldata.startsWith ('0xaa9d21cb'), true);
+        assert.strictEqual (calldata.length > 10, true);
+    }
+    // D3: QuoteSwap revert decode
+    {
+        const exchange = createExchange ();
+        const quoteSwapPayload = '0x' + exchange.getQuoteSwapErrorSelector () + '0'.repeat (62) + '2a';
+        const decodedResult = exchange.decodeQuoterRevertData (quoteSwapPayload);
+        assert.strictEqual (decodedResult, '0x' + '0'.repeat (62) + '2a');
+        const amountOut = exchange.decodeQuoterAmountOut (decodedResult);
+        assert.strictEqual (amountOut, 42);
     }
     // D1: decodeQuoterAmountOut first-word decode for extended payload
     {
@@ -131,6 +165,33 @@ async function testAlchemy () {
         exchange.ethCall = ethCallStub;
         const ticker: any = await exchange.fetchTicker (SYMBOL_BASE_UNI);
         assert.strictEqual (ticker['symbol'], SYMBOL_BASE_UNI);
+        assert.strictEqual (parseFloat (ticker['last']) > 0, true);
+    }
+    // T3: fetchTicker Uniswap V4 route with mocked eth_call
+    {
+        const exchange = createExchange ();
+        const ethCallStub = async (rpcUrl: string, toAddress: string, calldata: string) => {
+            if (calldata === '0x313ce567') {
+                if (toAddress.toLowerCase () === WETH_BASE) {
+                    return '0x' + '0'.repeat (63) + '12';
+                }
+                if (toAddress.toLowerCase () === USDC_BASE) {
+                    return '0x' + '0'.repeat (63) + '6';
+                }
+            }
+            if (toAddress.toLowerCase () === BASE_UNI_V4_QUOTER.toLowerCase ()) {
+                const quoteSwapPayload = '0x' + exchange.getQuoteSwapErrorSelector () + '0'.repeat (49) + 'de0b6b3a7640000';
+                const decodedResult = exchange.decodeQuoterRevertData (quoteSwapPayload);
+                if (decodedResult === undefined) {
+                    throw new Error ('failed to decode QuoteSwap payload in test stub');
+                }
+                return decodedResult;
+            }
+            throw new Error ('unexpected eth_call to ' + toAddress);
+        };
+        exchange.ethCall = ethCallStub;
+        const ticker: any = await exchange.fetchTicker (SYMBOL_BASE_UNI_V4);
+        assert.strictEqual (ticker['symbol'], SYMBOL_BASE_UNI_V4);
         assert.strictEqual (parseFloat (ticker['last']) > 0, true);
     }
     // P1: obParseNetworkDexSymbol

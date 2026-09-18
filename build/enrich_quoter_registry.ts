@@ -11,6 +11,7 @@ const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
 
 const ALGEBRA_INPUT_FIELDS = [ 'tokenIn', 'tokenOut', 'deployer', 'amountIn', 'limitSqrtPrice' ];
 const UNISWAPV3_INPUT_FIELDS = [ 'tokenIn', 'tokenOut', 'amountIn', 'fee', 'sqrtPriceLimitX96' ];
+const UNISWAPV4_INPUT_FIELDS = [ 'poolKey', 'zeroForOne', 'exactAmount', 'hookData' ];
 
 const NETWORK_CHAIN_IDS: Record<string, number> = {
     'BASE': 8453,
@@ -20,9 +21,11 @@ const NETWORK_CHAIN_IDS: Record<string, number> = {
 const ENGINE_QUOTERS: Record<string, Record<string, string>> = {
     'BASE': {
         'uniswapv3': '0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a',
+        'uniswapv4': '0x0d5e0F971ED27FBfF6c2837bf31316121532048D',
     },
     'ETH': {
         'uniswapv3': '0x61fFE014bA17989E743c5F6cB21bF9697530B21e',
+        'uniswapv4': '0x52F0E24D1C21C8A0cB1e5a5dD6198556BD9E1203',
     },
 };
 
@@ -144,11 +147,14 @@ function inferEngine (dexCode: string): string | undefined {
     if (dexCode === 'UNISWAPV3' || dexCode.startsWith ('UNISWAPV3_')) {
         return 'uniswapv3';
     }
+    if (dexCode === 'UNISWAPV4' || dexCode.startsWith ('UNISWAPV4_')) {
+        return 'uniswapv4';
+    }
     return undefined;
 }
 
 function inferFee (dexCode: string): number | undefined {
-    if (dexCode === 'UNISWAPV3') {
+    if (dexCode === 'UNISWAPV3' || dexCode === 'UNISWAPV4') {
         return 3000;
     }
     if (dexCode.endsWith ('_500')) {
@@ -156,6 +162,19 @@ function inferFee (dexCode: string): number | undefined {
     }
     if (dexCode.endsWith ('_10000')) {
         return 10000;
+    }
+    return undefined;
+}
+
+function inferTickSpacing (fee: number): number | undefined {
+    if (fee === 500) {
+        return 10;
+    }
+    if (fee === 3000) {
+        return 60;
+    }
+    if (fee === 10000) {
+        return 200;
     }
     return undefined;
 }
@@ -203,6 +222,18 @@ function enrichRegistryEntry (registryKey: string, partial: Record<string, unkno
             throw new Error ('cannot infer fee for uniswapv3 route ' + registryKey);
         }
         entry['fee'] = fee;
+    } else if (engineName === 'uniswapv4') {
+        const fee = inferFee (dexCode) ?? partial['fee'];
+        if (fee === undefined) {
+            throw new Error ('cannot infer fee for uniswapv4 route ' + registryKey);
+        }
+        entry['fee'] = fee;
+        const tickSpacing = inferTickSpacing (fee as number) ?? partial['tickSpacing'];
+        if (tickSpacing === undefined) {
+            throw new Error ('cannot infer tickSpacing for uniswapv4 route ' + registryKey);
+        }
+        entry['tickSpacing'] = tickSpacing;
+        entry['hooks'] = partial['hooks'] ?? ZERO_ADDRESS;
     } else if (engineName === 'algebra') {
         entry['deployer'] = knownDex?.deployer ?? partial['deployer'] ?? ZERO_ADDRESS;
     } else {
@@ -239,7 +270,12 @@ function validateEngineTemplate (engine: string, abi: any[]): void {
         throw new Error (engine + ' ABI missing quoteExactInputSingle params struct');
     }
     const fieldNames = inputComponents.map ((component) => component.name);
-    const expectedFields = (engine === 'algebra') ? ALGEBRA_INPUT_FIELDS : UNISWAPV3_INPUT_FIELDS;
+    let expectedFields = UNISWAPV3_INPUT_FIELDS;
+    if (engine === 'algebra') {
+        expectedFields = ALGEBRA_INPUT_FIELDS;
+    } else if (engine === 'uniswapv4') {
+        expectedFields = UNISWAPV4_INPUT_FIELDS;
+    }
     for (let fieldIndex = 0; fieldIndex < expectedFields.length; fieldIndex++) {
         const expectedField = expectedFields[fieldIndex];
         if (fieldNames[fieldIndex] !== expectedField) {
@@ -252,7 +288,8 @@ function validateEngineTemplate (engine: string, abi: any[]): void {
 }
 
 async function fetchSourcifyAbi (chainId: number, quoter: string): Promise<any[]> {
-    const sourcifyUrl = 'https://sourcify.dev/server/v2/contract/' + String (chainId) + '/' + quoter + '?fields=abi';
+    const normalizedQuoter = quoter.toLowerCase ();
+    const sourcifyUrl = 'https://sourcify.dev/server/v2/contract/' + String (chainId) + '/' + normalizedQuoter + '?fields=abi';
     const response = await fetch (sourcifyUrl);
     if (!response.ok) {
         throw new Error ('Sourcify request failed for ' + quoter + ' on chain ' + String (chainId) + ': HTTP ' + String (response.status));
@@ -275,7 +312,7 @@ function emitRegistryMethodBody (registry: Registry): string {
         const registryKey = registryKeys[keyIndex];
         const entry = registry[registryKey];
         lines.push ("            '" + registryKey + "': {");
-        const orderedEntryKeys = [ 'engine', 'quoter', 'chainId', 'fee', 'deployer' ].filter ((entryKey) => entry[entryKey] !== undefined);
+        const orderedEntryKeys = [ 'engine', 'quoter', 'chainId', 'fee', 'tickSpacing', 'hooks', 'deployer' ].filter ((entryKey) => entry[entryKey] !== undefined);
         for (let entryIndex = 0; entryIndex < orderedEntryKeys.length; entryIndex++) {
             const entryKey = orderedEntryKeys[entryIndex];
             const entryValue = entry[entryKey];
