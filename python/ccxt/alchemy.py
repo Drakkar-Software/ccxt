@@ -25,8 +25,11 @@ class alchemy(Exchange, ImplicitAPI):
         dexes = {
             'hydrex': 'HYDREX',
             'uniswapv3': 'UNISWAPV3',
-            'uniswapv3_500': 'UNISWAPV3_500',
             'uniswapv3_10000': 'UNISWAPV3_10000',
+            'uniswapv3_500': 'UNISWAPV3_500',
+            'uniswapv4': 'UNISWAPV4',
+            'uniswapv4_10000': 'UNISWAPV4_10000',
+            'uniswapv4_500': 'UNISWAPV4_500',
         }
         dexesById = {}
         dexKeys = list(dexes.keys())
@@ -152,6 +155,30 @@ class alchemy(Exchange, ImplicitAPI):
                 'chainId': 8453,
                 'fee': 500,
             },
+            'BASE:UNISWAPV4': {
+                'engine': 'uniswapv4',
+                'quoter': '0x0d5e0F971ED27FBfF6c2837bf31316121532048D',
+                'chainId': 8453,
+                'fee': 3000,
+                'tickSpacing': 60,
+                'hooks': '0x0000000000000000000000000000000000000000',
+            },
+            'BASE:UNISWAPV4_10000': {
+                'engine': 'uniswapv4',
+                'quoter': '0x0d5e0F971ED27FBfF6c2837bf31316121532048D',
+                'chainId': 8453,
+                'fee': 10000,
+                'tickSpacing': 200,
+                'hooks': '0x0000000000000000000000000000000000000000',
+            },
+            'BASE:UNISWAPV4_500': {
+                'engine': 'uniswapv4',
+                'quoter': '0x0d5e0F971ED27FBfF6c2837bf31316121532048D',
+                'chainId': 8453,
+                'fee': 500,
+                'tickSpacing': 10,
+                'hooks': '0x0000000000000000000000000000000000000000',
+            },
             'ETH:UNISWAPV3': {
                 'engine': 'uniswapv3',
                 'quoter': '0x61fFE014bA17989E743c5F6cB21bF9697530B21e',
@@ -169,6 +196,30 @@ class alchemy(Exchange, ImplicitAPI):
                 'quoter': '0x61fFE014bA17989E743c5F6cB21bF9697530B21e',
                 'chainId': 1,
                 'fee': 500,
+            },
+            'ETH:UNISWAPV4': {
+                'engine': 'uniswapv4',
+                'quoter': '0x52F0E24D1C21C8A0cB1e5a5dD6198556BD9E1203',
+                'chainId': 1,
+                'fee': 3000,
+                'tickSpacing': 60,
+                'hooks': '0x0000000000000000000000000000000000000000',
+            },
+            'ETH:UNISWAPV4_10000': {
+                'engine': 'uniswapv4',
+                'quoter': '0x52F0E24D1C21C8A0cB1e5a5dD6198556BD9E1203',
+                'chainId': 1,
+                'fee': 10000,
+                'tickSpacing': 200,
+                'hooks': '0x0000000000000000000000000000000000000000',
+            },
+            'ETH:UNISWAPV4_500': {
+                'engine': 'uniswapv4',
+                'quoter': '0x52F0E24D1C21C8A0cB1e5a5dD6198556BD9E1203',
+                'chainId': 1,
+                'fee': 500,
+                'tickSpacing': 10,
+                'hooks': '0x0000000000000000000000000000000000000000',
             },
         }
 
@@ -192,6 +243,31 @@ class alchemy(Exchange, ImplicitAPI):
 
     def get_algebra_quote_selector(self) -> str:
         return '0xe94764c4'
+
+    def get_uniswapv4_quote_selector(self) -> str:
+        return '0xaa9d21cb'
+
+    def get_quote_swap_error_selector(self) -> str:
+        return 'ecbd9804'
+
+    def compare_token_address_order(self, leftAddress: str, rightAddress: str) -> bool:
+        return leftAddress.lower() < rightAddress.lower()
+
+    def sort_pool_currencies(self, tokenA: str, tokenB: str) -> dict:
+        normalizedTokenA = self.normalize_token_address(tokenA)
+        normalizedTokenB = self.normalize_token_address(tokenB)
+        if self.compare_token_address_order(normalizedTokenA, normalizedTokenB):
+            return {
+                'currency0': normalizedTokenA,
+                'currency1': normalizedTokenB,
+            }
+        return {
+            'currency0': normalizedTokenB,
+            'currency1': normalizedTokenA,
+        }
+
+    def is_zero_for_one_swap(self, tokenIn: str, currency0: str) -> bool:
+        return self.normalize_token_address(tokenIn) == self.normalize_token_address(currency0)
 
     def build_amount_in_from_decimals(self, decimals: int) -> str:
         amountIn = '1'
@@ -483,6 +559,10 @@ class alchemy(Exchange, ImplicitAPI):
         normalizedHex = revertData[2:] if revertData.startswith('0x') else revertData
         if (len(normalizedHex) >= 8) and (normalizedHex[0:8] == self.get_error_string_selector()):
             return None
+        if (len(normalizedHex) >= 8) and (normalizedHex[0:8] == self.get_quote_swap_error_selector()):
+            if len(normalizedHex) >= 8 + 64:
+                return '0x' + normalizedHex[8:8 + 64]
+            return None
         expectedLength = self.get_quoter_output_word_count() * 64
         if len(normalizedHex) == expectedLength:
             return '0x' + normalizedHex
@@ -550,6 +630,46 @@ class alchemy(Exchange, ImplicitAPI):
         )
         return '0x' + self.get_algebra_quote_selector()[2:] + self.binary_to_base16(encodedParams)
 
+    def build_uniswap_v4_quoter_calldata(self, tokenIn: str, tokenOut: str, amountIn, fee: int, tickSpacing: int, hooks: str) -> str:
+        sortedCurrencies = self.sort_pool_currencies(tokenIn, tokenOut)
+        currency0 = self.safe_string(sortedCurrencies, 'currency0')
+        currency1 = self.safe_string(sortedCurrencies, 'currency1')
+        zeroForOne = self.is_zero_for_one_swap(tokenIn, currency0)
+        encodedAmountIn = self.coerce_amount_in_for_abi_encode(amountIn)
+        emptyHookData = self.base16_to_binary('')
+        tuplePayload = self.eth_abi_encode(
+            ['address', 'address', 'uint24', 'int24', 'address', 'bool', 'uint128', 'bytes'],
+            [currency0, currency1, fee, tickSpacing, hooks, zeroForOne, encodedAmountIn, emptyHookData]
+        )
+        encodedParams = self.binary_concat(self.number_to_be(32, 32), tuplePayload)
+        return '0x' + self.get_uniswapv4_quote_selector()[2:] + self.binary_to_base16(encodedParams)
+
+    def get_effective_uniswap_v4_pool_params(self, route: dict, params={}) -> dict:
+        paramsFee = self.safe_integer(params, 'fee')
+        routeFee = self.safe_integer(route, 'fee')
+        fee = routeFee
+        if paramsFee is not None:
+            fee = paramsFee
+        if fee is None:
+            raise ExchangeError(self.id + ' missing fee for uniswapv4 route')
+        paramsTickSpacing = self.safe_integer(params, 'tickSpacing')
+        routeTickSpacing = self.safe_integer(route, 'tickSpacing')
+        tickSpacing = routeTickSpacing
+        if paramsTickSpacing is not None:
+            tickSpacing = paramsTickSpacing
+        if tickSpacing is None:
+            raise ExchangeError(self.id + ' missing tickSpacing for uniswapv4 route')
+        paramsHooks = self.safe_string(params, 'hooks')
+        routeHooks = self.safe_string(route, 'hooks', self.get_zero_address())
+        hooks = routeHooks
+        if paramsHooks is not None:
+            hooks = paramsHooks
+        return {
+            'fee': fee,
+            'tickSpacing': tickSpacing,
+            'hooks': hooks,
+        }
+
     def get_effective_uniswap_fee(self, route: dict, params={}) -> int:
         paramsFee = self.safe_integer(params, 'fee')
         if paramsFee is not None:
@@ -578,6 +698,12 @@ class alchemy(Exchange, ImplicitAPI):
         elif engine == 'uniswapv3':
             fee = self.get_effective_uniswap_fee(route, params)
             calldata = self.build_uniswap_v3_quoter_calldata(baseId, quoteId, amountIn, fee)
+        elif engine == 'uniswapv4':
+            poolParams = self.get_effective_uniswap_v4_pool_params(route, params)
+            fee = self.safe_integer(poolParams, 'fee')
+            tickSpacing = self.safe_integer(poolParams, 'tickSpacing')
+            hooks = self.safe_string(poolParams, 'hooks')
+            calldata = self.build_uniswap_v4_quoter_calldata(baseId, quoteId, amountIn, fee, tickSpacing, hooks)
         else:
             raise NotSupported(self.id + ' unsupported quoter engine ' + engine)
         return {
@@ -649,6 +775,8 @@ class alchemy(Exchange, ImplicitAPI):
         :param str symbol: unified address-pair symbol with @networknot dex suffix
         :param dict [params]: extra parameters specific to the exchange API endpoint
         :param int [params.fee]: optional Uniswap V3 fee tier override
+        :param int [params.tickSpacing]: optional Uniswap V4 tick spacing override
+        :param str [params.hooks]: optional Uniswap V4 hooks contract override
         :returns dict: a `ticker structure <https://docs.ccxt.com/?id=ticker-structure>`
         """
         self.load_markets()

@@ -17,8 +17,11 @@ export default class alchemy extends Exchange {
         const dexes: Dict = {
             'hydrex': 'HYDREX',
             'uniswapv3': 'UNISWAPV3',
-            'uniswapv3_500': 'UNISWAPV3_500',
             'uniswapv3_10000': 'UNISWAPV3_10000',
+            'uniswapv3_500': 'UNISWAPV3_500',
+            'uniswapv4': 'UNISWAPV4',
+            'uniswapv4_10000': 'UNISWAPV4_10000',
+            'uniswapv4_500': 'UNISWAPV4_500',
         };
         const dexesById: Dict = {};
         const dexKeys = Object.keys (dexes);
@@ -153,6 +156,30 @@ export default class alchemy extends Exchange {
                 'chainId': 8453,
                 'fee': 500,
             },
+            'BASE:UNISWAPV4': {
+                'engine': 'uniswapv4',
+                'quoter': '0x0d5e0F971ED27FBfF6c2837bf31316121532048D',
+                'chainId': 8453,
+                'fee': 3000,
+                'tickSpacing': 60,
+                'hooks': '0x0000000000000000000000000000000000000000',
+            },
+            'BASE:UNISWAPV4_10000': {
+                'engine': 'uniswapv4',
+                'quoter': '0x0d5e0F971ED27FBfF6c2837bf31316121532048D',
+                'chainId': 8453,
+                'fee': 10000,
+                'tickSpacing': 200,
+                'hooks': '0x0000000000000000000000000000000000000000',
+            },
+            'BASE:UNISWAPV4_500': {
+                'engine': 'uniswapv4',
+                'quoter': '0x0d5e0F971ED27FBfF6c2837bf31316121532048D',
+                'chainId': 8453,
+                'fee': 500,
+                'tickSpacing': 10,
+                'hooks': '0x0000000000000000000000000000000000000000',
+            },
             'ETH:UNISWAPV3': {
                 'engine': 'uniswapv3',
                 'quoter': '0x61fFE014bA17989E743c5F6cB21bF9697530B21e',
@@ -170,6 +197,30 @@ export default class alchemy extends Exchange {
                 'quoter': '0x61fFE014bA17989E743c5F6cB21bF9697530B21e',
                 'chainId': 1,
                 'fee': 500,
+            },
+            'ETH:UNISWAPV4': {
+                'engine': 'uniswapv4',
+                'quoter': '0x52F0E24D1C21C8A0cB1e5a5dD6198556BD9E1203',
+                'chainId': 1,
+                'fee': 3000,
+                'tickSpacing': 60,
+                'hooks': '0x0000000000000000000000000000000000000000',
+            },
+            'ETH:UNISWAPV4_10000': {
+                'engine': 'uniswapv4',
+                'quoter': '0x52F0E24D1C21C8A0cB1e5a5dD6198556BD9E1203',
+                'chainId': 1,
+                'fee': 10000,
+                'tickSpacing': 200,
+                'hooks': '0x0000000000000000000000000000000000000000',
+            },
+            'ETH:UNISWAPV4_500': {
+                'engine': 'uniswapv4',
+                'quoter': '0x52F0E24D1C21C8A0cB1e5a5dD6198556BD9E1203',
+                'chainId': 1,
+                'fee': 500,
+                'tickSpacing': 10,
+                'hooks': '0x0000000000000000000000000000000000000000',
             },
         };
     }
@@ -200,6 +251,37 @@ export default class alchemy extends Exchange {
 
     getAlgebraQuoteSelector (): string {
         return '0xe94764c4';
+    }
+
+    getUniswapv4QuoteSelector (): string {
+        return '0xaa9d21cb';
+    }
+
+    getQuoteSwapErrorSelector (): string {
+        return 'ecbd9804';
+    }
+
+    compareTokenAddressOrder (leftAddress: string, rightAddress: string): boolean {
+        return leftAddress.toLowerCase () < rightAddress.toLowerCase ();
+    }
+
+    sortPoolCurrencies (tokenA: string, tokenB: string): Dict {
+        const normalizedTokenA = this.normalizeTokenAddress (tokenA);
+        const normalizedTokenB = this.normalizeTokenAddress (tokenB);
+        if (this.compareTokenAddressOrder (normalizedTokenA, normalizedTokenB)) {
+            return {
+                'currency0': normalizedTokenA,
+                'currency1': normalizedTokenB,
+            };
+        }
+        return {
+            'currency0': normalizedTokenB,
+            'currency1': normalizedTokenA,
+        };
+    }
+
+    isZeroForOneSwap (tokenIn: string, currency0: string): boolean {
+        return this.normalizeTokenAddress (tokenIn) === this.normalizeTokenAddress (currency0);
     }
 
     buildAmountInFromDecimals (decimals: int): string {
@@ -562,6 +644,12 @@ export default class alchemy extends Exchange {
         if ((normalizedHex.length >= 8) && (normalizedHex.slice (0, 8) === this.getErrorStringSelector ())) {
             return undefined;
         }
+        if ((normalizedHex.length >= 8) && (normalizedHex.slice (0, 8) === this.getQuoteSwapErrorSelector ())) {
+            if (normalizedHex.length >= 8 + 64) {
+                return '0x' + normalizedHex.slice (8, 8 + 64);
+            }
+            return undefined;
+        }
         const expectedLength = this.getQuoterOutputWordCount () * 64;
         if (normalizedHex.length === expectedLength) {
             return '0x' + normalizedHex;
@@ -642,6 +730,53 @@ export default class alchemy extends Exchange {
         return '0x' + this.getAlgebraQuoteSelector ().slice (2) + this.binaryToBase16 (encodedParams);
     }
 
+    buildUniswapV4QuoterCalldata (tokenIn: string, tokenOut: string, amountIn, fee: int, tickSpacing: int, hooks: string): string {
+        const sortedCurrencies = this.sortPoolCurrencies (tokenIn, tokenOut);
+        const currency0 = this.safeString (sortedCurrencies, 'currency0');
+        const currency1 = this.safeString (sortedCurrencies, 'currency1');
+        const zeroForOne = this.isZeroForOneSwap (tokenIn, currency0);
+        const encodedAmountIn = this.coerceAmountInForAbiEncode (amountIn);
+        const emptyHookData = this.base16ToBinary ('');
+        const tuplePayload = this.ethAbiEncode (
+            [ 'address', 'address', 'uint24', 'int24', 'address', 'bool', 'uint128', 'bytes' ],
+            [ currency0, currency1, fee, tickSpacing, hooks, zeroForOne, encodedAmountIn, emptyHookData ]
+        );
+        const encodedParams = this.binaryConcat (this.numberToBE (32, 32), tuplePayload);
+        return '0x' + this.getUniswapv4QuoteSelector ().slice (2) + this.binaryToBase16 (encodedParams);
+    }
+
+    getEffectiveUniswapV4PoolParams (route: Dict, params = {}): Dict {
+        const paramsFee = this.safeInteger (params, 'fee');
+        const routeFee = this.safeInteger (route, 'fee');
+        let fee = routeFee;
+        if (paramsFee !== undefined) {
+            fee = paramsFee;
+        }
+        if (fee === undefined) {
+            throw new ExchangeError (this.id + ' missing fee for uniswapv4 route');
+        }
+        const paramsTickSpacing = this.safeInteger (params, 'tickSpacing');
+        const routeTickSpacing = this.safeInteger (route, 'tickSpacing');
+        let tickSpacing = routeTickSpacing;
+        if (paramsTickSpacing !== undefined) {
+            tickSpacing = paramsTickSpacing;
+        }
+        if (tickSpacing === undefined) {
+            throw new ExchangeError (this.id + ' missing tickSpacing for uniswapv4 route');
+        }
+        const paramsHooks = this.safeString (params, 'hooks');
+        const routeHooks = this.safeString (route, 'hooks', this.getZeroAddress ());
+        let hooks = routeHooks;
+        if (paramsHooks !== undefined) {
+            hooks = paramsHooks;
+        }
+        return {
+            'fee': fee,
+            'tickSpacing': tickSpacing,
+            'hooks': hooks,
+        };
+    }
+
     getEffectiveUniswapFee (route: Dict, params = {}): int {
         const paramsFee = this.safeInteger (params, 'fee');
         if (paramsFee !== undefined) {
@@ -673,6 +808,12 @@ export default class alchemy extends Exchange {
         } else if (engine === 'uniswapv3') {
             const fee = this.getEffectiveUniswapFee (route, params);
             calldata = this.buildUniswapV3QuoterCalldata (baseId, quoteId, amountIn, fee);
+        } else if (engine === 'uniswapv4') {
+            const poolParams = this.getEffectiveUniswapV4PoolParams (route, params);
+            const fee = this.safeInteger (poolParams, 'fee');
+            const tickSpacing = this.safeInteger (poolParams, 'tickSpacing');
+            const hooks = this.safeString (poolParams, 'hooks');
+            calldata = this.buildUniswapV4QuoterCalldata (baseId, quoteId, amountIn, fee, tickSpacing, hooks);
         } else {
             throw new NotSupported (this.id + ' unsupported quoter engine ' + engine);
         }
@@ -752,6 +893,8 @@ export default class alchemy extends Exchange {
      * @param {string} symbol unified address-pair symbol with @network!dex suffix
      * @param {object} [params] extra parameters specific to the exchange API endpoint
      * @param {int} [params.fee] optional Uniswap V3 fee tier override
+     * @param {int} [params.tickSpacing] optional Uniswap V4 tick spacing override
+     * @param {string} [params.hooks] optional Uniswap V4 hooks contract override
      * @returns {object} a [ticker structure]{@link https://docs.ccxt.com/?id=ticker-structure}
      */
     async fetchTicker (symbol: string, params = {}): Promise<Ticker> {
