@@ -158,11 +158,13 @@ export default class coinrabbit extends Exchange {
                 'orderSource': 'octobot',
                 'statusMapping': {
                     'OPEN': 'open',
+                    'ACTIVE': 'open',
                     'CLOSED': 'closed',
                     'CANCELED': 'canceled',
                     'REJECTED': 'rejected',
                     'FAILED': 'failed',
                     'open': 'open',
+                    'active': 'open',
                     'closed': 'closed',
                     'canceled': 'canceled',
                     'rejected': 'rejected',
@@ -320,10 +322,8 @@ export default class coinrabbit extends Exchange {
         const active = this.safeBool (market, 'active', true);
         const minAmount = this.safeNumber (market, 'min_amount');
         const precisionInfo = this.safeDict (market, 'precision', {});
-        // TODO: CoinRabbit API may return null for precision.amount; default to 6 until the API always exposes amount precision.
         const amountPrecision = this.parseToInt (this.numberToString (this.safeNumber (precisionInfo, 'amount', 6)));
-        // TODO: CoinRabbit API returns null for precision.price; hardcode 2 until the API exposes price precision.
-        const pricePrecision = 2;
+        const pricePrecision = this.parseToInt (this.numberToString (this.safeNumber (precisionInfo, 'price', 10)));
         const marketId = this.coinrabbitMarketId (baseNetwork, quoteNetwork, apiSymbol);
         return {
             'id': marketId,
@@ -567,7 +567,7 @@ export default class coinrabbit extends Exchange {
      * @param {int} [since] timestamp in ms of the earliest order
      * @param {int} [limit] max number of orders to return, default is undefined
      * @param {object} [params] extra parameters specific to the exchange API endpoint
-     * @param {string} [params.status] order status filter (open, closed, canceled, rejected)
+     * @param {string} [params.status] order status filter (open, active, closed, canceled, rejected)
      * @returns {Order[]} a list of [order structures]{@link https://docs.ccxt.com/?id=order-structure}
      */
     async fetchOrders (symbol: Str = undefined, since: Int = undefined, limit: Int = undefined, params = {}): Promise<Order[]> {
@@ -602,8 +602,25 @@ export default class coinrabbit extends Exchange {
      * @returns {Order[]} a list of [order structures]{@link https://docs.ccxt.com/?id=order-structure}
      */
     async fetchOpenOrders (symbol: Str = undefined, since: Int = undefined, limit: Int = undefined, params = {}): Promise<Order[]> {
-        params = this.extend ({ 'status': 'open' }, params);
-        return await this.fetchOrders (symbol, since, limit, params);
+        const openParams = this.extend ({ 'status': 'open' }, params);
+        const activeParams = this.extend ({ 'status': 'active' }, params);
+        const openOrders = await this.fetchOrders (symbol, since, limit, openParams);
+        const activeOrders = await this.fetchOrders (symbol, since, limit, activeParams);
+        const ordersById: Dict = {};
+        for (let orderIndex = 0; orderIndex < openOrders.length; orderIndex++) {
+            const order = openOrders[orderIndex];
+            ordersById[order['id']] = order;
+        }
+        for (let orderIndex = 0; orderIndex < activeOrders.length; orderIndex++) {
+            const order = activeOrders[orderIndex];
+            ordersById[order['id']] = order;
+        }
+        const mergedOrders = Object.values (ordersById) as Order[];
+        const sortedMergedOrders = this.sortBy (mergedOrders, 'timestamp', true);
+        if (limit !== undefined) {
+            return sortedMergedOrders.slice (0, limit);
+        }
+        return sortedMergedOrders;
     }
 
     /**
@@ -629,7 +646,8 @@ export default class coinrabbit extends Exchange {
             symbol = apiSymbol;
         }
         const timestamp = this.parse8601 (this.safeString (order, 'created_at'));
-        let status = this.parseOrderStatus (this.safeStringUpper (order, 'status'));
+        const lastUpdateTimestamp = this.parse8601 (this.safeString (order, 'updated_at'));
+        const status = this.parseOrderStatus (this.safeStringUpper (order, 'status'));
         const side = this.safeStringLower (order, 'side');
         const type = this.safeStringLower (order, 'type');
         let price = this.safeString (order, 'price');
@@ -662,14 +680,6 @@ export default class coinrabbit extends Exchange {
             }
         }
         const feeCost = this.safeString (order, 'fee');
-        // TODO: CoinRabbit API keeps market orders status=open after execution; map to closed when fee is present so
-        // OctoBot treats them as filled. This does not align with portfolio settlement (used→free can lag minutes).
-        // Remove once the API exposes a reliable filled/closed status that matches balance settlement.
-        if (type === 'market' && status === 'open') {
-            if (feeCost !== undefined && this.parseNumber (feeCost) > 0) {
-                status = 'closed';
-            }
-        }
         const clientOrderId = this.safeString (order, 'client_order_id');
         let fee = undefined;
         if (feeCost !== undefined) {
@@ -685,7 +695,7 @@ export default class coinrabbit extends Exchange {
             'timestamp': timestamp,
             'datetime': this.iso8601 (timestamp),
             'lastTradeTimestamp': undefined,
-            'lastUpdateTimestamp': undefined,
+            'lastUpdateTimestamp': lastUpdateTimestamp,
             'status': status,
             'symbol': symbol,
             'type': type,

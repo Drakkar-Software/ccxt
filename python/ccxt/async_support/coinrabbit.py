@@ -165,11 +165,13 @@ class coinrabbit(Exchange, ImplicitAPI):
                 'orderSource': 'octobot',
                 'statusMapping': {
                     'OPEN': 'open',
+                    'ACTIVE': 'open',
                     'CLOSED': 'closed',
                     'CANCELED': 'canceled',
                     'REJECTED': 'rejected',
                     'FAILED': 'failed',
                     'open': 'open',
+                    'active': 'open',
                     'closed': 'closed',
                     'canceled': 'canceled',
                     'rejected': 'rejected',
@@ -300,10 +302,8 @@ class coinrabbit(Exchange, ImplicitAPI):
         active = self.safe_bool(market, 'active', True)
         minAmount = self.safe_number(market, 'min_amount')
         precisionInfo = self.safe_dict(market, 'precision', {})
-        # TODO: CoinRabbit API may return null for precision.amount; default to 6 until the API always exposes amount precision.
         amountPrecision = self.parse_to_int(self.number_to_string(self.safe_number(precisionInfo, 'amount', 6)))
-        # TODO: CoinRabbit API returns null for precision.price; hardcode 2 until the API exposes price precision.
-        pricePrecision = 2
+        pricePrecision = self.parse_to_int(self.number_to_string(self.safe_number(precisionInfo, 'price', 10)))
         marketId = self.coinrabbit_market_id(baseNetwork, quoteNetwork, apiSymbol)
         return {
             'id': marketId,
@@ -518,7 +518,7 @@ class coinrabbit(Exchange, ImplicitAPI):
         :param int [since]: timestamp in ms of the earliest order
         :param int [limit]: max number of orders to return, default is None
         :param dict [params]: extra parameters specific to the exchange API endpoint
-        :param str [params.status]: order status filter(open, closed, canceled, rejected)
+        :param str [params.status]: order status filter(open, active, closed, canceled, rejected)
         :returns Order[]: a list of `order structures <https://docs.ccxt.com/?id=order-structure>`
         """
         request = {}
@@ -546,8 +546,22 @@ class coinrabbit(Exchange, ImplicitAPI):
         :param dict [params]: extra parameters specific to the exchange API endpoint
         :returns Order[]: a list of `order structures <https://docs.ccxt.com/?id=order-structure>`
         """
-        params = self.extend({'status': 'open'}, params)
-        return await self.fetch_orders(symbol, since, limit, params)
+        openParams = self.extend({'status': 'open'}, params)
+        activeParams = self.extend({'status': 'active'}, params)
+        openOrders = await self.fetch_orders(symbol, since, limit, openParams)
+        activeOrders = await self.fetch_orders(symbol, since, limit, activeParams)
+        ordersById = {}
+        for orderIndex in range(0, len(openOrders)):
+            order = openOrders[orderIndex]
+            ordersById[order['id']] = order
+        for orderIndex in range(0, len(activeOrders)):
+            order = activeOrders[orderIndex]
+            ordersById[order['id']] = order
+        mergedOrders = list(ordersById.values())
+        sortedMergedOrders = self.sort_by(mergedOrders, 'timestamp', True)
+        if limit is not None:
+            return sortedMergedOrders[0:limit]
+        return sortedMergedOrders
 
     async def fetch_closed_orders(self, symbol: Str = None, since: Int = None, limit: Int = None, params={}) -> List[Order]:
         """
@@ -568,6 +582,7 @@ class coinrabbit(Exchange, ImplicitAPI):
         if symbol is None and apiSymbol is not None:
             symbol = apiSymbol
         timestamp = self.parse8601(self.safe_string(order, 'created_at'))
+        lastUpdateTimestamp = self.parse8601(self.safe_string(order, 'updated_at'))
         status = self.parse_order_status(self.safe_string_upper(order, 'status'))
         side = self.safe_string_lower(order, 'side')
         type = self.safe_string_lower(order, 'type')
@@ -595,12 +610,6 @@ class coinrabbit(Exchange, ImplicitAPI):
                         cost = amount
                     amount = self.amount_to_precision(symbol, amountNumber / priceNumber)
         feeCost = self.safe_string(order, 'fee')
-        # TODO: CoinRabbit API keeps market orders status=open after execution; map to closed when fee is present so
-        # OctoBot treats them. This does not align with portfolio settlement(used→free can lag minutes).
-        # Remove once the API exposes a reliable filled/closed status that matches balance settlement.
-        if type == 'market' and status == 'open':
-            if feeCost is not None and self.parse_number(feeCost) > 0:
-                status = 'closed'
         clientOrderId = self.safe_string(order, 'client_order_id')
         fee = None
         if feeCost is not None:
@@ -615,7 +624,7 @@ class coinrabbit(Exchange, ImplicitAPI):
             'timestamp': timestamp,
             'datetime': self.iso8601(timestamp),
             'lastTradeTimestamp': None,
-            'lastUpdateTimestamp': None,
+            'lastUpdateTimestamp': lastUpdateTimestamp,
             'status': status,
             'symbol': symbol,
             'type': type,

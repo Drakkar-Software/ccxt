@@ -76,7 +76,7 @@ async function testCoinrabbit () {
         assert.strictEqual (market['info']['base_network'], 'btc');
         assert.strictEqual (market['info']['quote_network'], 'eth');
     }
-    // parseMarket: null API price precision defaults to hardcoded 2
+    // parseMarket: null API price precision defaults to 10
     {
         const exchange = new ccxt.coinrabbit ();
         const market = exchange.parseMarket ({
@@ -89,15 +89,17 @@ async function testCoinrabbit () {
             'min_amount': 0.000001,
             'precision': { 'amount': 6, 'price': null },
         });
-        assert.strictEqual (market['precision']['price'], 2);
+        assert.strictEqual (market['precision']['price'], 10);
     }
     // parseOrderStatus mapping
     {
         const exchange = new ccxt.coinrabbit ();
         assert.strictEqual (exchange.parseOrderStatus ('OPEN'), 'open');
+        assert.strictEqual (exchange.parseOrderStatus ('ACTIVE'), 'open');
         assert.strictEqual (exchange.parseOrderStatus ('CLOSED'), 'closed');
         assert.strictEqual (exchange.parseOrderStatus ('CANCELED'), 'canceled');
         assert.strictEqual (exchange.parseOrderStatus ('open'), 'open');
+        assert.strictEqual (exchange.parseOrderStatus ('active'), 'open');
     }
     // parseBalance: flat currency balances from array envelope
     {
@@ -187,7 +189,7 @@ async function testCoinrabbit () {
         }, tickerWiseMarket as any);
         assert.strictEqual (order['symbol'], 'BTC@BTC/USDT@ETH');
     }
-    // parseOrder: buy market API amount is quote cost, not base quantity
+    // parseOrder: buy market active status maps to open while converting
     {
         const exchange = new ccxt.coinrabbit ();
         const tickerWiseMarket = {
@@ -213,13 +215,28 @@ async function testCoinrabbit () {
             'amount': '2.41',
             'price': '77775.8',
             'fee': '0.0723',
-            'status': 'open',
+            'status': 'active',
             'created_at': '2025-01-01T00:00:00Z',
         }, tickerWiseMarket as any);
         const expectedAmount = exchange.amountToPrecision ('BTC@BTC/USDT@ETH', 2.41 / 77775.8);
         assert.strictEqual (Number (order['amount']), Number (expectedAmount));
         assert.strictEqual (Number (order['cost']), 2.41);
-        assert.strictEqual (order['status'], 'closed');
+        assert.strictEqual (order['status'], 'open');
+    }
+    // parseOrder: updated_at maps to lastUpdateTimestamp
+    {
+        const exchange = new ccxt.coinrabbit ();
+        const order = exchange.parseOrder ({
+            'id': '9',
+            'symbol': 'BTC/USDT',
+            'side': 'sell',
+            'type': 'market',
+            'amount': '0.1',
+            'status': 'closed',
+            'created_at': '2025-01-01T00:00:00Z',
+            'updated_at': '2025-01-01T00:05:00Z',
+        });
+        assert.strictEqual (order['lastUpdateTimestamp'], 1735689900000);
     }
     // parseOrder: buy market closed-list API uses amount=quote spent, quote_amount=base received, inverted price
     {
@@ -461,6 +478,35 @@ async function testCoinrabbit () {
         assert.strictEqual (capturedRequest['source'], 'octobot');
         assert.strictEqual (capturedRequest['base_network'], 'btc');
         assert.strictEqual (capturedRequest['quote_network'], 'eth');
+    }
+    // fetchOpenOrders: merges open and active API statuses
+    {
+        const exchange = new ccxt.coinrabbit () as any;
+        exchange.apiKey = 'key';
+        exchange.secret = 'secret';
+        exchange.loadMarkets = async () => exchange.markets;
+        exchange.privateGetTradingOrders = async (request: any) => {
+            if (request['status'] === 'open') {
+                return {
+                    'result': true,
+                    'response': [
+                        { 'id': '1', 'symbol': 'BTC/USDT', 'side': 'buy', 'type': 'limit', 'amount': '1', 'status': 'open', 'created_at': '2025-01-01T00:00:00Z' },
+                    ],
+                };
+            }
+            return {
+                'result': true,
+                'response': [
+                    { 'id': '2', 'symbol': 'BTC/USDT', 'side': 'sell', 'type': 'market', 'amount': '0.1', 'status': 'active', 'created_at': '2025-01-02T00:00:00Z' },
+                ],
+            };
+        };
+        const orders = await exchange.fetchOpenOrders ();
+        assert.strictEqual (orders.length, 2);
+        assert.strictEqual (orders[0]['id'], '2');
+        assert.strictEqual (orders[0]['status'], 'open');
+        assert.strictEqual (orders[1]['id'], '1');
+        assert.strictEqual (orders[1]['status'], 'open');
     }
 }
 
