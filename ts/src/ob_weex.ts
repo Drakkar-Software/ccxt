@@ -34,6 +34,9 @@ export default class ob_weex extends weex {
             'options': {
                 'partner': 'b-WEEX111174',
                 'octobot': {
+                    'urls': {
+                        'icon': 'https://exchanges-icons.octobot.cloud/weex-icon.webp',
+                    },
                     'supportedElements': {
                         'spot': {
                             'orders': [ 'market', 'limit' ],

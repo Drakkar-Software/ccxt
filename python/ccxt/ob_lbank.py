@@ -34,6 +34,9 @@ class ob_lbank(lbank, ImplicitAPI):
             'options': {
                 'createMarketBuyOrderRequiresPrice': False,  # disable quote conversion
                 'octobot': {
+                    'urls': {
+                        'icon': 'https://exchanges-icons.octobot.cloud/lbank-icon.webp',
+                    },
                     'supportedElements': {
                         'spot': {
                             'orders': ['market', 'limit'],

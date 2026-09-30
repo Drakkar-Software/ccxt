@@ -36,6 +36,9 @@ class ob_bitmart(bitmart, ImplicitAPI):
                 'createMarketBuyOrderRequiresPrice': False,  # disable quote conversion
                 'brokerId': 'OCTOBOTBROKER01',
                 'octobot': {
+                    'urls': {
+                        'icon': 'https://exchanges-icons.octobot.cloud/bitmart-icon.webp',
+                    },
                     'supportedElements': {
                         'spot': {
                             'orders': ['market', 'limit'],

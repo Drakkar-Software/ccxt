@@ -33,6 +33,9 @@ class ob_hyperliquid(hyperliquid, ImplicitAPI):
                     'types': ['spot'],  # only hyperliquid spot markets are supported
                 },
                 'octobot': {
+                    'urls': {
+                        'icon': 'https://exchanges-icons.octobot.cloud/hyperliquid-icon.webp',
+                    },
                     'supportedElements': {
                         'spot': {
                             'orders': ['market', 'limit'],

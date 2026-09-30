@@ -41,6 +41,9 @@ class ob_coinex(coinex, ImplicitAPI):
                 'createMarketBuyOrderRequiresPrice': False,  # disable quote conversion
                 'brokerId': 'x-124998316',
                 'octobot': {
+                    'urls': {
+                        'icon': 'https://exchanges-icons.octobot.cloud/coinex-icon.webp',
+                    },
                     'supportedElements': {
                         'spot': {
                             'orders': ['market', 'limit'],

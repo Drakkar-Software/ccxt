@@ -31,6 +31,9 @@ class ob_cryptocom(cryptocom, ImplicitAPI):
             'options': {
                 'broker': 'OCTBT',
                 'octobot': {
+                    'urls': {
+                        'icon': 'https://exchanges-icons.octobot.cloud/crypto-com-icon.webp',
+                    },
                     'supportedElements': {
                         'spot': {
                             'orders': ['market', 'limit'],

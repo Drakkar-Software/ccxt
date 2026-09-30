@@ -52,6 +52,9 @@ export default class ob_bingx extends bingx {
             'options': {
                 'broker': 'OctoBot',
                 'octobot': {
+                    'urls': {
+                        'icon': 'https://exchanges-icons.octobot.cloud/bingx-icon.webp',
+                    },
                     'supportedElements': {
                         'spot': {
                             'orders': [ 'market', 'limit', 'stop_loss' ],

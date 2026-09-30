@@ -33,6 +33,9 @@ export default class ob_hyperliquid extends hyperliquid {
                     'types': [ 'spot' ], // only hyperliquid spot markets are supported
                 },
                 'octobot': {
+                    'urls': {
+                        'icon': 'https://exchanges-icons.octobot.cloud/hyperliquid-icon.webp',
+                    },
                     'supportedElements': {
                         'spot': {
                             'orders': [ 'market', 'limit' ],

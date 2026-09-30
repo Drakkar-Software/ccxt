@@ -66,6 +66,9 @@ class ob_kucoineu(kucoineu, ImplicitAPI):
                     },
                 },
                 'octobot': {
+                    'urls': {
+                        'icon': 'https://exchanges-icons.octobot.cloud/kucoin-icon.webp',
+                    },
                     'supportedElements': {
                         'spot': {
                             'orders': ['market', 'limit', 'stop_loss'],

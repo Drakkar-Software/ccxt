@@ -28,6 +28,9 @@ export default class ob_defillama extends defillama {
             },
             'options': {
                 'octobot': {
+                    'urls': {
+                        'icon': 'https://exchanges-icons.octobot.cloud/defillama-icon.webp',
+                    },
                     'supportedElements': {
                         'spot': {
                             'orders': [],

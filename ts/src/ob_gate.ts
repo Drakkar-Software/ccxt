@@ -46,6 +46,9 @@ export default class ob_gate extends gate {
             },
             'options': {
                 'octobot': {
+                    'urls': {
+                        'icon': 'https://exchanges-icons.octobot.cloud/gateio-icon.webp',
+                    },
                     'supportedElements': {
                         'spot': {
                             'orders': [ 'market', 'limit' ],

@@ -41,6 +41,9 @@ export default class ob_coinex extends coinex {
                 'createMarketBuyOrderRequiresPrice': false, // disable quote conversion
                 'brokerId': 'x-124998316',
                 'octobot': {
+                    'urls': {
+                        'icon': 'https://exchanges-icons.octobot.cloud/coinex-icon.webp',
+                    },
                     'supportedElements': {
                         'spot': {
                             'orders': [ 'market', 'limit' ],

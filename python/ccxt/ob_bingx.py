@@ -57,6 +57,9 @@ class ob_bingx(bingx, ImplicitAPI):
             'options': {
                 'broker': 'OctoBot',
                 'octobot': {
+                    'urls': {
+                        'icon': 'https://exchanges-icons.octobot.cloud/bingx-icon.webp',
+                    },
                     'supportedElements': {
                         'spot': {
                             'orders': ['market', 'limit', 'stop_loss'],

@@ -13,6 +13,7 @@ async function testObBinance () {
     {
         const ex = new ccxt.ob_binance ();
         assertObExchangeId (ex, 'ob_binance');
+        assert.strictEqual (ex.options.octobot.urls.icon, 'https://exchanges-icons.octobot.cloud/binance-icon.webp');
     }
     {
         const ex = new ccxt.ob_binance ();

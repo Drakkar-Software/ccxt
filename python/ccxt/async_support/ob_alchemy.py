@@ -28,6 +28,9 @@ class ob_alchemy(alchemy, ImplicitAPI):
             },
             'options': {
                 'octobot': {
+                    'urls': {
+                        'icon': 'https://exchanges-icons.octobot.cloud/alchemy-icon.webp',
+                    },
                     'supportedElements': {
                         'spot': {
                             'orders': [],

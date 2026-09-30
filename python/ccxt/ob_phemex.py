@@ -34,6 +34,9 @@ class ob_phemex(phemex, ImplicitAPI):
             'options': {
                 'brokerId': 'Octobot',
                 'octobot': {
+                    'urls': {
+                        'icon': 'https://exchanges-icons.octobot.cloud/phemex-icon.webp',
+                    },
                     'supportedElements': {
                         'spot': {
                             'orders': ['market', 'limit'],

@@ -39,6 +39,9 @@ class ob_kraken(kraken, ImplicitAPI):
                 'maxRetriesOnFailure': 5,
                 'maxRetriesOnFailureDelay': 0,
                 'octobot': {
+                    'urls': {
+                        'icon': 'https://exchanges-icons.octobot.cloud/kraken-icon.webp',
+                    },
                     'supportedElements': {
                         'spot': {
                             'orders': ['market', 'limit'],

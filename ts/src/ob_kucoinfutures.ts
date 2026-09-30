@@ -67,6 +67,9 @@ export default class ob_kucoinfutures extends kucoinfutures {
                     },
                 },
                 'octobot': {
+                    'urls': {
+                        'icon': 'https://exchanges-icons.octobot.cloud/kucoin-icon.webp',
+                    },
                     'supportedElements': {
                         'spot': {
                             'orders': [ 'market', 'limit', 'stop_loss' ],

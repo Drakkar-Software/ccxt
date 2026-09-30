@@ -28,6 +28,9 @@ class ob_defillama(defillama, ImplicitAPI):
             },
             'options': {
                 'octobot': {
+                    'urls': {
+                        'icon': 'https://exchanges-icons.octobot.cloud/defillama-icon.webp',
+                    },
                     'supportedElements': {
                         'spot': {
                             'orders': [],

@@ -30,6 +30,9 @@ export default class ob_cryptocom extends cryptocom {
             'options': {
                 'broker': 'OCTBT',
                 'octobot': {
+                    'urls': {
+                        'icon': 'https://exchanges-icons.octobot.cloud/crypto-com-icon.webp',
+                    },
                     'supportedElements': {
                         'spot': {
                             'orders': [ 'market', 'limit' ],

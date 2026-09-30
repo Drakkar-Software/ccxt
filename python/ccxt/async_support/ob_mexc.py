@@ -57,6 +57,9 @@ class ob_mexc(mexc, ImplicitAPI):
                 'recvWindow': 60000,  # default is 5000, avoid time related issues
                 'broker': 'OCTO',
                 'octobot': {
+                    'urls': {
+                        'icon': 'https://exchanges-icons.octobot.cloud/mexc-icon.webp',
+                    },
                     'supportedElements': {
                         'spot': {
                             'orders': ['market', 'limit'],

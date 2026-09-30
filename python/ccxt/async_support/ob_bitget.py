@@ -33,6 +33,9 @@ class ob_bitget(bitget, ImplicitAPI):
                 'createMarketBuyOrderRequiresPrice': False,  # disable quote conversion
                 'broker': 'Octobot',
                 'octobot': {
+                    'urls': {
+                        'icon': 'https://exchanges-icons.octobot.cloud/bitget-icon.webp',
+                    },
                     'supportedElements': {
                         'spot': {
                             'orders': ['market', 'limit'],

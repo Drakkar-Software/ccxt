@@ -34,6 +34,9 @@ class ob_weex(weex, ImplicitAPI):
             'options': {
                 'partner': 'b-WEEX111174',
                 'octobot': {
+                    'urls': {
+                        'icon': 'https://exchanges-icons.octobot.cloud/weex-icon.webp',
+                    },
                     'supportedElements': {
                         'spot': {
                             'orders': ['market', 'limit'],

@@ -46,6 +46,9 @@ class ob_gate(gate, ImplicitAPI):
             },
             'options': {
                 'octobot': {
+                    'urls': {
+                        'icon': 'https://exchanges-icons.octobot.cloud/gateio-icon.webp',
+                    },
                     'supportedElements': {
                         'spot': {
                             'orders': ['market', 'limit'],

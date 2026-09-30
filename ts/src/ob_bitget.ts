@@ -33,6 +33,9 @@ export default class ob_bitget extends bitget {
                 'createMarketBuyOrderRequiresPrice': false, // disable quote conversion
                 'broker': 'Octobot',
                 'octobot': {
+                    'urls': {
+                        'icon': 'https://exchanges-icons.octobot.cloud/bitget-icon.webp',
+                    },
                     'supportedElements': {
                         'spot': {
                             'orders': [ 'market', 'limit' ],
