@@ -54,6 +54,9 @@ export default class ob_coinbase extends coinbase {
                 'maxRetriesOnFailureDelay': 0,
                 'brokerId': 'octobot',
                 'octobot': {
+                    'urls': {
+                        'icon': 'https://exchanges-icons.octobot.cloud/coinbase-icon.webp',
+                    },
                     'supportedElements': {
                         'spot': {
                             'orders': [ 'market', 'limit', 'stop_loss' ],

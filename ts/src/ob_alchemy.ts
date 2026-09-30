@@ -28,6 +28,9 @@ export default class ob_alchemy extends alchemy {
             },
             'options': {
                 'octobot': {
+                    'urls': {
+                        'icon': 'https://exchanges-icons.octobot.cloud/alchemy-icon.webp',
+                    },
                     'supportedElements': {
                         'spot': {
                             'orders': [],

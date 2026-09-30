@@ -34,6 +34,9 @@ export default class ob_phemex extends phemex {
             'options': {
                 'brokerId': 'Octobot',
                 'octobot': {
+                    'urls': {
+                        'icon': 'https://exchanges-icons.octobot.cloud/phemex-icon.webp',
+                    },
                     'supportedElements': {
                         'spot': {
                             'orders': [ 'market', 'limit' ],

@@ -33,6 +33,9 @@ export default class ob_bybiteu extends bybiteu {
                 'brokerId': 'octobot',
                 'recvWindow': 60000, // default is 5000, avoid time related issues
                 'octobot': {
+                    'urls': {
+                        'icon': 'https://exchanges-icons.octobot.cloud/bybit-icon.webp',
+                    },
                     'supportedElements': {
                         'spot': {
                             'orders': [ 'market', 'limit' ],

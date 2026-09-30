@@ -43,6 +43,9 @@ export default class ob_hollaex extends hollaex {
                 // OctoBot trading_constants.DEFAULT_REQUEST_TIMEOUT default 20000 ms / 1000 (hollaex_exchange.py); env can override Python.
                 'api-expires': 20,
                 'octobot': {
+                    'urls': {
+                        'icon': 'https://exchanges-icons.octobot.cloud/hollaex-icon.webp',
+                    },
                     'supportedElements': {
                         'spot': {
                             'orders': [ 'market', 'limit' ],

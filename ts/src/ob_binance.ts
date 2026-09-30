@@ -57,6 +57,9 @@ export default class ob_binance extends binance {
                 'fetchPositions': 'account', // required to fetch empty positions as well
                 'filterClosed': false, // return empty positions as well
                 'octobot': {
+                    'urls': {
+                        'icon': 'https://exchanges-icons.octobot.cloud/binance-icon.webp',
+                    },
                     'supportedElements': {
                         'spot': {
                             'orders': [ 'market', 'limit', 'stop_loss' ],

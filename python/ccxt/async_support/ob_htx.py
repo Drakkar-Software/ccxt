@@ -38,6 +38,9 @@ class ob_htx(htx, ImplicitAPI):
                     'id': 'AAc4ccb049',
                 },
                 'octobot': {
+                    'urls': {
+                        'icon': 'https://exchanges-icons.octobot.cloud/htx-icon.webp',
+                    },
                     'supportedElements': {
                         'spot': {
                             'orders': ['market', 'limit'],

@@ -62,6 +62,9 @@ class ob_coinbase(coinbase, ImplicitAPI):
                 'maxRetriesOnFailureDelay': 0,
                 'brokerId': 'octobot',
                 'octobot': {
+                    'urls': {
+                        'icon': 'https://exchanges-icons.octobot.cloud/coinbase-icon.webp',
+                    },
                     'supportedElements': {
                         'spot': {
                             'orders': ['market', 'limit', 'stop_loss'],

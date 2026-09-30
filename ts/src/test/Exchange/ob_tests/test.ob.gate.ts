@@ -8,6 +8,7 @@ async function testObGate () {
     {
         const ex = new ccxt.ob_gate ();
         assertObExchangeId (ex, 'ob_gate');
+        assert.strictEqual (ex.options.octobot.urls.icon, 'https://exchanges-icons.octobot.cloud/gateio-icon.webp');
     }
     {
         const ex = new ccxt.ob_gate ();

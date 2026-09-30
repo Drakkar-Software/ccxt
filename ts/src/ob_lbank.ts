@@ -36,6 +36,9 @@ export default class ob_lbank extends lbank {
             'options': {
                 'createMarketBuyOrderRequiresPrice': false, // disable quote conversion
                 'octobot': {
+                    'urls': {
+                        'icon': 'https://exchanges-icons.octobot.cloud/lbank-icon.webp',
+                    },
                     'supportedElements': {
                         'spot': {
                             'orders': [ 'market', 'limit' ],

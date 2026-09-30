@@ -62,6 +62,9 @@ class ob_binance(binance, ImplicitAPI):
                 'fetchPositions': 'account',  # required to fetch empty positions
                 'filterClosed': False,  # return empty positions
                 'octobot': {
+                    'urls': {
+                        'icon': 'https://exchanges-icons.octobot.cloud/binance-icon.webp',
+                    },
                     'supportedElements': {
                         'spot': {
                             'orders': ['market', 'limit', 'stop_loss'],

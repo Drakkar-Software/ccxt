@@ -38,6 +38,9 @@ export default class ob_kraken extends kraken {
                 'maxRetriesOnFailure': 5,
                 'maxRetriesOnFailureDelay': 0,
                 'octobot': {
+                    'urls': {
+                        'icon': 'https://exchanges-icons.octobot.cloud/kraken-icon.webp',
+                    },
                     'supportedElements': {
                         'spot': {
                             'orders': [ 'market', 'limit' ],

@@ -50,6 +50,9 @@ class ob_myokx(myokx, ImplicitAPI):
             'options': {
                 'brokerId': 'c812bf5944b749BC',
                 'octobot': {
+                    'urls': {
+                        'icon': 'https://exchanges-icons.octobot.cloud/okx-icon.webp',
+                    },
                     'supportedElements': {
                         'spot': {
                             'orders': ['market', 'limit'],
