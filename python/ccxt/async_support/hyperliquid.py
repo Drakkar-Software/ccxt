@@ -3278,6 +3278,11 @@ class hyperliquid(Exchange, ImplicitAPI):
         userAddress, params = self.handle_public_address('fetchMyTrades', params)
         if self.markets is None:
             await self.load_markets()
+        paginate = False
+        paginate, params = self.handle_option_and_params(params, 'fetchMyTrades', 'paginate')
+        if paginate:
+            maxLimit = 500
+            return await self.fetch_paginated_call_dynamic('fetchMyTrades', symbol, since, limit, params, maxLimit)
         market = None
         if symbol is not None:
             market = self.market(symbol)

@@ -19,9 +19,15 @@ from ccxt.base.errors import AuthenticationError                      # noqa: F4
 from ccxt.base.errors import PermissionDenied                         # noqa: F401
 from ccxt.base.errors import AccountNotEnabled                        # noqa: F401
 from ccxt.base.errors import AccountSuspended                         # noqa: F401
+from ccxt.base.errors import OBIPWhitelistError                       # noqa: F401
 from ccxt.base.errors import ArgumentsRequired                        # noqa: F401
 from ccxt.base.errors import BadRequest                               # noqa: F401
 from ccxt.base.errors import BadSymbol                                # noqa: F401
+from ccxt.base.errors import OBUntradableSymbol                       # noqa: F401
+from ccxt.base.errors import OBClosedPositionError                    # noqa: F401
+from ccxt.base.errors import OBOrderUncancellableError                # noqa: F401
+from ccxt.base.errors import OBInternalSyncError                      # noqa: F401
+from ccxt.base.errors import OBMaxOpenOrdersReached                   # noqa: F401
 from ccxt.base.errors import OperationRejected                        # noqa: F401
 from ccxt.base.errors import NoChange                                 # noqa: F401
 from ccxt.base.errors import MarginModeAlreadySet                     # noqa: F401

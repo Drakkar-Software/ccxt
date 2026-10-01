@@ -3407,6 +3407,12 @@ export default class phemex extends Exchange {
         if (this.markets === undefined) {
             await this.loadMarkets ();
         }
+        let paginate = false;
+        [ paginate, params ] = this.handleOptionAndParams (params, 'fetchMyTrades', 'paginate');
+        if (paginate) {
+            const maxLimit = 200;
+            return await this.fetchPaginatedCallDynamic ('fetchMyTrades', symbol, since, limit, params, maxLimit) as Trade[];
+        }
         let market: Market = undefined;
         if (symbol !== undefined) {
             market = this.market (symbol);

@@ -1477,6 +1477,12 @@ export default class hollaex extends Exchange {
         if (this.markets === undefined) {
             await this.loadMarkets ();
         }
+        let paginate = false;
+        [ paginate, params ] = this.handleOptionAndParams (params, 'fetchMyTrades', 'paginate');
+        if (paginate) {
+            const maxLimit = 100;
+            return await this.fetchPaginatedCallDynamic ('fetchMyTrades', symbol, since, limit, params, maxLimit) as Trade[];
+        }
         const request: Dict = {
             // 'symbol': market['id'],
             // 'limit': 50, // default 50, max 100

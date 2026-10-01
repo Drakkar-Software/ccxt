@@ -678,6 +678,16 @@ export interface TransferEntry {
     status?: Str;
 }
 
+export interface ObDexPair {
+    'symbol': string;
+    'network': string;
+    'dex': string;
+    'baseTokenAddress': string;
+    'quoteTokenAddress': string;
+    'price': number;
+    'quoteLiquidity': number;
+}
+
 export interface CrossBorrowRate {
     info: any;
     currency?: Str;

@@ -6151,7 +6151,7 @@ export class BaseExchange {
                 }
                 if (e instanceof OperationFailed) {
                     if (i < retries) {
-                        if (this.verbose) {
+                        if (retries > 0 || this.verbose) { // octobot override
                             const index = i + 1;
                             this.log ('Request failed with the error: ' + e.toString () + ', retrying ' + index.toString () + ' of ' + retries.toString () + '...');
                         }
@@ -6928,6 +6928,281 @@ export class BaseExchange {
 
     createExpiredOptionMarket (symbol: string): MarketInterface {
         throw new NotSupported (this.id + ' createExpiredOptionMarket () is not supported yet');
+    }
+
+    obIsStrictFiniteNumber (n: Num): boolean {
+        if (n === undefined) {
+            return false;
+        }
+        // Reject NaN and infinities using (n===n) and (n-n)===0; transpiler-safe for Python (Number.isFinite is not).
+        // eslint-disable-next-line no-self-compare -- intentional NaN check (NaN !== NaN); Infinity − Infinity is NaN in JS
+        return (n === n) && ((n - n) === 0);
+    }
+
+    obCoerceScalarToFloatStrict (raw: any): Num {
+        if (raw === undefined) {
+            return undefined;
+        }
+        const src = typeof raw === 'string' ? raw.trim () : raw;
+        const n = this.parseNumber (src, undefined);
+        if (!this.obIsStrictFiniteNumber (n)) {
+            return undefined;
+        }
+        return n;
+    }
+
+    obPrecisionStepToDigitCount (value: Num): Num {
+        const n = this.parseNumber (value, undefined);
+        if (!this.obIsStrictFiniteNumber (n) || n <= 0) {
+            return undefined;
+        }
+        return Math.round (Math.abs (Math.log10 (n)));
+    }
+
+    obObtainMutablePrecisionAndLimits (base: Dict): Dict {
+        const result = this.extend ({}, base) as Dict;
+        const basePrec = base['precision'];
+        result['precision'] = this.isDictionary (basePrec) ? this.extend ({}, basePrec) : {};
+        const limitsIn = this.safeDict (base, 'limits', {});
+        const limitsCopy = this.extend ({}, limitsIn) as Dict;
+        const minMaxBranches = [ 'amount', 'price', 'cost' ];
+        for (let i = 0; i < minMaxBranches.length; i++) {
+            const groupKey = minMaxBranches[i];
+            const branch = limitsIn[groupKey];
+            if (this.isDictionary (branch)) {
+                limitsCopy[groupKey] = this.extend ({}, branch);
+            } else {
+                limitsCopy[groupKey] = {};
+            }
+        }
+        result['limits'] = limitsCopy;
+        return result;
+    }
+
+    obCoerceMarketStatusWhitelistToFloat (marketStatus: Dict) {
+        const precision = marketStatus['precision'];
+        if (this.isDictionary (precision)) {
+            precision['amount'] = this.obCoerceScalarToFloatStrict (precision['amount']);
+            precision['price'] = this.obCoerceScalarToFloatStrict (precision['price']);
+        }
+        const limits = marketStatus['limits'];
+        if (!this.isDictionary (limits)) {
+            return;
+        }
+        const cost = limits['cost'];
+        if (this.isDictionary (cost)) {
+            cost['min'] = this.obCoerceScalarToFloatStrict (cost['min']);
+            cost['max'] = this.obCoerceScalarToFloatStrict (cost['max']);
+        }
+        const amount = limits['amount'];
+        if (this.isDictionary (amount)) {
+            amount['min'] = this.obCoerceScalarToFloatStrict (amount['min']);
+            amount['max'] = this.obCoerceScalarToFloatStrict (amount['max']);
+        }
+        const priceLm = limits['price'];
+        if (this.isDictionary (priceLm)) {
+            priceLm['min'] = this.obCoerceScalarToFloatStrict (priceLm['min']);
+            priceLm['max'] = this.obCoerceScalarToFloatStrict (priceLm['max']);
+        }
+    }
+
+    obReplacePrecisionStepsWithDigitCount (precision: Dict) {
+        precision['amount'] = this.obPrecisionStepToDigitCount (precision['amount']);
+        precision['price'] = this.obPrecisionStepToDigitCount (precision['price']);
+    }
+
+    obScaleLimitByContractSize (v: Num, floatSize: Num): Num {
+        if (v === undefined) {
+            return undefined;
+        }
+        if (!this.obIsStrictFiniteNumber (v) || !this.obIsStrictFiniteNumber (floatSize)) {
+            return undefined;
+        }
+        return floatSize * v;
+    }
+
+    obApplyAdaptMarketStatusForContractSize (marketStatus: Dict) {
+        const floatSize = this.obCoerceScalarToFloatStrict (marketStatus['contractSize']);
+        if (!this.obIsStrictFiniteNumber (floatSize)) {
+            return;
+        }
+        const limits = marketStatus['limits'];
+        if (!this.isDictionary (limits)) {
+            return;
+        }
+        const amountLimits = limits['amount'];
+        if (!this.isDictionary (amountLimits)) {
+            return;
+        }
+        amountLimits['min'] = this.obScaleLimitByContractSize (amountLimits['min'], floatSize);
+        amountLimits['max'] = this.obScaleLimitByContractSize (amountLimits['max'], floatSize);
+        marketStatus['precision']['amount'] = this.obPrecisionStepToDigitCount (floatSize);
+    }
+
+    obIsMarketStatusLimitValid (value: Num, zeroValid: boolean = false): boolean {
+        if (!this.obIsStrictFiniteNumber (value)) {
+            return false;
+        }
+        return zeroValid ? value >= 0 : value > 0;
+    }
+
+    obComputeMarketStatusCostLimits (marketStatus: Dict) {
+        const limits = marketStatus['limits'];
+        if (!this.isDictionary (limits)) {
+            return;
+        }
+        const limitCost = limits['cost'];
+        const limitPrice = limits['price'];
+        const limitAmount = limits['amount'];
+        if (!this.isDictionary (limitCost) || !this.isDictionary (limitPrice) || !this.isDictionary (limitAmount)) {
+            return;
+        }
+        if (!this.obIsMarketStatusLimitValid (limitCost['max'])) {
+            if (this.obIsMarketStatusLimitValid (limitAmount['max']) && this.obIsMarketStatusLimitValid (limitPrice['max'])) {
+                limitCost['max'] = limitAmount['max'] * limitPrice['max'];
+            }
+        }
+        if (!this.obIsMarketStatusLimitValid (limitCost['min'])) {
+            if (this.obIsMarketStatusLimitValid (limitAmount['min']) && this.obIsMarketStatusLimitValid (limitPrice['min'])) {
+                limitCost['min'] = limitAmount['min'] * limitPrice['min'];
+            }
+        }
+    }
+
+    obEnsureMarketStatusMinCost (marketStatus: Dict) {
+        const limits = marketStatus['limits'];
+        if (!this.isDictionary (limits)) {
+            return;
+        }
+        const limitCost = limits['cost'];
+        if (!this.isDictionary (limitCost)) {
+            return;
+        }
+        if (!this.obIsMarketStatusLimitValid (limitCost['min'], true)) {
+            limitCost['min'] = 0;
+        }
+    }
+
+    obGetFixedMarketStatus (symbol: string): Dict {
+        const base = this.market (symbol) as Dict;
+        const octobotCfg = this.safeDict (this.options, 'octobot', {});
+        const fixMarketStatus = this.safeBool (octobotCfg, 'fixMarketStatus', false) === true;
+        const removeMarketStatusPriceLimits = this.safeBool (octobotCfg, 'removeMarketStatusPriceLimits', false) === true;
+        const adaptMarketStatusForContractSize = this.safeBool (octobotCfg, 'adaptMarketStatusForContractSize', false) === true;
+        const computeMarketStatusCostLimits = this.safeBool (octobotCfg, 'computeMarketStatusCostLimits', false) === true;
+        // Step build: selective shallow copy so untouched nested refs stay shared (.info unchanged by reference swap on top clone only when we omit deep copy)
+        const out = this.obObtainMutablePrecisionAndLimits (base);
+        // Step coerce: unify whitelist fields to floats; non-convertible -> undefined (OctoBot _fix_typing parity + failures explicit)
+        this.obCoerceMarketStatusWhitelistToFloat (out);
+        // Step fixes: connector order mirrors Python adapter + rest_exchange helpers
+        if (fixMarketStatus) {
+            this.obReplacePrecisionStepsWithDigitCount (out['precision']);
+        }
+        if (removeMarketStatusPriceLimits) {
+            const limitsLm = out['limits'];
+            if (this.isDictionary (limitsLm)) {
+                let priceLm = limitsLm['price'];
+                if (!this.isDictionary (priceLm)) {
+                    priceLm = {};
+                    limitsLm['price'] = priceLm;
+                }
+                priceLm['min'] = undefined;
+                priceLm['max'] = undefined;
+            }
+        }
+        if (adaptMarketStatusForContractSize) {
+            this.obApplyAdaptMarketStatusForContractSize (out);
+        }
+        if (computeMarketStatusCostLimits) {
+            this.obComputeMarketStatusCostLimits (out);
+        }
+        this.obEnsureMarketStatusMinCost (out);
+        return out;
+    }
+
+    obSanitizeNetworkDexToken (token: Str): Str {
+        if (token === undefined) {
+            return undefined;
+        }
+        let sanitized = '';
+        for (let charIndex = 0; charIndex < token.length; charIndex++) {
+            const char = token[charIndex];
+            if (char !== '!' && char !== '@' && char !== ':') {
+                sanitized = sanitized + char;
+            }
+        }
+        return sanitized;
+    }
+
+    obParseNetworkDexSymbol (symbol: string): Dict {
+        const networkSeparator = '@';
+        const dexSeparator = '!';
+        const anyDexWildcard = '*';
+        if (symbol.indexOf (networkSeparator) < 0) {
+            throw new BadSymbol (this.id + ' symbol must include a network suffix using ' + networkSeparator);
+        }
+        let separatorIndex = -1;
+        for (let charIndex = 0; charIndex < symbol.length; charIndex++) {
+            if (symbol[charIndex] === networkSeparator) {
+                separatorIndex = charIndex;
+            }
+        }
+        const tradingSymbol = symbol.slice (0, separatorIndex);
+        const networkAndDex = symbol.slice (separatorIndex + 1);
+        if (networkAndDex === '') {
+            throw new BadSymbol (this.id + ' invalid symbol ' + symbol + ': network must be specified after ' + networkSeparator);
+        }
+        let networkCode = networkAndDex;
+        let dexCode = undefined;
+        const dexSeparatorIndex = networkAndDex.indexOf (dexSeparator);
+        if (dexSeparatorIndex >= 0) {
+            networkCode = networkAndDex.slice (0, dexSeparatorIndex);
+            dexCode = networkAndDex.slice (dexSeparatorIndex + 1);
+            if (dexCode === '') {
+                dexCode = undefined;
+            }
+        }
+        networkCode = this.obSanitizeNetworkDexToken (networkCode);
+        if (dexCode !== undefined) {
+            dexCode = this.obSanitizeNetworkDexToken (dexCode);
+            if (dexCode === anyDexWildcard) {
+                dexCode = anyDexWildcard;
+            }
+        }
+        if ((networkCode === undefined) || (networkCode === '')) {
+            throw new BadSymbol (this.id + ' invalid symbol ' + symbol + ': network must be specified after ' + networkSeparator);
+        }
+        return {
+            'tradingSymbol': tradingSymbol,
+            'networkCode': networkCode,
+            'dexCode': dexCode,
+        };
+    }
+
+    obDexCodeToId (dexCode: string): string {
+        if (dexCode === undefined) {
+            return undefined;
+        }
+        const sanitizedDexCode = this.obSanitizeNetworkDexToken (dexCode);
+        const dexesByCode = this.safeDict (this.options, 'dexesById', {});
+        const dexId = this.safeString (dexesByCode, sanitizedDexCode);
+        if (dexId !== undefined) {
+            return dexId;
+        }
+        return sanitizedDexCode.toLowerCase ();
+    }
+
+    obDexIdToCode (dexId: string): string {
+        if (dexId === undefined) {
+            return undefined;
+        }
+        const sanitizedDexId = this.obSanitizeNetworkDexToken (dexId).toLowerCase ();
+        const dexes = this.safeDict (this.options, 'dexes', {});
+        const dexCode = this.safeString (dexes, sanitizedDexId);
+        if (dexCode !== undefined) {
+            return dexCode;
+        }
+        return sanitizedDexId.toUpperCase ();
     }
 
     isLeveragedCurrency (currencyCode, checkBaseCoin: Bool = false, existingCurrencies: Dict = undefined): boolean {
@@ -8687,6 +8962,87 @@ export class BaseExchange {
     async isUTAEnabled (params = {}) {
         return false; // stub
     }
+
+    obResolveRightsFromImaginaryCancelCatch (e: any, rights: string[], authPermissionMatch: Str): string[] {
+        // octobot specific
+        if (e instanceof AuthenticationError) {
+            const authenticationErrorLower = String (e).toLowerCase ();
+            if (authPermissionMatch === 'pair') {
+                if (authenticationErrorLower.indexOf ('permission') >= 0 && authenticationErrorLower.indexOf ('denied') >= 0) {
+                    return rights;
+                }
+            } else {
+                if (authenticationErrorLower.indexOf ('permission') >= 0 || authenticationErrorLower.indexOf ('denied') >= 0) {
+                    return rights;
+                }
+            }
+            throw e;
+        }
+        if (e instanceof NetworkError) {
+            throw e;
+        }
+        if ((e instanceof BadSymbol) || (e instanceof OperationFailed)) {
+            throw e;
+        }
+        if (e instanceof ArgumentsRequired) {
+            throw new AuthenticationError (this.id + ' ' + String (e.message));
+        }
+        if (!(e instanceof ExchangeError)) {
+            throw e;
+        }
+        const low = String (e).toLowerCase ();
+        if (low.indexOf ('permission') >= 0 && (low.indexOf ('denied') >= 0 || low.indexOf ('trading') >= 0)) {
+            return rights;
+        }
+        rights.push ('spotTrading');
+        rights.push ('marginTrading');
+        rights.push ('futuresTrading');
+        return rights;
+    }
+
+    obIsAuthenticatedRequest (url: Str, method: Str, headers: Dict, body, probe: Str, probeParams: Dict = {}): Bool {
+        if (probe === 'urlBodySignature') {
+            const needle = ('needle' in probeParams) ? probeParams['needle'] : 'signature=';
+            let urlStr = '';
+            if (url) {
+                urlStr = String (url);
+            }
+            let bodyStr = '';
+            if (body) {
+                bodyStr = String (body);
+            }
+            return (urlStr.indexOf (needle) >= 0) || (bodyStr.indexOf (needle) >= 0);
+        }
+        if (probe === 'headersJsonAny') {
+            const needles = ('needles' in probeParams) ? probeParams['needles'] : [];
+            const hdrTxt = headers ? JSON.stringify (headers) : '';
+            for (let needleIdx = 0; needleIdx < needles.length; needleIdx++) {
+                const needleEntry = needles[needleIdx];
+                if (hdrTxt.indexOf (needleEntry) >= 0) {
+                    return true;
+                }
+            }
+            return false;
+        }
+        if (probe === 'restSignatureInHeadersJsonOrInUrl') {
+            const hdrsStr = headers ? JSON.stringify (headers) : '';
+            const hdrMatches = hdrsStr.indexOf ('Signature') >= 0;
+            let urlTxt = '';
+            if (url) {
+                urlTxt = String (url);
+            }
+            const urlMatches = urlTxt.indexOf ('signature=') >= 0;
+            return hdrMatches || urlMatches;
+        }
+        if (probe === 'signatureMethodInHeadersJsonOrSignInBody') {
+            const hdrsStr = headers ? JSON.stringify (headers).toLowerCase () : '';
+            const signatureMethodHit = hdrsStr.indexOf ('signature_method') >= 0;
+            const bodyStr = body ? String (body).toLowerCase () : '';
+            const bodyHit = bodyStr.indexOf ('sign=') >= 0;
+            return signatureMethodHit || bodyHit;
+        }
+        return false;
+    }
 }
 
 // Exchange is a thin concrete tier over BaseExchange (which holds all shared infra). Regular
@@ -9580,6 +9936,16 @@ export default class Exchange extends BaseExchange {
 
     async cancelOrder (id: string, symbol: Str = undefined, params = {}): Promise<Order> {
         throw new NotSupported (this.id + ' cancelOrder() is not supported yet');
+    }
+
+    async obFetchPermissionsImaginaryCancel (orderId: Str, symbol: Str, params = {}, authPermissionMatch: Str = 'either'): Promise<string[]> {
+        const rights: string[] = [ 'reading' ];
+        try {
+            await this.cancelOrder (orderId, symbol, params);
+            return rights;
+        } catch (e) {
+            return this.obResolveRightsFromImaginaryCancelCatch (e, rights, authPermissionMatch);
+        }
     }
 
     /**

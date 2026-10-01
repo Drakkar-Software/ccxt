@@ -6,10 +6,16 @@ const errorHierarchy = {
                     'AccountNotEnabled': {},
                 },
                 'AccountSuspended': {},
+                'OBIPWhitelistError': {},
             },
             'ArgumentsRequired': {},
             'BadRequest': {
                 'BadSymbol': {},
+                'OBUntradableSymbol': {},
+                'OBClosedPositionError': {},
+                'OBOrderUncancellableError': {},
+                'OBInternalSyncError': {},
+                'OBMaxOpenOrdersReached': {},
             },
             'OperationRejected': {
                 'NoChange': {

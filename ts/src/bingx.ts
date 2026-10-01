@@ -3,7 +3,7 @@
 
 import { sha256 } from '@noble/hashes/sha2.js';
 import Exchange from './abstract/bingx.js';
-import { AuthenticationError, PermissionDenied, AccountSuspended, ExchangeError, InsufficientFunds, BadRequest, OrderNotFound, DDoSProtection, BadSymbol, ArgumentsRequired, NotSupported, OperationFailed, InvalidOrder } from './base/errors.js';
+import { AuthenticationError, PermissionDenied, AccountSuspended, ExchangeError, InsufficientFunds, BadRequest, OrderNotFound, DDoSProtection, BadSymbol, ArgumentsRequired, NotSupported, OperationFailed, InvalidOrder, InvalidNonce } from './base/errors.js';
 import { Precise } from './base/Precise.js';
 import { TICK_SIZE } from './base/functions/number.js';
 import type{ LeverageTier, TransferEntry, Int, OrderSide, OHLCV, FundingRateHistory, Order, OrderType, OrderRequest, Str, Trade, Balances, Transaction, Ticker, OrderBook, Tickers, Market, Strings, Currency, Position, Dict, NullableDict, Leverage, MarginMode, Num, List, NullableList, MarginModification, Currencies, int, TradingFeeInterface, FundingRate, FundingRates, DepositAddress, FundingHistory, Bool } from './base/types.js';
@@ -4916,6 +4916,12 @@ export default class bingx extends Exchange {
         if (this.markets === undefined) {
             await this.loadMarkets ();
         }
+        const maxLimit = 100;
+        let paginate = false;
+        [ paginate, params ] = this.handleOptionAndParams (params, 'fetchClosedOrders', 'paginate');
+        if (paginate) {
+            return await this.fetchPaginatedCallDynamic ('fetchClosedOrders', symbol, since, limit, params, maxLimit) as Order[];
+        }
         const orders = await this.fetchCanceledAndClosedOrders (symbol, since, limit, params);
         return this.filterBy (orders, 'status', 'closed') as Order[];
     }
@@ -4984,6 +4990,14 @@ export default class bingx extends Exchange {
         } else if (type === 'spot') {
             if (limit !== undefined) {
                 request['pageSize'] = limit;
+            }
+            if (since !== undefined) {
+                request['startTime'] = since;
+            }
+            const until = this.safeInteger (params, 'until');
+            params = this.omit (params, 'until');
+            if (until !== undefined) {
+                request['endTime'] = until;
             }
             response = await this.spotV1PrivateGetTradeHistoryOrders (this.extend (request, params));
             //
@@ -7013,7 +7027,7 @@ export default class bingx extends Exchange {
     }
 
     nonce () {
-        return this.milliseconds ();
+        return this.milliseconds () - this.safeInteger (this.options, 'timeDifference', 0);
     }
 
     setSandboxMode (enable: boolean) {
@@ -7041,6 +7055,9 @@ export default class bingx extends Exchange {
                 message = transferErrorMsg;
             }
             const feedback = this.id + ' ' + body;
+            if ((code === '100421') && (message !== undefined) && (message.toLowerCase ().indexOf ('timestamp') >= 0)) {
+                throw new InvalidNonce (feedback);
+            }
             this.throwExactlyMatchedException (this.exceptions['exact'], message, feedback);
             this.throwExactlyMatchedException (this.exceptions['exact'], code, feedback);
             this.throwBroadlyMatchedException (this.exceptions['broad'], message, feedback);
