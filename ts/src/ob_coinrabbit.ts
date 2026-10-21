@@ -49,8 +49,10 @@ export default class ob_coinrabbit extends coinrabbit {
                     // coinrabbit uses DECIMAL_PLACES; obReplacePrecisionStepsWithDigitCount mis-converts place counts (6 → 1)
                     'fixMarketStatus': false,
                     'enableSpotBuyMarketWithCost': true,
+                    'requiresSymbolsParamToFetchTickers': true,
                     'requireRecentTradesFromClosedOrders': true,
                     'supportFetchingCancelledOrders': false,
+                    'createOhlcvFromTickers': true,
                     'hasBroker': true,
                 },
             },
