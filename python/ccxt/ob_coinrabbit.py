@@ -49,8 +49,10 @@ class ob_coinrabbit(coinrabbit, ImplicitAPI):
                     # coinrabbit uses DECIMAL_PLACES; obReplacePrecisionStepsWithDigitCount mis-converts place counts(6 → 1)
                     'fixMarketStatus': False,
                     'enableSpotBuyMarketWithCost': True,
+                    'requiresSymbolsParamToFetchTickers': True,
                     'requireRecentTradesFromClosedOrders': True,
                     'supportFetchingCancelledOrders': False,
+                    'createOhlcvFromTickers': True,
                     'hasBroker': True,
                 },
             },
