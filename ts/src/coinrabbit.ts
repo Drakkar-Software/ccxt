@@ -582,6 +582,10 @@ export default class coinrabbit extends Exchange {
         if (since !== undefined) {
             request['since'] = this.iso8601 (since);
         }
+        // CoinRabbit rejects limit above 50. Callers such as OctoBot may pass a higher default.
+        if (limit !== undefined && limit > 50) {
+            limit = 50;
+        }
         if (limit !== undefined) {
             request['limit'] = limit;
         }

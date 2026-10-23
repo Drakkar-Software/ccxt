@@ -508,6 +508,41 @@ async function testCoinrabbit () {
         assert.strictEqual (orders[1]['id'], '1');
         assert.strictEqual (orders[1]['status'], 'open');
     }
+    // fetchOrders: limit above 50 is sent as 50; 50 and below are unchanged; omitted limit is not sent
+    {
+        const exchange = new ccxt.coinrabbit () as any;
+        exchange.apiKey = 'key';
+        exchange.secret = 'secret';
+        const capturedLimits: any[] = [];
+        exchange.privateGetTradingOrders = async (request: any) => {
+            capturedLimits.push (request['limit']);
+            return {
+                'result': true,
+                'response': [
+                    { 'id': '1', 'symbol': 'BTC/USDT', 'side': 'sell', 'type': 'market', 'amount': '0.1', 'status': 'closed', 'created_at': '2025-01-01T00:00:00Z' },
+                ],
+            };
+        };
+        await exchange.fetchOrders (undefined, undefined, 100);
+        await exchange.fetchOrders (undefined, undefined, 50);
+        await exchange.fetchOrders (undefined, undefined, 10);
+        await exchange.fetchOrders ();
+        assert.deepStrictEqual (capturedLimits, [ 50, 50, 10, undefined ]);
+    }
+    // fetchClosedOrders: delegated fetch uses the capped limit and closed status
+    {
+        const exchange = new ccxt.coinrabbit () as any;
+        exchange.apiKey = 'key';
+        exchange.secret = 'secret';
+        let capturedRequest: any = undefined;
+        exchange.privateGetTradingOrders = async (request: any) => {
+            capturedRequest = request;
+            return { 'result': true, 'response': [] };
+        };
+        await exchange.fetchClosedOrders (undefined, undefined, 100);
+        assert.strictEqual (capturedRequest['limit'], 50);
+        assert.strictEqual (capturedRequest['status'], 'closed');
+    }
 }
 
 export default testCoinrabbit;
