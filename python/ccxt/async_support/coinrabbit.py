@@ -530,6 +530,9 @@ class coinrabbit(Exchange, ImplicitAPI):
             request['symbol'] = self.safe_string(marketInfo, 'symbol', market['symbol'])
         if since is not None:
             request['since'] = self.iso8601(since)
+        # CoinRabbit rejects limit above 50. Callers such may pass a higher default.
+        if limit is not None and limit > 50:
+            limit = 50
         if limit is not None:
             request['limit'] = limit
         params = self.omit(params, ['base_network', 'baseNetwork', 'quote_network', 'quoteNetwork'])

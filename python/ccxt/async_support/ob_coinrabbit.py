@@ -54,6 +54,8 @@ class ob_coinrabbit(coinrabbit, ImplicitAPI):
                     'supportFetchingCancelledOrders': False,
                     'createOhlcvFromTickers': True,
                     'hasBroker': True,
+                    'waitForOrdersToFillTimeoutSeconds': 600,
+                    'waitForOrdersToFillPollIntervalSeconds': 20,
                 },
             },
         })

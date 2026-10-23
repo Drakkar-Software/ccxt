@@ -54,6 +54,8 @@ export default class ob_coinrabbit extends coinrabbit {
                     'supportFetchingCancelledOrders': false,
                     'createOhlcvFromTickers': true,
                     'hasBroker': true,
+                    'waitForOrdersToFillTimeoutSeconds': 600,
+                    'waitForOrdersToFillPollIntervalSeconds': 20,
                 },
             },
         });
