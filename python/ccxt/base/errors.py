@@ -87,6 +87,10 @@ class AccountSuspended(AuthenticationError):
     pass
 
 
+class OBIPWhitelistError(AuthenticationError):
+    pass
+
+
 class ArgumentsRequired(ExchangeError):
     pass
 
@@ -96,6 +100,26 @@ class BadRequest(ExchangeError):
 
 
 class BadSymbol(BadRequest):
+    pass
+
+
+class OBUntradableSymbol(BadRequest):
+    pass
+
+
+class OBClosedPositionError(BadRequest):
+    pass
+
+
+class OBOrderUncancellableError(BadRequest):
+    pass
+
+
+class OBInternalSyncError(BadRequest):
+    pass
+
+
+class OBMaxOpenOrdersReached(BadRequest):
     pass
 
 
@@ -235,9 +259,15 @@ __all__ = [
     'PermissionDenied',
     'AccountNotEnabled',
     'AccountSuspended',
+    'OBIPWhitelistError',
     'ArgumentsRequired',
     'BadRequest',
     'BadSymbol',
+    'OBUntradableSymbol',
+    'OBClosedPositionError',
+    'OBOrderUncancellableError',
+    'OBInternalSyncError',
+    'OBMaxOpenOrdersReached',
     'OperationRejected',
     'NoChange',
     'MarginModeAlreadySet',

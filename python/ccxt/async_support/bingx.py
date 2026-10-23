@@ -23,6 +23,7 @@ from ccxt.base.errors import OrderNotFound
 from ccxt.base.errors import NotSupported
 from ccxt.base.errors import OperationFailed
 from ccxt.base.errors import DDoSProtection
+from ccxt.base.errors import InvalidNonce
 from ccxt.base.decimal_to_precision import TICK_SIZE
 from ccxt.base.precise import Precise
 
@@ -4686,6 +4687,11 @@ class bingx(Exchange, ImplicitAPI):
         """
         if self.markets is None:
             await self.load_markets()
+        maxLimit = 100
+        paginate = False
+        paginate, params = self.handle_option_and_params(params, 'fetchClosedOrders', 'paginate')
+        if paginate:
+            return await self.fetch_paginated_call_dynamic('fetchClosedOrders', symbol, since, limit, params, maxLimit)
         orders = await self.fetch_canceled_and_closed_orders(symbol, since, limit, params)
         return self.filter_by(orders, 'status', 'closed')
 
@@ -4749,6 +4755,12 @@ class bingx(Exchange, ImplicitAPI):
         elif type == 'spot':
             if limit is not None:
                 request['pageSize'] = limit
+            if since is not None:
+                request['startTime'] = since
+            until = self.safe_integer(params, 'until')
+            params = self.omit(params, 'until')
+            if until is not None:
+                request['endTime'] = until
             response = await self.spotV1PrivateGetTradeHistoryOrders(self.extend(request, params))
             #
             #    {
@@ -6634,7 +6646,7 @@ class bingx(Exchange, ImplicitAPI):
         return {'url': url, 'method': method, 'body': body, 'headers': headers}
 
     def nonce(self):
-        return self.milliseconds()
+        return self.milliseconds() - self.safe_integer(self.options, 'timeDifference', 0)
 
     def set_sandbox_mode(self, enable: bool):
         super(bingx, self).set_sandbox_mode(enable)
@@ -6658,6 +6670,8 @@ class bingx(Exchange, ImplicitAPI):
             if transferErrorMsg is not None:
                 message = transferErrorMsg
             feedback = self.id + ' ' + body
+            if (code == '100421') and (message is not None) and (message.lower().find('timestamp') >= 0):
+                raise InvalidNonce(feedback)
             self.throw_exactly_matched_exception(self.exceptions['exact'], message, feedback)
             self.throw_exactly_matched_exception(self.exceptions['exact'], code, feedback)
             self.throw_broadly_matched_exception(self.exceptions['broad'], message, feedback)

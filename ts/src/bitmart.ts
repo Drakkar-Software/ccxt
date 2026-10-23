@@ -2239,6 +2239,12 @@ export default class bitmart extends Exchange {
         if (this.markets === undefined) {
             await this.loadMarkets ();
         }
+        let paginate = false;
+        [ paginate, params ] = this.handleOptionAndParams (params, 'fetchMyTrades', 'paginate');
+        if (paginate) {
+            const maxLimit = 200;
+            return await this.fetchPaginatedCallDynamic ('fetchMyTrades', symbol, since, limit, params, maxLimit) as Trade[];
+        }
         let market: Market = undefined;
         const request: Dict = {};
         if (symbol !== undefined) {
@@ -5858,8 +5864,8 @@ export default class bitmart extends Exchange {
         //     {"errno":"OK","message":"INVALID_PARAMETER","code":49998,"trace":"eb5ebb54-23cd-4de2-9064-e090b6c3b2e3","data":null}
         //
         const message = this.safeString (response, 'message');
-        const messageLower = (message as string).toLowerCase ();
-        const isErrorMessage = (message !== undefined) && (messageLower !== 'ok') && (messageLower !== 'success');
+        const messageLower = (message !== undefined) ? message.toLowerCase () : undefined;
+        const isErrorMessage = (messageLower !== undefined) && (messageLower !== 'ok') && (messageLower !== 'success');
         const errorCode = this.safeString (response, 'code');
         const isErrorCode = (errorCode !== undefined) && (errorCode !== '1000');
         if (isErrorCode || isErrorMessage) {
