@@ -71,12 +71,10 @@ class wizardswap(Exchange, ImplicitAPI):
             'api': {
                 'public': {
                     'get': [
-                        'currencies',
                         'currency',
                         'currency/{symbol}',
                         'pairs',
                         'pairs/{symbol}',
-                        'exchange/{id}',
                     ],
                     'post': [
                         'estimate',
@@ -152,10 +150,9 @@ class wizardswap(Exchange, ImplicitAPI):
                 # Route via Tor hidden service; requires a SOCKS proxy at the transport layer.
                 'useOnion': False,
                 'onionUrl': 'http://wizardswgtu2ovor7r2esg3cxdpt7tv4nrugi32lldv53zmtonbz6sid.onion/api',
-                # Hardcoded fallback when both /currency and /currencies
-                # endpoints are unreachable(e.g. DDoS-Guard blocks all GET).
+                # Hardcoded fallback when GET /currency is unreachable(e.g. DDoS-Guard blocks GET).
                 'defaultCurrencyIds': [
-                    'btc', 'xmr', 'eth', 'ltc', 'bch',
+                    'btc', 'xmr', 'eth', 'ltc', 'bch', 'doge',
                     'zec', 'dash', 'firo', 'part', 'pivx', 'zano',
                 ],
                 # WizardSwap statuses mapped to ccxt unified statuses
@@ -182,19 +179,20 @@ class wizardswap(Exchange, ImplicitAPI):
         :returns dict: an associative dictionary of currencies
         """
         #
-        # GET /api/currency returns rich data:
-        #  [
-        #      {
-        #          "symbol": "PART", "name": "Particl", "decimals": 8,
-        #          "minamt": "0.00001", "enabled": 1, "maintenance": 0,
-        #          "validation_address": "...", "explorer": "https://...",
-        #          ...
-        #      },
-        #      ...
-        #  ]
-        #
-        # GET /api/currencies returns simple array(may be blocked by DDoS-Guard):
-        #  ["btc","xmr","eth",...]
+        # GET /api/currency returns an array of currency objects, e.g.:
+        #  {
+        #      "symbol": "btc",
+        #      "has_extra_id": False,
+        #      "name": "Bitcoin",
+        #      "warnings_from": [],
+        #      "warnings_to": [],
+        #      "validation_address": "...",
+        #      "validation_extra": null,
+        #      "address_explorer": null,
+        #      "tx_explorer": "https://...",
+        #      "image": "https://..."
+        #  }
+        # Legacy fields(decimals, minamt, enabled, maintenance) may still be parsed when present.
         #
         richResponse = self.publicGetCurrency(params)
         if isinstance(richResponse, list) and len(richResponse) > 0:
@@ -380,7 +378,8 @@ class wizardswap(Exchange, ImplicitAPI):
         }
         response = self.publicPostEstimate(self.extend(request, params))
         #
-        #  {"estimated_amount": "0.00476907"}
+        #  {"estimated_amount": "0.00476907"}  (live)
+        #  {"amount_to": 0.00476907}             (docs)
         #
         return self.parse_ticker(response, market)
 
@@ -392,7 +391,7 @@ class wizardswap(Exchange, ImplicitAPI):
             baseCode = self.safe_currency_code(currencyFrom)
             quoteCode = self.safe_currency_code(currencyTo)
             symbol = baseCode + '/' + quoteCode
-        last = self.safe_string_2(ticker, 'estimated_amount', 'rate')
+        last = self.safe_string_n(ticker, ['estimated_amount', 'amount_to', 'rate'])
         return self.safe_ticker({
             'symbol': symbol,
             'timestamp': None,
@@ -430,6 +429,8 @@ class wizardswap(Exchange, ImplicitAPI):
         :param dict [params]: extra parameters specific to the exchange API endpoint
         :param str params['address_to']: destination address for the quote currency
         :param str [params.refund_address]: refund address for the base currency
+        :param str [params.extra_id_to]: recipient Extra ID when the quote currency requires it
+        :param str [params.refund_extra_id]: refund Extra ID for the base currency
         :returns dict: an `order structure <https://docs.ccxt.com/?id=order-structure>`
         """
         self.load_markets()
@@ -446,7 +447,13 @@ class wizardswap(Exchange, ImplicitAPI):
         refundAddress = self.safe_string(params, 'refund_address')
         if refundAddress is not None:
             request['refund_address'] = refundAddress
-        params = self.omit(params, ['address_to', 'refund_address'])
+        extraIdTo = self.safe_string(params, 'extra_id_to')
+        if extraIdTo is not None:
+            request['extra_id_to'] = extraIdTo
+        refundExtraId = self.safe_string(params, 'refund_extra_id')
+        if refundExtraId is not None:
+            request['refund_extra_id'] = refundExtraId
+        params = self.omit(params, ['address_to', 'refund_address', 'extra_id_to', 'refund_extra_id'])
         # ob_wizardswap enables maxRetriesOnFailure for fetch2(HTTP/network failures only).
         # Missing order id is a successful HTTP response without an id — retry here at createOrder level.
         # Rejected swaps(False) fail immediately; exhausted missing-id retries raise InvalidOrder
@@ -456,7 +463,7 @@ class wizardswap(Exchange, ImplicitAPI):
         extendedRequest = self.extend(request, params)
         for attempt in range(0, maxRetries):
             response = self.publicPostExchange(extendedRequest)
-            if ((isinstance(response, bool)) and not response) or response == 'False':
+            if str(response).lower() == 'false':
                 raise InvalidOrder(self.id + ' createOrder() failed: exchange returned False(order rejected)')
             orderId = self.safe_string(response, 'id')
             if orderId is not None and orderId != '':
@@ -503,12 +510,9 @@ class wizardswap(Exchange, ImplicitAPI):
         :param dict [params]: extra parameters specific to the exchange API endpoint
         :returns dict: an `order structure <https://docs.ccxt.com/?id=order-structure>`
         """
-        request = {
-            'id': id,
-        }
         response = None
         try:
-            response = self.publicGetExchangeId(self.extend(request, params))
+            response = self.publicPostExchange(self.extend({'id': id}, params))
         except Exception as e:
             raise OrderNotFound(self.id + ' order ' + id + ' not found')
         #
@@ -608,6 +612,8 @@ class wizardswap(Exchange, ImplicitAPI):
             baseUrl = self.safe_string(self.options, 'onionUrl', baseUrl)
         url = baseUrl + '/' + self.implode_params(path, params)
         query = self.omit(params, self.extract_params(path))
+        if method == 'POST' and self.apiKey and (query['api_key'] is None):
+            query['api_key'] = self.apiKey
         if method == 'GET':
             if query:
                 url += '?' + self.urlencode(query)
