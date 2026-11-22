@@ -70,12 +70,10 @@ export default class wizardswap extends Exchange {
             'api': {
                 'public': {
                     'get': [
-                        'currencies',
                         'currency',
                         'currency/{symbol}',
                         'pairs',
                         'pairs/{symbol}',
-                        'exchange/{id}',
                     ],
                     'post': [
                         'estimate',
@@ -151,10 +149,9 @@ export default class wizardswap extends Exchange {
                 // Route via Tor hidden service; requires a SOCKS proxy at the transport layer.
                 'useOnion': false,
                 'onionUrl': 'http://wizardswgtu2ovor7r2esg3cxdpt7tv4nrugi32lldv53zmtonbz6sid.onion/api',
-                // Hardcoded fallback when both /currency and /currencies
-                // endpoints are unreachable (e.g. DDoS-Guard blocks all GET).
+                // Hardcoded fallback when GET /currency is unreachable (e.g. DDoS-Guard blocks GET).
                 'defaultCurrencyIds': [
-                    'btc', 'xmr', 'eth', 'ltc', 'bch',
+                    'btc', 'xmr', 'eth', 'ltc', 'bch', 'doge',
                     'zec', 'dash', 'firo', 'part', 'pivx', 'zano',
                 ],
                 // WizardSwap statuses mapped to ccxt unified statuses
@@ -182,19 +179,20 @@ export default class wizardswap extends Exchange {
      */
     async fetchCurrencies (params = {}): Promise<Currencies> {
         //
-        // GET /api/currency returns rich data:
-        //  [
-        //      {
-        //          "symbol": "PART", "name": "Particl", "decimals": 8,
-        //          "minamt": "0.00001", "enabled": 1, "maintenance": 0,
-        //          "validation_address": "...", "explorer": "https://...",
-        //          ...
-        //      },
-        //      ...
-        //  ]
-        //
-        // GET /api/currencies returns simple array (may be blocked by DDoS-Guard):
-        //  ["btc","xmr","eth",...]
+        // GET /api/currency returns an array of currency objects, e.g.:
+        //  {
+        //      "symbol": "btc",
+        //      "has_extra_id": false,
+        //      "name": "Bitcoin",
+        //      "warnings_from": [],
+        //      "warnings_to": [],
+        //      "validation_address": "...",
+        //      "validation_extra": null,
+        //      "address_explorer": null,
+        //      "tx_explorer": "https://...",
+        //      "image": "https://..."
+        //  }
+        // Legacy fields (decimals, minamt, enabled, maintenance) may still be parsed when present.
         //
         const richResponse = await this.publicGetCurrency (params);
         if (Array.isArray (richResponse) && richResponse.length > 0) {
@@ -397,7 +395,8 @@ export default class wizardswap extends Exchange {
         };
         const response = await this.publicPostEstimate (this.extend (request, params));
         //
-        //  { "estimated_amount": "0.00476907" }
+        //  { "estimated_amount": "0.00476907" }  (live)
+        //  { "amount_to": 0.00476907 }             (docs)
         //
         return this.parseTicker (response, market);
     }
@@ -411,7 +410,7 @@ export default class wizardswap extends Exchange {
             const quoteCode = this.safeCurrencyCode (currencyTo);
             symbol = baseCode + '/' + quoteCode;
         }
-        const last = this.safeString2 (ticker, 'estimated_amount', 'rate');
+        const last = this.safeStringN (ticker, [ 'estimated_amount', 'amount_to', 'rate' ]);
         return this.safeTicker ({
             'symbol': symbol,
             'timestamp': undefined,
@@ -449,6 +448,8 @@ export default class wizardswap extends Exchange {
      * @param {object} [params] extra parameters specific to the exchange API endpoint
      * @param {string} params.address_to destination address for the quote currency
      * @param {string} [params.refund_address] refund address for the base currency
+     * @param {string} [params.extra_id_to] recipient Extra ID when the quote currency requires it
+     * @param {string} [params.refund_extra_id] refund Extra ID for the base currency
      * @returns {object} an [order structure]{@link https://docs.ccxt.com/?id=order-structure}
      */
     async createOrder (symbol: string, type: OrderType, side: OrderSide, amount: number, price: Num = undefined, params = {}): Promise<Order> {
@@ -468,7 +469,15 @@ export default class wizardswap extends Exchange {
         if (refundAddress !== undefined) {
             request['refund_address'] = refundAddress;
         }
-        params = this.omit (params, [ 'address_to', 'refund_address' ]);
+        const extraIdTo = this.safeString (params, 'extra_id_to');
+        if (extraIdTo !== undefined) {
+            request['extra_id_to'] = extraIdTo;
+        }
+        const refundExtraId = this.safeString (params, 'refund_extra_id');
+        if (refundExtraId !== undefined) {
+            request['refund_extra_id'] = refundExtraId;
+        }
+        params = this.omit (params, [ 'address_to', 'refund_address', 'extra_id_to', 'refund_extra_id' ]);
         // ob_wizardswap enables maxRetriesOnFailure for fetch2 (HTTP/network failures only).
         // Missing order id is a successful HTTP response without an id — retry here at createOrder level.
         // Rejected swaps (False) fail immediately; exhausted missing-id retries throw InvalidOrder
@@ -478,7 +487,7 @@ export default class wizardswap extends Exchange {
         const extendedRequest = this.extend (request, params);
         for (let attempt = 0; attempt <= maxRetries; attempt++) {
             const response = await this.publicPostExchange (extendedRequest);
-            if (((typeof response === 'boolean') && !response) || response === 'False') {
+            if (String (response).toLowerCase () === 'false') {
                 throw new InvalidOrder (this.id + ' createOrder() failed: exchange returned False (order rejected)');
             }
             const orderId = this.safeString (response, 'id');
@@ -531,12 +540,9 @@ export default class wizardswap extends Exchange {
      * @returns {object} an [order structure]{@link https://docs.ccxt.com/?id=order-structure}
      */
     async fetchOrder (id: string, symbol: Str = undefined, params = {}): Promise<Order> {
-        const request: Dict = {
-            'id': id,
-        };
         let response = undefined;
         try {
-            response = await this.publicGetExchangeId (this.extend (request, params));
+            response = await this.publicPostExchange (this.extend ({ 'id': id }, params));
         } catch (e) {
             throw new OrderNotFound (this.id + ' order ' + id + ' not found');
         }
@@ -647,6 +653,9 @@ export default class wizardswap extends Exchange {
         }
         let url = baseUrl + '/' + this.implodeParams (path, params);
         const query = this.omit (params, this.extractParams (path));
+        if (method === 'POST' && this.apiKey && (query['api_key'] === undefined)) {
+            query['api_key'] = this.apiKey;
+        }
         if (method === 'GET') {
             if (Object.keys (query).length) {
                 url += '?' + this.urlencode (query);
