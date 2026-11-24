@@ -303,7 +303,6 @@ async function testWizardswap () {
         '<div>Minimum XMR to send: 0.003</div>' +
         '<strong>Amount to be sent: 0.0004 BTC</strong>'
     );
-    const STATUS_JSON = { 'status': 'waiting', 'status_text': 'Waiting for deposit.' };
     // website W1: create via redirect NetworkError
     {
         const exchange = createExchange (FORM_OPTS);
@@ -320,9 +319,6 @@ async function testWizardswap () {
             const urlText = String (url);
             if (method === 'GET' && urlText.indexOf ('id=FORMID01') >= 0) {
                 return PAGE_HTML ('FORMID01');
-            }
-            if (method === 'POST' && urlText.indexOf ('action=get_status') >= 0) {
-                return STATUS_JSON;
             }
             if (method === 'GET') {
                 return '<input type="hidden" name="token" value="csrfTokenValue">';
@@ -359,9 +355,6 @@ async function testWizardswap () {
             const urlText = String (url);
             if (method === 'GET' && urlText.indexOf ('id=FORMID02') >= 0) {
                 return PAGE_HTML ('FORMID02');
-            }
-            if (method === 'POST' && urlText.indexOf ('action=get_status') >= 0) {
-                return STATUS_JSON;
             }
             if (method === 'GET') {
                 return '<input type="hidden" name="token" value="csrfTokenValue">';
@@ -423,7 +416,7 @@ async function testWizardswap () {
             // noop
         }
     }
-    // website W5: fetch status+page merge
+    // website W5: fetch order page only
     {
         const exchange = createExchange (FORM_OPTS);
         const origFetch = exchange.fetch;
@@ -432,10 +425,6 @@ async function testWizardswap () {
             throw new Error ('API fallback must not run');
         };
         exchange.fetch = async (url: string, method: string) => {
-            const urlText = String (url);
-            if (method === 'POST' && urlText.indexOf ('action=get_status') >= 0) {
-                return STATUS_JSON;
-            }
             if (method === 'GET') {
                 return PAGE_HTML ('FORMID03');
             }
@@ -453,31 +442,13 @@ async function testWizardswap () {
             exchange.publicPostExchange = origExchange;
         }
     }
-    // website W6: fetch status fails, page alone
-    {
-        const exchange = createExchange (FORM_OPTS);
-        const origFetch = exchange.fetch;
-        exchange.fetch = async (url: string, method: string) => {
-            if (method === 'POST') {
-                throw new Error ('status down');
-            }
-            return PAGE_HTML ('FORMID04');
-        };
-        try {
-            const order: any = await exchange.fetchOrder ('FORMID04');
-            assert.strictEqual (order['status'], 'open');
-            assert.strictEqual (order['info']['address_from'], 'depositAddressFromWebsiteForm01');
-        } finally {
-            exchange.fetch = origFetch;
-        }
-    }
-    // website W7: website legs fail -> API fallback
+    // website W6: order page unavailable -> API fallback
     {
         const exchange = createExchange (FORM_OPTS);
         const origFetch = exchange.fetch;
         const origExchange = exchange.publicPostExchange;
         exchange.fetch = async () => {
-            throw new Error ('website down');
+            throw new Error ('order page down');
         };
         exchange.publicPostExchange = async () => ({
             'id': 'APIFALL01',

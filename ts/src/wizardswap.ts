@@ -63,7 +63,6 @@ export default class wizardswap extends Exchange {
                     'rest': 'https://www.wizardswap.io/api',
                 },
                 'www': 'https://www.wizardswap.io',
-                'status': 'https://www.wizardswap.io/action=get_status',
                 'doc': [
                     'https://www.wizardswap.io/api',
                 ],
@@ -199,10 +198,6 @@ export default class wizardswap extends Exchange {
         return base + 'id=' + id;
     }
 
-    wizardswapStatusUrl (): string {
-        return this.safeString (this.urls, 'status', 'https://www.wizardswap.io/action=get_status');
-    }
-
     websiteIndexOfInsensitive (haystack: string, needle: string): number {
         return haystack.toLowerCase ().indexOf (needle.toLowerCase ());
     }
@@ -232,7 +227,10 @@ export default class wizardswap extends Exchange {
                 break;
             }
         }
-        return id === '' ? undefined : id;
+        if (id === '') {
+            return undefined;
+        }
+        return id;
     }
 
     parseWebsiteCsrfToken (html: string): string {
@@ -259,7 +257,7 @@ export default class wizardswap extends Exchange {
         const candidates: string[] = [];
         if (typeof responseOrError === 'string') {
             candidates.push (responseOrError);
-        } else if (responseOrError !== undefined && responseOrError !== null) {
+        } else if (responseOrError !== undefined) {
             const message = this.safeString (responseOrError, 'message');
             if (message !== undefined) {
                 candidates.push (message);
@@ -336,7 +334,10 @@ export default class wizardswap extends Exchange {
             const endQuote = afterValue.indexOf ('"');
             if (endQuote >= 0) {
                 const value = afterValue.slice (0, endQuote).trim ();
-                return value === '' ? undefined : value;
+                if (value === '') {
+                    return undefined;
+                }
+                return value;
             }
         }
         if (tagEnd < 0) {
@@ -348,7 +349,10 @@ export default class wizardswap extends Exchange {
             return undefined;
         }
         const text = inner.slice (0, closeTag).trim ();
-        return text === '' ? undefined : text;
+        if (text === '') {
+            return undefined;
+        }
+        return text;
     }
 
     parseWebsiteStatusHeading (html: string): Str {
@@ -386,7 +390,10 @@ export default class wizardswap extends Exchange {
                 break;
             }
         }
-        return currency === '' ? undefined : currency.toLowerCase ();
+        if (currency === '') {
+            return undefined;
+        }
+        return currency.toLowerCase ();
     }
 
     parseWebsiteAmountToBeSent (html: string): Dict {
@@ -424,25 +431,6 @@ export default class wizardswap extends Exchange {
             'amount_to': amount,
             'currency_to': currency.toLowerCase (),
         };
-    }
-
-    async fetchWebsiteOrderStatus (id: string): Promise<Dict> {
-        const headers = {
-            'Content-Type': 'application/x-www-form-urlencoded',
-            'X-Requested-With': 'XMLHttpRequest',
-        };
-        const body = this.urlencode ({ 'id': id });
-        const response = await this.fetch (this.wizardswapStatusUrl (), 'POST', headers, body);
-        if (typeof response === 'string') {
-            if (response.indexOf ('Invalid exchange ID') >= 0) {
-                throw new OrderNotFound (this.id + ' order ' + id + ' not found');
-            }
-            throw new ExchangeError (this.id + ' unexpected status response: ' + response.slice (0, 80));
-        }
-        if (response === undefined || typeof response !== 'object') {
-            throw new ExchangeError (this.id + ' unexpected status response type');
-        }
-        return response as Dict;
     }
 
     async fetchWebsiteOrderPage (id: string): Promise<Dict> {
@@ -485,31 +473,6 @@ export default class wizardswap extends Exchange {
             page['currency_to'] = amountToPart['currency_to'];
         }
         return page;
-    }
-
-    mergeWebsiteOrderParts (statusPart: Dict, pagePart: Dict, id: string): Dict {
-        const merged: Dict = { 'id': id };
-        if (statusPart !== undefined) {
-            const statusKeys = [ 'status', 'status_text', 'refund_txid', 'deposit_txid', 'txid', 'confirmations', 'remaining_deposit' ];
-            for (let i = 0; i < statusKeys.length; i++) {
-                const key = statusKeys[i];
-                const value = this.safeValue (statusPart, key);
-                if (value !== undefined) {
-                    merged[key] = value;
-                }
-            }
-        }
-        if (pagePart !== undefined) {
-            const pageKeys = [ 'status_text', 'amount_from', 'amount_to', 'address_from', 'address_to', 'currency_from', 'currency_to' ];
-            for (let i = 0; i < pageKeys.length; i++) {
-                const key = pageKeys[i];
-                const value = this.safeValue (pagePart, key);
-                if (value !== undefined && value !== '') {
-                    merged[key] = value;
-                }
-            }
-        }
-        return merged;
     }
 
     normalizeWebsiteOrder (raw: Dict, market: Market = undefined): Dict {
@@ -560,20 +523,9 @@ export default class wizardswap extends Exchange {
 
     async requestWebsiteOrder (id: string, market: Market = undefined): Promise<Dict> {
         this.ensureWebsiteUserAgent ();
-        let statusPart = undefined;
-        let pagePart = undefined;
-        try {
-            statusPart = await this.fetchWebsiteOrderStatus (id);
-        } catch (e) {
-            statusPart = undefined;
-        }
-        try {
-            pagePart = await this.fetchWebsiteOrderPage (id);
-        } catch (e) {
-            pagePart = undefined;
-        }
-        const merged = this.mergeWebsiteOrderParts (statusPart, pagePart, id);
-        const normalized = this.normalizeWebsiteOrder (merged, market);
+        const pagePart = await this.fetchWebsiteOrderPage (id);
+        const pageWithId = this.extend ({ 'id': id }, pagePart);
+        const normalized = this.normalizeWebsiteOrder (pageWithId, market);
         if (!this.isWebsiteOrderUsable (normalized)) {
             throw new ExchangeError (this.id + ' website order ' + id + ' incomplete');
         }
@@ -640,7 +592,7 @@ export default class wizardswap extends Exchange {
                 }
             }
         }
-        let rawOrder = await this.requestWebsiteOrder (orderId, market);
+        const rawOrder = await this.requestWebsiteOrder (orderId, market);
         if (this.safeString (rawOrder, 'timestamp') === undefined) {
             rawOrder['timestamp'] = this.websiteOrderTimestampString ();
         }
