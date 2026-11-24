@@ -65,7 +65,6 @@ class wizardswap(Exchange, ImplicitAPI):
                     'rest': 'https://www.wizardswap.io/api',
                 },
                 'www': 'https://www.wizardswap.io',
-                'status': 'https://www.wizardswap.io/action=get_status',
                 'doc': [
                     'https://www.wizardswap.io/api',
                 ],
@@ -194,9 +193,6 @@ class wizardswap(Exchange, ImplicitAPI):
         base = www if www.endswith('/') else www + '/'
         return base + 'id=' + id
 
-    def wizardswap_status_url(self) -> str:
-        return self.safe_string(self.urls, 'status', 'https://www.wizardswap.io/action=get_status')
-
     def website_index_of_insensitive(self, haystack: str, needle: str) -> float:
         return haystack.lower().find(needle.lower())
 
@@ -220,7 +216,9 @@ class wizardswap(Exchange, ImplicitAPI):
                 id += character
             elif len(id) > 0:
                 break
-        return id == None if '' else id
+        if id == '':
+            return None
+        return id
 
     def parse_website_csrf_token(self, html: str) -> str:
         tokenField = 'name="token"'
@@ -242,7 +240,7 @@ class wizardswap(Exchange, ImplicitAPI):
         candidates = []
         if isinstance(responseOrError, str):
             candidates.append(responseOrError)
-        elif responseOrError is not None and responseOrError != None:
+        elif responseOrError is not None:
             message = self.safe_string(responseOrError, 'message')
             if message is not None:
                 candidates.append(message)
@@ -300,7 +298,9 @@ class wizardswap(Exchange, ImplicitAPI):
             endQuote = afterValue.find('"')
             if endQuote >= 0:
                 value = afterValue[0:endQuote].strip()
-                return value == None if '' else value
+                if value == '':
+                    return None
+                return value
         if tagEnd < 0:
             return None
         inner = chunk[tagEnd + 1:]
@@ -308,7 +308,9 @@ class wizardswap(Exchange, ImplicitAPI):
         if closeTag < 0:
             return None
         text = inner[0:closeTag].strip()
-        return text == None if '' else text
+        if text == '':
+            return None
+        return text
 
     def parse_website_status_heading(self, html: str) -> Str:
         marker = '<h2 id="status"'
@@ -338,7 +340,9 @@ class wizardswap(Exchange, ImplicitAPI):
                 currency += character
             else:
                 break
-        return currency == None if '' else currency.lower()
+        if currency == '':
+            return None
+        return currency.lower()
 
     def parse_website_amount_to_be_sent(self, html: str) -> dict:
         label = 'Amount to be sent:'
@@ -369,21 +373,6 @@ class wizardswap(Exchange, ImplicitAPI):
             'amount_to': amount,
             'currency_to': currency.lower(),
         }
-
-    async def fetch_website_order_status(self, id: str) -> dict:
-        headers = {
-            'Content-Type': 'application/x-www-form-urlencoded',
-            'X-Requested-With': 'XMLHttpRequest',
-        }
-        body = self.urlencode({'id': id})
-        response = await self.fetch(self.wizardswap_status_url(), 'POST', headers, body)
-        if isinstance(response, str):
-            if response.find('Invalid exchange ID') >= 0:
-                raise OrderNotFound(self.id + ' order ' + id + ' not found')
-            raise ExchangeError(self.id + ' unexpected status response: ' + response[0:80])
-        if response is None or not isinstance(response, dict):
-            raise ExchangeError(self.id + ' unexpected status response type')
-        return response
 
     async def fetch_website_order_page(self, id: str) -> dict:
         html = await self.fetch(self.wizardswap_order_page_url(id), 'GET', None, None)
@@ -418,24 +407,6 @@ class wizardswap(Exchange, ImplicitAPI):
             page['amount_to'] = amountToPart['amount_to']
             page['currency_to'] = amountToPart['currency_to']
         return page
-
-    def merge_website_order_parts(self, statusPart: dict, pagePart: dict, id: str) -> dict:
-        merged = {'id': id}
-        if statusPart is not None:
-            statusKeys = ['status', 'status_text', 'refund_txid', 'deposit_txid', 'txid', 'confirmations', 'remaining_deposit']
-            for i in range(0, len(statusKeys)):
-                key = statusKeys[i]
-                value = self.safe_value(statusPart, key)
-                if value is not None:
-                    merged[key] = value
-        if pagePart is not None:
-            pageKeys = ['status_text', 'amount_from', 'amount_to', 'address_from', 'address_to', 'currency_from', 'currency_to']
-            for i in range(0, len(pageKeys)):
-                key = pageKeys[i]
-                value = self.safe_value(pagePart, key)
-                if value is not None and value != '':
-                    merged[key] = value
-        return merged
 
     def normalize_website_order(self, raw: dict, market: Market = None) -> dict:
         status = self.safe_string(raw, 'status')
@@ -478,18 +449,9 @@ class wizardswap(Exchange, ImplicitAPI):
 
     async def request_website_order(self, id: str, market: Market = None) -> dict:
         self.ensure_website_user_agent()
-        statusPart = None
-        pagePart = None
-        try:
-            statusPart = await self.fetch_website_order_status(id)
-        except Exception as e:
-            statusPart = None
-        try:
-            pagePart = await self.fetch_website_order_page(id)
-        except Exception as e:
-            pagePart = None
-        merged = self.merge_website_order_parts(statusPart, pagePart, id)
-        normalized = self.normalize_website_order(merged, market)
+        pagePart = await self.fetch_website_order_page(id)
+        pageWithId = self.extend({'id': id}, pagePart)
+        normalized = self.normalize_website_order(pageWithId, market)
         if not self.is_website_order_usable(normalized):
             raise ExchangeError(self.id + ' website order ' + id + ' incomplete')
         return normalized
