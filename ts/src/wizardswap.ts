@@ -162,8 +162,32 @@ export default class wizardswap extends Exchange {
                     'sending': 'open',
                     'finished': 'closed',
                     'failed': 'canceled',
+                    'expired': 'canceled',
                     'refunded': 'canceled',
                     'verifying': 'open',
+                },
+                // Display names / tickers on order HTML id= pages → currency id.
+                'websiteCurrencyNames': {
+                    'bitcoin': 'btc',
+                    'btc': 'btc',
+                    'monero': 'xmr',
+                    'xmr': 'xmr',
+                    'ethereum': 'eth',
+                    'eth': 'eth',
+                    'litecoin': 'ltc',
+                    'ltc': 'ltc',
+                    'bitcoin cash': 'bch',
+                    'bch': 'bch',
+                    'dogecoin': 'doge',
+                    'doge': 'doge',
+                    'zcash': 'zec',
+                    'zec': 'zec',
+                    'dash': 'dash',
+                    'firo': 'firo',
+                    'particl': 'part',
+                    'part': 'part',
+                    'pivx': 'pivx',
+                    'zano': 'zano',
                 },
                 // Use website form POST for create/fetch when REST /api/exchange is unavailable.
                 'websiteFormBackup': false,
@@ -313,10 +337,126 @@ export default class wizardswap extends Exchange {
         if (lowered.startsWith ('refunded')) {
             return 'refunded';
         }
+        if (lowered.startsWith ('expired')) {
+            return 'expired';
+        }
         if (lowered.startsWith ('verifying')) {
             return 'verifying';
         }
         return undefined;
+    }
+
+    websiteStripHtmlTags (text: string): string {
+        let result = '';
+        for (let charIndex = 0; charIndex < text.length; charIndex++) {
+            const character = text[charIndex];
+            if (character === '<') {
+                const tagEnd = text.indexOf ('>', charIndex);
+                if (tagEnd < 0) {
+                    break;
+                }
+                charIndex = tagEnd;
+                continue;
+            }
+            result += character;
+        }
+        return result;
+    }
+
+    websiteCurrencyNameToId (displayName: string): Str {
+        if (displayName === undefined) {
+            return undefined;
+        }
+        const trimmed = displayName.trim ().toLowerCase ();
+        if (trimmed === '') {
+            return undefined;
+        }
+        const names = this.safeDict (this.options, 'websiteCurrencyNames', {});
+        const mapped = this.safeString (names, trimmed);
+        if (mapped !== undefined) {
+            return mapped;
+        }
+        return undefined;
+    }
+
+    parseWebsiteCurrencyFromAmountAnchor (html: string): Str {
+        const amountMarker = 'id="amount_a"';
+        const fieldIndex = html.indexOf (amountMarker);
+        if (fieldIndex < 0) {
+            return undefined;
+        }
+        const chunk = html.slice (fieldIndex, fieldIndex + 350);
+        const spanEnd = chunk.indexOf ('</span>');
+        if (spanEnd < 0) {
+            return undefined;
+        }
+        const afterSpan = this.websiteTrimLeft (chunk.slice (spanEnd + '</span>'.length));
+        const toColonIndex = this.websiteIndexOfInsensitive (afterSpan, ' to:');
+        if (toColonIndex < 0) {
+            return undefined;
+        }
+        const namePart = this.websiteTrimLeft (afterSpan.slice (0, toColonIndex));
+        return this.websiteCurrencyNameToId (namePart);
+    }
+
+    parseWebsiteTrailingAmountAndCurrencyName (text: string): Dict {
+        const stripped = this.websiteStripHtmlTags (text);
+        const trimmed = stripped.trim ();
+        if (trimmed === '') {
+            return undefined;
+        }
+        let amount = '';
+        let scanIndex = 0;
+        while (scanIndex < trimmed.length) {
+            const character = trimmed[scanIndex];
+            if ((character >= '0' && character <= '9') || character === '.') {
+                amount += character;
+                scanIndex += 1;
+            } else {
+                break;
+            }
+        }
+        const namePart = this.websiteTrimLeft (trimmed.slice (scanIndex));
+        if (amount === '' || namePart === '') {
+            return undefined;
+        }
+        const currencyId = this.websiteCurrencyNameToId (namePart);
+        if (currencyId === undefined) {
+            return undefined;
+        }
+        return {
+            'amount_to': amount,
+            'currency_to': currencyId,
+        };
+    }
+
+    parseWebsiteWillBeSentAmount (html: string): Dict {
+        const sentNeedle = ' will be sent to:';
+        let searchFrom = 0;
+        while (searchFrom < html.length) {
+            const slice = html.slice (searchFrom);
+            const relativeIndex = this.websiteIndexOfInsensitive (slice, sentNeedle);
+            if (relativeIndex < 0) {
+                return undefined;
+            }
+            const matchIndex = searchFrom + relativeIndex;
+            const windowStart = Math.max (0, matchIndex - 120);
+            const segment = html.slice (windowStart, matchIndex);
+            const parsed = this.parseWebsiteTrailingAmountAndCurrencyName (segment);
+            if (parsed !== undefined) {
+                return parsed;
+            }
+            searchFrom = matchIndex + 1;
+        }
+        return undefined;
+    }
+
+    parseWebsiteReceiveAmount (html: string): Dict {
+        const willBeSent = this.parseWebsiteWillBeSentAmount (html);
+        if (willBeSent !== undefined) {
+            return willBeSent;
+        }
+        return this.parseWebsiteAmountToBeSent (html);
     }
 
     parseWebsiteHtmlField (html: string, fieldId: string): Str {
@@ -356,44 +496,55 @@ export default class wizardswap extends Exchange {
     }
 
     parseWebsiteStatusHeading (html: string): Str {
-        const marker = '<h2 id="status"';
-        const markerIndex = html.indexOf (marker);
-        if (markerIndex < 0) {
+        const idMarker = 'id="status"';
+        const idIndex = html.indexOf (idMarker);
+        if (idIndex < 0) {
             return undefined;
         }
-        const chunk = html.slice (markerIndex, markerIndex + 200);
-        const tagEnd = chunk.indexOf ('>');
-        if (tagEnd < 0) {
-            return undefined;
-        }
-        const inner = chunk.slice (tagEnd + 1);
-        const closeTag = inner.indexOf ('<');
-        if (closeTag < 0) {
-            return undefined;
-        }
-        return inner.slice (0, closeTag).trim ();
-    }
-
-    parseWebsiteMinimumCurrency (html: string): Str {
-        const label = 'Minimum ';
-        const labelIndex = html.indexOf (label);
-        if (labelIndex < 0) {
-            return undefined;
-        }
-        const rest = html.slice (labelIndex + label.length);
-        let currency = '';
-        for (let charIndex = 0; charIndex < rest.length; charIndex++) {
-            const character = rest[charIndex];
-            if (character >= 'A' && character <= 'Z') {
-                currency += character;
-            } else {
+        let openBracket = -1;
+        let backIndex = idIndex - 1;
+        while (backIndex >= 0) {
+            const character = html[backIndex];
+            if (character === '<') {
+                openBracket = backIndex;
                 break;
             }
+            backIndex -= 1;
         }
-        if (currency === '') {
+        if (openBracket < 0) {
             return undefined;
         }
-        return currency.toLowerCase ();
+        const openChunk = html.slice (openBracket, openBracket + 48);
+        const gtInChunk = openChunk.indexOf ('>');
+        let tagStop = gtInChunk;
+        const spaceInChunk = openChunk.indexOf (' ');
+        if (spaceInChunk >= 0 && (tagStop < 0 || spaceInChunk < tagStop)) {
+            tagStop = spaceInChunk;
+        }
+        if (tagStop <= 1) {
+            return undefined;
+        }
+        const tagName = openChunk.slice (1, tagStop);
+        if (tagName === '') {
+            return undefined;
+        }
+        const openTagEnd = html.indexOf ('>', openBracket);
+        if (openTagEnd < 0) {
+            return undefined;
+        }
+        const closeTagMarker = '</' + tagName + '>';
+        const sliceAfterOpen = html.slice (openTagEnd + 1);
+        const relativeClose = this.websiteIndexOfInsensitive (sliceAfterOpen, closeTagMarker);
+        if (relativeClose < 0) {
+            return undefined;
+        }
+        const closeTagIndex = openTagEnd + 1 + relativeClose;
+        const rawInner = html.slice (openTagEnd + 1, closeTagIndex);
+        const text = this.websiteStripHtmlTags (rawInner).trim ();
+        if (text === '') {
+            return undefined;
+        }
+        return text;
     }
 
     parseWebsiteAmountToBeSent (html: string): Dict {
@@ -427,9 +578,13 @@ export default class wizardswap extends Exchange {
         if (amount === '' || currency === '') {
             return undefined;
         }
+        const currencyId = this.websiteCurrencyNameToId (currency);
+        if (currencyId === undefined) {
+            return undefined;
+        }
         return {
             'amount_to': amount,
-            'currency_to': currency.toLowerCase (),
+            'currency_to': currencyId,
         };
     }
 
@@ -456,8 +611,8 @@ export default class wizardswap extends Exchange {
             throw new ExchangeError (this.id + ' order page id mismatch');
         }
         const statusText = this.parseWebsiteStatusHeading (html);
-        const amountToPart = this.parseWebsiteAmountToBeSent (html);
-        const currencyFrom = this.parseWebsiteMinimumCurrency (html);
+        const amountToPart = this.parseWebsiteReceiveAmount (html);
+        const currencyFrom = this.parseWebsiteCurrencyFromAmountAnchor (html);
         const page: Dict = {
             'id': parsedId,
             'status_text': statusText,
