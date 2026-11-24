@@ -297,10 +297,10 @@ async function testWizardswap () {
     const PAGE_HTML = (orderId: string) => (
         '<h5>Exchange ID: ' + orderId + '</h5>' +
         '<h2 id="status">Waiting for deposit.</h2>' +
-        '<span id="amount_a">0.1</span>' +
+        '<div>Send <span id="amount_a">0.1</span> Monero to:</div>' +
         '<input id="deposit_address" value="depositAddressFromWebsiteForm01" />' +
+        '<div>0.0004 Bitcoin will be sent to:</div>' +
         '<input id="receiver_address" value="1BitcoinAddress" />' +
-        '<div>Minimum XMR to send: 0.003</div>' +
         '<strong>Amount to be sent: 0.0004 BTC</strong>'
     );
     // website W1: create via redirect NetworkError

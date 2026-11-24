@@ -164,8 +164,32 @@ class wizardswap(Exchange, ImplicitAPI):
                     'sending': 'open',
                     'finished': 'closed',
                     'failed': 'canceled',
+                    'expired': 'canceled',
                     'refunded': 'canceled',
                     'verifying': 'open',
+                },
+                # Display names / tickers on order HTML id= pages → currency id.
+                'websiteCurrencyNames': {
+                    'bitcoin': 'btc',
+                    'btc': 'btc',
+                    'monero': 'xmr',
+                    'xmr': 'xmr',
+                    'ethereum': 'eth',
+                    'eth': 'eth',
+                    'litecoin': 'ltc',
+                    'ltc': 'ltc',
+                    'bitcoin cash': 'bch',
+                    'bch': 'bch',
+                    'dogecoin': 'doge',
+                    'doge': 'doge',
+                    'zcash': 'zec',
+                    'zec': 'zec',
+                    'dash': 'dash',
+                    'firo': 'firo',
+                    'particl': 'part',
+                    'part': 'part',
+                    'pivx': 'pivx',
+                    'zano': 'zano',
                 },
                 # Use website form POST for create/fetch when REST /api/exchange is unavailable.
                 'websiteFormBackup': False,
@@ -280,9 +304,100 @@ class wizardswap(Exchange, ImplicitAPI):
             return 'failed'
         if lowered.startswith('refunded'):
             return 'refunded'
+        if lowered.startswith('expired'):
+            return 'expired'
         if lowered.startswith('verifying'):
             return 'verifying'
         return None
+
+    def website_strip_html_tags(self, text: str) -> str:
+        result = ''
+        for charIndex in range(0, len(text)):
+            character = text[charIndex]
+            if character == '<':
+                tagEnd = text.find('>', charIndex)
+                if tagEnd < 0:
+                    break
+                charIndex = tagEnd
+                continue
+            result += character
+        return result
+
+    def website_currency_name_to_id(self, displayName: str) -> Str:
+        if displayName is None:
+            return None
+        trimmed = displayName.strip().lower()
+        if trimmed == '':
+            return None
+        names = self.safe_dict(self.options, 'websiteCurrencyNames', {})
+        mapped = self.safe_string(names, trimmed)
+        if mapped is not None:
+            return mapped
+        return None
+
+    def parse_website_currency_from_amount_anchor(self, html: str) -> Str:
+        amountMarker = 'id="amount_a"'
+        fieldIndex = html.find(amountMarker)
+        if fieldIndex < 0:
+            return None
+        chunk = html[fieldIndex:fieldIndex + 350]
+        spanEnd = chunk.find('</span>')
+        if spanEnd < 0:
+            return None
+        afterSpan = self.website_trim_left(chunk[spanEnd + len('</span>'):])
+        toColonIndex = self.website_index_of_insensitive(afterSpan, ' to:')
+        if toColonIndex < 0:
+            return None
+        namePart = self.website_trim_left(afterSpan[0:toColonIndex])
+        return self.website_currency_name_to_id(namePart)
+
+    def parse_website_trailing_amount_and_currency_name(self, text: str) -> dict:
+        stripped = self.website_strip_html_tags(text)
+        trimmed = stripped.strip()
+        if trimmed == '':
+            return None
+        amount = ''
+        scanIndex = 0
+        while(scanIndex < len(trimmed)):
+            character = trimmed[scanIndex]
+            if (character >= '0' and character <= '9') or character == '.':
+                amount += character
+                scanIndex += 1
+            else:
+                break
+        namePart = self.website_trim_left(trimmed[scanIndex:])
+        if amount == '' or namePart == '':
+            return None
+        currencyId = self.website_currency_name_to_id(namePart)
+        if currencyId is None:
+            return None
+        return {
+            'amount_to': amount,
+            'currency_to': currencyId,
+        }
+
+    def parse_website_will_be_sent_amount(self, html: str) -> dict:
+        sentNeedle = ' will be sent to:'
+        searchFrom = 0
+        while(searchFrom < len(html)):
+            slice = html[searchFrom:]
+            relativeIndex = self.website_index_of_insensitive(slice, sentNeedle)
+            if relativeIndex < 0:
+                return None
+            matchIndex = searchFrom + relativeIndex
+            windowStart = max(0, matchIndex - 120)
+            segment = html[windowStart:matchIndex]
+            parsed = self.parse_website_trailing_amount_and_currency_name(segment)
+            if parsed is not None:
+                return parsed
+            searchFrom = matchIndex + 1
+        return None
+
+    def parse_website_receive_amount(self, html: str) -> dict:
+        willBeSent = self.parse_website_will_be_sent_amount(html)
+        if willBeSent is not None:
+            return willBeSent
+        return self.parse_website_amount_to_be_sent(html)
 
     def parse_website_html_field(self, html: str, fieldId: str) -> Str:
         idMarker = 'id="' + fieldId + '"'
@@ -313,36 +428,45 @@ class wizardswap(Exchange, ImplicitAPI):
         return text
 
     def parse_website_status_heading(self, html: str) -> Str:
-        marker = '<h2 id="status"'
-        markerIndex = html.find(marker)
-        if markerIndex < 0:
+        idMarker = 'id="status"'
+        idIndex = html.find(idMarker)
+        if idIndex < 0:
             return None
-        chunk = html[markerIndex:markerIndex + 200]
-        tagEnd = chunk.find('>')
-        if tagEnd < 0:
-            return None
-        inner = chunk[tagEnd + 1:]
-        closeTag = inner.find('<')
-        if closeTag < 0:
-            return None
-        return inner[0:closeTag].strip()
-
-    def parse_website_minimum_currency(self, html: str) -> Str:
-        label = 'Minimum '
-        labelIndex = html.find(label)
-        if labelIndex < 0:
-            return None
-        rest = html[labelIndex + len(label):]
-        currency = ''
-        for charIndex in range(0, len(rest)):
-            character = rest[charIndex]
-            if character >= 'A' and character <= 'Z':
-                currency += character
-            else:
+        openBracket = -1
+        backIndex = idIndex - 1
+        while(backIndex >= 0):
+            character = html[backIndex]
+            if character == '<':
+                openBracket = backIndex
                 break
-        if currency == '':
+            backIndex -= 1
+        if openBracket < 0:
             return None
-        return currency.lower()
+        openChunk = html[openBracket:openBracket + 48]
+        gtInChunk = openChunk.find('>')
+        tagStop = gtInChunk
+        spaceInChunk = openChunk.find(' ')
+        if spaceInChunk >= 0 and (tagStop < 0 or spaceInChunk < tagStop):
+            tagStop = spaceInChunk
+        if tagStop <= 1:
+            return None
+        tagName = openChunk[1:tagStop]
+        if tagName == '':
+            return None
+        openTagEnd = html.find('>', openBracket)
+        if openTagEnd < 0:
+            return None
+        closeTagMarker = '</' + tagName + '>'
+        sliceAfterOpen = html[openTagEnd + 1:]
+        relativeClose = self.website_index_of_insensitive(sliceAfterOpen, closeTagMarker)
+        if relativeClose < 0:
+            return None
+        closeTagIndex = openTagEnd + 1 + relativeClose
+        rawInner = html[openTagEnd + 1:closeTagIndex]
+        text = self.website_strip_html_tags(rawInner).strip()
+        if text == '':
+            return None
+        return text
 
     def parse_website_amount_to_be_sent(self, html: str) -> dict:
         label = 'Amount to be sent:'
@@ -369,9 +493,12 @@ class wizardswap(Exchange, ImplicitAPI):
                 break
         if amount == '' or currency == '':
             return None
+        currencyId = self.website_currency_name_to_id(currency)
+        if currencyId is None:
+            return None
         return {
             'amount_to': amount,
-            'currency_to': currency.lower(),
+            'currency_to': currencyId,
         }
 
     def fetch_website_order_page(self, id: str) -> dict:
@@ -392,8 +519,8 @@ class wizardswap(Exchange, ImplicitAPI):
         if parsedId != id:
             raise ExchangeError(self.id + ' order page id mismatch')
         statusText = self.parse_website_status_heading(html)
-        amountToPart = self.parse_website_amount_to_be_sent(html)
-        currencyFrom = self.parse_website_minimum_currency(html)
+        amountToPart = self.parse_website_receive_amount(html)
+        currencyFrom = self.parse_website_currency_from_amount_anchor(html)
         page = {
             'id': parsedId,
             'status_text': statusText,
