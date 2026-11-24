@@ -12,6 +12,7 @@ from ccxt.base.errors import ArgumentsRequired
 from ccxt.base.errors import BadRequest
 from ccxt.base.errors import InvalidOrder
 from ccxt.base.errors import OrderNotFound
+from ccxt.base.errors import NotSupported
 from ccxt.base.decimal_to_precision import TICK_SIZE
 
 
@@ -64,6 +65,7 @@ class wizardswap(Exchange, ImplicitAPI):
                     'rest': 'https://www.wizardswap.io/api',
                 },
                 'www': 'https://www.wizardswap.io',
+                'status': 'https://www.wizardswap.io/action=get_status',
                 'doc': [
                     'https://www.wizardswap.io/api',
                 ],
@@ -166,8 +168,427 @@ class wizardswap(Exchange, ImplicitAPI):
                     'refunded': 'canceled',
                     'verifying': 'open',
                 },
+                # Use website form POST for create/fetch when REST /api/exchange is unavailable.
+                'websiteFormBackup': False,
+                'websiteFormUserAgent': (
+                    'Mozilla/5.0(Windows NT 10.0; Win64; x64) AppleWebKit/537.36 ' +
+                    '(KHTML, like Gecko) Chrome/158.0.0.0 Safari/537.36'
+                ),
             },
         })
+
+    def website_form_backup_enabled(self) -> bool:
+        return self.safe_bool(self.options, 'websiteFormBackup', False)
+
+    def ensure_website_user_agent(self):
+        if not self.website_form_backup_enabled():
+            return
+        browserUserAgent = self.safe_string(self.options, 'websiteFormUserAgent')
+        if browserUserAgent is None:
+            return
+        if self.userAgent != browserUserAgent:
+            self.userAgent = browserUserAgent
+
+    def wizardswap_order_page_url(self, id: str) -> str:
+        www = self.safe_string(self.urls, 'www', 'https://www.wizardswap.io')
+        base = www if www.endswith('/') else www + '/'
+        return base + 'id=' + id
+
+    def wizardswap_status_url(self) -> str:
+        return self.safe_string(self.urls, 'status', 'https://www.wizardswap.io/action=get_status')
+
+    def website_index_of_insensitive(self, haystack: str, needle: str) -> float:
+        return haystack.lower().find(needle.lower())
+
+    def website_trim_left(self, text: str) -> str:
+        startIndex = 0
+        while(startIndex < len(text)):
+            character = text[startIndex]
+            if character == ' ' or character == '\t' or character == '\n' or character == '\r':
+                startIndex += 1
+            else:
+                break
+        return text[startIndex:]
+
+    def website_leading_alphanumeric_id(self, text: str) -> Str:
+        id = ''
+        for charIndex in range(0, len(text)):
+            character = text[charIndex]
+            isUpper = (character >= 'A' and character <= 'Z')
+            isDigit = (character >= '0' and character <= '9')
+            if isUpper or isDigit:
+                id += character
+            elif len(id) > 0:
+                break
+        return id == None if '' else id
+
+    def parse_website_csrf_token(self, html: str) -> str:
+        tokenField = 'name="token"'
+        fieldIndex = html.find(tokenField)
+        if fieldIndex < 0:
+            raise InvalidOrder(self.id + ' createOrder() failed: homepage has no CSRF token')
+        chunk = html[fieldIndex:fieldIndex + 120]
+        valueMarker = 'value="'
+        valueIndex = chunk.find(valueMarker)
+        if valueIndex < 0:
+            raise InvalidOrder(self.id + ' createOrder() failed: homepage has no CSRF token')
+        afterValue = chunk[valueIndex + len(valueMarker):]
+        endQuote = afterValue.find('"')
+        if endQuote < 0:
+            raise InvalidOrder(self.id + ' createOrder() failed: homepage has no CSRF token')
+        return afterValue[0:endQuote]
+
+    def parse_website_create_order_id(self, responseOrError: Any) -> str:
+        candidates = []
+        if isinstance(responseOrError, str):
+            candidates.append(responseOrError)
+        elif responseOrError is not None and responseOrError != None:
+            message = self.safe_string(responseOrError, 'message')
+            if message is not None:
+                candidates.append(message)
+        redirectNeedle = 'redirect to id='
+        exchangeIdNeedle = 'Exchange ID:'
+        for i in range(0, len(candidates)):
+            text = candidates[i]
+            redirectIndex = self.website_index_of_insensitive(text, redirectNeedle)
+            if redirectIndex >= 0:
+                afterRedirect = text[redirectIndex + len(redirectNeedle):]
+                orderId = self.website_leading_alphanumeric_id(afterRedirect)
+                if orderId is not None:
+                    return orderId
+            exchangeIdIndex = self.website_index_of_insensitive(text, exchangeIdNeedle)
+            if exchangeIdIndex >= 0:
+                afterLabel = text[exchangeIdIndex + len(exchangeIdNeedle):]
+                orderId = self.website_leading_alphanumeric_id(self.website_trim_left(afterLabel))
+                if orderId is not None:
+                    return orderId
+        raise InvalidOrder(self.id + ' createOrder() failed: exchange response has no order id')
+
+    def parse_website_status_text(self, statusText: Str) -> Str:
+        if statusText is None:
+            return None
+        lowered = statusText.strip().lower()
+        if lowered.startswith('waiting'):
+            return 'waiting'
+        if lowered.startswith('confirming'):
+            return 'confirming'
+        if lowered.startswith('exchanging'):
+            return 'exchanging'
+        if lowered.startswith('sending'):
+            return 'sending'
+        if lowered.startswith('completed') or lowered.startswith('finished'):
+            return 'finished'
+        if lowered.startswith('failed'):
+            return 'failed'
+        if lowered.startswith('refunded'):
+            return 'refunded'
+        if lowered.startswith('verifying'):
+            return 'verifying'
+        return None
+
+    def parse_website_html_field(self, html: str, fieldId: str) -> Str:
+        idMarker = 'id="' + fieldId + '"'
+        fieldIndex = html.find(idMarker)
+        if fieldIndex < 0:
+            return None
+        chunk = html[fieldIndex:fieldIndex + 400]
+        tagEnd = chunk.find('>')
+        valueMarker = 'value="'
+        valueIndex = chunk.find(valueMarker)
+        if valueIndex >= 0 and (tagEnd < 0 or valueIndex < tagEnd):
+            afterValue = chunk[valueIndex + len(valueMarker):]
+            endQuote = afterValue.find('"')
+            if endQuote >= 0:
+                value = afterValue[0:endQuote].strip()
+                return value == None if '' else value
+        if tagEnd < 0:
+            return None
+        inner = chunk[tagEnd + 1:]
+        closeTag = inner.find('<')
+        if closeTag < 0:
+            return None
+        text = inner[0:closeTag].strip()
+        return text == None if '' else text
+
+    def parse_website_status_heading(self, html: str) -> Str:
+        marker = '<h2 id="status"'
+        markerIndex = html.find(marker)
+        if markerIndex < 0:
+            return None
+        chunk = html[markerIndex:markerIndex + 200]
+        tagEnd = chunk.find('>')
+        if tagEnd < 0:
+            return None
+        inner = chunk[tagEnd + 1:]
+        closeTag = inner.find('<')
+        if closeTag < 0:
+            return None
+        return inner[0:closeTag].strip()
+
+    def parse_website_minimum_currency(self, html: str) -> Str:
+        label = 'Minimum '
+        labelIndex = html.find(label)
+        if labelIndex < 0:
+            return None
+        rest = html[labelIndex + len(label):]
+        currency = ''
+        for charIndex in range(0, len(rest)):
+            character = rest[charIndex]
+            if character >= 'A' and character <= 'Z':
+                currency += character
+            else:
+                break
+        return currency == None if '' else currency.lower()
+
+    def parse_website_amount_to_be_sent(self, html: str) -> dict:
+        label = 'Amount to be sent:'
+        labelIndex = html.find(label)
+        if labelIndex < 0:
+            return None
+        rest = self.website_trim_left(html[labelIndex + len(label):])
+        amount = ''
+        amountEndIndex = 0
+        for charIndex in range(0, len(rest)):
+            character = rest[charIndex]
+            if (character >= '0' and character <= '9') or character == '.':
+                amount += character
+                amountEndIndex = charIndex + 1
+            else:
+                break
+        currency = ''
+        afterAmount = self.website_trim_left(rest[amountEndIndex:])
+        for charIndex in range(0, len(afterAmount)):
+            character = afterAmount[charIndex]
+            if character >= 'A' and character <= 'Z':
+                currency += character
+            else:
+                break
+        if amount == '' or currency == '':
+            return None
+        return {
+            'amount_to': amount,
+            'currency_to': currency.lower(),
+        }
+
+    async def fetch_website_order_status(self, id: str) -> dict:
+        headers = {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'X-Requested-With': 'XMLHttpRequest',
+        }
+        body = self.urlencode({'id': id})
+        response = await self.fetch(self.wizardswap_status_url(), 'POST', headers, body)
+        if isinstance(response, str):
+            if response.find('Invalid exchange ID') >= 0:
+                raise OrderNotFound(self.id + ' order ' + id + ' not found')
+            raise ExchangeError(self.id + ' unexpected status response: ' + response[0:80])
+        if response is None or not isinstance(response, dict):
+            raise ExchangeError(self.id + ' unexpected status response type')
+        return response
+
+    async def fetch_website_order_page(self, id: str) -> dict:
+        html = await self.fetch(self.wizardswap_order_page_url(id), 'GET', None, None)
+        if not isinstance(html, str):
+            raise ExchangeError(self.id + ' unexpected order page response type')
+        exchangeIdLabel = 'Exchange ID: ' + id
+        if html.find(exchangeIdLabel) < 0 and html.find(id) < 0:
+            raise OrderNotFound(self.id + ' order ' + id + ' not found')
+        exchangeIdNeedle = 'Exchange ID:'
+        exchangeIdIndex = self.website_index_of_insensitive(html, exchangeIdNeedle)
+        parsedId = id
+        if exchangeIdIndex >= 0:
+            afterLabel = html[exchangeIdIndex + len(exchangeIdNeedle):]
+            pageId = self.website_leading_alphanumeric_id(self.website_trim_left(afterLabel))
+            if pageId is not None:
+                parsedId = pageId
+        if parsedId != id:
+            raise ExchangeError(self.id + ' order page id mismatch')
+        statusText = self.parse_website_status_heading(html)
+        amountToPart = self.parse_website_amount_to_be_sent(html)
+        currencyFrom = self.parse_website_minimum_currency(html)
+        page = {
+            'id': parsedId,
+            'status_text': statusText,
+            'amount_from': self.parse_website_html_field(html, 'amount_a'),
+            'address_from': self.parse_website_html_field(html, 'deposit_address'),
+            'address_to': self.parse_website_html_field(html, 'receiver_address'),
+        }
+        if currencyFrom is not None:
+            page['currency_from'] = currencyFrom
+        if amountToPart is not None:
+            page['amount_to'] = amountToPart['amount_to']
+            page['currency_to'] = amountToPart['currency_to']
+        return page
+
+    def merge_website_order_parts(self, statusPart: dict, pagePart: dict, id: str) -> dict:
+        merged = {'id': id}
+        if statusPart is not None:
+            statusKeys = ['status', 'status_text', 'refund_txid', 'deposit_txid', 'txid', 'confirmations', 'remaining_deposit']
+            for i in range(0, len(statusKeys)):
+                key = statusKeys[i]
+                value = self.safe_value(statusPart, key)
+                if value is not None:
+                    merged[key] = value
+        if pagePart is not None:
+            pageKeys = ['status_text', 'amount_from', 'amount_to', 'address_from', 'address_to', 'currency_from', 'currency_to']
+            for i in range(0, len(pageKeys)):
+                key = pageKeys[i]
+                value = self.safe_value(pagePart, key)
+                if value is not None and value != '':
+                    merged[key] = value
+        return merged
+
+    def normalize_website_order(self, raw: dict, market: Market = None) -> dict:
+        status = self.safe_string(raw, 'status')
+        if status is None:
+            status = self.parse_website_status_text(self.safe_string(raw, 'status_text'))
+        currencyFrom = self.safe_string(raw, 'currency_from')
+        currencyTo = self.safe_string(raw, 'currency_to')
+        if market is not None:
+            if currencyFrom is None:
+                currencyFrom = self.safe_string(market, 'baseId')
+            if currencyTo is None:
+                currencyTo = self.safe_string(market, 'quoteId')
+        amountFrom = self.safe_string_2(raw, 'amount_from', 'expected_amount')
+        amountTo = self.safe_string(raw, 'amount_to')
+        normalized = {
+            'id': self.safe_string(raw, 'id'),
+            'status': status,
+            'currency_from': currencyFrom,
+            'currency_to': currencyTo,
+            'amount_from': amountFrom,
+            'expected_amount': amountFrom,
+            'amount_to': amountTo,
+            'address_from': self.safe_string(raw, 'address_from'),
+            'address_to': self.safe_string(raw, 'address_to'),
+            'timestamp': self.safe_string(raw, 'timestamp'),
+            'updated_at': self.safe_string(raw, 'updated_at'),
+            'info_source': 'website',
+        }
+        return normalized
+
+    def is_website_order_usable(self, order: dict) -> bool:
+        orderId = self.safe_string(order, 'id')
+        status = self.safe_string(order, 'status')
+        addressFrom = self.safe_string(order, 'address_from')
+        return(orderId is not None) and (status is not None) and (addressFrom is not None) and (addressFrom != '')
+
+    def website_order_timestamp_string(self) -> str:
+        iso = self.iso8601(self.milliseconds())
+        return iso[0:19].replace('T', ' ')
+
+    async def request_website_order(self, id: str, market: Market = None) -> dict:
+        self.ensure_website_user_agent()
+        statusPart = None
+        pagePart = None
+        try:
+            statusPart = await self.fetch_website_order_status(id)
+        except Exception as e:
+            statusPart = None
+        try:
+            pagePart = await self.fetch_website_order_page(id)
+        except Exception as e:
+            pagePart = None
+        merged = self.merge_website_order_parts(statusPart, pagePart, id)
+        normalized = self.normalize_website_order(merged, market)
+        if not self.is_website_order_usable(normalized):
+            raise ExchangeError(self.id + ' website order ' + id + ' incomplete')
+        return normalized
+
+    async def create_order_via_website_form(self, symbol: str, type: OrderType, side: OrderSide, amount: float, price: Num, params: dict, market: Market) -> Order:
+        self.ensure_website_user_agent()
+        addressTo = self.safe_string(params, 'address_to')
+        refundAddress = self.safe_string(params, 'refund_address', '')
+        extraIdTo = self.safe_string(params, 'extra_id_to')
+        refundExtraId = self.safe_string(params, 'refund_extra_id')
+        if (extraIdTo is not None) or (refundExtraId is not None):
+            raise NotSupported(self.id + ' createOrder() website form does not support extra_id/refund_extra_id')
+        www = self.safe_string(self.urls, 'www', 'https://www.wizardswap.io')
+        homeHtml = await self.fetch(www, 'GET', None, None)
+        if not isinstance(homeHtml, str):
+            raise InvalidOrder(self.id + ' createOrder() failed: unexpected homepage response')
+        csrfToken = self.parse_website_csrf_token(homeHtml)
+        estimateResponse = await self.publicPostEstimate({
+            'currency_from': market['baseId'],
+            'currency_to': market['quoteId'],
+            'amount_from': self.number_to_string(amount),
+        })
+        amountTo = self.safe_string_2(estimateResponse, 'estimated_amount', 'amount_to')
+        if amountTo is None:
+            raise InvalidOrder(self.id + ' createOrder() failed: estimate missing amount_to')
+        formBody = self.urlencode({
+            'amount_a': self.number_to_string(amount),
+            'crypto_a': market['baseId'].upper(),
+            'amount_b': amountTo,
+            'crypto_b': market['quoteId'].upper(),
+            'refund_address': refundAddress,
+            'address': addressTo,
+            'token': csrfToken,
+            'exchange': 'submit',
+        })
+        formHeaders = {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'Origin': www,
+            'Referer': www + '/',
+        }
+        orderId = None
+        try:
+            formResponse = await self.fetch(www, 'POST', formHeaders, formBody)
+            orderId = self.parse_website_create_order_id(formResponse)
+        except Exception as e:
+            try:
+                orderId = self.parse_website_create_order_id(e)
+            except Exception as ignored:
+                lastHeaders = self.last_response_headers
+                if lastHeaders is not None:
+                    locationHeader = self.safe_string_2(lastHeaders, 'Location', 'location')
+                    if locationHeader is not None:
+                        orderId = self.parse_website_create_order_id(locationHeader)
+                    else:
+                        raise e
+                else:
+                    raise e
+        rawOrder = await self.request_website_order(orderId, market)
+        if self.safe_string(rawOrder, 'timestamp') is None:
+            rawOrder['timestamp'] = self.website_order_timestamp_string()
+        if self.safe_string(rawOrder, 'address_to') is None:
+            rawOrder['address_to'] = addressTo
+        return self.parse_order(rawOrder, market)
+
+    async def fetch_order_via_api(self, id: str, params={}) -> Order:
+        response = None
+        try:
+            response = await self.publicPostExchange(self.extend({'id': id}, params))
+        except Exception as e:
+            raise OrderNotFound(self.id + ' order ' + id + ' not found')
+        #
+        #  {
+        #      "id": "08A75WA1",
+        #      "timestamp": "2026-03-24 21:48:22",
+        #      "updated_at": "2026-03-24 22:48:22",
+        #      "currency_from": "xmr",
+        #      "currency_to": "btc",
+        #      "amount_from": "0.1000...",
+        #      "amount_to": "0.000467720...",
+        #      "expected_amount": "0.1000...",
+        #      "address_from": "88hsysd...",
+        #      "address_to": "1Bitcoin...",
+        #      "extra_id_from": "",
+        #      "extra_id_to": "",
+        #      "tx_from": "",
+        #      "tx_to": "",
+        #      "status": "waiting",
+        #      "refund_address": null,
+        #      "refund_extra_id": "",
+        #      "currencies": [{"symbol": "xmr", ...}, {"symbol": "btc", ...}]
+        #  }
+        #
+        if response is None or not isinstance(response, dict):
+            raise OrderNotFound(self.id + ' order ' + id + ' not found')
+        # The API returns a dict with status=null for nonexistent orders
+        responseStatus = self.safe_string(response, 'status')
+        if responseStatus is None:
+            raise OrderNotFound(self.id + ' order ' + id + ' not found')
+        return self.parse_order(response)
 
     async def fetch_currencies(self, params={}) -> Currencies:
         """
@@ -438,6 +859,11 @@ class wizardswap(Exchange, ImplicitAPI):
         addressTo = self.safe_string(params, 'address_to')
         if addressTo is None:
             raise ArgumentsRequired(self.id + ' createOrder() requires params.address_to – the destination address for the received currency')
+        if self.website_form_backup_enabled():
+            formParams = self.extend({
+                'address_to': addressTo,
+            }, params)
+            return await self.create_order_via_website_form(symbol, type, side, amount, price, formParams, market)
         request = {
             'currency_from': market['baseId'],
             'currency_to': market['quoteId'],
@@ -510,40 +936,17 @@ class wizardswap(Exchange, ImplicitAPI):
         :param dict [params]: extra parameters specific to the exchange API endpoint
         :returns dict: an `order structure <https://docs.ccxt.com/?id=order-structure>`
         """
-        response = None
-        try:
-            response = await self.publicPostExchange(self.extend({'id': id}, params))
-        except Exception as e:
-            raise OrderNotFound(self.id + ' order ' + id + ' not found')
-        #
-        #  {
-        #      "id": "08A75WA1",
-        #      "timestamp": "2026-03-24 21:48:22",
-        #      "updated_at": "2026-03-24 22:48:22",
-        #      "currency_from": "xmr",
-        #      "currency_to": "btc",
-        #      "amount_from": "0.1000...",
-        #      "amount_to": "0.000467720...",
-        #      "expected_amount": "0.1000...",
-        #      "address_from": "88hsysd...",
-        #      "address_to": "1Bitcoin...",
-        #      "extra_id_from": "",
-        #      "extra_id_to": "",
-        #      "tx_from": "",
-        #      "tx_to": "",
-        #      "status": "waiting",
-        #      "refund_address": null,
-        #      "refund_extra_id": "",
-        #      "currencies": [{"symbol": "xmr", ...}, {"symbol": "btc", ...}]
-        #  }
-        #
-        if response is None or not isinstance(response, dict):
-            raise OrderNotFound(self.id + ' order ' + id + ' not found')
-        # The API returns a dict with status=null for nonexistent orders
-        responseStatus = self.safe_string(response, 'status')
-        if responseStatus is None:
-            raise OrderNotFound(self.id + ' order ' + id + ' not found')
-        return self.parse_order(response)
+        market = None
+        if symbol is not None:
+            await self.load_markets()
+            market = self.market(symbol)
+        if self.website_form_backup_enabled():
+            try:
+                rawOrder = await self.request_website_order(id, market)
+                return self.parse_order(rawOrder, market)
+            except Exception as e:
+                return await self.fetch_order_via_api(id, params)
+        return await self.fetch_order_via_api(id, params)
 
     def parse_order(self, order: dict, market: Market = None) -> Order:
         id = self.safe_string(order, 'id')

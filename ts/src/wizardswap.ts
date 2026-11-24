@@ -2,7 +2,7 @@
 //  ---------------------------------------------------------------------------
 
 import Exchange from './abstract/wizardswap.js';
-import { ExchangeError, BadRequest, ArgumentsRequired, InvalidOrder, OrderNotFound } from './base/errors.js';
+import { ExchangeError, BadRequest, ArgumentsRequired, InvalidOrder, NotSupported, OrderNotFound } from './base/errors.js';
 import { TICK_SIZE } from './base/functions/number.js';
 import type { Market, Str, Dict, Ticker, Num, Currencies, int, Order, OrderType, OrderSide } from './base/types.js';
 
@@ -63,6 +63,7 @@ export default class wizardswap extends Exchange {
                     'rest': 'https://www.wizardswap.io/api',
                 },
                 'www': 'https://www.wizardswap.io',
+                'status': 'https://www.wizardswap.io/action=get_status',
                 'doc': [
                     'https://www.wizardswap.io/api',
                 ],
@@ -165,8 +166,528 @@ export default class wizardswap extends Exchange {
                     'refunded': 'canceled',
                     'verifying': 'open',
                 },
+                // Use website form POST for create/fetch when REST /api/exchange is unavailable.
+                'websiteFormBackup': false,
+                'websiteFormUserAgent': (
+                    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 ' +
+                    '(KHTML, like Gecko) Chrome/158.0.0.0 Safari/537.36'
+                ),
             },
         });
+    }
+
+    websiteFormBackupEnabled (): boolean {
+        return this.safeBool (this.options, 'websiteFormBackup', false);
+    }
+
+    ensureWebsiteUserAgent () {
+        if (!this.websiteFormBackupEnabled ()) {
+            return;
+        }
+        const browserUserAgent = this.safeString (this.options, 'websiteFormUserAgent');
+        if (browserUserAgent === undefined) {
+            return;
+        }
+        if (this.userAgent !== browserUserAgent) {
+            this.userAgent = browserUserAgent;
+        }
+    }
+
+    wizardswapOrderPageUrl (id: string): string {
+        const www = this.safeString (this.urls, 'www', 'https://www.wizardswap.io');
+        const base = www.endsWith ('/') ? www : www + '/';
+        return base + 'id=' + id;
+    }
+
+    wizardswapStatusUrl (): string {
+        return this.safeString (this.urls, 'status', 'https://www.wizardswap.io/action=get_status');
+    }
+
+    websiteIndexOfInsensitive (haystack: string, needle: string): number {
+        return haystack.toLowerCase ().indexOf (needle.toLowerCase ());
+    }
+
+    websiteTrimLeft (text: string): string {
+        let startIndex = 0;
+        while (startIndex < text.length) {
+            const character = text[startIndex];
+            if (character === ' ' || character === '\t' || character === '\n' || character === '\r') {
+                startIndex += 1;
+            } else {
+                break;
+            }
+        }
+        return text.slice (startIndex);
+    }
+
+    websiteLeadingAlphanumericId (text: string): Str {
+        let id = '';
+        for (let charIndex = 0; charIndex < text.length; charIndex++) {
+            const character = text[charIndex];
+            const isUpper = (character >= 'A' && character <= 'Z');
+            const isDigit = (character >= '0' && character <= '9');
+            if (isUpper || isDigit) {
+                id += character;
+            } else if (id.length > 0) {
+                break;
+            }
+        }
+        return id === '' ? undefined : id;
+    }
+
+    parseWebsiteCsrfToken (html: string): string {
+        const tokenField = 'name="token"';
+        const fieldIndex = html.indexOf (tokenField);
+        if (fieldIndex < 0) {
+            throw new InvalidOrder (this.id + ' createOrder() failed: homepage has no CSRF token');
+        }
+        const chunk = html.slice (fieldIndex, fieldIndex + 120);
+        const valueMarker = 'value="';
+        const valueIndex = chunk.indexOf (valueMarker);
+        if (valueIndex < 0) {
+            throw new InvalidOrder (this.id + ' createOrder() failed: homepage has no CSRF token');
+        }
+        const afterValue = chunk.slice (valueIndex + valueMarker.length);
+        const endQuote = afterValue.indexOf ('"');
+        if (endQuote < 0) {
+            throw new InvalidOrder (this.id + ' createOrder() failed: homepage has no CSRF token');
+        }
+        return afterValue.slice (0, endQuote);
+    }
+
+    parseWebsiteCreateOrderId (responseOrError: any): string {
+        const candidates: string[] = [];
+        if (typeof responseOrError === 'string') {
+            candidates.push (responseOrError);
+        } else if (responseOrError !== undefined && responseOrError !== null) {
+            const message = this.safeString (responseOrError, 'message');
+            if (message !== undefined) {
+                candidates.push (message);
+            }
+        }
+        const redirectNeedle = 'redirect to id=';
+        const exchangeIdNeedle = 'Exchange ID:';
+        for (let i = 0; i < candidates.length; i++) {
+            const text = candidates[i];
+            const redirectIndex = this.websiteIndexOfInsensitive (text, redirectNeedle);
+            if (redirectIndex >= 0) {
+                const afterRedirect = text.slice (redirectIndex + redirectNeedle.length);
+                const orderId = this.websiteLeadingAlphanumericId (afterRedirect);
+                if (orderId !== undefined) {
+                    return orderId;
+                }
+            }
+            const exchangeIdIndex = this.websiteIndexOfInsensitive (text, exchangeIdNeedle);
+            if (exchangeIdIndex >= 0) {
+                const afterLabel = text.slice (exchangeIdIndex + exchangeIdNeedle.length);
+                const orderId = this.websiteLeadingAlphanumericId (this.websiteTrimLeft (afterLabel));
+                if (orderId !== undefined) {
+                    return orderId;
+                }
+            }
+        }
+        throw new InvalidOrder (this.id + ' createOrder() failed: exchange response has no order id');
+    }
+
+    parseWebsiteStatusText (statusText: Str): Str {
+        if (statusText === undefined) {
+            return undefined;
+        }
+        const lowered = statusText.trim ().toLowerCase ();
+        if (lowered.startsWith ('waiting')) {
+            return 'waiting';
+        }
+        if (lowered.startsWith ('confirming')) {
+            return 'confirming';
+        }
+        if (lowered.startsWith ('exchanging')) {
+            return 'exchanging';
+        }
+        if (lowered.startsWith ('sending')) {
+            return 'sending';
+        }
+        if (lowered.startsWith ('completed') || lowered.startsWith ('finished')) {
+            return 'finished';
+        }
+        if (lowered.startsWith ('failed')) {
+            return 'failed';
+        }
+        if (lowered.startsWith ('refunded')) {
+            return 'refunded';
+        }
+        if (lowered.startsWith ('verifying')) {
+            return 'verifying';
+        }
+        return undefined;
+    }
+
+    parseWebsiteHtmlField (html: string, fieldId: string): Str {
+        const idMarker = 'id="' + fieldId + '"';
+        const fieldIndex = html.indexOf (idMarker);
+        if (fieldIndex < 0) {
+            return undefined;
+        }
+        const chunk = html.slice (fieldIndex, fieldIndex + 400);
+        const tagEnd = chunk.indexOf ('>');
+        const valueMarker = 'value="';
+        const valueIndex = chunk.indexOf (valueMarker);
+        if (valueIndex >= 0 && (tagEnd < 0 || valueIndex < tagEnd)) {
+            const afterValue = chunk.slice (valueIndex + valueMarker.length);
+            const endQuote = afterValue.indexOf ('"');
+            if (endQuote >= 0) {
+                const value = afterValue.slice (0, endQuote).trim ();
+                return value === '' ? undefined : value;
+            }
+        }
+        if (tagEnd < 0) {
+            return undefined;
+        }
+        const inner = chunk.slice (tagEnd + 1);
+        const closeTag = inner.indexOf ('<');
+        if (closeTag < 0) {
+            return undefined;
+        }
+        const text = inner.slice (0, closeTag).trim ();
+        return text === '' ? undefined : text;
+    }
+
+    parseWebsiteStatusHeading (html: string): Str {
+        const marker = '<h2 id="status"';
+        const markerIndex = html.indexOf (marker);
+        if (markerIndex < 0) {
+            return undefined;
+        }
+        const chunk = html.slice (markerIndex, markerIndex + 200);
+        const tagEnd = chunk.indexOf ('>');
+        if (tagEnd < 0) {
+            return undefined;
+        }
+        const inner = chunk.slice (tagEnd + 1);
+        const closeTag = inner.indexOf ('<');
+        if (closeTag < 0) {
+            return undefined;
+        }
+        return inner.slice (0, closeTag).trim ();
+    }
+
+    parseWebsiteMinimumCurrency (html: string): Str {
+        const label = 'Minimum ';
+        const labelIndex = html.indexOf (label);
+        if (labelIndex < 0) {
+            return undefined;
+        }
+        const rest = html.slice (labelIndex + label.length);
+        let currency = '';
+        for (let charIndex = 0; charIndex < rest.length; charIndex++) {
+            const character = rest[charIndex];
+            if (character >= 'A' && character <= 'Z') {
+                currency += character;
+            } else {
+                break;
+            }
+        }
+        return currency === '' ? undefined : currency.toLowerCase ();
+    }
+
+    parseWebsiteAmountToBeSent (html: string): Dict {
+        const label = 'Amount to be sent:';
+        const labelIndex = html.indexOf (label);
+        if (labelIndex < 0) {
+            return undefined;
+        }
+        const rest = this.websiteTrimLeft (html.slice (labelIndex + label.length));
+        let amount = '';
+        let amountEndIndex = 0;
+        for (let charIndex = 0; charIndex < rest.length; charIndex++) {
+            const character = rest[charIndex];
+            if ((character >= '0' && character <= '9') || character === '.') {
+                amount += character;
+                amountEndIndex = charIndex + 1;
+            } else {
+                break;
+            }
+        }
+        let currency = '';
+        const afterAmount = this.websiteTrimLeft (rest.slice (amountEndIndex));
+        for (let charIndex = 0; charIndex < afterAmount.length; charIndex++) {
+            const character = afterAmount[charIndex];
+            if (character >= 'A' && character <= 'Z') {
+                currency += character;
+            } else {
+                break;
+            }
+        }
+        if (amount === '' || currency === '') {
+            return undefined;
+        }
+        return {
+            'amount_to': amount,
+            'currency_to': currency.toLowerCase (),
+        };
+    }
+
+    async fetchWebsiteOrderStatus (id: string): Promise<Dict> {
+        const headers = {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'X-Requested-With': 'XMLHttpRequest',
+        };
+        const body = this.urlencode ({ 'id': id });
+        const response = await this.fetch (this.wizardswapStatusUrl (), 'POST', headers, body);
+        if (typeof response === 'string') {
+            if (response.indexOf ('Invalid exchange ID') >= 0) {
+                throw new OrderNotFound (this.id + ' order ' + id + ' not found');
+            }
+            throw new ExchangeError (this.id + ' unexpected status response: ' + response.slice (0, 80));
+        }
+        if (response === undefined || typeof response !== 'object') {
+            throw new ExchangeError (this.id + ' unexpected status response type');
+        }
+        return response as Dict;
+    }
+
+    async fetchWebsiteOrderPage (id: string): Promise<Dict> {
+        const html = await this.fetch (this.wizardswapOrderPageUrl (id), 'GET', undefined, undefined);
+        if (typeof html !== 'string') {
+            throw new ExchangeError (this.id + ' unexpected order page response type');
+        }
+        const exchangeIdLabel = 'Exchange ID: ' + id;
+        if (html.indexOf (exchangeIdLabel) < 0 && html.indexOf (id) < 0) {
+            throw new OrderNotFound (this.id + ' order ' + id + ' not found');
+        }
+        const exchangeIdNeedle = 'Exchange ID:';
+        const exchangeIdIndex = this.websiteIndexOfInsensitive (html, exchangeIdNeedle);
+        let parsedId = id;
+        if (exchangeIdIndex >= 0) {
+            const afterLabel = html.slice (exchangeIdIndex + exchangeIdNeedle.length);
+            const pageId = this.websiteLeadingAlphanumericId (this.websiteTrimLeft (afterLabel));
+            if (pageId !== undefined) {
+                parsedId = pageId;
+            }
+        }
+        if (parsedId !== id) {
+            throw new ExchangeError (this.id + ' order page id mismatch');
+        }
+        const statusText = this.parseWebsiteStatusHeading (html);
+        const amountToPart = this.parseWebsiteAmountToBeSent (html);
+        const currencyFrom = this.parseWebsiteMinimumCurrency (html);
+        const page: Dict = {
+            'id': parsedId,
+            'status_text': statusText,
+            'amount_from': this.parseWebsiteHtmlField (html, 'amount_a'),
+            'address_from': this.parseWebsiteHtmlField (html, 'deposit_address'),
+            'address_to': this.parseWebsiteHtmlField (html, 'receiver_address'),
+        };
+        if (currencyFrom !== undefined) {
+            page['currency_from'] = currencyFrom;
+        }
+        if (amountToPart !== undefined) {
+            page['amount_to'] = amountToPart['amount_to'];
+            page['currency_to'] = amountToPart['currency_to'];
+        }
+        return page;
+    }
+
+    mergeWebsiteOrderParts (statusPart: Dict, pagePart: Dict, id: string): Dict {
+        const merged: Dict = { 'id': id };
+        if (statusPart !== undefined) {
+            const statusKeys = [ 'status', 'status_text', 'refund_txid', 'deposit_txid', 'txid', 'confirmations', 'remaining_deposit' ];
+            for (let i = 0; i < statusKeys.length; i++) {
+                const key = statusKeys[i];
+                const value = this.safeValue (statusPart, key);
+                if (value !== undefined) {
+                    merged[key] = value;
+                }
+            }
+        }
+        if (pagePart !== undefined) {
+            const pageKeys = [ 'status_text', 'amount_from', 'amount_to', 'address_from', 'address_to', 'currency_from', 'currency_to' ];
+            for (let i = 0; i < pageKeys.length; i++) {
+                const key = pageKeys[i];
+                const value = this.safeValue (pagePart, key);
+                if (value !== undefined && value !== '') {
+                    merged[key] = value;
+                }
+            }
+        }
+        return merged;
+    }
+
+    normalizeWebsiteOrder (raw: Dict, market: Market = undefined): Dict {
+        let status = this.safeString (raw, 'status');
+        if (status === undefined) {
+            status = this.parseWebsiteStatusText (this.safeString (raw, 'status_text'));
+        }
+        let currencyFrom = this.safeString (raw, 'currency_from');
+        let currencyTo = this.safeString (raw, 'currency_to');
+        if (market !== undefined) {
+            if (currencyFrom === undefined) {
+                currencyFrom = this.safeString (market, 'baseId');
+            }
+            if (currencyTo === undefined) {
+                currencyTo = this.safeString (market, 'quoteId');
+            }
+        }
+        const amountFrom = this.safeString2 (raw, 'amount_from', 'expected_amount');
+        const amountTo = this.safeString (raw, 'amount_to');
+        const normalized: Dict = {
+            'id': this.safeString (raw, 'id'),
+            'status': status,
+            'currency_from': currencyFrom,
+            'currency_to': currencyTo,
+            'amount_from': amountFrom,
+            'expected_amount': amountFrom,
+            'amount_to': amountTo,
+            'address_from': this.safeString (raw, 'address_from'),
+            'address_to': this.safeString (raw, 'address_to'),
+            'timestamp': this.safeString (raw, 'timestamp'),
+            'updated_at': this.safeString (raw, 'updated_at'),
+            'info_source': 'website',
+        };
+        return normalized;
+    }
+
+    isWebsiteOrderUsable (order: Dict): boolean {
+        const orderId = this.safeString (order, 'id');
+        const status = this.safeString (order, 'status');
+        const addressFrom = this.safeString (order, 'address_from');
+        return (orderId !== undefined) && (status !== undefined) && (addressFrom !== undefined) && (addressFrom !== '');
+    }
+
+    websiteOrderTimestampString (): string {
+        const iso = this.iso8601 (this.milliseconds ());
+        return iso.slice (0, 19).replace ('T', ' ');
+    }
+
+    async requestWebsiteOrder (id: string, market: Market = undefined): Promise<Dict> {
+        this.ensureWebsiteUserAgent ();
+        let statusPart = undefined;
+        let pagePart = undefined;
+        try {
+            statusPart = await this.fetchWebsiteOrderStatus (id);
+        } catch (e) {
+            statusPart = undefined;
+        }
+        try {
+            pagePart = await this.fetchWebsiteOrderPage (id);
+        } catch (e) {
+            pagePart = undefined;
+        }
+        const merged = this.mergeWebsiteOrderParts (statusPart, pagePart, id);
+        const normalized = this.normalizeWebsiteOrder (merged, market);
+        if (!this.isWebsiteOrderUsable (normalized)) {
+            throw new ExchangeError (this.id + ' website order ' + id + ' incomplete');
+        }
+        return normalized;
+    }
+
+    async createOrderViaWebsiteForm (symbol: string, type: OrderType, side: OrderSide, amount: number, price: Num, params: Dict, market: Market): Promise<Order> {
+        this.ensureWebsiteUserAgent ();
+        const addressTo = this.safeString (params, 'address_to');
+        const refundAddress = this.safeString (params, 'refund_address', '');
+        const extraIdTo = this.safeString (params, 'extra_id_to');
+        const refundExtraId = this.safeString (params, 'refund_extra_id');
+        if ((extraIdTo !== undefined) || (refundExtraId !== undefined)) {
+            throw new NotSupported (this.id + ' createOrder() website form does not support extra_id/refund_extra_id');
+        }
+        const www = this.safeString (this.urls, 'www', 'https://www.wizardswap.io');
+        const homeHtml = await this.fetch (www, 'GET', undefined, undefined);
+        if (typeof homeHtml !== 'string') {
+            throw new InvalidOrder (this.id + ' createOrder() failed: unexpected homepage response');
+        }
+        const csrfToken = this.parseWebsiteCsrfToken (homeHtml);
+        const estimateResponse = await this.publicPostEstimate ({
+            'currency_from': market['baseId'],
+            'currency_to': market['quoteId'],
+            'amount_from': this.numberToString (amount),
+        });
+        const amountTo = this.safeString2 (estimateResponse, 'estimated_amount', 'amount_to');
+        if (amountTo === undefined) {
+            throw new InvalidOrder (this.id + ' createOrder() failed: estimate missing amount_to');
+        }
+        const formBody = this.urlencode ({
+            'amount_a': this.numberToString (amount),
+            'crypto_a': market['baseId'].toUpperCase (),
+            'amount_b': amountTo,
+            'crypto_b': market['quoteId'].toUpperCase (),
+            'refund_address': refundAddress,
+            'address': addressTo,
+            'token': csrfToken,
+            'exchange': 'submit',
+        });
+        const formHeaders = {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'Origin': www,
+            'Referer': www + '/',
+        };
+        let orderId = undefined;
+        try {
+            const formResponse = await this.fetch (www, 'POST', formHeaders, formBody);
+            orderId = this.parseWebsiteCreateOrderId (formResponse);
+        } catch (e) {
+            try {
+                orderId = this.parseWebsiteCreateOrderId (e);
+            } catch (ignored) {
+                const lastHeaders = this.last_response_headers;
+                if (lastHeaders !== undefined) {
+                    const locationHeader = this.safeString2 (lastHeaders, 'Location', 'location');
+                    if (locationHeader !== undefined) {
+                        orderId = this.parseWebsiteCreateOrderId (locationHeader);
+                    } else {
+                        throw e;
+                    }
+                } else {
+                    throw e;
+                }
+            }
+        }
+        let rawOrder = await this.requestWebsiteOrder (orderId, market);
+        if (this.safeString (rawOrder, 'timestamp') === undefined) {
+            rawOrder['timestamp'] = this.websiteOrderTimestampString ();
+        }
+        if (this.safeString (rawOrder, 'address_to') === undefined) {
+            rawOrder['address_to'] = addressTo;
+        }
+        return this.parseOrder (rawOrder, market);
+    }
+
+    async fetchOrderViaApi (id: string, params = {}): Promise<Order> {
+        let response = undefined;
+        try {
+            response = await this.publicPostExchange (this.extend ({ 'id': id }, params));
+        } catch (e) {
+            throw new OrderNotFound (this.id + ' order ' + id + ' not found');
+        }
+        //
+        //  {
+        //      "id": "08A75WA1",
+        //      "timestamp": "2026-03-24 21:48:22",
+        //      "updated_at": "2026-03-24 22:48:22",
+        //      "currency_from": "xmr",
+        //      "currency_to": "btc",
+        //      "amount_from": "0.1000...",
+        //      "amount_to": "0.000467720...",
+        //      "expected_amount": "0.1000...",
+        //      "address_from": "88hsysd...",
+        //      "address_to": "1Bitcoin...",
+        //      "extra_id_from": "",
+        //      "extra_id_to": "",
+        //      "tx_from": "",
+        //      "tx_to": "",
+        //      "status": "waiting",
+        //      "refund_address": null,
+        //      "refund_extra_id": "",
+        //      "currencies": [ { "symbol": "xmr", ... }, { "symbol": "btc", ... } ]
+        //  }
+        //
+        if (response === undefined || typeof response !== 'object') {
+            throw new OrderNotFound (this.id + ' order ' + id + ' not found');
+        }
+        // The API returns a dict with status=null for nonexistent orders
+        const responseStatus = this.safeString (response, 'status');
+        if (responseStatus === undefined) {
+            throw new OrderNotFound (this.id + ' order ' + id + ' not found');
+        }
+        return this.parseOrder (response);
     }
 
     /**
@@ -459,6 +980,12 @@ export default class wizardswap extends Exchange {
         if (addressTo === undefined) {
             throw new ArgumentsRequired (this.id + ' createOrder() requires params.address_to – the destination address for the received currency');
         }
+        if (this.websiteFormBackupEnabled ()) {
+            const formParams = this.extend ({
+                'address_to': addressTo,
+            }, params);
+            return await this.createOrderViaWebsiteForm (symbol, type, side, amount, price, formParams, market);
+        }
         const request: Dict = {
             'currency_from': market['baseId'],
             'currency_to': market['quoteId'],
@@ -540,43 +1067,20 @@ export default class wizardswap extends Exchange {
      * @returns {object} an [order structure]{@link https://docs.ccxt.com/?id=order-structure}
      */
     async fetchOrder (id: string, symbol: Str = undefined, params = {}): Promise<Order> {
-        let response = undefined;
-        try {
-            response = await this.publicPostExchange (this.extend ({ 'id': id }, params));
-        } catch (e) {
-            throw new OrderNotFound (this.id + ' order ' + id + ' not found');
+        let market = undefined;
+        if (symbol !== undefined) {
+            await this.loadMarkets ();
+            market = this.market (symbol);
         }
-        //
-        //  {
-        //      "id": "08A75WA1",
-        //      "timestamp": "2026-03-24 21:48:22",
-        //      "updated_at": "2026-03-24 22:48:22",
-        //      "currency_from": "xmr",
-        //      "currency_to": "btc",
-        //      "amount_from": "0.1000...",
-        //      "amount_to": "0.000467720...",
-        //      "expected_amount": "0.1000...",
-        //      "address_from": "88hsysd...",
-        //      "address_to": "1Bitcoin...",
-        //      "extra_id_from": "",
-        //      "extra_id_to": "",
-        //      "tx_from": "",
-        //      "tx_to": "",
-        //      "status": "waiting",
-        //      "refund_address": null,
-        //      "refund_extra_id": "",
-        //      "currencies": [ { "symbol": "xmr", ... }, { "symbol": "btc", ... } ]
-        //  }
-        //
-        if (response === undefined || typeof response !== 'object') {
-            throw new OrderNotFound (this.id + ' order ' + id + ' not found');
+        if (this.websiteFormBackupEnabled ()) {
+            try {
+                const rawOrder = await this.requestWebsiteOrder (id, market);
+                return this.parseOrder (rawOrder, market);
+            } catch (e) {
+                return await this.fetchOrderViaApi (id, params);
+            }
         }
-        // The API returns a dict with status=null for nonexistent orders
-        const responseStatus = this.safeString (response, 'status');
-        if (responseStatus === undefined) {
-            throw new OrderNotFound (this.id + ' order ' + id + ' not found');
-        }
-        return this.parseOrder (response);
+        return await this.fetchOrderViaApi (id, params);
     }
 
     parseOrder (order: Dict, market: Market = undefined): Order {
