@@ -5533,7 +5533,7 @@ class BaseExchange(object):
                     self.add_fetch_cache(fetchData)
                 if isinstance(e, OperationFailed):
                     if i < retries:
-                        if self.verbose:
+                        if retries > 0 or self.verbose:  # octobot override
                             index = i + 1
                             self.log('Request failed with the error: ' + str(e) + ', retrying ' + str(index) + ' of ' + str(retries) + '...')
                         if (retryDelay is not None) and (retryDelay != 0):
@@ -6138,6 +6138,217 @@ class BaseExchange(object):
 
     def create_expired_option_market(self, symbol: str):
         raise NotSupported(self.id + ' createExpiredOptionMarket() is not supported yet')
+
+    def ob_is_strict_finite_number(self, n: Num):
+        if n is None:
+            return False
+        # Reject NaN and infinities using(n==n) and (n-n)==0; transpiler-safe for Python(Number.isFinite is not).
+        # eslint-disable-next-line no-self-compare -- intentional NaN check(NaN != NaN); Infinity − Infinity is NaN in JS
+        return(n == n) and ((n - n) == 0)
+
+    def ob_coerce_scalar_to_float_strict(self, raw: Any):
+        if raw is None:
+            return None
+        src = raw.strip() if isinstance(raw, str) else raw
+        n = self.parse_number(src, None)
+        if not self.ob_is_strict_finite_number(n):
+            return None
+        return n
+
+    def ob_precision_step_to_digit_count(self, value: Num):
+        n = self.parse_number(value, None)
+        if not self.ob_is_strict_finite_number(n) or n <= 0:
+            return None
+        return int(round(abs(math.log10(n))))
+
+    def ob_obtain_mutable_precision_and_limits(self, base: dict):
+        result = self.extend({}, base)
+        basePrec = base['precision']
+        result['precision'] = self.extend({}, basePrec) if self.is_dictionary(basePrec) else {}
+        limitsIn = self.safe_dict(base, 'limits', {})
+        limitsCopy = self.extend({}, limitsIn)
+        minMaxBranches = ['amount', 'price', 'cost']
+        for i in range(0, len(minMaxBranches)):
+            groupKey = minMaxBranches[i]
+            branch = limitsIn[groupKey]
+            if self.is_dictionary(branch):
+                limitsCopy[groupKey] = self.extend({}, branch)
+            else:
+                limitsCopy[groupKey] = {}
+        result['limits'] = limitsCopy
+        return result
+
+    def ob_coerce_market_status_whitelist_to_float(self, marketStatus: dict):
+        precision = marketStatus['precision']
+        if self.is_dictionary(precision):
+            precision['amount'] = self.ob_coerce_scalar_to_float_strict(precision['amount'])
+            precision['price'] = self.ob_coerce_scalar_to_float_strict(precision['price'])
+        limits = marketStatus['limits']
+        if not self.is_dictionary(limits):
+            return
+        cost = limits['cost']
+        if self.is_dictionary(cost):
+            cost['min'] = self.ob_coerce_scalar_to_float_strict(cost['min'])
+            cost['max'] = self.ob_coerce_scalar_to_float_strict(cost['max'])
+        amount = limits['amount']
+        if self.is_dictionary(amount):
+            amount['min'] = self.ob_coerce_scalar_to_float_strict(amount['min'])
+            amount['max'] = self.ob_coerce_scalar_to_float_strict(amount['max'])
+        priceLm = limits['price']
+        if self.is_dictionary(priceLm):
+            priceLm['min'] = self.ob_coerce_scalar_to_float_strict(priceLm['min'])
+            priceLm['max'] = self.ob_coerce_scalar_to_float_strict(priceLm['max'])
+
+    def ob_replace_precision_steps_with_digit_count(self, precision: dict):
+        precision['amount'] = self.ob_precision_step_to_digit_count(precision['amount'])
+        precision['price'] = self.ob_precision_step_to_digit_count(precision['price'])
+
+    def ob_scale_limit_by_contract_size(self, v: Num, floatSize: Num):
+        if v is None:
+            return None
+        if not self.ob_is_strict_finite_number(v) or not self.ob_is_strict_finite_number(floatSize):
+            return None
+        return floatSize * v
+
+    def ob_apply_adapt_market_status_for_contract_size(self, marketStatus: dict):
+        floatSize = self.ob_coerce_scalar_to_float_strict(marketStatus['contractSize'])
+        if not self.ob_is_strict_finite_number(floatSize):
+            return
+        limits = marketStatus['limits']
+        if not self.is_dictionary(limits):
+            return
+        amountLimits = limits['amount']
+        if not self.is_dictionary(amountLimits):
+            return
+        amountLimits['min'] = self.ob_scale_limit_by_contract_size(amountLimits['min'], floatSize)
+        amountLimits['max'] = self.ob_scale_limit_by_contract_size(amountLimits['max'], floatSize)
+        marketStatus['precision']['amount'] = self.ob_precision_step_to_digit_count(floatSize)
+
+    def ob_is_market_status_limit_valid(self, value: Num, zeroValid: bool = False):
+        if not self.ob_is_strict_finite_number(value):
+            return False
+        return value >= 0 if zeroValid else value > 0
+
+    def ob_compute_market_status_cost_limits(self, marketStatus: dict):
+        limits = marketStatus['limits']
+        if not self.is_dictionary(limits):
+            return
+        limitCost = limits['cost']
+        limitPrice = limits['price']
+        limitAmount = limits['amount']
+        if not self.is_dictionary(limitCost) or not self.is_dictionary(limitPrice) or not self.is_dictionary(limitAmount):
+            return
+        if not self.ob_is_market_status_limit_valid(limitCost['max']):
+            if self.ob_is_market_status_limit_valid(limitAmount['max']) and self.ob_is_market_status_limit_valid(limitPrice['max']):
+                limitCost['max'] = limitAmount['max'] * limitPrice['max']
+        if not self.ob_is_market_status_limit_valid(limitCost['min']):
+            if self.ob_is_market_status_limit_valid(limitAmount['min']) and self.ob_is_market_status_limit_valid(limitPrice['min']):
+                limitCost['min'] = limitAmount['min'] * limitPrice['min']
+
+    def ob_ensure_market_status_min_cost(self, marketStatus: dict):
+        limits = marketStatus['limits']
+        if not self.is_dictionary(limits):
+            return
+        limitCost = limits['cost']
+        if not self.is_dictionary(limitCost):
+            return
+        if not self.ob_is_market_status_limit_valid(limitCost['min'], True):
+            limitCost['min'] = 0
+
+    def ob_get_fixed_market_status(self, symbol: str):
+        base = self.market(symbol)
+        octobotCfg = self.safe_dict(self.options, 'octobot', {})
+        fixMarketStatus = self.safe_bool(octobotCfg, 'fixMarketStatus', False) is True
+        removeMarketStatusPriceLimits = self.safe_bool(octobotCfg, 'removeMarketStatusPriceLimits', False) is True
+        adaptMarketStatusForContractSize = self.safe_bool(octobotCfg, 'adaptMarketStatusForContractSize', False) is True
+        computeMarketStatusCostLimits = self.safe_bool(octobotCfg, 'computeMarketStatusCostLimits', False) is True
+        # Step build: selective shallow copy so untouched nested refs stay shared(.info unchanged by reference swap on top clone only when we omit deep copy)
+        out = self.ob_obtain_mutable_precision_and_limits(base)
+        # Step coerce: unify whitelist fields to floats; non-convertible -> None(OctoBot _fix_typing parity + failures explicit)
+        self.ob_coerce_market_status_whitelist_to_float(out)
+        # Step fixes: connector order mirrors Python adapter + rest_exchange helpers
+        if fixMarketStatus:
+            self.ob_replace_precision_steps_with_digit_count(out['precision'])
+        if removeMarketStatusPriceLimits:
+            limitsLm = out['limits']
+            if self.is_dictionary(limitsLm):
+                priceLm = limitsLm['price']
+                if not self.is_dictionary(priceLm):
+                    priceLm = {}
+                    limitsLm['price'] = priceLm
+                priceLm['min'] = None
+                priceLm['max'] = None
+        if adaptMarketStatusForContractSize:
+            self.ob_apply_adapt_market_status_for_contract_size(out)
+        if computeMarketStatusCostLimits:
+            self.ob_compute_market_status_cost_limits(out)
+        self.ob_ensure_market_status_min_cost(out)
+        return out
+
+    def ob_sanitize_network_dex_token(self, token: Str):
+        if token is None:
+            return None
+        sanitized = ''
+        for charIndex in range(0, len(token)):
+            char = token[charIndex]
+            if char != '!' and char != '@' and char != ':':
+                sanitized = sanitized + char
+        return sanitized
+
+    def ob_parse_network_dex_symbol(self, symbol: str):
+        networkSeparator = '@'
+        dexSeparator = '!'
+        anyDexWildcard = '*'
+        if symbol.find(networkSeparator) < 0:
+            raise BadSymbol(self.id + ' symbol must include a network suffix using ' + networkSeparator)
+        separatorIndex = -1
+        for charIndex in range(0, len(symbol)):
+            if symbol[charIndex] == networkSeparator:
+                separatorIndex = charIndex
+        tradingSymbol = symbol[0:separatorIndex]
+        networkAndDex = symbol[separatorIndex + 1:]
+        if networkAndDex == '':
+            raise BadSymbol(self.id + ' invalid symbol ' + symbol + ': network must be specified after ' + networkSeparator)
+        networkCode = networkAndDex
+        dexCode = None
+        dexSeparatorIndex = networkAndDex.find(dexSeparator)
+        if dexSeparatorIndex >= 0:
+            networkCode = networkAndDex[0:dexSeparatorIndex]
+            dexCode = networkAndDex[dexSeparatorIndex + 1:]
+            if dexCode == '':
+                dexCode = None
+        networkCode = self.ob_sanitize_network_dex_token(networkCode)
+        if dexCode is not None:
+            dexCode = self.ob_sanitize_network_dex_token(dexCode)
+            if dexCode == anyDexWildcard:
+                dexCode = anyDexWildcard
+        if (networkCode is None) or (networkCode == ''):
+            raise BadSymbol(self.id + ' invalid symbol ' + symbol + ': network must be specified after ' + networkSeparator)
+        return {
+            'tradingSymbol': tradingSymbol,
+            'networkCode': networkCode,
+            'dexCode': dexCode,
+        }
+
+    def ob_dex_code_to_id(self, dexCode: str):
+        if dexCode is None:
+            return None
+        sanitizedDexCode = self.ob_sanitize_network_dex_token(dexCode)
+        dexesByCode = self.safe_dict(self.options, 'dexesById', {})
+        dexId = self.safe_string(dexesByCode, sanitizedDexCode)
+        if dexId is not None:
+            return dexId
+        return sanitizedDexCode.lower()
+
+    def ob_dex_id_to_code(self, dexId: str):
+        if dexId is None:
+            return None
+        sanitizedDexId = self.ob_sanitize_network_dex_token(dexId).lower()
+        dexes = self.safe_dict(self.options, 'dexes', {})
+        dexCode = self.safe_string(dexes, sanitizedDexId)
+        if dexCode is not None:
+            return dexCode
+        return sanitizedDexId.upper()
 
     def is_leveraged_currency(self, currencyCode, checkBaseCoin: Bool = False, existingCurrencies: dict = None):
         leverageSuffixes = [
@@ -7552,6 +7763,67 @@ class BaseExchange(object):
     def is_uta_enabled(self, params={}):
         return False  # stub
 
+    def ob_resolve_rights_from_imaginary_cancel_catch(self, e: Any, rights: List[str], authPermissionMatch: Str):
+        # octobot specific
+        if isinstance(e, AuthenticationError):
+            authenticationErrorLower = str(e).lower()
+            if authPermissionMatch == 'pair':
+                if authenticationErrorLower.find('permission') >= 0 and authenticationErrorLower.find('denied') >= 0:
+                    return rights
+            else:
+                if authenticationErrorLower.find('permission') >= 0 or authenticationErrorLower.find('denied') >= 0:
+                    return rights
+            raise e
+        if isinstance(e, NetworkError):
+            raise e
+        if (isinstance(e, BadSymbol)) or (isinstance(e, OperationFailed)):
+            raise e
+        if isinstance(e, ArgumentsRequired):
+            raise AuthenticationError(self.id + ' ' + str(e.message))
+        if not (isinstance(e, ExchangeError)):
+            raise e
+        low = str(e).lower()
+        if low.find('permission') >= 0 and (low.find('denied') >= 0 or low.find('trading') >= 0):
+            return rights
+        rights.append('spotTrading')
+        rights.append('marginTrading')
+        rights.append('futuresTrading')
+        return rights
+
+    def ob_is_authenticated_request(self, url: Str, method: Str, headers: dict, body, probe: Str, probeParams: dict = {}):
+        if probe == 'urlBodySignature':
+            needle = probeParams['needle'] if ('needle' in probeParams) else 'signature='
+            urlStr = ''
+            if url:
+                urlStr = str(url)
+            bodyStr = ''
+            if body:
+                bodyStr = str(body)
+            return(urlStr.find(needle) >= 0) or (bodyStr.find(needle) >= 0)
+        if probe == 'headersJsonAny':
+            needles = probeParams['needles'] if ('needles' in probeParams) else []
+            hdrTxt = json.dumps(headers) if headers else ''
+            for needleIdx in range(0, len(needles)):
+                needleEntry = needles[needleIdx]
+                if hdrTxt.find(needleEntry) >= 0:
+                    return True
+            return False
+        if probe == 'restSignatureInHeadersJsonOrInUrl':
+            hdrsStr = json.dumps(headers) if headers else ''
+            hdrMatches = hdrsStr.find('Signature') >= 0
+            urlTxt = ''
+            if url:
+                urlTxt = str(url)
+            urlMatches = urlTxt.find('signature=') >= 0
+            return hdrMatches or urlMatches
+        if probe == 'signatureMethodInHeadersJsonOrSignInBody':
+            hdrsStr = json.dumps(headers).lower() if headers else ''
+            signatureMethodHit = hdrsStr.find('signature_method') >= 0
+            bodyStr = str(body).lower() if body else ''
+            bodyHit = bodyStr.find('sign=') >= 0
+            return signatureMethodHit or bodyHit
+        return False
+
 
 class Exchange(BaseExchange):
 
@@ -8222,6 +8494,14 @@ class Exchange(BaseExchange):
 
     def cancel_order(self, id: str, symbol: Str = None, params={}):
         raise NotSupported(self.id + ' cancelOrder() is not supported yet')
+
+    def ob_fetch_permissions_imaginary_cancel(self, orderId: Str, symbol: Str, params={}, authPermissionMatch: Str = 'either'):
+        rights = ['reading']
+        try:
+            self.cancel_order(orderId, symbol, params)
+            return rights
+        except Exception as e:
+            return self.ob_resolve_rights_from_imaginary_cancel_catch(e, rights, authPermissionMatch)
 
     def cancel_order_with_client_order_id(self, clientOrderId: str, symbol: Str = None, params={}):
         """

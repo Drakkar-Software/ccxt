@@ -3971,6 +3971,11 @@ class mexc(Exchange, ImplicitAPI):
             raise ArgumentsRequired(self.id + ' fetchMyTrades() requires a symbol argument')
         if self.markets is None:
             await self.load_markets()
+        paginate = False
+        paginate, params = self.handle_option_and_params(params, 'fetchMyTrades', 'paginate')
+        if paginate:
+            maxLimit = 1000
+            return await self.fetch_paginated_call_dynamic('fetchMyTrades', symbol, since, limit, params, maxLimit)
         market = self.market(symbol)
         marketType = None
         marketType, params = self.handle_market_type_and_params('fetchMyTrades', market, params)

@@ -806,6 +806,12 @@ async function exportEverything () {
             replacement: '$1' + errorsExports.join(", ") + '$3'
         },
         {
+            // types automatic import statement
+            file: ccxtFileDir,
+            regex:  /(import\s+type\s+\{)(.*?)(\}\s+from\s+'.\/src\/base\/types.js'\n+)/g,
+            replacement: '$1' + typeExports.join(', ') + '$3'
+        },
+        {
             file: ccxtFileDir,
             regex:  /(?:(import)\s(\w+)\sfrom\s+'.\/src\/(\2).js'\n)+/g,
             replacement: ids.map (id => "import " + id + ' from ' + " './src/" + id + ".js'").join("\n") + "\n" // update these paths

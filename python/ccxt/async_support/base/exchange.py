@@ -979,7 +979,7 @@ class BaseExchange(SyncExchange):
                     self.add_fetch_cache(fetchData)
                 if isinstance(e, OperationFailed):
                     if i < retries:
-                        if self.verbose:
+                        if retries > 0 or self.verbose:  # octobot override
                             index = i + 1
                             self.log('Request failed with the error: ' + str(e) + ', retrying ' + str(index) + ' of ' + str(retries) + '...')
                         if (retryDelay is not None) and (retryDelay != 0):
@@ -2316,6 +2316,14 @@ class Exchange(BaseExchange):
 
     async def cancel_order(self, id: str, symbol: Str = None, params={}):
         raise NotSupported(self.id + ' cancelOrder() is not supported yet')
+
+    async def ob_fetch_permissions_imaginary_cancel(self, orderId: Str, symbol: Str, params={}, authPermissionMatch: Str = 'either'):
+        rights = ['reading']
+        try:
+            await self.cancel_order(orderId, symbol, params)
+            return rights
+        except Exception as e:
+            return self.ob_resolve_rights_from_imaginary_cancel_catch(e, rights, authPermissionMatch)
 
     async def cancel_order_with_client_order_id(self, clientOrderId: str, symbol: Str = None, params={}):
         """

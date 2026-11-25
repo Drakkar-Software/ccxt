@@ -4164,6 +4164,12 @@ export default class mexc extends Exchange {
         if (this.markets === undefined) {
             await this.loadMarkets ();
         }
+        let paginate = false;
+        [ paginate, params ] = this.handleOptionAndParams (params, 'fetchMyTrades', 'paginate');
+        if (paginate) {
+            const maxLimit = 1000;
+            return await this.fetchPaginatedCallDynamic ('fetchMyTrades', symbol, since, limit, params, maxLimit) as Trade[];
+        }
         const market = this.market (symbol);
         let marketType: Str = undefined;
         [ marketType, params ] = this.handleMarketTypeAndParams ('fetchMyTrades', market, params);
